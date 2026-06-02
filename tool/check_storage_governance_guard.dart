@@ -8,7 +8,6 @@ const Set<String> _approvedJsonBackedPreferenceWrites = <String>{
   'lib/features/reader/application/local/txt_chapter_rule_service.dart|_ruleStorageKey',
   'lib/features/reader/application/reader_preferences_service.dart|_customBackgroundImagesKey',
   'lib/features/reader/application/reader_preferences_service.dart|_recentBodyTextColorsKey',
-  'lib/features/reader/application/reader_preferences_service.dart|key',
   'lib/features/reader/application/reader_visual_overrides_service.dart|_visualOverridesKey',
   'lib/features/search/application/search_history_service.dart|_storageKey',
 };

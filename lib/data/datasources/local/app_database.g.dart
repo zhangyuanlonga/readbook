@@ -8096,6 +8096,28 @@ class $StoredRemoteAccessSnapshotsTable extends StoredRemoteAccessSnapshots
     type: DriftSqlType.dateTime,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _vipExpireAtMeta = const VerificationMeta(
+    'vipExpireAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> vipExpireAt = GeneratedColumn<DateTime>(
+    'vip_expire_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _membershipPlanTypeMeta =
+      const VerificationMeta('membershipPlanType');
+  @override
+  late final GeneratedColumn<String> membershipPlanType =
+      GeneratedColumn<String>(
+        'membership_plan_type',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   @override
   List<GeneratedColumn> get $columns => [
     userId,
@@ -8104,6 +8126,8 @@ class $StoredRemoteAccessSnapshotsTable extends StoredRemoteAccessSnapshots
     hasThemeCustom,
     serverSourceGatewayLimit,
     cachedAt,
+    vipExpireAt,
+    membershipPlanType,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -8169,6 +8193,24 @@ class $StoredRemoteAccessSnapshotsTable extends StoredRemoteAccessSnapshots
     } else if (isInserting) {
       context.missing(_cachedAtMeta);
     }
+    if (data.containsKey('vip_expire_at')) {
+      context.handle(
+        _vipExpireAtMeta,
+        vipExpireAt.isAcceptableOrUnknown(
+          data['vip_expire_at']!,
+          _vipExpireAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('membership_plan_type')) {
+      context.handle(
+        _membershipPlanTypeMeta,
+        membershipPlanType.isAcceptableOrUnknown(
+          data['membership_plan_type']!,
+          _membershipPlanTypeMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -8211,6 +8253,14 @@ class $StoredRemoteAccessSnapshotsTable extends StoredRemoteAccessSnapshots
             DriftSqlType.dateTime,
             data['${effectivePrefix}cached_at'],
           )!,
+      vipExpireAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}vip_expire_at'],
+      ),
+      membershipPlanType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}membership_plan_type'],
+      ),
     );
   }
 
@@ -8228,6 +8278,8 @@ class StoredRemoteAccessSnapshot extends DataClass
   final bool hasThemeCustom;
   final int serverSourceGatewayLimit;
   final DateTime cachedAt;
+  final DateTime? vipExpireAt;
+  final String? membershipPlanType;
   const StoredRemoteAccessSnapshot({
     required this.userId,
     required this.serverSourceGatewayEnabled,
@@ -8235,6 +8287,8 @@ class StoredRemoteAccessSnapshot extends DataClass
     required this.hasThemeCustom,
     required this.serverSourceGatewayLimit,
     required this.cachedAt,
+    this.vipExpireAt,
+    this.membershipPlanType,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -8245,6 +8299,12 @@ class StoredRemoteAccessSnapshot extends DataClass
     map['has_theme_custom'] = Variable<bool>(hasThemeCustom);
     map['source_import_limit'] = Variable<int>(serverSourceGatewayLimit);
     map['cached_at'] = Variable<DateTime>(cachedAt);
+    if (!nullToAbsent || vipExpireAt != null) {
+      map['vip_expire_at'] = Variable<DateTime>(vipExpireAt);
+    }
+    if (!nullToAbsent || membershipPlanType != null) {
+      map['membership_plan_type'] = Variable<String>(membershipPlanType);
+    }
     return map;
   }
 
@@ -8256,6 +8316,14 @@ class StoredRemoteAccessSnapshot extends DataClass
       hasThemeCustom: Value(hasThemeCustom),
       serverSourceGatewayLimit: Value(serverSourceGatewayLimit),
       cachedAt: Value(cachedAt),
+      vipExpireAt:
+          vipExpireAt == null && nullToAbsent
+              ? const Value.absent()
+              : Value(vipExpireAt),
+      membershipPlanType:
+          membershipPlanType == null && nullToAbsent
+              ? const Value.absent()
+              : Value(membershipPlanType),
     );
   }
 
@@ -8275,6 +8343,10 @@ class StoredRemoteAccessSnapshot extends DataClass
         json['serverSourceGatewayLimit'],
       ),
       cachedAt: serializer.fromJson<DateTime>(json['cachedAt']),
+      vipExpireAt: serializer.fromJson<DateTime?>(json['vipExpireAt']),
+      membershipPlanType: serializer.fromJson<String?>(
+        json['membershipPlanType'],
+      ),
     );
   }
   @override
@@ -8291,6 +8363,8 @@ class StoredRemoteAccessSnapshot extends DataClass
         serverSourceGatewayLimit,
       ),
       'cachedAt': serializer.toJson<DateTime>(cachedAt),
+      'vipExpireAt': serializer.toJson<DateTime?>(vipExpireAt),
+      'membershipPlanType': serializer.toJson<String?>(membershipPlanType),
     };
   }
 
@@ -8301,6 +8375,8 @@ class StoredRemoteAccessSnapshot extends DataClass
     bool? hasThemeCustom,
     int? serverSourceGatewayLimit,
     DateTime? cachedAt,
+    Value<DateTime?> vipExpireAt = const Value.absent(),
+    Value<String?> membershipPlanType = const Value.absent(),
   }) => StoredRemoteAccessSnapshot(
     userId: userId ?? this.userId,
     serverSourceGatewayEnabled:
@@ -8310,6 +8386,11 @@ class StoredRemoteAccessSnapshot extends DataClass
     serverSourceGatewayLimit:
         serverSourceGatewayLimit ?? this.serverSourceGatewayLimit,
     cachedAt: cachedAt ?? this.cachedAt,
+    vipExpireAt: vipExpireAt.present ? vipExpireAt.value : this.vipExpireAt,
+    membershipPlanType:
+        membershipPlanType.present
+            ? membershipPlanType.value
+            : this.membershipPlanType,
   );
   StoredRemoteAccessSnapshot copyWithCompanion(
     StoredRemoteAccessSnapshotsCompanion data,
@@ -8333,6 +8414,12 @@ class StoredRemoteAccessSnapshot extends DataClass
               ? data.serverSourceGatewayLimit.value
               : this.serverSourceGatewayLimit,
       cachedAt: data.cachedAt.present ? data.cachedAt.value : this.cachedAt,
+      vipExpireAt:
+          data.vipExpireAt.present ? data.vipExpireAt.value : this.vipExpireAt,
+      membershipPlanType:
+          data.membershipPlanType.present
+              ? data.membershipPlanType.value
+              : this.membershipPlanType,
     );
   }
 
@@ -8344,7 +8431,9 @@ class StoredRemoteAccessSnapshot extends DataClass
           ..write('hasMembership: $hasMembership, ')
           ..write('hasThemeCustom: $hasThemeCustom, ')
           ..write('serverSourceGatewayLimit: $serverSourceGatewayLimit, ')
-          ..write('cachedAt: $cachedAt')
+          ..write('cachedAt: $cachedAt, ')
+          ..write('vipExpireAt: $vipExpireAt, ')
+          ..write('membershipPlanType: $membershipPlanType')
           ..write(')'))
         .toString();
   }
@@ -8357,6 +8446,8 @@ class StoredRemoteAccessSnapshot extends DataClass
     hasThemeCustom,
     serverSourceGatewayLimit,
     cachedAt,
+    vipExpireAt,
+    membershipPlanType,
   );
   @override
   bool operator ==(Object other) =>
@@ -8367,7 +8458,9 @@ class StoredRemoteAccessSnapshot extends DataClass
           other.hasMembership == this.hasMembership &&
           other.hasThemeCustom == this.hasThemeCustom &&
           other.serverSourceGatewayLimit == this.serverSourceGatewayLimit &&
-          other.cachedAt == this.cachedAt);
+          other.cachedAt == this.cachedAt &&
+          other.vipExpireAt == this.vipExpireAt &&
+          other.membershipPlanType == this.membershipPlanType);
 }
 
 class StoredRemoteAccessSnapshotsCompanion
@@ -8378,6 +8471,8 @@ class StoredRemoteAccessSnapshotsCompanion
   final Value<bool> hasThemeCustom;
   final Value<int> serverSourceGatewayLimit;
   final Value<DateTime> cachedAt;
+  final Value<DateTime?> vipExpireAt;
+  final Value<String?> membershipPlanType;
   final Value<int> rowid;
   const StoredRemoteAccessSnapshotsCompanion({
     this.userId = const Value.absent(),
@@ -8386,6 +8481,8 @@ class StoredRemoteAccessSnapshotsCompanion
     this.hasThemeCustom = const Value.absent(),
     this.serverSourceGatewayLimit = const Value.absent(),
     this.cachedAt = const Value.absent(),
+    this.vipExpireAt = const Value.absent(),
+    this.membershipPlanType = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   StoredRemoteAccessSnapshotsCompanion.insert({
@@ -8395,6 +8492,8 @@ class StoredRemoteAccessSnapshotsCompanion
     this.hasThemeCustom = const Value.absent(),
     this.serverSourceGatewayLimit = const Value.absent(),
     required DateTime cachedAt,
+    this.vipExpireAt = const Value.absent(),
+    this.membershipPlanType = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : userId = Value(userId),
        cachedAt = Value(cachedAt);
@@ -8405,6 +8504,8 @@ class StoredRemoteAccessSnapshotsCompanion
     Expression<bool>? hasThemeCustom,
     Expression<int>? serverSourceGatewayLimit,
     Expression<DateTime>? cachedAt,
+    Expression<DateTime>? vipExpireAt,
+    Expression<String>? membershipPlanType,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -8416,6 +8517,9 @@ class StoredRemoteAccessSnapshotsCompanion
       if (serverSourceGatewayLimit != null)
         'source_import_limit': serverSourceGatewayLimit,
       if (cachedAt != null) 'cached_at': cachedAt,
+      if (vipExpireAt != null) 'vip_expire_at': vipExpireAt,
+      if (membershipPlanType != null)
+        'membership_plan_type': membershipPlanType,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -8427,6 +8531,8 @@ class StoredRemoteAccessSnapshotsCompanion
     Value<bool>? hasThemeCustom,
     Value<int>? serverSourceGatewayLimit,
     Value<DateTime>? cachedAt,
+    Value<DateTime?>? vipExpireAt,
+    Value<String?>? membershipPlanType,
     Value<int>? rowid,
   }) {
     return StoredRemoteAccessSnapshotsCompanion(
@@ -8438,6 +8544,8 @@ class StoredRemoteAccessSnapshotsCompanion
       serverSourceGatewayLimit:
           serverSourceGatewayLimit ?? this.serverSourceGatewayLimit,
       cachedAt: cachedAt ?? this.cachedAt,
+      vipExpireAt: vipExpireAt ?? this.vipExpireAt,
+      membershipPlanType: membershipPlanType ?? this.membershipPlanType,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -8467,6 +8575,12 @@ class StoredRemoteAccessSnapshotsCompanion
     if (cachedAt.present) {
       map['cached_at'] = Variable<DateTime>(cachedAt.value);
     }
+    if (vipExpireAt.present) {
+      map['vip_expire_at'] = Variable<DateTime>(vipExpireAt.value);
+    }
+    if (membershipPlanType.present) {
+      map['membership_plan_type'] = Variable<String>(membershipPlanType.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -8482,6 +8596,8 @@ class StoredRemoteAccessSnapshotsCompanion
           ..write('hasThemeCustom: $hasThemeCustom, ')
           ..write('serverSourceGatewayLimit: $serverSourceGatewayLimit, ')
           ..write('cachedAt: $cachedAt, ')
+          ..write('vipExpireAt: $vipExpireAt, ')
+          ..write('membershipPlanType: $membershipPlanType, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -17931,6 +18047,8 @@ typedef $$StoredRemoteAccessSnapshotsTableCreateCompanionBuilder =
       Value<bool> hasThemeCustom,
       Value<int> serverSourceGatewayLimit,
       required DateTime cachedAt,
+      Value<DateTime?> vipExpireAt,
+      Value<String?> membershipPlanType,
       Value<int> rowid,
     });
 typedef $$StoredRemoteAccessSnapshotsTableUpdateCompanionBuilder =
@@ -17941,6 +18059,8 @@ typedef $$StoredRemoteAccessSnapshotsTableUpdateCompanionBuilder =
       Value<bool> hasThemeCustom,
       Value<int> serverSourceGatewayLimit,
       Value<DateTime> cachedAt,
+      Value<DateTime?> vipExpireAt,
+      Value<String?> membershipPlanType,
       Value<int> rowid,
     });
 
@@ -17980,6 +18100,16 @@ class $$StoredRemoteAccessSnapshotsTableFilterComposer
 
   ColumnFilters<DateTime> get cachedAt => $composableBuilder(
     column: $table.cachedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get vipExpireAt => $composableBuilder(
+    column: $table.vipExpireAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get membershipPlanType => $composableBuilder(
+    column: $table.membershipPlanType,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -18022,6 +18152,16 @@ class $$StoredRemoteAccessSnapshotsTableOrderingComposer
     column: $table.cachedAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<DateTime> get vipExpireAt => $composableBuilder(
+    column: $table.vipExpireAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get membershipPlanType => $composableBuilder(
+    column: $table.membershipPlanType,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$StoredRemoteAccessSnapshotsTableAnnotationComposer
@@ -18058,6 +18198,16 @@ class $$StoredRemoteAccessSnapshotsTableAnnotationComposer
 
   GeneratedColumn<DateTime> get cachedAt =>
       $composableBuilder(column: $table.cachedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get vipExpireAt => $composableBuilder(
+    column: $table.vipExpireAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get membershipPlanType => $composableBuilder(
+    column: $table.membershipPlanType,
+    builder: (column) => column,
+  );
 }
 
 class $$StoredRemoteAccessSnapshotsTableTableManager
@@ -18112,6 +18262,8 @@ class $$StoredRemoteAccessSnapshotsTableTableManager
                 Value<bool> hasThemeCustom = const Value.absent(),
                 Value<int> serverSourceGatewayLimit = const Value.absent(),
                 Value<DateTime> cachedAt = const Value.absent(),
+                Value<DateTime?> vipExpireAt = const Value.absent(),
+                Value<String?> membershipPlanType = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => StoredRemoteAccessSnapshotsCompanion(
                 userId: userId,
@@ -18120,6 +18272,8 @@ class $$StoredRemoteAccessSnapshotsTableTableManager
                 hasThemeCustom: hasThemeCustom,
                 serverSourceGatewayLimit: serverSourceGatewayLimit,
                 cachedAt: cachedAt,
+                vipExpireAt: vipExpireAt,
+                membershipPlanType: membershipPlanType,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -18130,6 +18284,8 @@ class $$StoredRemoteAccessSnapshotsTableTableManager
                 Value<bool> hasThemeCustom = const Value.absent(),
                 Value<int> serverSourceGatewayLimit = const Value.absent(),
                 required DateTime cachedAt,
+                Value<DateTime?> vipExpireAt = const Value.absent(),
+                Value<String?> membershipPlanType = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => StoredRemoteAccessSnapshotsCompanion.insert(
                 userId: userId,
@@ -18138,6 +18294,8 @@ class $$StoredRemoteAccessSnapshotsTableTableManager
                 hasThemeCustom: hasThemeCustom,
                 serverSourceGatewayLimit: serverSourceGatewayLimit,
                 cachedAt: cachedAt,
+                vipExpireAt: vipExpireAt,
+                membershipPlanType: membershipPlanType,
                 rowid: rowid,
               ),
           withReferenceMapper:

@@ -265,6 +265,8 @@ class StoredRemoteAccessSnapshots extends Table {
   IntColumn get serverSourceGatewayLimit =>
       integer().named('source_import_limit').withDefault(const Constant(10))();
   DateTimeColumn get cachedAt => dateTime()();
+  DateTimeColumn get vipExpireAt => dateTime().nullable()();
+  TextColumn get membershipPlanType => text().nullable()();
 
   @override
   String get tableName => 'remote_access_snapshots';
@@ -542,7 +544,7 @@ class AppDatabase extends _$AppDatabase {
   static final AppDatabase instance = AppDatabase();
 
   @override
-  int get schemaVersion => 32;
+  int get schemaVersion => 33;
 
   @override
   MigrationStrategy get migration {
@@ -779,6 +781,28 @@ class AppDatabase extends _$AppDatabase {
         }
         if (from < 32) {
           await migrator.createTable(storedTocSnapshots);
+        }
+        if (from < 33) {
+          await _addColumnIfMissing(
+            migrator: migrator,
+            tableName: storedRemoteAccessSnapshots.tableName,
+            columnName: 'vip_expire_at',
+            addColumn:
+                () => migrator.addColumn(
+                  storedRemoteAccessSnapshots,
+                  storedRemoteAccessSnapshots.vipExpireAt,
+                ),
+          );
+          await _addColumnIfMissing(
+            migrator: migrator,
+            tableName: storedRemoteAccessSnapshots.tableName,
+            columnName: 'membership_plan_type',
+            addColumn:
+                () => migrator.addColumn(
+                  storedRemoteAccessSnapshots,
+                  storedRemoteAccessSnapshots.membershipPlanType,
+                ),
+          );
         }
       },
       beforeOpen: (_) async {
@@ -3176,6 +3200,8 @@ class AppDatabase extends _$AppDatabase {
     required bool hasThemeCustom,
     required int serverSourceGatewayLimit,
     required DateTime cachedAt,
+    DateTime? vipExpireAt,
+    String? membershipPlanType,
   }) async {
     final normalizedUserId = userId.trim();
     if (normalizedUserId.isEmpty) {
@@ -3189,6 +3215,8 @@ class AppDatabase extends _$AppDatabase {
         hasThemeCustom: Value(hasThemeCustom),
         serverSourceGatewayLimit: Value(serverSourceGatewayLimit),
         cachedAt: Value(cachedAt),
+        vipExpireAt: Value(vipExpireAt),
+        membershipPlanType: Value(membershipPlanType),
       ),
       mode: InsertMode.insertOrReplace,
     );

@@ -921,14 +921,17 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
           platform: platform,
         ) +
         navigationComfortInset;
-    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
+    final metrics = AppAdaptiveMetrics.of(context);
+    final topInset =
+        metrics.isMediumUpWindow
+            ? 0.0
+            : MediaQuery.paddingOf(context).top + kToolbarHeight;
     final continueReadingReservedSpace =
         continueReadingVisible
             ? _kContinueReadingCardHeight + continueReadingBottomInset
             : navigationBottomInset + navigationComfortInset;
     final contentTopPadding =
         _shouldShowBookshelfSearchSliver ? 12.0 : topInset + 12;
-    final metrics = AppAdaptiveMetrics.of(context);
     final contentMaxWidth = AppLayout.pageContentMaxWidth(
       context,
       maxWidth: AppLayout.bookshelfContentMaxWidth,
@@ -944,104 +947,110 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       child: Scaffold(
         resizeToAvoidBottomInset: false,
         extendBodyBehindAppBar: true,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          surfaceTintColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-          leading:
-              _isSelectionMode
-                  ? IconButton(
-                    onPressed: _exitSelectionMode,
-                    tooltip: '取消选择',
-                    icon: const Icon(Icons.close),
-                  )
-                  : null,
-          title:
-              _isSelectionMode
-                  ? Text('已选择 ${_selectedBookKeys.length} 项')
-                  : _buildBookshelfViewTitle(),
-          actions: [
-            if (_isSelectionMode)
-              if (_isBatchDeleting || _isBatchUpdatingCovers)
-                const Padding(
-                  padding: EdgeInsets.only(right: 16),
-                  child: Center(
-                    child: SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  ),
-                )
-              else
-                const SizedBox.shrink()
-            else ...[
-              _buildAnnouncementAction(),
-              if (showTopSearchAction)
-                Builder(
-                  builder:
-                      (searchButtonContext) => IconButton(
-                        tooltip: '搜索书籍',
-                        onPressed:
-                            () => unawaited(
-                              _openOnlineSearchWithReveal(searchButtonContext),
+        appBar:
+            metrics.isMediumUpWindow
+                ? null
+                : AppBar(
+                  backgroundColor: Colors.transparent,
+                  surfaceTintColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  leading:
+                      _isSelectionMode
+                          ? IconButton(
+                            onPressed: _exitSelectionMode,
+                            tooltip: '取消选择',
+                            icon: const Icon(Icons.close),
+                          )
+                          : null,
+                  title:
+                      _isSelectionMode
+                          ? Text('已选择 ${_selectedBookKeys.length} 项')
+                          : _buildBookshelfViewTitle(),
+                  actions: [
+                    if (_isSelectionMode)
+                      if (_isBatchDeleting || _isBatchUpdatingCovers)
+                        const Padding(
+                          padding: EdgeInsets.only(right: 16),
+                          child: Center(
+                            child: SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
                             ),
-                        icon: const Icon(Icons.search_rounded),
-                      ),
-                ),
-              PopupMenuButton<_BookshelfMoreAction>(
-                tooltip: '更多功能',
-                onSelected: _handleMoreAction,
-                itemBuilder:
-                    (context) => [
-                      PopupMenuItem<_BookshelfMoreAction>(
-                        value: _BookshelfMoreAction.selectBooks,
-                        enabled: !_isLoading && _filteredBooks.isNotEmpty,
-                        child: const Row(
-                          children: [
-                            Icon(Icons.checklist_rounded, size: 18),
-                            SizedBox(width: 10),
-                            Text('选择书籍'),
-                          ],
+                          ),
+                        )
+                      else
+                        const SizedBox.shrink()
+                    else ...[
+                      _buildAnnouncementAction(),
+                      if (showTopSearchAction)
+                        Builder(
+                          builder:
+                              (searchButtonContext) => IconButton(
+                                tooltip: '搜索书籍',
+                                onPressed:
+                                    () => unawaited(
+                                      _openOnlineSearchWithReveal(
+                                        searchButtonContext,
+                                      ),
+                                    ),
+                                icon: const Icon(Icons.search_rounded),
+                              ),
                         ),
-                      ),
-                      PopupMenuItem<_BookshelfMoreAction>(
-                        value: _BookshelfMoreAction.sortBooks,
-                        enabled: !_isLoading && _books.isNotEmpty,
-                        child: const Row(
-                          children: [
-                            Icon(Icons.sort_rounded, size: 18),
-                            SizedBox(width: 10),
-                            Text('书籍排序'),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem<_BookshelfMoreAction>(
-                        value: _BookshelfMoreAction.settings,
-                        child: Row(
-                          children: [
-                            Icon(Icons.tune_rounded, size: 18),
-                            SizedBox(width: 10),
-                            Text('书架设置'),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem<_BookshelfMoreAction>(
-                        value: _BookshelfMoreAction.importLocal,
-                        child: Row(
-                          children: [
-                            Icon(Icons.library_add_rounded, size: 18),
-                            SizedBox(width: 10),
-                            Text('导入图书'),
-                          ],
-                        ),
+                      PopupMenuButton<_BookshelfMoreAction>(
+                        tooltip: '更多功能',
+                        onSelected: _handleMoreAction,
+                        itemBuilder:
+                            (context) => [
+                              PopupMenuItem<_BookshelfMoreAction>(
+                                value: _BookshelfMoreAction.selectBooks,
+                                enabled:
+                                    !_isLoading && _filteredBooks.isNotEmpty,
+                                child: const Row(
+                                  children: [
+                                    Icon(Icons.checklist_rounded, size: 18),
+                                    SizedBox(width: 10),
+                                    Text('选择书籍'),
+                                  ],
+                                ),
+                              ),
+                              PopupMenuItem<_BookshelfMoreAction>(
+                                value: _BookshelfMoreAction.sortBooks,
+                                enabled: !_isLoading && _books.isNotEmpty,
+                                child: const Row(
+                                  children: [
+                                    Icon(Icons.sort_rounded, size: 18),
+                                    SizedBox(width: 10),
+                                    Text('书籍排序'),
+                                  ],
+                                ),
+                              ),
+                              const PopupMenuItem<_BookshelfMoreAction>(
+                                value: _BookshelfMoreAction.settings,
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.tune_rounded, size: 18),
+                                    SizedBox(width: 10),
+                                    Text('书架设置'),
+                                  ],
+                                ),
+                              ),
+                              const PopupMenuItem<_BookshelfMoreAction>(
+                                value: _BookshelfMoreAction.importLocal,
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.library_add_rounded, size: 18),
+                                    SizedBox(width: 10),
+                                    Text('导入图书'),
+                                  ],
+                                ),
+                              ),
+                            ],
+                        icon: const Icon(Icons.more_vert_rounded),
                       ),
                     ],
-                icon: const Icon(Icons.more_vert_rounded),
-              ),
-            ],
-          ],
-        ),
+                  ],
+                ),
         bottomNavigationBar:
             _isSelectionMode
                 ? _buildSelectionActionBar(filteredBooks: filteredBooks)
@@ -1201,33 +1210,28 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                 children: [
                   Row(
                     children: [
-                      Expanded(child: _buildBookshelfSearchBar()),
-                      if (showToolbarImport) ...[
-                        SizedBox(width: metrics.contentGap),
-                        FilledButton.icon(
-                          onPressed: _showImportLocalBooksSheet,
-                          icon: const Icon(Icons.library_add_rounded),
-                          label: const Text('导入'),
-                        ),
-                      ],
-                    ],
-                  ),
-                  SizedBox(height: metrics.contentGap),
-                  Row(
-                    children: [
                       Expanded(child: filterOrSummary),
                       SizedBox(width: metrics.contentGap),
                       actionWrap(),
                     ],
                   ),
+                  if (showToolbarImport) ...[
+                    SizedBox(height: metrics.contentGap),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: FilledButton.icon(
+                        onPressed: _showImportLocalBooksSheet,
+                        icon: const Icon(Icons.library_add_rounded),
+                        label: const Text('导入'),
+                      ),
+                    ),
+                  ],
                 ],
               );
             }
 
             return Row(
               children: [
-                SizedBox(width: 360, child: _buildBookshelfSearchBar()),
-                SizedBox(width: metrics.contentGap),
                 Expanded(child: filterOrSummary),
                 SizedBox(width: metrics.contentGap),
                 actionWrap(),

@@ -3,6 +3,12 @@ part of 'mine_page.dart';
 extension on _MinePageState {
   Widget _buildMinePage(BuildContext context) {
     final metrics = AppAdaptiveMetrics.of(context);
+    final platform = Theme.of(context).platform;
+    final isDesktopMine = AppLayout.isDesktopLike(
+      context,
+      isWeb: kIsWeb,
+      platform: platform,
+    );
     final horizontal = metrics.pagePadding;
     final seedColor = ref.watch(appSeedColorProvider);
     final themeMode = ref.watch(appThemeModeProvider);
@@ -23,7 +29,6 @@ extension on _MinePageState {
     final navigationPreference = ref.watch(
       appNavigationStylePreferenceProvider,
     );
-    final platform = Theme.of(context).platform;
     final effectiveNavigationStyle = resolveAppNavigationStyle(
       navigationPreference,
       isWeb: false,
@@ -37,12 +42,6 @@ extension on _MinePageState {
     );
     final visibilityState = ref.watch(minePageVisibilityProvider);
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
-    final toggleTooltip =
-        _layoutMode == _MineLayoutMode.grid ? '切换为列表' : '切换为网格';
-    final toggleIcon =
-        _layoutMode == _MineLayoutMode.grid
-            ? Icons.view_list_rounded
-            : Icons.grid_view_rounded;
     final appearanceActions = _buildAppearanceActions(
       context,
       visibilityState: visibilityState,
@@ -61,6 +60,24 @@ extension on _MinePageState {
       context,
       visibilityState: visibilityState,
     );
+
+    if (isDesktopMine) {
+      return _buildDesktopMinePage(
+        context,
+        palette: advancedPalette,
+        backdrop: advancedBackdrop,
+        appearanceActions: appearanceActions,
+        dataActions: dataActions,
+        otherActions: otherActions,
+      );
+    }
+
+    final toggleTooltip =
+        _layoutMode == MinePageLayoutMode.grid ? '切换为列表' : '切换为网格';
+    final toggleIcon =
+        _layoutMode == MinePageLayoutMode.grid
+            ? Icons.view_list_rounded
+            : Icons.grid_view_rounded;
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -119,6 +136,162 @@ extension on _MinePageState {
           );
         },
       ),
+    );
+  }
+
+  Widget _buildDesktopMinePage(
+    BuildContext context, {
+    required _MineResolvedPalette palette,
+    required ResolvedAdvancedThemeBackdrop backdrop,
+    required List<_MineActionItem> appearanceActions,
+    required List<_MineActionItem> dataActions,
+    required List<_MineActionItem> otherActions,
+  }) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    final contentMaxWidth = AppLayout.pageContentMaxWidth(
+      context,
+      maxWidth: AppLayout.mineContentMaxWidth,
+    );
+    final bottomPadding = MediaQuery.paddingOf(context).bottom;
+
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: DecoratedBox(
+        decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+        child: CustomScrollView(
+          slivers: [
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(
+                metrics.pagePadding,
+                metrics.sectionGap,
+                metrics.pagePadding,
+                metrics.sectionGap + bottomPadding,
+              ),
+              sliver: SliverToBoxAdapter(
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: contentMaxWidth),
+                    child: _buildDesktopMineDashboard(
+                      context,
+                      palette: palette,
+                      appearanceActions: appearanceActions,
+                      dataActions: dataActions,
+                      otherActions: otherActions,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopMineDashboard(
+    BuildContext context, {
+    required _MineResolvedPalette palette,
+    required List<_MineActionItem> appearanceActions,
+    required List<_MineActionItem> dataActions,
+    required List<_MineActionItem> otherActions,
+  }) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    final gap = metrics.contentGap;
+    final toggleTooltip =
+        _layoutMode == MinePageLayoutMode.grid ? '切换为列表' : '切换为网格';
+    final toggleIcon =
+        _layoutMode == MinePageLayoutMode.grid
+            ? Icons.view_list_rounded
+            : Icons.grid_view_rounded;
+    final desktopSections = <Widget>[
+      if (dataActions.isNotEmpty)
+        _buildPageEntrance(
+          index: 1,
+          child: _buildActionSection(
+            context,
+            palette: palette,
+            title: '数据',
+            actions: dataActions,
+            maxGridColumns: 3,
+          ),
+        ),
+      if (otherActions.isNotEmpty)
+        _buildPageEntrance(
+          index: 2,
+          child: _buildActionSection(
+            context,
+            palette: palette,
+            title: '其他',
+            actions: otherActions,
+            maxGridColumns: 3,
+          ),
+        ),
+      if (appearanceActions.isNotEmpty)
+        _buildPageEntrance(
+          index: 3,
+          child: _buildActionSection(
+            context,
+            palette: palette,
+            title: '外观',
+            actions: appearanceActions,
+            maxGridColumns: 3,
+          ),
+        ),
+    ];
+
+    final profile = _buildPageEntrance(
+      index: 0,
+      child: _buildProfileCard(context, palette: palette),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        profile,
+        if (desktopSections.isNotEmpty) ...[
+          SizedBox(height: metrics.sectionGap),
+          Align(
+            alignment: Alignment.centerRight,
+            child: IconButton(
+              tooltip: toggleTooltip,
+              onPressed: _toggleLayoutMode,
+              icon: Icon(toggleIcon),
+            ),
+          ),
+          SizedBox(height: gap * 0.5),
+          _buildDesktopMineSectionGrid(sections: desktopSections, spacing: gap),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildDesktopMineSectionGrid({
+    required List<Widget> sections,
+    required double spacing,
+  }) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final desiredColumns =
+            constraints.maxWidth >= 900
+                ? 3
+                : constraints.maxWidth >= 620
+                ? 2
+                : 1;
+        final columns =
+            sections.length < desiredColumns ? sections.length : desiredColumns;
+        final totalSpacing = spacing * (columns - 1);
+        final tileWidth = (constraints.maxWidth - totalSpacing) / columns;
+
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: [
+            for (final section in sections)
+              SizedBox(width: tileWidth, child: section),
+          ],
+        );
+      },
     );
   }
 
@@ -655,6 +828,11 @@ extension on _MinePageState {
   }) {
     final theme = Theme.of(context);
     final metrics = AppAdaptiveMetrics.of(context);
+    final isDesktopProfile = AppLayout.isDesktopLike(
+      context,
+      isWeb: kIsWeb,
+      platform: theme.platform,
+    );
     final displayName =
         _userId == null
             ? '登录 / 注册'
@@ -672,7 +850,19 @@ extension on _MinePageState {
               tone: AppBorderTone.subtle,
             );
 
+    if (isDesktopProfile) {
+      return _buildDesktopProfileCard(
+        context,
+        palette: palette,
+        displayName: displayName,
+        avatarLabel: avatarLabel,
+        avatarFill: avatarFill,
+        membershipAccent: membershipAccent,
+      );
+    }
+
     return Card(
+      key: const ValueKey<String>('mine_mobile_profile_card'),
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
@@ -841,7 +1031,7 @@ extension on _MinePageState {
                                 ),
                               ),
                             ),
-                          if (_userId == null)
+                          if (_userId == null && !isDesktopProfile)
                             Container(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 8,
@@ -894,6 +1084,448 @@ extension on _MinePageState {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildDesktopProfileCard(
+    BuildContext context, {
+    required _MineResolvedPalette palette,
+    required String displayName,
+    required String? avatarLabel,
+    required Color avatarFill,
+    required Color membershipAccent,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final borderColor = resolveAppBorderColor(
+      colorScheme,
+      baseColor: palette.cardBorderColor,
+      containerColor: palette.cardColor,
+      tone: AppBorderTone.subtle,
+    );
+    final cardShadowColor =
+        colorScheme.brightness == Brightness.light
+            ? const Color(0xFFCBD5E1).withValues(alpha: 0.26)
+            : Colors.black.withValues(alpha: 0.22);
+    final topTint = Color.alphaBlend(
+      palette.primaryColor.withValues(alpha: 0.05),
+      palette.cardColor,
+    );
+    final bottomTint = Color.alphaBlend(
+      const Color(0xFF94A3B8).withValues(alpha: 0.035),
+      palette.cardColor,
+    );
+    final statusText =
+        _userId == null ? '未登录' : (_hasMembership ? 'PRO' : '普通用户');
+    final statusColor =
+        _userId == null
+            ? palette.noticeAccentColor
+            : (_hasMembership ? membershipAccent : palette.primaryColor);
+    final actionLabel = _userId == null ? '登录 / 注册' : '查看资料';
+
+    return Material(
+      key: const ValueKey<String>('mine_desktop_profile_card'),
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(24),
+        onTap: () {
+          final target = _userId == null ? '/auth' : '/profile';
+          context.push(target).then((_) => _loadSession());
+        },
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color:
+                  _hasMembership
+                      ? membershipAccent.withValues(alpha: 0.32)
+                      : borderColor,
+            ),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors:
+                  _hasMembership
+                      ? [
+                        Color.alphaBlend(
+                          membershipAccent.withValues(alpha: 0.10),
+                          palette.cardColor,
+                        ),
+                        palette.cardColor,
+                        Color.alphaBlend(
+                          palette.primaryColor.withValues(alpha: 0.035),
+                          palette.cardColor,
+                        ),
+                      ]
+                      : [topTint, palette.cardColor, bottomTint],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: cardShadowColor,
+                blurRadius: 28,
+                offset: const Offset(0, 14),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 22, 24, 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '我的账户',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: palette.textSecondaryColor,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    _buildDesktopProfileStatusPill(
+                      context,
+                      label: statusText,
+                      color: statusColor,
+                      palette: palette,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 22),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final compactIdentity = constraints.maxWidth < 560;
+                    final identityRow = Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        _buildDesktopProfileAvatar(
+                          context,
+                          avatarLabel: avatarLabel,
+                          avatarFill: avatarFill,
+                          membershipAccent: membershipAccent,
+                          palette: palette,
+                        ),
+                        const SizedBox(width: 18),
+                        Expanded(
+                          child: _buildDesktopProfileIdentityText(
+                            context,
+                            displayName: displayName,
+                            palette: palette,
+                          ),
+                        ),
+                      ],
+                    );
+
+                    if (compactIdentity) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          identityRow,
+                          const SizedBox(height: 16),
+                          _buildDesktopProfileActionButton(
+                            context,
+                            label: actionLabel,
+                            palette: palette,
+                          ),
+                        ],
+                      );
+                    }
+
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(child: identityRow),
+                        const SizedBox(width: 14),
+                        _buildDesktopProfileActionButton(
+                          context,
+                          label: actionLabel,
+                          palette: palette,
+                        ),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 22),
+                _buildDesktopProfileMetrics(context, palette: palette),
+                const SizedBox(height: 18),
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    border: Border(top: BorderSide(color: borderColor)),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 16),
+                    child:
+                        _userId == null
+                            ? _buildDesktopProfileLoginHint(
+                              context,
+                              palette: palette,
+                            )
+                            : _buildProfileMembershipRow(
+                              context,
+                              palette,
+                              membershipAccent,
+                            ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopProfileIdentityText(
+    BuildContext context, {
+    required String displayName,
+    required _MineResolvedPalette palette,
+  }) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          displayName,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.headlineSmall?.copyWith(
+            color: palette.textPrimaryColor,
+            fontWeight: FontWeight.w800,
+            height: 1.05,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          _buildProfileStats(),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: palette.textSecondaryColor,
+            height: 1.35,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDesktopProfileLoginHint(
+    BuildContext context, {
+    required _MineResolvedPalette palette,
+  }) {
+    return Row(
+      children: [
+        Icon(Icons.sync_alt_rounded, size: 16, color: palette.primaryColor),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            '登录后可同步书架、阅读记录和会员权益',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: palette.textSecondaryColor,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDesktopProfileAvatar(
+    BuildContext context, {
+    required String? avatarLabel,
+    required Color avatarFill,
+    required Color membershipAccent,
+    required _MineResolvedPalette palette,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: _userId == null ? null : () => _handleAvatarTap(context),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: 74,
+              height: 74,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color:
+                      _hasMembership
+                          ? membershipAccent
+                          : palette.cardBorderColor.withValues(alpha: 0.8),
+                  width: _hasMembership ? 2 : 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: (_hasMembership
+                            ? membershipAccent
+                            : palette.primaryColor)
+                        .withValues(alpha: 0.14),
+                    blurRadius: 20,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: Container(
+                margin: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: avatarFill,
+                  shape: BoxShape.circle,
+                ),
+                clipBehavior: Clip.antiAlias,
+                alignment: Alignment.center,
+                child: _buildProfileAvatarContent(
+                  context,
+                  avatarLabel: avatarLabel,
+                  palette: palette,
+                ),
+              ),
+            ),
+            Positioned(
+              right: -2,
+              bottom: -2,
+              child: Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: _hasMembership ? membershipAccent : palette.cardColor,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: palette.cardColor, width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Icon(
+                  _hasMembership
+                      ? Icons.workspace_premium_rounded
+                      : Icons.camera_alt_outlined,
+                  size: 13,
+                  color:
+                      _hasMembership
+                          ? Colors.white
+                          : palette.textSecondaryColor,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopProfileStatusPill(
+    BuildContext context, {
+    required String label,
+    required Color color,
+    required _MineResolvedPalette palette,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: Color.alphaBlend(
+          color.withValues(alpha: 0.08),
+          palette.cardColor,
+        ),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.22)),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w800,
+          height: 1,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopProfileActionButton(
+    BuildContext context, {
+    required String label,
+    required _MineResolvedPalette palette,
+  }) {
+    return OutlinedButton.icon(
+      onPressed: () {
+        final target = _userId == null ? '/auth' : '/profile';
+        context.push(target).then((_) => _loadSession());
+      },
+      icon: Icon(_userId == null ? Icons.login_rounded : Icons.person_outline),
+      label: Text(label),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: palette.primaryColor,
+        side: BorderSide(color: palette.primaryColor.withValues(alpha: 0.28)),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        textStyle: Theme.of(
+          context,
+        ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w800),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+    );
+  }
+
+  Widget _buildDesktopProfileMetrics(
+    BuildContext context, {
+    required _MineResolvedPalette palette,
+  }) {
+    final items =
+        _userId == null
+            ? const <({String label, String value})>[
+              (label: '书架同步', value: '登录后'),
+              (label: '阅读记录', value: '待开启'),
+              (label: '会员权益', value: '可同步'),
+            ]
+            : <({String label, String value})>[
+              (label: '累计阅读', value: '$_totalReadingHours 小时'),
+              (label: '连续阅读', value: '$_readingStreakDays 天'),
+              (label: '主题权益', value: _hasThemeCustom ? '已开启' : '未开启'),
+            ];
+
+    return Row(
+      children: [
+        for (var index = 0; index < items.length; index++) ...[
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  items[index].value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: palette.textPrimaryColor,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  items[index].label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: palette.textSecondaryColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (index < items.length - 1)
+            Container(
+              width: 1,
+              height: 32,
+              margin: const EdgeInsets.symmetric(horizontal: 14),
+              color: palette.cardBorderColor.withValues(alpha: 0.55),
+            ),
+        ],
+      ],
     );
   }
 

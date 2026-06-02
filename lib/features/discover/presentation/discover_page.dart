@@ -69,35 +69,39 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
     final palette = resolveAdvancedThemePalette(theme.colorScheme, activeTheme);
     final sourcesAsync = ref.watch(discoverSourcePagerProvider);
     final horizontal = metrics.pagePadding;
-    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     final isWide = AppLayout.isMediumUp(context);
+    final topInset =
+        isWide ? 0.0 : MediaQuery.paddingOf(context).top + kToolbarHeight;
 
     return Scaffold(
       extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        title: const Text('发现'),
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        shadowColor: Colors.transparent,
-        actions: [
-          IconButton(
-            tooltip: '刷新',
-            onPressed: () {
-              _searchDebounce?.cancel();
-              _searchController.clear();
-              setState(() {
-                _searchKeyword = '';
-                _expandedSourceId = null;
-                _remoteSearchKeyword = '';
-                _remoteSearchAsync = null;
-              });
-              ref.read(discoverSourcePagerProvider.notifier).refresh();
-            },
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-        ],
-      ),
+      appBar:
+          isWide
+              ? null
+              : AppBar(
+                title: const Text('发现'),
+                backgroundColor: Colors.transparent,
+                surfaceTintColor: Colors.transparent,
+                shadowColor: Colors.transparent,
+                actions: [
+                  IconButton(
+                    tooltip: '刷新',
+                    onPressed: () {
+                      _searchDebounce?.cancel();
+                      _searchController.clear();
+                      setState(() {
+                        _searchKeyword = '';
+                        _expandedSourceId = null;
+                        _remoteSearchKeyword = '';
+                        _remoteSearchAsync = null;
+                      });
+                      ref.read(discoverSourcePagerProvider.notifier).refresh();
+                    },
+                    icon: const Icon(Icons.refresh_rounded),
+                  ),
+                ],
+              ),
       body: DecoratedBox(
         decoration: buildAdvancedThemeBackdropDecoration(backdrop),
         child: Align(

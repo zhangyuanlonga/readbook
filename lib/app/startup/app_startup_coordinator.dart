@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ui' show FrameTiming;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import '../../core/app_update/app_update_release.dart';
@@ -138,6 +139,10 @@ class AppStartupCoordinator {
   Future<void> _checkStartupUpdateIfNeeded({
     required bool Function() isMounted,
   }) async {
+    if (kIsWeb) {
+      _hasCheckedStartupUpdate = true;
+      return;
+    }
     if (_hasCheckedStartupUpdate || _isStartupUpdateInFlight) {
       return;
     }

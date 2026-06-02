@@ -139,6 +139,13 @@ extension on _AppearancePageState {
     required bool showNavigationLabels,
   }) {
     final sectionGap = AppAdaptiveMetrics.of(context).contentGap;
+    final isDesktopAppearanceOnly =
+        widget.section == AppearanceSection.appearance &&
+        AppLayout.isDesktopLike(
+          context,
+          isWeb: kIsWeb,
+          platform: Theme.of(context).platform,
+        );
     final sections = <Widget>[];
 
     if (widget.section == AppearanceSection.appearance) {
@@ -151,30 +158,30 @@ extension on _AppearancePageState {
       );
       sections.add(SizedBox(height: sectionGap));
       sections.add(_buildAdvancedThemeSummarySection(context));
-      sections.add(SizedBox(height: sectionGap));
-      sections.add(
-        _buildNavigationStyleSection(
-          context,
-          selectedNavigationStyle: selectedNavigationStyle,
-          standardNavigationAppearance: standardNavigationAppearance,
-          cupertinoDockAppearance: cupertinoDockAppearance,
-          showNavigationLabels: showNavigationLabels,
-        ),
-      );
-      sections.add(SizedBox(height: sectionGap));
-      sections.add(
-        _buildSectionCard(
-          context,
-          icon: Icons.space_dashboard_outlined,
-          title: '底部菜单',
-          subtitle: '控制底部主导航展示项，至少保留一个内容入口。',
-          child: const _AppearanceNavigationVisibilityPanel(),
-        ),
-      );
-      sections.add(SizedBox(height: sectionGap));
-      sections.add(_buildFontSection(context));
-      sections.add(SizedBox(height: sectionGap));
-      sections.add(const AppearanceOtherSettingsCard());
+      if (!isDesktopAppearanceOnly) {
+        sections.addAll([
+          SizedBox(height: sectionGap),
+          _buildNavigationStyleSection(
+            context,
+            selectedNavigationStyle: selectedNavigationStyle,
+            standardNavigationAppearance: standardNavigationAppearance,
+            cupertinoDockAppearance: cupertinoDockAppearance,
+            showNavigationLabels: showNavigationLabels,
+          ),
+          SizedBox(height: sectionGap),
+          _buildSectionCard(
+            context,
+            icon: Icons.space_dashboard_outlined,
+            title: '底部菜单',
+            subtitle: '控制底部主导航展示项，至少保留一个内容入口。',
+            child: const _AppearanceNavigationVisibilityPanel(),
+          ),
+          SizedBox(height: sectionGap),
+          _buildFontSection(context),
+          SizedBox(height: sectionGap),
+          const AppearanceOtherSettingsCard(),
+        ]);
+      }
     }
 
     if (widget.section == AppearanceSection.tabBar) {

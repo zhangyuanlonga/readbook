@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../app/images/local_file_image.dart';
 import '../../../app/layout/app_adaptive.dart';
@@ -51,7 +50,9 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
 
   Future<void> _loadSession() async {
     final session = await _sessionStore.getSession();
-    final localAvatarPath = await _loadLocalAvatarPath(session?.userId);
+    final localAvatarPath = await _minePageSessionService.loadLocalAvatarPath(
+      session?.userId,
+    );
     if (!mounted) {
       return;
     }
@@ -91,23 +92,11 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
     }
   }
 
-  Future<String?> _loadLocalAvatarPath(String? userId) async {
-    final normalizedUserId = userId?.trim() ?? '';
-    if (normalizedUserId.isEmpty) {
-      return null;
-    }
-    final prefs = await SharedPreferences.getInstance();
-    final path =
-        prefs.getString('mine.profile.avatar.path.$normalizedUserId')?.trim();
-    if (path == null || path.isEmpty) {
-      return null;
-    }
-    return path;
-  }
-
   Future<void> _refreshPage() async {
     final session = await _sessionStore.getSession();
-    final localAvatarPath = await _loadLocalAvatarPath(session?.userId);
+    final localAvatarPath = await _minePageSessionService.loadLocalAvatarPath(
+      session?.userId,
+    );
     if (!mounted) {
       return;
     }

@@ -117,16 +117,16 @@ class RemoteAccessSnapshotService {
 
     final stored = await _database.getRemoteAccessSnapshot(normalizedUserId);
     if (stored != null) {
-      final sidecar = await _loadMembershipSidecar(normalizedUserId);
-      return RemoteAccessSnapshot(
+      final snapshot = RemoteAccessSnapshot(
         serverSourceGatewayEnabled: stored.serverSourceGatewayEnabled,
         hasMembership: stored.hasMembership,
         hasThemeCustom: stored.hasThemeCustom,
         serverSourceGatewayLimit: stored.serverSourceGatewayLimit,
         cachedAt: stored.cachedAt,
-        vipExpireAt: sidecar.vipExpireAt,
-        membershipPlanType: sidecar.membershipPlanType,
+        vipExpireAt: stored.vipExpireAt,
+        membershipPlanType: stored.membershipPlanType,
       );
+      return _hydrateLegacyMembershipSidecar(normalizedUserId, snapshot);
     }
 
     final prefs = await _preferencesFuture;
@@ -147,9 +147,11 @@ class RemoteAccessSnapshotService {
         hasThemeCustom: snapshot.hasThemeCustom,
         serverSourceGatewayLimit: snapshot.serverSourceGatewayLimit,
         cachedAt: snapshot.cachedAt,
+        vipExpireAt: snapshot.vipExpireAt,
+        membershipPlanType: snapshot.membershipPlanType,
       );
-      await _saveMembershipSidecar(normalizedUserId, snapshot);
       await prefs.remove(_storageKey(normalizedUserId));
+      await prefs.remove(_membershipSidecarKey(normalizedUserId));
       return snapshot;
     } catch (_) {
       await prefs.remove(_storageKey(normalizedUserId));
@@ -169,10 +171,12 @@ class RemoteAccessSnapshotService {
       hasThemeCustom: snapshot.hasThemeCustom,
       serverSourceGatewayLimit: snapshot.serverSourceGatewayLimit,
       cachedAt: snapshot.cachedAt,
+      vipExpireAt: snapshot.vipExpireAt,
+      membershipPlanType: snapshot.membershipPlanType,
     );
-    await _saveMembershipSidecar(normalizedUserId, snapshot);
     final prefs = await _preferencesFuture;
     await prefs.remove(_storageKey(normalizedUserId));
+    await prefs.remove(_membershipSidecarKey(normalizedUserId));
   }
 
   Future<void> clear(String userId) async {
@@ -295,23 +299,37 @@ class RemoteAccessSnapshotService {
     }
   }
 
-  Future<void> _saveMembershipSidecar(
+  Future<RemoteAccessSnapshot> _hydrateLegacyMembershipSidecar(
     String userId,
     RemoteAccessSnapshot snapshot,
   ) async {
-    final prefs = await _preferencesFuture;
-    if (snapshot.vipExpireAt == null &&
-        (snapshot.membershipPlanType?.trim().isEmpty ?? true)) {
-      await prefs.remove(_membershipSidecarKey(userId));
-      return;
+    if (snapshot.vipExpireAt != null ||
+        (snapshot.membershipPlanType?.trim().isNotEmpty ?? false)) {
+      return snapshot;
     }
-    await prefs.setString(
-      _membershipSidecarKey(userId),
-      jsonEncode(<String, Object?>{
-        'vipExpireAt': snapshot.vipExpireAt?.toUtc().toIso8601String(),
-        'membershipPlanType': snapshot.membershipPlanType,
-      }),
+
+    final sidecar = await _loadMembershipSidecar(userId);
+    if (sidecar.vipExpireAt == null &&
+        (sidecar.membershipPlanType?.trim().isEmpty ?? true)) {
+      return snapshot;
+    }
+    final hydrated = snapshot.copyWith(
+      vipExpireAt: sidecar.vipExpireAt,
+      membershipPlanType: sidecar.membershipPlanType,
     );
+    await _database.upsertRemoteAccessSnapshot(
+      userId: userId,
+      serverSourceGatewayEnabled: hydrated.serverSourceGatewayEnabled,
+      hasMembership: hydrated.hasMembership,
+      hasThemeCustom: hydrated.hasThemeCustom,
+      serverSourceGatewayLimit: hydrated.serverSourceGatewayLimit,
+      cachedAt: hydrated.cachedAt,
+      vipExpireAt: hydrated.vipExpireAt,
+      membershipPlanType: hydrated.membershipPlanType,
+    );
+    final prefs = await _preferencesFuture;
+    await prefs.remove(_membershipSidecarKey(userId));
+    return hydrated;
   }
 
   MobileFeatureModule? _findModule(

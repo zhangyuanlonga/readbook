@@ -10,6 +10,8 @@
 
 - [Web / Desktop 业务逻辑兼容规则](web_desktop_business_logic_compatibility_rules_2026-05-31.md)
 - [桌面端 UI 第一里程碑：外壳导航与我的页展示基线](desktop_ui_phase1_shell_mine_milestone_2026-05-31.md)
+- [桌面端工程提效与底座优化里程碑](desktop_engineering_productivity_milestone_2026-06-01.md)
+- [代码库工程治理专项 Backlog](codebase_engineering_governance_backlog_2026-06-02.md)
 
 ## 长期约束
 

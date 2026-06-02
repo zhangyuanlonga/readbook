@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -411,7 +412,7 @@ class _AboutPageState extends ConsumerState<AboutPage> {
           title: '官方 Q 群',
           onTap: _openSourceFeedback,
         ),
-      if (visibilityState.isVisible(MinePageItemId.checkUpdate))
+      if (!kIsWeb && visibilityState.isVisible(MinePageItemId.checkUpdate))
         (
           icon: Icons.system_update_alt,
           title: '检查更新',

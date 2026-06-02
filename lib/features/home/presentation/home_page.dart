@@ -23,6 +23,8 @@ import '../../mine/application/cover_gallery_provider.dart';
 import '../../reader/application/reader_entry_route_resolver.dart';
 import '../../reader/application/reader_preferences_service.dart';
 import '../../reader/application/reading_record_service.dart';
+import 'widgets/home_dashboard_layouts.dart';
+import 'widgets/home_metric_widgets.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({
@@ -101,19 +103,27 @@ class _HomePageState extends ConsumerState<HomePage>
       showNavigationLabels: showLabels,
       standardAppearance: standardNavigationAppearance,
     );
-    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
     final metrics = AppAdaptiveMetrics.of(context);
     final desktopLike = AppLayout.isMediumUp(context);
+    final topInset =
+        desktopLike ? 0.0 : MediaQuery.paddingOf(context).top + kToolbarHeight;
+    final desktopContentMaxWidth = AppLayout.pageContentMaxWidth(
+      context,
+      maxWidth: AppLayout.screenWidth(context) >= 1600 ? 1480 : 1320,
+    );
 
     return Scaffold(
       extendBodyBehindAppBar: true,
       backgroundColor: Theme.of(context).colorScheme.surface,
-      appBar: AppBar(
-        title: const Text('首页'),
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        shadowColor: Colors.transparent,
-      ),
+      appBar:
+          desktopLike
+              ? null
+              : AppBar(
+                title: const Text('首页'),
+                backgroundColor: Colors.transparent,
+                surfaceTintColor: Colors.transparent,
+                shadowColor: Colors.transparent,
+              ),
       body: DecoratedBox(
         decoration: buildAdvancedThemeBackdropDecoration(backdrop),
         child: SizedBox.expand(
@@ -122,10 +132,13 @@ class _HomePageState extends ConsumerState<HomePage>
             child: Center(
               child: ConstrainedBox(
                 constraints: BoxConstraints(
-                  maxWidth: AppLayout.pageContentMaxWidth(
-                    context,
-                    maxWidth: 980,
-                  ),
+                  maxWidth:
+                      desktopLike
+                          ? desktopContentMaxWidth
+                          : AppLayout.pageContentMaxWidth(
+                            context,
+                            maxWidth: 980,
+                          ),
                 ),
                 child: Padding(
                   padding: EdgeInsets.fromLTRB(
@@ -137,32 +150,7 @@ class _HomePageState extends ConsumerState<HomePage>
                   child:
                       desktopLike
                           ? _buildDesktopDashboard(context)
-                          : Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              AppFadeSlideTransition(
-                                child: _buildCheckInSummarySection(),
-                              ),
-                              SizedBox(height: metrics.sectionGap),
-                              AppFadeSlideTransition(
-                                delay: const Duration(milliseconds: 56),
-                                child: _buildSectionHeader(
-                                  context,
-                                  title: '继续阅读',
-                                ),
-                              ),
-                              SizedBox(height: metrics.contentGap),
-                              AppFadeSlideTransition(
-                                delay: const Duration(milliseconds: 84),
-                                child: _buildContinueReadingSectionBlock(),
-                              ),
-                              SizedBox(height: metrics.sectionGap),
-                              AppFadeSlideTransition(
-                                delay: const Duration(milliseconds: 112),
-                                child: _buildReadingGoalSection(),
-                              ),
-                            ],
-                          ),
+                          : _buildMobileDashboard(metrics),
                 ),
               ),
             ),
@@ -172,84 +160,46 @@ class _HomePageState extends ConsumerState<HomePage>
     );
   }
 
-  Widget _buildDesktopDashboard(BuildContext context) {
-    final metrics = AppAdaptiveMetrics.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        AppFadeSlideTransition(child: _buildDesktopOverviewToolbar(context)),
-        SizedBox(height: metrics.sectionGap),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              flex: 6,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  AppFadeSlideTransition(
-                    delay: const Duration(milliseconds: 56),
-                    child: _buildSectionHeader(
-                      context,
-                      title: '继续阅读',
-                    ),
-                  ),
-                  SizedBox(height: metrics.contentGap),
-                  AppFadeSlideTransition(
-                    delay: const Duration(milliseconds: 84),
-                    child: _buildContinueReadingSectionBlock(),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(width: metrics.sectionGap),
-            Expanded(
-              flex: 4,
-              child: AppFadeSlideTransition(
-                delay: const Duration(milliseconds: 96),
-                child: _buildReadingSummarySection(),
-              ),
-            ),
-          ],
-        ),
-      ],
+  Widget _buildMobileDashboard(AppAdaptiveMetrics metrics) {
+    return HomeMobileDashboardLayout(
+      metrics: metrics,
+      checkInSummary: _buildCheckInSummarySection(),
+      sectionHeader: _buildSectionHeader(context, title: '继续阅读'),
+      continueReading: _buildContinueReadingSectionBlock(),
+      readingGoal: _buildReadingGoalSection(),
     );
   }
 
-  Widget _buildDesktopOverviewToolbar(BuildContext context) {
+  Widget _buildDesktopDashboard(BuildContext context) {
     final metrics = AppAdaptiveMetrics.of(context);
-    final colorScheme = Theme.of(context).colorScheme;
+    return HomeDesktopDashboardLayout(
+      metrics: metrics,
+      continueReadingPanel: _buildDesktopContinueReadingPanel(context),
+      readingSummary: _buildReadingSummarySection(),
+    );
+  }
+
+  Widget _buildDesktopContinueReadingPanel(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
     return _buildSurface(
       child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: metrics.cardPadding + 2,
-          vertical: metrics.cardPadding,
+        padding: EdgeInsets.fromLTRB(
+          metrics.cardPadding + 2,
+          metrics.cardPadding,
+          metrics.cardPadding + 2,
+          metrics.cardPadding + 2,
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: Text(
-                '阅读概览',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-              ),
+            _buildSectionHeader(
+              context,
+              title: '继续阅读',
+              actionLabel: '书架',
+              onAction: () => context.go('/bookshelf'),
             ),
-            TextButton.icon(
-              onPressed: () => context.go('/bookshelf'),
-              icon: const Icon(Icons.library_books_outlined),
-              label: const Text('书架'),
-            ),
-            SizedBox(width: metrics.contentGap * 0.6),
-            FilledButton.icon(
-              onPressed: () => context.push('/stats'),
-              icon: const Icon(Icons.query_stats_rounded),
-              label: const Text('阅读统计'),
-              style: FilledButton.styleFrom(
-                backgroundColor: colorScheme.onSurface,
-                foregroundColor: colorScheme.surface,
-              ),
-            ),
+            SizedBox(height: metrics.contentGap),
+            _buildContinueReadingSectionBlock(desktopProminent: true),
           ],
         ),
       ),
@@ -316,7 +266,7 @@ class _HomePageState extends ConsumerState<HomePage>
     );
   }
 
-  Widget _buildContinueReadingSectionBlock() {
+  Widget _buildContinueReadingSectionBlock({bool desktopProminent = false}) {
     return StreamBuilder<List<ReadingRecord>>(
       stream: _readingRecordService.watchLatestRecords(),
       builder: (context, snapshot) {
@@ -324,7 +274,10 @@ class _HomePageState extends ConsumerState<HomePage>
         return AppAnimatedSwitcher(
           child: KeyedSubtree(
             key: ValueKey<String>('continue_reading_${records.length}'),
-            child: _buildContinueReadingSection(records),
+            child: _buildContinueReadingSection(
+              records,
+              desktopProminent: desktopProminent,
+            ),
           ),
         );
       },
@@ -336,7 +289,8 @@ class _HomePageState extends ConsumerState<HomePage>
     final checkedInToday = _engagementState.isCheckedInOn(DateTime.now());
     final streakDays = _engagementState.streakDays();
     final weekCheckInCount = _engagementState.recentCheckInCount(7);
-    final todayReadMinutes = Duration(milliseconds: summary.todayReadMillis).inMinutes;
+    final todayReadMinutes =
+        Duration(milliseconds: summary.todayReadMillis).inMinutes;
     final metrics = AppAdaptiveMetrics.of(context);
     final canCheckIn =
         !_isEngagementLoading && !_isSubmittingCheckIn && !checkedInToday;
@@ -409,11 +363,10 @@ class _HomePageState extends ConsumerState<HomePage>
                               return FadeTransition(
                                 opacity: animation,
                                 child: SlideTransition(
-                                  position:
-                                      Tween<Offset>(
-                                        begin: const Offset(0, 0.12),
-                                        end: Offset.zero,
-                                      ).animate(animation),
+                                  position: Tween<Offset>(
+                                    begin: const Offset(0, 0.12),
+                                    end: Offset.zero,
+                                  ).animate(animation),
                                   child: child,
                                 ),
                               );
@@ -428,11 +381,12 @@ class _HomePageState extends ConsumerState<HomePage>
                           const SizedBox(height: 2),
                           Text(
                             checkedInToday ? '保持节奏，继续阅读' : '阅读满 5 分钟即可打卡',
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                  height: 1.3,
-                                ),
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                              height: 1.3,
+                            ),
                           ),
                         ],
                       ),
@@ -469,11 +423,12 @@ class _HomePageState extends ConsumerState<HomePage>
                                 ),
                                 child: Text(
                                   '+1 连续天',
-                                  style: Theme.of(context).textTheme.labelSmall
-                                      ?.copyWith(
-                                        fontWeight: FontWeight.w700,
-                                        color: colorScheme.primary,
-                                      ),
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.labelSmall?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    color: colorScheme.primary,
+                                  ),
                                 ),
                               )
                               : const SizedBox(
@@ -489,7 +444,7 @@ class _HomePageState extends ConsumerState<HomePage>
                 child: Row(
                   children: [
                     Expanded(
-                      child: _AnimatedMetricPill(
+                      child: HomeAnimatedMetricPill(
                         label: '连续打卡',
                         value: streakDays,
                         formatter: (value) => '$value 天',
@@ -497,14 +452,14 @@ class _HomePageState extends ConsumerState<HomePage>
                     ),
                     SizedBox(width: metrics.contentGap),
                     Expanded(
-                      child: _MetricPill(
+                      child: HomeMetricPill(
                         label: '本周打卡',
                         value: '$weekCheckInCount / 7',
                       ),
                     ),
                     SizedBox(width: metrics.contentGap),
                     Expanded(
-                      child: _AnimatedMetricPill(
+                      child: HomeAnimatedMetricPill(
                         label: '今日阅读',
                         value: todayReadMinutes,
                         formatter: _formatCheckInReadFromMinutes,
@@ -540,8 +495,7 @@ class _HomePageState extends ConsumerState<HomePage>
                     child: AnimatedScale(
                       duration: const Duration(milliseconds: 170),
                       curve: Curves.easeOutCubic,
-                      scale:
-                          canCheckIn && _isCheckInButtonPressed ? 0.98 : 1.0,
+                      scale: canCheckIn && _isCheckInButtonPressed ? 0.98 : 1.0,
                       child: FilledButton(
                         onPressed: canCheckIn ? _handleCheckInToday : null,
                         style: FilledButton.styleFrom(
@@ -667,7 +621,7 @@ class _HomePageState extends ConsumerState<HomePage>
                           height: arcHeight,
                           child: ClipRect(
                             child: CustomPaint(
-                              painter: _ReadingGoalArcPainter(
+                              painter: HomeReadingGoalArcPainter(
                                 progress: progress,
                                 trackColor: colorScheme.outlineVariant
                                     .withValues(alpha: 0.16),
@@ -771,16 +725,63 @@ class _HomePageState extends ConsumerState<HomePage>
     );
   }
 
-  Widget _buildContinueReadingSection(List<ReadingRecord> records) {
+  Widget _buildContinueReadingSection(
+    List<ReadingRecord> records, {
+    bool desktopProminent = false,
+  }) {
+    final metrics = AppAdaptiveMetrics.of(context);
     if (records.isEmpty) {
+      final action = FilledButton.icon(
+        onPressed: () => context.go('/bookshelf'),
+        icon: const Icon(Icons.library_books_outlined),
+        label: const Text('前往书架'),
+      );
       return _buildSurface(
         child: Padding(
-          padding: const EdgeInsets.all(18),
-          child: Text(
-            '还没有阅读记录。首页已经预留好了继续阅读区块，等你开始阅读后这里会自动填充。',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-              height: 1.45,
+          padding: EdgeInsets.all(desktopProminent ? 28 : 18),
+          child: SizedBox(
+            width: double.infinity,
+            height: desktopProminent ? 420 : null,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primaryContainer.withValues(alpha: 0.72),
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.menu_book_rounded,
+                    color: Theme.of(context).colorScheme.primary,
+                    size: 28,
+                  ),
+                ),
+                SizedBox(height: metrics.sectionGap),
+                Text(
+                  '还没有继续阅读记录',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                SizedBox(height: metrics.contentGap),
+                Text(
+                  '首页已经预留好了继续阅读区块。等你开始阅读后，最近在读内容、累计阅读时长和入口都会自动出现在这里。',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    height: 1.55,
+                  ),
+                ),
+                if (desktopProminent)
+                  const Spacer()
+                else
+                  SizedBox(height: metrics.sectionGap),
+                action,
+              ],
             ),
           ),
         ),
@@ -788,20 +789,175 @@ class _HomePageState extends ConsumerState<HomePage>
     }
 
     final visible = records.take(6).toList(growable: false);
-    return SizedBox(
-      height: _kContinueReadingCardHeight,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        itemCount: visible.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final record = visible[index];
-          return SizedBox(
-            width: _kContinueReadingCardWidth,
-            child: _buildContinueReadingCard(record),
-          );
-        },
+    if (!desktopProminent) {
+      return SizedBox(
+        height: _kContinueReadingCardHeight,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          itemCount: visible.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 8),
+          itemBuilder: (context, index) {
+            final record = visible[index];
+            return SizedBox(
+              width: _kContinueReadingCardWidth,
+              child: _buildContinueReadingCard(record),
+            );
+          },
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        if (visible.isNotEmpty)
+          _buildFeaturedContinueReadingCard(visible.first),
+        if (visible.length > 1) ...[
+          SizedBox(height: metrics.sectionGap),
+          SizedBox(
+            height: _kContinueReadingCardHeight,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              itemCount: visible.length - 1,
+              separatorBuilder: (_, __) => const SizedBox(width: 10),
+              itemBuilder: (context, index) {
+                final record = visible[index + 1];
+                return SizedBox(
+                  width: _kContinueReadingCardWidth,
+                  child: _buildContinueReadingCard(record),
+                );
+              },
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildFeaturedContinueReadingCard(ReadingRecord record) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final displayState = _bookPresentationResolver.resolveReadingRecord(
+      record: record,
+    );
+    final metrics = AppAdaptiveMetrics.of(context);
+    final authorText =
+        displayState.displayAuthor?.trim().isNotEmpty == true
+            ? displayState.displayAuthor!
+            : '继续阅读';
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(metrics.cardRadius + 6),
+        onTap: () => unawaited(_openRecord(record)),
+        child: Padding(
+          padding: const EdgeInsets.all(2),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Consumer(
+                builder: (context, ref, _) {
+                  final cover = resolveBookCover(
+                    realCoverUrl: displayState.displayCover,
+                    activeTheme:
+                        ref.watch(activeAdvancedThemeProvider).valueOrNull,
+                    galleries:
+                        ref.watch(coverGalleriesProvider).valueOrNull ??
+                        const [],
+                    brightness: theme.brightness,
+                    bookId: record.bookId,
+                    sourceId: record.sourceId,
+                    detailUrl: record.detailUrl,
+                  );
+                  return Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: [
+                        BoxShadow(
+                          color: colorScheme.shadow.withValues(alpha: 0.16),
+                          blurRadius: 18,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: ResolvedBookCoverView(
+                      cover: cover,
+                      title: displayState.displayTitle,
+                      author: displayState.displayAuthor,
+                      width: 168,
+                      height: 232,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                  );
+                },
+              ),
+              SizedBox(width: metrics.sectionGap),
+              Expanded(
+                child: SizedBox(
+                  height: 232,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        displayState.displayTitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          height: 1.18,
+                        ),
+                      ),
+                      SizedBox(height: metrics.contentGap * 0.55),
+                      Text(
+                        authorText,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      SizedBox(height: metrics.contentGap),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: colorScheme.primaryContainer.withValues(
+                            alpha: 0.42,
+                          ),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          '累计 ${_formatMinutes(record.totalReadMillis)}',
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: colorScheme.primary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        '继续回到上次阅读位置，保持今天的阅读节奏。',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          height: 1.5,
+                        ),
+                      ),
+                      SizedBox(height: metrics.contentGap),
+                      FilledButton(
+                        onPressed: () => unawaited(_openRecord(record)),
+                        child: const Text('继续阅读'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1326,155 +1482,4 @@ class _HomeReadingSummary {
   final int weekReadMillis;
   final int totalBooks;
   final int activeDays;
-}
-
-class _MetricPill extends StatelessWidget {
-  const _MetricPill({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final metrics = AppAdaptiveMetrics.of(context);
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: metrics.contentGap,
-        vertical: metrics.isCompactDensity ? 8 : 12,
-      ),
-      decoration: BoxDecoration(
-        color: colorScheme.surface.withValues(alpha: 0.72),
-        borderRadius: BorderRadius.circular(metrics.cardRadius + 2),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AnimatedMetricPill extends StatelessWidget {
-  const _AnimatedMetricPill({
-    required this.label,
-    required this.value,
-    required this.formatter,
-  });
-
-  final String label;
-  final int value;
-  final String Function(int value) formatter;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final metrics = AppAdaptiveMetrics.of(context);
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: metrics.contentGap,
-        vertical: metrics.isCompactDensity ? 8 : 12,
-      ),
-      decoration: BoxDecoration(
-        color: colorScheme.surface.withValues(alpha: 0.72),
-        borderRadius: BorderRadius.circular(metrics.cardRadius + 2),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 4),
-          TweenAnimationBuilder<double>(
-            tween: Tween<double>(begin: 0, end: value.toDouble()),
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOutCubic,
-            builder: (context, animatedValue, _) {
-              final display = formatter(animatedValue.round());
-              return Text(
-                display,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ReadingGoalArcPainter extends CustomPainter {
-  const _ReadingGoalArcPainter({
-    required this.progress,
-    required this.trackColor,
-    required this.progressColor,
-  });
-
-  final double progress;
-  final Color trackColor;
-  final Color progressColor;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    const strokeWidth = 12.0;
-    final clampedProgress = progress.clamp(0.0, 1.0);
-    final radius = math.min((size.width - strokeWidth) / 2, size.height - 8);
-    final center = Offset(size.width / 2, size.height + radius - 188);
-    final rect = Rect.fromCircle(center: center, radius: radius);
-
-    final trackPaint =
-        Paint()
-          ..color = trackColor
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = strokeWidth
-          ..strokeCap = StrokeCap.round;
-    final progressPaint =
-        Paint()
-          ..color = progressColor
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = strokeWidth
-          ..strokeCap = StrokeCap.round;
-
-    canvas.drawArc(rect, math.pi, math.pi, false, trackPaint);
-    if (clampedProgress > 0) {
-      canvas.drawArc(
-        rect,
-        math.pi,
-        math.pi * clampedProgress,
-        false,
-        progressPaint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _ReadingGoalArcPainter oldDelegate) {
-    return oldDelegate.progress != progress ||
-        oldDelegate.trackColor != trackColor ||
-        oldDelegate.progressColor != progressColor;
-  }
 }

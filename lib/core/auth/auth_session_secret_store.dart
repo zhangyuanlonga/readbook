@@ -1,7 +1,18 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'auth_session_storage_keys.dart';
+
+const String authSecretFallbackAccessTokenStorageKey =
+    'auth.secret_fallback.access_token';
+const String authSecretFallbackRefreshTokenStorageKey =
+    'auth.secret_fallback.refresh_token';
+const String authSecretFallbackAccessExpiresAtStorageKey =
+    'auth.secret_fallback.access_expires_at';
+const String authSecretFallbackRefreshExpiresAtStorageKey =
+    'auth.secret_fallback.refresh_expires_at';
 
 class AuthSessionSecrets {
   const AuthSessionSecrets({
@@ -52,6 +63,38 @@ abstract class AuthSessionSecretStore {
   Future<void> writeSecrets(AuthSessionSecrets secrets);
 
   Future<void> clear();
+}
+
+AuthSessionSecretStore createDefaultAuthSessionSecretStore({
+  SharedPreferences? preferences,
+}) {
+  if (kIsWeb || _isDesktopPlatform(defaultTargetPlatform)) {
+    return SharedPreferencesAuthSessionSecretStore(preferences: preferences);
+  }
+  return FlutterSecureAuthSessionSecretStore();
+}
+
+bool hasPersistedFallbackAuthSecretsSync(SharedPreferences prefs) {
+  return _readNormalizedPrefsValue(
+            prefs,
+            authSecretFallbackAccessTokenStorageKey,
+          ) !=
+          null ||
+      _readNormalizedPrefsValue(
+            prefs,
+            authSecretFallbackRefreshTokenStorageKey,
+          ) !=
+          null ||
+      _readNormalizedPrefsValue(
+            prefs,
+            authSecretFallbackAccessExpiresAtStorageKey,
+          ) !=
+          null ||
+      _readNormalizedPrefsValue(
+            prefs,
+            authSecretFallbackRefreshExpiresAtStorageKey,
+          ) !=
+          null;
 }
 
 class FlutterSecureAuthSessionSecretStore implements AuthSessionSecretStore {
@@ -138,4 +181,108 @@ class FlutterSecureAuthSessionSecretStore implements AuthSessionSecretStore {
       throw StateError('当前运行中的应用尚未加载安全存储插件，请完整重启应用后再试。');
     }
   }
+}
+
+class SharedPreferencesAuthSessionSecretStore
+    implements AuthSessionSecretStore {
+  SharedPreferencesAuthSessionSecretStore({SharedPreferences? preferences})
+    : _preferencesFuture =
+          preferences == null
+              ? SharedPreferences.getInstance()
+              : Future.value(preferences);
+
+  final Future<SharedPreferences> _preferencesFuture;
+
+  @override
+  Future<void> clear() async {
+    final prefs = await _preferencesFuture;
+    await prefs.remove(authSecretFallbackAccessTokenStorageKey);
+    await prefs.remove(authSecretFallbackRefreshTokenStorageKey);
+    await prefs.remove(authSecretFallbackAccessExpiresAtStorageKey);
+    await prefs.remove(authSecretFallbackRefreshExpiresAtStorageKey);
+  }
+
+  @override
+  Future<AuthSessionSecrets> readSecrets() async {
+    final prefs = await _preferencesFuture;
+    return AuthSessionSecrets(
+      accessToken: _readNormalizedPrefsValue(
+        prefs,
+        authSecretFallbackAccessTokenStorageKey,
+      ),
+      refreshToken: _readNormalizedPrefsValue(
+        prefs,
+        authSecretFallbackRefreshTokenStorageKey,
+      ),
+      accessExpiresAt: _parseTime(
+        _readNormalizedPrefsValue(
+          prefs,
+          authSecretFallbackAccessExpiresAtStorageKey,
+        ),
+      ),
+      refreshExpiresAt: _parseTime(
+        _readNormalizedPrefsValue(
+          prefs,
+          authSecretFallbackRefreshExpiresAtStorageKey,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Future<void> writeSecrets(AuthSessionSecrets secrets) async {
+    final prefs = await _preferencesFuture;
+    await _writeString(
+      prefs,
+      authSecretFallbackAccessTokenStorageKey,
+      secrets.accessToken,
+    );
+    await _writeString(
+      prefs,
+      authSecretFallbackRefreshTokenStorageKey,
+      secrets.refreshToken,
+    );
+    await _writeString(
+      prefs,
+      authSecretFallbackAccessExpiresAtStorageKey,
+      secrets.accessExpiresAt?.toUtc().toIso8601String(),
+    );
+    await _writeString(
+      prefs,
+      authSecretFallbackRefreshExpiresAtStorageKey,
+      secrets.refreshExpiresAt?.toUtc().toIso8601String(),
+    );
+  }
+
+  DateTime? _parseTime(String? raw) {
+    final value = raw?.trim() ?? '';
+    if (value.isEmpty) {
+      return null;
+    }
+    return DateTime.tryParse(value)?.toUtc();
+  }
+
+  Future<void> _writeString(
+    SharedPreferences prefs,
+    String key,
+    String? value,
+  ) async {
+    final normalized = value?.trim() ?? '';
+    if (normalized.isEmpty) {
+      await prefs.remove(key);
+      return;
+    }
+    await prefs.setString(key, normalized);
+  }
+}
+
+bool _isDesktopPlatform(TargetPlatform platform) {
+  return platform == TargetPlatform.macOS ||
+      platform == TargetPlatform.windows ||
+      platform == TargetPlatform.linux;
+}
+
+String? _readNormalizedPrefsValue(SharedPreferences prefs, String key) {
+  final value = prefs.getString(key)?.trim() ?? '';
+  return value.isEmpty ? null : value;
 }

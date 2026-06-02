@@ -215,11 +215,6 @@ class MinePageSessionService {
     await prefs.remove(_profileAvatarStorageKey(userId.trim()));
   }
 
-  Future<String?> restoreLayoutMode(String storageKey) async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(storageKey);
-  }
-
   Future<void> clearUserScopedCache(String? userId) async {
     final normalizedUserId = userId?.trim() ?? '';
     if (normalizedUserId.isEmpty) {
@@ -231,14 +226,6 @@ class MinePageSessionService {
       existingPath: existingAvatarPath,
     );
     await _remoteAccessSnapshotService.clear(normalizedUserId);
-  }
-
-  Future<void> persistLayoutMode({
-    required String storageKey,
-    required String value,
-  }) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(storageKey, value);
   }
 
   String avatarExtensionForName(String fileName) {

@@ -28,6 +28,11 @@ Future<void> main(List<String> args) async {
       arguments: ['run', 'tool/check_architecture_guardrails.dart'],
     ),
     const _SuiteStep(
+      name: 'Engineering Baseline Audit',
+      executable: 'dart',
+      arguments: ['run', 'tool/check_codebase_engineering_baseline.dart'],
+    ),
+    const _SuiteStep(
       name: 'Storage Governance Guard',
       executable: 'dart',
       arguments: ['run', 'tool/check_storage_governance_guard.dart'],

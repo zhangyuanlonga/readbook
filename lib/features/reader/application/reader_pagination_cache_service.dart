@@ -465,8 +465,8 @@ class ReaderPaginationCacheService {
   }
 
   static Future<Directory> _defaultDirectoryProvider() async {
-    final tempDirectory = await getTemporaryDirectory();
-    return Directory(p.join(tempDirectory.path, 'reader_pagination_cache'));
+    final cacheDirectory = await getApplicationCacheDirectory();
+    return Directory(p.join(cacheDirectory.path, 'reader_pagination_cache'));
   }
 
   Future<File> _legacyChapterLayoutCacheFile({

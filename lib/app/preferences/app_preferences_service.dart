@@ -2,6 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/storage/managed_asset_store.dart';
+import 'app_shell_navigation_snapshot.dart';
+import 'preference_key.dart';
 
 const String appThemeModePreferenceKey = 'app.themeMode';
 const String appSeedColorPreferenceKey = 'app.seedColor';
@@ -32,6 +34,27 @@ const String appShellNavigationStatsPreferenceKey =
     'app.shell.navigation.stats';
 const String appShellNavigationSourcePreferenceKey =
     'app.shell.navigation.source';
+
+const PreferenceKey<bool> appShellNavigationHomePreference =
+    PreferenceKey<bool>(
+      appShellNavigationHomePreferenceKey,
+      defaultValue: true,
+    );
+const PreferenceKey<bool> appShellNavigationBookshelfPreference =
+    PreferenceKey<bool>(
+      appShellNavigationBookshelfPreferenceKey,
+      defaultValue: true,
+    );
+const PreferenceKey<bool> appShellNavigationDiscoverPreference =
+    PreferenceKey<bool>(
+      appShellNavigationDiscoverPreferenceKey,
+      defaultValue: false,
+    );
+const PreferenceKey<bool> appShellNavigationStatsPreference =
+    PreferenceKey<bool>(
+      appShellNavigationStatsPreferenceKey,
+      defaultValue: true,
+    );
 
 final appThemePreferencesServiceProvider = Provider<AppThemePreferencesService>(
   (ref) {
@@ -102,12 +125,11 @@ class AppInterfaceTypographyPreferencesService {
   AppInterfaceTypographyPreferencesService({
     SharedPreferences? preferences,
     ManagedAssetStore? assetStore,
-  })
-    : _preferencesFuture =
-          preferences == null
-              ? SharedPreferences.getInstance()
-              : Future.value(preferences),
-      _assetStore = assetStore ?? ManagedAssetStore();
+  }) : _preferencesFuture =
+           preferences == null
+               ? SharedPreferences.getInstance()
+               : Future.value(preferences),
+       _assetStore = assetStore ?? ManagedAssetStore();
 
   final Future<SharedPreferences> _preferencesFuture;
   final ManagedAssetStore _assetStore;
@@ -282,20 +304,6 @@ class AppNavigationPreferencesService {
   }
 }
 
-class AppShellNavigationSnapshot {
-  const AppShellNavigationSnapshot({
-    required this.showHome,
-    required this.showBookshelf,
-    required this.showDiscover,
-    required this.showStats,
-  });
-
-  final bool showHome;
-  final bool showBookshelf;
-  final bool showDiscover;
-  final bool showStats;
-}
-
 class AppShellNavigationPreferencesService {
   AppShellNavigationPreferencesService({SharedPreferences? preferences})
     : _preferencesFuture =
@@ -309,30 +317,47 @@ class AppShellNavigationPreferencesService {
     final prefs = await _preferencesFuture;
     await prefs.remove(appShellNavigationSourcePreferenceKey);
     return AppShellNavigationSnapshot(
-      showHome: prefs.getBool(appShellNavigationHomePreferenceKey) ?? true,
-      showBookshelf:
-          prefs.getBool(appShellNavigationBookshelfPreferenceKey) ?? true,
-      showDiscover:
-          prefs.getBool(appShellNavigationDiscoverPreferenceKey) ?? false,
-      showStats: prefs.getBool(appShellNavigationStatsPreferenceKey) ?? true,
+      showHome: _readBool(prefs, appShellNavigationHomePreference),
+      showBookshelf: _readBool(prefs, appShellNavigationBookshelfPreference),
+      showDiscover: _readBool(prefs, appShellNavigationDiscoverPreference),
+      showStats: _readBool(prefs, appShellNavigationStatsPreference),
     );
   }
 
   Future<void> saveShellNavigation(AppShellNavigationSnapshot snapshot) async {
     final prefs = await _preferencesFuture;
-    await prefs.setBool(appShellNavigationHomePreferenceKey, snapshot.showHome);
-    await prefs.setBool(
-      appShellNavigationBookshelfPreferenceKey,
+    await _writeBool(
+      prefs,
+      appShellNavigationHomePreference,
+      snapshot.showHome,
+    );
+    await _writeBool(
+      prefs,
+      appShellNavigationBookshelfPreference,
       snapshot.showBookshelf,
     );
-    await prefs.setBool(
-      appShellNavigationDiscoverPreferenceKey,
+    await _writeBool(
+      prefs,
+      appShellNavigationDiscoverPreference,
       snapshot.showDiscover,
     );
-    await prefs.setBool(
-      appShellNavigationStatsPreferenceKey,
+    await _writeBool(
+      prefs,
+      appShellNavigationStatsPreference,
       snapshot.showStats,
     );
     await prefs.remove(appShellNavigationSourcePreferenceKey);
+  }
+
+  bool _readBool(SharedPreferences prefs, PreferenceKey<bool> key) {
+    return prefs.getBool(key.name) ?? key.defaultValue ?? false;
+  }
+
+  Future<void> _writeBool(
+    SharedPreferences prefs,
+    PreferenceKey<bool> key,
+    bool value,
+  ) {
+    return prefs.setBool(key.name, value);
   }
 }

@@ -13,6 +13,8 @@ import 'package:responsive_framework/responsive_framework.dart';
 /// - expanded: 840dp 及以上的大屏设备。
 enum AppWidthBucket { compact, largePhone, phoneXl, medium, expanded }
 
+enum AppDesktopWidthClass { desktop, wideDesktop, ultraWideDesktop }
+
 class AppLayout {
   const AppLayout._();
 
@@ -31,6 +33,9 @@ class AppLayout {
   static const double phoneXlBreakpointWidth = 480;
   static const double mediumBreakpointWidth = 600;
   static const double expandedBreakpointWidth = 840;
+  static const double desktopBreakpointWidth = 1200;
+  static const double wideDesktopBreakpointWidth = 1600;
+  static const double ultraWideDesktopBreakpointWidth = 1920;
   static const double actionWrapWidth = 420;
   static const double phoneLargeWidth = largePhoneBreakpointWidth;
   static const double railBreakpointWidth = mediumBreakpointWidth;
@@ -189,6 +194,28 @@ class AppLayout {
 
   static bool isExpandedWidth(double width) {
     return width >= expandedBreakpointWidth;
+  }
+
+  static AppDesktopWidthClass desktopWidthClass(BuildContext context) {
+    return desktopWidthClassFor(screenWidth(context));
+  }
+
+  static AppDesktopWidthClass desktopWidthClassFor(double width) {
+    if (width >= ultraWideDesktopBreakpointWidth) {
+      return AppDesktopWidthClass.ultraWideDesktop;
+    }
+    if (width >= wideDesktopBreakpointWidth) {
+      return AppDesktopWidthClass.wideDesktop;
+    }
+    return AppDesktopWidthClass.desktop;
+  }
+
+  static bool isWideDesktopWidth(double width) {
+    return width >= wideDesktopBreakpointWidth;
+  }
+
+  static bool isUltraWideDesktopWidth(double width) {
+    return width >= ultraWideDesktopBreakpointWidth;
   }
 
   static bool isMediumWidth(double width) {

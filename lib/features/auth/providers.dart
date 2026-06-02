@@ -6,7 +6,7 @@ import '../../core/auth/auth_session_store.dart';
 import '../../core/user/user_profile_service.dart';
 
 final authSessionSecretStoreProvider = Provider<AuthSessionSecretStore>((ref) {
-  return FlutterSecureAuthSessionSecretStore();
+  return createDefaultAuthSessionSecretStore();
 });
 
 final authServiceProvider = Provider<AuthService>((ref) {

@@ -57,6 +57,11 @@ class AppAdaptiveMetrics {
   bool get isExpandedWindow => windowClass == AppWindowClass.expanded;
   bool get isMediumUpWindow => !isCompactWindow;
   bool get isCompactDensity => density == AppDensity.compact;
+  AppDesktopWidthClass get desktopWidthClass =>
+      AppLayout.desktopWidthClassFor(width);
+  bool get isWideDesktopWindow => width >= AppLayout.wideDesktopBreakpointWidth;
+  bool get isUltraWideDesktopWindow =>
+      width >= AppLayout.ultraWideDesktopBreakpointWidth;
 
   bool isDesktopLikeForPlatform({
     required bool isWeb,

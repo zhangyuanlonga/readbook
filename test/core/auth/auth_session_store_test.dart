@@ -119,4 +119,44 @@ void main() {
     expect(prefs.getString('auth.access_token'), isNull);
     expect(prefs.getString('auth.refresh_token'), isNull);
   });
+
+  test(
+    'shared preferences secret store persists desktop compatible secrets',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      final secretStore = SharedPreferencesAuthSessionSecretStore(
+        preferences: prefs,
+      );
+      final store = AuthSessionStore(
+        preferences: prefs,
+        secretStore: secretStore,
+        enableLegacyCredentialFallback: false,
+      );
+
+      await store.saveSession(
+        const AuthSession(
+          accessToken: 'desktop_access',
+          refreshToken: 'desktop_refresh',
+          userId: 'desktop_user',
+          username: 'desktop_reader',
+          displayName: 'Desktop Reader',
+        ),
+      );
+
+      expect(
+        prefs.getString(authSecretFallbackAccessTokenStorageKey),
+        'desktop_access',
+      );
+      expect(
+        prefs.getString(authSecretFallbackRefreshTokenStorageKey),
+        'desktop_refresh',
+      );
+
+      final session = await store.getSession();
+      expect(session, isNotNull);
+      expect(session?.accessToken, 'desktop_access');
+      expect(session?.refreshToken, 'desktop_refresh');
+      expect(session?.userId, 'desktop_user');
+    },
+  );
 }

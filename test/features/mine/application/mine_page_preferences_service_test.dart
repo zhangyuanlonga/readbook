@@ -97,4 +97,20 @@ void main() {
       MinePageStartupDestination.bookshelf,
     );
   });
+
+  test('layout mode defaults to null and persists grid mode', () async {
+    final service = MinePagePreferencesService();
+
+    expect(await service.loadLayoutMode(), isNull);
+
+    await service.saveLayoutMode(MinePageLayoutMode.grid);
+
+    expect(await service.loadLayoutMode(), MinePageLayoutMode.grid);
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(
+      prefs.getString(MinePagePreferencesService.layoutModePreferenceKey),
+      'grid',
+    );
+  });
 }

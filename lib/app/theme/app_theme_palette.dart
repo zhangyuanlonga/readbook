@@ -71,10 +71,21 @@ const Color _defaultLightTertiary = Color(0xFF1677FF);
 const Color _defaultLightOnTertiary = Color(0xFFFFFFFF);
 const Color _defaultLightTertiaryContainer = Color(0xFFEAF2FF);
 const Color _defaultLightOnTertiaryContainer = Color(0xFF0F172A);
-const Color _defaultLightOutline = Color(0xFFD9DEE5);
-const Color _defaultLightOutlineVariant = Color(0xFFE6E6E6);
-const Color _defaultLightInverseSurface = Color(0xFF1F2937);
-const Color _defaultLightInversePrimary = Color(0xFF9DC2FF);
+const Color _snowWhiteLightSurface = Color(0xFFF8F9FA);
+const Color _snowWhiteLightSurfaceDim = Color(0xFFD9DADB);
+const Color _snowWhiteLightSurfaceBright = Color(0xFFF8F9FA);
+const Color _snowWhiteLightSurfaceContainerLowest = Color(0xFFFFFFFF);
+const Color _snowWhiteLightSurfaceContainerLow = Color(0xFFF3F4F5);
+const Color _snowWhiteLightSurfaceContainer = Color(0xFFEDEEEF);
+const Color _snowWhiteLightSurfaceContainerHigh = Color(0xFFE7E8E9);
+const Color _snowWhiteLightSurfaceContainerHighest = Color(0xFFE1E3E4);
+const Color _snowWhiteLightOnSurface = Color(0xFF191C1D);
+const Color _snowWhiteLightOnSurfaceVariant = Color(0xFF414755);
+const Color _snowWhiteLightOutline = Color(0xFF727786);
+const Color _snowWhiteLightOutlineVariant = Color(0xFFC1C6D7);
+const Color _snowWhiteLightInverseSurface = Color(0xFF2E3132);
+const Color _snowWhiteLightOnInverseSurface = Color(0xFFF0F1F2);
+const Color _snowWhiteLightInversePrimary = Color(0xFFAFc6FF);
 const Color _defaultDarkPrimary = Color(0xFF8EB8FF);
 const Color _defaultDarkOnPrimary = Color(0xFF082A5E);
 const Color _defaultDarkPrimaryContainer = Color(0xFF123B78);
@@ -199,7 +210,6 @@ ColorScheme buildAppLightColorScheme(Color seedColor) {
   }
 
   if (isPureWhiteThemeSeed(seedColor)) {
-    const pureWhite = Color(0xFFFFFFFF);
     return neutralSurfaceScheme.copyWith(
       primary: _defaultLightPrimary,
       onPrimary: _defaultLightOnPrimary,
@@ -213,20 +223,22 @@ ColorScheme buildAppLightColorScheme(Color seedColor) {
       onTertiary: _defaultLightOnTertiary,
       tertiaryContainer: _defaultLightTertiaryContainer,
       onTertiaryContainer: _defaultLightOnTertiaryContainer,
-      surface: pureWhite,
-      surfaceDim: pureWhite,
-      surfaceBright: pureWhite,
-      surfaceContainerLowest: pureWhite,
-      surfaceContainerLow: pureWhite,
-      surfaceContainer: pureWhite,
-      surfaceContainerHigh: pureWhite,
-      surfaceContainerHighest: pureWhite,
+      surface: _snowWhiteLightSurface,
+      surfaceDim: _snowWhiteLightSurfaceDim,
+      surfaceBright: _snowWhiteLightSurfaceBright,
+      surfaceContainerLowest: _snowWhiteLightSurfaceContainerLowest,
+      surfaceContainerLow: _snowWhiteLightSurfaceContainerLow,
+      surfaceContainer: _snowWhiteLightSurfaceContainer,
+      surfaceContainerHigh: _snowWhiteLightSurfaceContainerHigh,
+      surfaceContainerHighest: _snowWhiteLightSurfaceContainerHighest,
+      onSurface: _snowWhiteLightOnSurface,
+      onSurfaceVariant: _snowWhiteLightOnSurfaceVariant,
       surfaceTint: Colors.transparent,
-      outline: _defaultLightOutline,
-      outlineVariant: _defaultLightOutlineVariant,
-      inverseSurface: _defaultLightInverseSurface,
-      onInverseSurface: pureWhite,
-      inversePrimary: _defaultLightInversePrimary,
+      outline: _snowWhiteLightOutline,
+      outlineVariant: _snowWhiteLightOutlineVariant,
+      inverseSurface: _snowWhiteLightInverseSurface,
+      onInverseSurface: _snowWhiteLightOnInverseSurface,
+      inversePrimary: _snowWhiteLightInversePrimary,
     );
   }
 

@@ -294,6 +294,25 @@ void main() {
     expect(bucket840, AppWidthBucket.expanded);
   });
 
+  testWidgets('AppLayout 按桌面宽屏断点划分桌面宽度等级', (tester) async {
+    expect(AppLayout.desktopWidthClassFor(1199), AppDesktopWidthClass.desktop);
+    expect(
+      AppLayout.desktopWidthClassFor(1600),
+      AppDesktopWidthClass.wideDesktop,
+    );
+    expect(
+      AppLayout.desktopWidthClassFor(1920),
+      AppDesktopWidthClass.ultraWideDesktop,
+    );
+
+    final metrics = AppAdaptiveMetrics.resolveForSize(
+      size: const Size(1920, 1080),
+    );
+    expect(metrics.desktopWidthClass, AppDesktopWidthClass.ultraWideDesktop);
+    expect(metrics.isWideDesktopWindow, isTrue);
+    expect(metrics.isUltraWideDesktopWindow, isTrue);
+  });
+
   testWidgets('AppLayout pageContentMaxWidth 在手机上保持原宽，在中大屏按可用宽度限宽', (
     tester,
   ) async {
@@ -665,7 +684,9 @@ void main() {
     await _pumpShellScaffold(tester, width: AppLayout.railBreakpointWidth);
 
     expect(find.byType(NavigationBar), findsNothing);
-    expect(find.byType(NavigationRail), findsOneWidget);
+    expect(find.byKey(const ValueKey('desktop_shell_sidebar')), findsOneWidget);
+    expect(find.text('Selune'), findsOneWidget);
+    expect(find.text('书架'), findsOneWidget);
   });
 
   testWidgets('ShellScaffold 底部导航保持统计页位于我的之前', (tester) async {
@@ -722,11 +743,11 @@ void main() {
     );
     expect(
       (destinations[1].icon as BottomNavIconView).icon.fallbackIcon,
-      Icons.menu_book_outlined,
+      Icons.library_books_outlined,
     );
     expect(
       (destinations[1].selectedIcon as BottomNavIconView).icon.fallbackIcon,
-      Icons.menu_book_rounded,
+      Icons.library_books_rounded,
     );
     expect(
       (destinations[2].icon as BottomNavIconView).icon.fallbackIcon,
@@ -851,7 +872,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.byType(NavigationRail), findsOneWidget);
+    expect(find.byKey(const ValueKey('desktop_shell_sidebar')), findsOneWidget);
     expect(find.byType(CupertinoDockNavigationBar), findsNothing);
     expect(find.byType(NavigationBar), findsNothing);
   });

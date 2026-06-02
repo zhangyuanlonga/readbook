@@ -80,26 +80,6 @@ void main() {
     },
   );
 
-  test('persists and restores layout mode', () async {
-    final service = MinePageSessionService(
-      authSessionStore: AuthSessionStore(
-        secretStore: FakeAuthSessionSecretStore(),
-      ),
-      mobileFeatureService: _FakeMobileFeatureService(),
-      membershipService: _FakeMembershipService(),
-      userProfileService: _FakeUserProfileService(
-        userId: 'layout_user',
-        username: 'layout_user',
-        account: 'layout_user',
-        displayName: 'Layout User',
-      ),
-      remoteAccessSnapshotService: RemoteAccessSnapshotService(),
-    );
-
-    await service.persistLayoutMode(storageKey: 'layout', value: 'grid');
-    expect(await service.restoreLayoutMode('layout'), 'grid');
-  });
-
   test('uses cached remote snapshot when remote refresh is disabled', () async {
     final prefs = await SharedPreferences.getInstance();
     final store = AuthSessionStore(

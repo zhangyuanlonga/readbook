@@ -9,6 +9,7 @@ import 'package:image_picker_platform_interface/image_picker_platform_interface.
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app.dart';
+import 'router.dart';
 import 'startup_artwork_store.dart';
 import '../features/mine/application/advanced_theme_provider.dart';
 import '../features/mine/application/mine_page_session_service.dart';
@@ -19,6 +20,7 @@ import '../core/logging/source_log_store.dart';
 import '../core/storage/managed_file_path_resolver.dart';
 import 'navigation/app_navigation_style_provider.dart';
 import 'platform/app_platform_capabilities.dart';
+import 'platform/desktop_window_bootstrap.dart';
 import 'startup/managed_asset_path_migration_service.dart';
 import 'theme/app_interface_typography_provider.dart';
 import 'theme/app_theme_provider.dart';
@@ -26,6 +28,7 @@ import 'theme/app_theme_seed_provider.dart';
 
 Future<void> bootstrap() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await DesktopWindowBootstrap.configure();
   unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
   _configureImagePicker();
   final prefs = await SharedPreferences.getInstance();
@@ -38,6 +41,7 @@ Future<void> bootstrap() async {
   ActiveAdvancedThemeIdNotifier.prime(prefs);
   ActiveThemeAppearanceSnapshotNotifier.prime(prefs);
   MinePageSessionPriming.prime(prefs);
+  AuthSessionSnapshotBootstrap.prime(prefs);
   AppInterfaceFontSettingsNotifier.prime(prefs);
   AppInterfaceTextScaleNotifier.prime(prefs);
   AppInterfaceFontWeightNotifier.prime(prefs);

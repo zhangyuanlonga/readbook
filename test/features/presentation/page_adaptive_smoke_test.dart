@@ -1,4 +1,4 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -42,6 +42,37 @@ void main() {
       useProviderScope: true,
       pageName: 'MinePage',
     );
+  });
+
+  testWidgets('MinePage uses desktop profile card on desktop platform', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    await tester.binding.setSurfaceSize(const Size(1280, 800));
+    addTearDown(() async {
+      await tester.binding.setSurfaceSize(null);
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          theme: ThemeData(platform: TargetPlatform.macOS),
+          home: const MinePage(),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(
+      find.byKey(const ValueKey<String>('mine_desktop_profile_card')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('mine_mobile_profile_card')),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets(

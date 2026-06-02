@@ -166,7 +166,10 @@ void main() {
               'textScale=$textScaleFactor)',
         );
         if (item.size.width >= AppLayout.railBreakpointWidth) {
-          expect(find.byType(NavigationRail), findsOneWidget);
+          expect(
+            find.byKey(const ValueKey('desktop_shell_sidebar')),
+            findsOneWidget,
+          );
         } else {
           expect(find.byType(NavigationBar), findsOneWidget);
         }

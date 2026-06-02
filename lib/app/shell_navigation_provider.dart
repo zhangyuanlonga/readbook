@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:freezed_annotation/freezed_annotation.dart';
 
+import 'preferences/app_shell_navigation_snapshot.dart';
 import 'preferences/app_preferences_service.dart';
+
+part 'shell_navigation_provider.freezed.dart';
 
 enum AppShellTab { home, bookshelf, discover, stats, mine }
 
@@ -33,8 +37,8 @@ const List<AppShellDestination> appShellDestinations = [
     tab: AppShellTab.bookshelf,
     location: '/bookshelf',
     label: '书架',
-    icon: Icons.menu_book_outlined,
-    selectedIcon: Icons.menu_book_rounded,
+    icon: Icons.library_books_outlined,
+    selectedIcon: Icons.library_books_rounded,
   ),
   AppShellDestination(
     tab: AppShellTab.discover,
@@ -59,18 +63,16 @@ const List<AppShellDestination> appShellDestinations = [
   ),
 ];
 
-class AppShellNavigationState {
-  const AppShellNavigationState({
-    this.showHome = true,
-    this.showBookshelf = true,
-    this.showDiscover = false,
-    this.showStats = true,
-  });
+@freezed
+abstract class AppShellNavigationState with _$AppShellNavigationState {
+  const AppShellNavigationState._();
 
-  final bool showHome;
-  final bool showBookshelf;
-  final bool showDiscover;
-  final bool showStats;
+  const factory AppShellNavigationState({
+    @Default(true) bool showHome,
+    @Default(true) bool showBookshelf,
+    @Default(true) bool showDiscover,
+    @Default(true) bool showStats,
+  }) = _AppShellNavigationState;
 
   int get configurableVisibleCount {
     var count = 0;
@@ -102,33 +104,6 @@ class AppShellNavigationState {
   int get visibleTabCount {
     return configurableVisibleCount + 1;
   }
-
-  AppShellNavigationState copyWith({
-    bool? showHome,
-    bool? showBookshelf,
-    bool? showDiscover,
-    bool? showStats,
-  }) {
-    return AppShellNavigationState(
-      showHome: showHome ?? this.showHome,
-      showBookshelf: showBookshelf ?? this.showBookshelf,
-      showDiscover: showDiscover ?? this.showDiscover,
-      showStats: showStats ?? this.showStats,
-    );
-  }
-
-  @override
-  bool operator ==(Object other) {
-    return other is AppShellNavigationState &&
-        other.showHome == showHome &&
-        other.showBookshelf == showBookshelf &&
-        other.showDiscover == showDiscover &&
-        other.showStats == showStats;
-  }
-
-  @override
-  int get hashCode =>
-      Object.hash(showHome, showBookshelf, showDiscover, showStats);
 }
 
 List<AppShellDestination> visibleAppShellDestinations(

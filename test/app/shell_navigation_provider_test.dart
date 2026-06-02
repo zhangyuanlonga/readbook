@@ -4,6 +4,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  group('AppShellNavigationState', () {
+    test('uses generated copyWith and value equality', () {
+      final state = const AppShellNavigationState().copyWith(
+        showDiscover: false,
+      );
+
+      expect(state, const AppShellNavigationState(showDiscover: false));
+      expect(state.visibleTabCount, 4);
+    });
+  });
+
   group('AppShellNavigationNotifier', () {
     setUp(() {
       SharedPreferences.setMockInitialValues({});
@@ -15,9 +26,9 @@ void main() {
 
       final state = container.read(appShellNavigationProvider);
       expect(state.showBookshelf, isTrue);
-      expect(state.showDiscover, isFalse);
+      expect(state.showDiscover, isTrue);
       expect(state.showStats, isTrue);
-      expect(state.visibleTabCount, 4);
+      expect(state.visibleTabCount, 5);
     });
 
     test('persists configurable tab visibility', () async {
@@ -46,7 +57,7 @@ void main() {
 
       final updated = container.read(appShellNavigationProvider);
       expect(updated.showStats, isFalse);
-      expect(updated.visibleTabCount, 3);
+      expect(updated.visibleTabCount, 4);
 
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getBool('app.shell.navigation.stats'), isFalse);
@@ -61,7 +72,7 @@ void main() {
           .setTabVisible(AppShellTab.mine, false);
 
       final state = container.read(appShellNavigationProvider);
-      expect(state.visibleTabCount, 4);
+      expect(state.visibleTabCount, 5);
     });
   });
 }

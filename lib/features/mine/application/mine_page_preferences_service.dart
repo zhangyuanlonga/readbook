@@ -1,7 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../app/preferences/preference_key.dart';
+
 enum MinePageStartupDestination { home, bookshelf }
+
+enum MinePageLayoutMode { grid, list }
 
 extension MinePageStartupDestinationX on MinePageStartupDestination {
   String get label {
@@ -196,6 +200,9 @@ class MinePageVisibilityState {
     if (!definition.displayable) {
       return false;
     }
+    if (kIsWeb && itemId == MinePageItemId.checkUpdate) {
+      return false;
+    }
     if (!definition.configurable) {
       return true;
     }
@@ -239,8 +246,23 @@ class MinePagePreferencesService {
               ? SharedPreferences.getInstance()
               : Future<SharedPreferences>.value(preferences);
 
-  static const String _hiddenItemIdsKey = 'mine.page.hiddenItems';
-  static const String _startupDestinationKey = 'app.startup.destination';
+  static const String hiddenItemIdsPreferenceKey = 'mine.page.hiddenItems';
+  static const String startupDestinationPreferenceKey =
+      'app.startup.destination';
+  static const String layoutModePreferenceKey = 'mine.page.layoutMode';
+
+  static const PreferenceKey<List<String>> hiddenItemIdsPreference =
+      PreferenceKey<List<String>>(
+        hiddenItemIdsPreferenceKey,
+        defaultValue: <String>[],
+      );
+  static const PreferenceKey<String> startupDestinationPreference =
+      PreferenceKey<String>(
+        startupDestinationPreferenceKey,
+        defaultValue: 'home',
+      );
+  static const PreferenceKey<String> layoutModePreference =
+      PreferenceKey<String>(layoutModePreferenceKey);
 
   final Future<SharedPreferences> _preferencesFuture;
 
@@ -258,7 +280,7 @@ class MinePagePreferencesService {
         })
         .map((itemId) => itemId.name)
         .toList(growable: false);
-    await prefs.setStringList(_hiddenItemIdsKey, hiddenIds);
+    await _writeStringList(prefs, hiddenItemIdsPreference, hiddenIds);
   }
 
   Future<MinePageStartupDestination> loadStartupDestination() async {
@@ -270,11 +292,21 @@ class MinePagePreferencesService {
     MinePageStartupDestination destination,
   ) async {
     final prefs = await _preferencesFuture;
-    await prefs.setString(_startupDestinationKey, destination.name);
+    await _writeString(prefs, startupDestinationPreference, destination.name);
+  }
+
+  Future<MinePageLayoutMode?> loadLayoutMode() async {
+    final prefs = await _preferencesFuture;
+    return readLayoutMode(prefs);
+  }
+
+  Future<void> saveLayoutMode(MinePageLayoutMode mode) async {
+    final prefs = await _preferencesFuture;
+    await _writeString(prefs, layoutModePreference, mode.name);
   }
 
   static MinePageVisibilityState readVisibilityState(SharedPreferences prefs) {
-    final rawIds = prefs.getStringList(_hiddenItemIdsKey) ?? const <String>[];
+    final rawIds = _readStringList(prefs, hiddenItemIdsPreference);
     final hiddenIds = rawIds
         .map(_itemIdFromRaw)
         .whereType<MinePageItemId>()
@@ -289,7 +321,13 @@ class MinePagePreferencesService {
   static MinePageStartupDestination readStartupDestination(
     SharedPreferences prefs,
   ) {
-    return _startupDestinationFromRaw(prefs.getString(_startupDestinationKey));
+    return _startupDestinationFromRaw(
+      _readString(prefs, startupDestinationPreference),
+    );
+  }
+
+  static MinePageLayoutMode? readLayoutMode(SharedPreferences prefs) {
+    return _layoutModeFromRaw(_readString(prefs, layoutModePreference));
   }
 
   static MinePageItemId? _itemIdFromRaw(String raw) {
@@ -306,5 +344,45 @@ class MinePagePreferencesService {
       'bookshelf' => MinePageStartupDestination.bookshelf,
       _ => MinePageStartupDestination.home,
     };
+  }
+
+  static MinePageLayoutMode? _layoutModeFromRaw(String? raw) {
+    return switch (raw) {
+      'grid' => MinePageLayoutMode.grid,
+      'list' => MinePageLayoutMode.list,
+      _ => null,
+    };
+  }
+
+  static String? _readString(
+    SharedPreferences prefs,
+    PreferenceKey<String> key,
+  ) {
+    return prefs.getString(key.name) ?? key.defaultValue;
+  }
+
+  static List<String> _readStringList(
+    SharedPreferences prefs,
+    PreferenceKey<List<String>> key,
+  ) {
+    return prefs.getStringList(key.name) ??
+        key.defaultValue ??
+        const <String>[];
+  }
+
+  static Future<void> _writeString(
+    SharedPreferences prefs,
+    PreferenceKey<String> key,
+    String value,
+  ) {
+    return prefs.setString(key.name, value);
+  }
+
+  static Future<void> _writeStringList(
+    SharedPreferences prefs,
+    PreferenceKey<List<String>> key,
+    List<String> value,
+  ) {
+    return prefs.setStringList(key.name, value);
   }
 }

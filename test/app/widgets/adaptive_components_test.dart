@@ -7,8 +7,10 @@ import 'package:shuxiang_reading_next/app/widgets/adaptive_bottom_sheet.dart';
 import 'package:shuxiang_reading_next/app/widgets/adaptive_content_container.dart';
 import 'package:shuxiang_reading_next/app/widgets/adaptive_filter_bar.dart';
 import 'package:shuxiang_reading_next/app/widgets/adaptive_list_tile.dart';
+import 'package:shuxiang_reading_next/app/widgets/adaptive_overflow_toolbar.dart';
 import 'package:shuxiang_reading_next/app/widgets/adaptive_search_bar.dart';
 import 'package:shuxiang_reading_next/app/widgets/adaptive_setting_tile.dart';
+import 'package:shuxiang_reading_next/app/widgets/adaptive_split_body.dart';
 import 'package:shuxiang_reading_next/app/widgets/app_empty_state_card.dart';
 import 'package:shuxiang_reading_next/app/widgets/app_task_bottom_sheet.dart';
 import 'package:shuxiang_reading_next/app/widgets/import_export_task_overlay.dart';
@@ -199,6 +201,134 @@ void main() {
     final semantics = tester.getSemantics(find.byType(AdaptiveListTile));
     expect(semantics.flagsCollection.isSelected, Tristate.isTrue);
     expect(semantics.flagsCollection.isEnabled, Tristate.isFalse);
+  });
+
+  testWidgets('AdaptiveSplitBody stacks below breakpoint and splits above it', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const AdaptiveTestHarness(
+        width: 700,
+        height: 800,
+        wrapWithMaterialApp: true,
+        child: Scaffold(
+          body: SizedBox(
+            width: 700,
+            child: AdaptiveSplitBody(
+              primary: SizedBox(
+                key: ValueKey<String>('split_primary'),
+                height: 40,
+              ),
+              secondary: SizedBox(
+                key: ValueKey<String>('split_secondary'),
+                height: 40,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    var primaryTop = tester.getTopLeft(
+      find.byKey(const ValueKey<String>('split_primary')),
+    );
+    var secondaryTop = tester.getTopLeft(
+      find.byKey(const ValueKey<String>('split_secondary')),
+    );
+    expect(secondaryTop.dy, greaterThan(primaryTop.dy));
+
+    await tester.pumpWidget(
+      const AdaptiveTestHarness(
+        width: 1024,
+        height: 800,
+        wrapWithMaterialApp: true,
+        child: Scaffold(
+          body: SizedBox(
+            width: 1024,
+            child: AdaptiveSplitBody(
+              breakpoint: 600,
+              primary: SizedBox(
+                key: ValueKey<String>('split_primary'),
+                height: 40,
+              ),
+              secondary: SizedBox(
+                key: ValueKey<String>('split_secondary'),
+                height: 40,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    primaryTop = tester.getTopLeft(
+      find.byKey(const ValueKey<String>('split_primary')),
+    );
+    secondaryTop = tester.getTopLeft(
+      find.byKey(const ValueKey<String>('split_secondary')),
+    );
+    expect(secondaryTop.dx, greaterThan(primaryTop.dx));
+    expect((secondaryTop.dy - primaryTop.dy).abs(), lessThan(1));
+  });
+
+  testWidgets('AdaptiveOverflowToolbar keeps priority items visible', (
+    tester,
+  ) async {
+    var firstTapped = false;
+    var thirdTapped = false;
+    await tester.pumpWidget(
+      AdaptiveTestHarness(
+        width: 180,
+        height: 200,
+        wrapWithMaterialApp: true,
+        child: Scaffold(
+          body: SizedBox(
+            width: 104,
+            child: AdaptiveOverflowToolbar(
+              spacing: 8,
+              items: [
+                AdaptiveOverflowToolbarItem(
+                  icon: Icons.star,
+                  label: '重要',
+                  priority: 10,
+                  onPressed: () {
+                    firstTapped = true;
+                  },
+                ),
+                AdaptiveOverflowToolbarItem(
+                  icon: Icons.tune,
+                  label: '普通',
+                  priority: 1,
+                  onPressed: () {},
+                ),
+                AdaptiveOverflowToolbarItem(
+                  icon: Icons.archive,
+                  label: '收起项',
+                  onPressed: () {
+                    thirdTapped = true;
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byIcon(Icons.star), findsOneWidget);
+    expect(find.byIcon(Icons.tune), findsNothing);
+    expect(find.byIcon(Icons.more_horiz_rounded), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.star));
+    expect(firstTapped, isTrue);
+
+    await tester.tap(find.byIcon(Icons.more_horiz_rounded));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('收起项'));
+    expect(thirdTapped, isTrue);
   });
 
   testWidgets('AdaptiveSettingTile exposes tap path when enabled', (

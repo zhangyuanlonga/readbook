@@ -62,7 +62,7 @@ final mineAuthSessionStoreProvider = Provider<AuthSessionStore>((ref) {
 final mineAuthSessionSecretStoreProvider = Provider<AuthSessionSecretStore>((
   ref,
 ) {
-  return FlutterSecureAuthSessionSecretStore();
+  return createDefaultAuthSessionSecretStore();
 });
 
 final mineUpdateServiceProvider = Provider<AppUpdateService>((ref) {

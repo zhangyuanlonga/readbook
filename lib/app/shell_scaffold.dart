@@ -231,29 +231,11 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     }
 
     if (useNavigationRail) {
-      return Scaffold(
-        body: Row(
-          children: [
-            SafeArea(
-              child: NavigationRail(
-                selectedIndex: effectiveSelectedIndex,
-                onDestinationSelected:
-                    (index) =>
-                        _goToDestination(context, visibleDestinations[index]),
-                labelType: NavigationRailLabelType.all,
-                destinations: [
-                  for (final destination in visibleDestinations)
-                    NavigationRailDestination(
-                      icon: Icon(destination.icon),
-                      label: Text(destination.label),
-                    ),
-                ],
-              ),
-            ),
-            const VerticalDivider(width: 1),
-            Expanded(child: body),
-          ],
-        ),
+      return _buildDesktopShell(
+        context,
+        body: body,
+        destinations: visibleDestinations,
+        selectedIndex: effectiveSelectedIndex,
       );
     }
 
@@ -276,6 +258,551 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
 
   bool _isMobilePlatform(TargetPlatform platform) {
     return platform == TargetPlatform.android || platform == TargetPlatform.iOS;
+  }
+
+  Widget _buildDesktopShell(
+    BuildContext context, {
+    required Widget body,
+    required List<AppShellDestination> destinations,
+    required int selectedIndex,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final width = AppLayout.screenWidth(context);
+    final sidebarWidth =
+        width >= AppLayout.expandedBreakpointWidth ? 280.0 : 240.0;
+
+    return Scaffold(
+      backgroundColor: colorScheme.surface,
+      body: Row(
+        children: [
+          _buildDesktopSidebar(
+            context,
+            width: sidebarWidth,
+            destinations: destinations,
+            selectedIndex: selectedIndex,
+          ),
+          Expanded(
+            child: DecoratedBox(
+              decoration: BoxDecoration(color: colorScheme.surface),
+              child: Column(
+                children: [
+                  _buildDesktopTopBar(
+                    context,
+                    destinations: destinations,
+                    selectedIndex: selectedIndex,
+                  ),
+                  Expanded(child: body),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDesktopTopBar(
+    BuildContext context, {
+    required List<AppShellDestination> destinations,
+    required int selectedIndex,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
+    final currentTab = _locationTab(widget.location);
+    final contentMaxWidth = _desktopTopBarContentMaxWidthForTab(currentTab);
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLowest.withValues(alpha: 0.98),
+        border: Border(
+          bottom: BorderSide(
+            color: colorScheme.outlineVariant.withValues(alpha: 0.62),
+          ),
+        ),
+      ),
+      child: SafeArea(
+        bottom: false,
+        left: false,
+        right: false,
+        child: SizedBox(
+          height: 74,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: contentMaxWidth),
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  metrics.pagePadding,
+                  12,
+                  metrics.pagePadding,
+                  12,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child:
+                          currentTab == AppShellTab.bookshelf
+                              ? _buildDesktopTopBarSearchTrigger(context)
+                              : const SizedBox.shrink(),
+                    ),
+                    const SizedBox(width: 18),
+                    _buildDesktopTopBarNotificationButton(context),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  double _desktopTopBarContentMaxWidthForTab(AppShellTab tab) {
+    return switch (tab) {
+      AppShellTab.home => 980,
+      AppShellTab.bookshelf => AppLayout.bookshelfContentMaxWidth,
+      AppShellTab.discover => AppLayout.discoverExpandedContentMaxWidth,
+      AppShellTab.stats => 1120,
+      AppShellTab.mine => AppLayout.mineContentMaxWidth,
+    };
+  }
+
+  Widget _buildDesktopTopBarNotificationButton(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Material(
+      color: colorScheme.surface,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () {
+          unawaited(context.push('/announcements'));
+        },
+        child: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: colorScheme.outlineVariant.withValues(alpha: 0.78),
+            ),
+          ),
+          child: Icon(
+            Icons.notifications_none_outlined,
+            size: 20,
+            color: colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopTopBarSearchTrigger(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 460),
+        child: Material(
+          color: colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(999),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(999),
+            onTap:
+                () => unawaited(
+                  _openSearchWithReveal(
+                    context,
+                    route: '/search?entry=bookshelf_top',
+                  ),
+                ),
+            child: Container(
+              height: 44,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: colorScheme.outlineVariant.withValues(alpha: 0.72),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.search_rounded,
+                    size: 20,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '搜索书架中的书名、作者或备注...',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopSidebar(
+    BuildContext context, {
+    required double width,
+    required List<AppShellDestination> destinations,
+    required int selectedIndex,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return SizedBox(
+      key: const ValueKey('desktop_shell_sidebar'),
+      width: width,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerLowest,
+          border: Border(
+            right: BorderSide(
+              color: colorScheme.outlineVariant.withValues(alpha: 0.72),
+            ),
+          ),
+        ),
+        child: SafeArea(
+          right: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 24, 14, 22),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildDesktopSidebarHeader(context),
+                const SizedBox(height: 34),
+                Expanded(
+                  child: ListView.separated(
+                    padding: EdgeInsets.zero,
+                    itemBuilder: (context, index) {
+                      final destination = destinations[index];
+                      return _buildDesktopNavItem(
+                        context,
+                        destination: destination,
+                        selected: index == selectedIndex,
+                        onTap: () => _goToDestination(context, destination),
+                      );
+                    },
+                    separatorBuilder:
+                        (context, index) => const SizedBox(height: 8),
+                    itemCount: destinations.length,
+                  ),
+                ),
+                _buildDesktopSidebarFooter(context),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopSidebarHeader(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.only(left: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Selune',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: textTheme.headlineSmall?.copyWith(
+              color: colorScheme.onSurface,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            'CLEAR READING',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: textTheme.labelSmall?.copyWith(
+              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.74),
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.7,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  IconData _desktopShellIconFor(
+    AppShellDestination destination,
+    bool selected,
+  ) {
+    if (destination.tab == AppShellTab.bookshelf) {
+      return selected
+          ? Icons.library_books_rounded
+          : Icons.library_books_outlined;
+    }
+    return selected ? destination.selectedIcon : destination.icon;
+  }
+
+  double _desktopShellIconSizeFor(AppShellDestination destination) {
+    return destination.tab == AppShellTab.bookshelf ? 21 : 22;
+  }
+
+  Color _desktopSelectedNavBackground(ColorScheme colorScheme) {
+    return Color.alphaBlend(
+      colorScheme.onSurface.withValues(alpha: 0.04),
+      colorScheme.surfaceContainerLow,
+    );
+  }
+
+  Color _desktopUserCardBackground(ColorScheme colorScheme) {
+    return Color.alphaBlend(
+      colorScheme.onSurface.withValues(alpha: 0.04),
+      colorScheme.surfaceContainerLow,
+    );
+  }
+
+  Color _desktopAvatarBackground(ColorScheme colorScheme) {
+    return Color.alphaBlend(
+      colorScheme.onSurface.withValues(alpha: 0.02),
+      colorScheme.surfaceContainerLowest,
+    );
+  }
+
+  Color _desktopDividerColor(ColorScheme colorScheme) {
+    return colorScheme.outline.withValues(alpha: 0.68);
+  }
+
+  Widget _desktopInkWell({
+    required BorderRadius borderRadius,
+    required VoidCallback onTap,
+    required Widget child,
+  }) {
+    return InkWell(
+      borderRadius: borderRadius,
+      overlayColor: WidgetStateProperty.all(Colors.transparent),
+      splashFactory: NoSplash.splashFactory,
+      onTap: onTap,
+      child: child,
+    );
+  }
+
+  Widget _buildDesktopNavItem(
+    BuildContext context, {
+    required AppShellDestination destination,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final activeColor = colorScheme.primary;
+    final foreground = selected ? activeColor : colorScheme.onSurfaceVariant;
+    final selectedBackground = _desktopSelectedNavBackground(colorScheme);
+    final icon = _desktopShellIconFor(destination, selected);
+
+    return Material(
+      color: Colors.transparent,
+      child: _desktopInkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: SizedBox(
+          height: 44,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              if (selected)
+                Positioned.fill(
+                  left: 0,
+                  right: 0,
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: Container(
+                      width: 7,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: activeColor,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
+                ),
+              Positioned.fill(
+                right: selected ? 3 : 0,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: selected ? selectedBackground : Colors.transparent,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+              Positioned.fill(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const SizedBox(width: 18),
+                    Icon(
+                      icon,
+                      color: foreground,
+                      size: _desktopShellIconSizeFor(destination),
+                    ),
+                    const SizedBox(width: 18),
+                    Expanded(
+                      child: Text(
+                        destination.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: foreground,
+                          fontWeight:
+                              selected ? FontWeight.w800 : FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopSidebarFooter(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final dividerColor = _desktopDividerColor(colorScheme);
+    final userCardColor = _desktopUserCardBackground(colorScheme);
+    final avatarColor = _desktopAvatarBackground(colorScheme);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Divider(color: dividerColor),
+        const SizedBox(height: 28),
+        _buildDesktopFooterAction(
+          context,
+          icon: Icons.settings_outlined,
+          label: '设置',
+          onTap: () {
+            unawaited(context.push('/system-settings'));
+          },
+        ),
+        const SizedBox(height: 14),
+        Material(
+          color: Colors.transparent,
+          child: _desktopInkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: () {
+              unawaited(context.push('/profile'));
+            },
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 68),
+              padding: const EdgeInsets.fromLTRB(18, 14, 16, 14),
+              decoration: BoxDecoration(
+                color: userCardColor,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 24,
+                    backgroundColor: avatarColor,
+                    child: Icon(
+                      Icons.more_horiz_rounded,
+                      size: 22,
+                      color: colorScheme.onSurfaceVariant.withValues(
+                        alpha: 0.52,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '林静深',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: textTheme.labelLarge?.copyWith(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '已读 124 本',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: textTheme.labelSmall?.copyWith(
+                            fontSize: 13,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    Icons.logout_rounded,
+                    color: colorScheme.onSurfaceVariant,
+                    size: 24,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDesktopFooterAction(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Material(
+      color: Colors.transparent,
+      child: Column(
+        children: [
+          _desktopInkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: onTap,
+            child: SizedBox(
+              height: 44,
+              child: Row(
+                children: [
+                  const SizedBox(width: 18),
+                  Icon(icon, color: colorScheme.onSurfaceVariant, size: 22),
+                  const SizedBox(width: 18),
+                  Expanded(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildMobileBottomNavigationBar(

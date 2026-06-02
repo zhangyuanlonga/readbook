@@ -41,6 +41,8 @@ void main() {
     });
 
     tearDown(() async {
+      // storePrecomputedChapterLayout persists in the background by design.
+      await Future<void>.delayed(const Duration(milliseconds: 50));
       if (await tempDir.exists()) {
         await tempDir.delete(recursive: true);
       }

@@ -39,12 +39,9 @@ class MinePage extends ConsumerStatefulWidget {
   ConsumerState<MinePage> createState() => _MinePageState();
 }
 
-enum _MineLayoutMode { grid, list }
-
 enum _ProfileAvatarAction { change, remove }
 
 class _MinePageState extends ConsumerState<MinePage> {
-  static const String _layoutModeKey = 'mine.page.layoutMode';
   late final ImageSelectionService _imageSelectionService;
   late final MinePageFlowCoordinator _pageFlowCoordinator;
   late final MinePageSessionService _sessionService;
@@ -58,11 +55,11 @@ class _MinePageState extends ConsumerState<MinePage> {
   bool _hasMembership = false;
   bool _hasThemeCustom = false;
   bool _isRemoteAccessResolved = false;
-  _MineLayoutMode _layoutMode = _MineLayoutMode.list;
+  MinePageLayoutMode _layoutMode = MinePageLayoutMode.list;
   bool _didRestoreLayoutMode = false;
   String? _openingRoute;
 
-  bool get _isListMode => _layoutMode == _MineLayoutMode.list;
+  bool get _isListMode => _layoutMode == MinePageLayoutMode.list;
 
   VoidCallback _pushMineRouteAction(String route) {
     return () => unawaited(_pushMineRoute(route));
@@ -180,14 +177,10 @@ class _MinePageState extends ConsumerState<MinePage> {
   Future<void> _restoreLayoutMode() async {
     final preferGridByDefault = AppAdaptiveMetrics.of(context).isMediumUpWindow;
     final defaultMode =
-        preferGridByDefault ? _MineLayoutMode.grid : _MineLayoutMode.list;
-    final raw = await _sessionService.restoreLayoutMode(_layoutModeKey);
-    final mode =
-        raw == null
-            ? defaultMode
-            : raw == 'grid'
-            ? _MineLayoutMode.grid
-            : _MineLayoutMode.list;
+        preferGridByDefault ? MinePageLayoutMode.grid : MinePageLayoutMode.list;
+    final persistedMode =
+        await ref.read(minePagePreferencesServiceProvider).loadLayoutMode();
+    final mode = persistedMode ?? defaultMode;
     if (!mounted || _layoutMode == mode) {
       return;
     }
@@ -198,16 +191,13 @@ class _MinePageState extends ConsumerState<MinePage> {
 
   Future<void> _toggleLayoutMode() async {
     final next =
-        _layoutMode == _MineLayoutMode.grid
-            ? _MineLayoutMode.list
-            : _MineLayoutMode.grid;
+        _layoutMode == MinePageLayoutMode.grid
+            ? MinePageLayoutMode.list
+            : MinePageLayoutMode.grid;
     setState(() {
       _layoutMode = next;
     });
-    await _sessionService.persistLayoutMode(
-      storageKey: _layoutModeKey,
-      value: next == _MineLayoutMode.list ? 'list' : 'grid',
-    );
+    await ref.read(minePagePreferencesServiceProvider).saveLayoutMode(next);
   }
 
   Future<void> _loadSession() async {
@@ -490,11 +480,12 @@ class _MinePageState extends ConsumerState<MinePage> {
     required List<_MineActionItem> actions,
     EdgeInsetsGeometry? padding,
     Widget? trailing,
+    int? maxGridColumns,
   }) {
     final layout = _layoutMode;
     final sectionKey = ValueKey<String>('mine_section_${title}_$layout');
     final sectionChild =
-        layout == _MineLayoutMode.list
+        layout == MinePageLayoutMode.list
             ? _buildActionListSection(
               context,
               palette: palette,
@@ -529,9 +520,14 @@ class _MinePageState extends ConsumerState<MinePage> {
                   const SizedBox(height: 10),
                   LayoutBuilder(
                     builder: (context, constraints) {
-                      final columns = AppLayout.mineActionGridColumnsForWidth(
+                      var columns = AppLayout.mineActionGridColumnsForWidth(
                         constraints.maxWidth,
                       );
+                      final gridColumnLimit = maxGridColumns;
+                      if (gridColumnLimit != null &&
+                          columns > gridColumnLimit) {
+                        columns = gridColumnLimit;
+                      }
                       final denseGrid = columns >= 4;
                       final crossSpacing = denseGrid ? 8.0 : 10.0;
                       final runSpacing = denseGrid ? 8.0 : 10.0;
@@ -580,7 +576,7 @@ class _MinePageState extends ConsumerState<MinePage> {
               ),
             );
 
-    final incomingIsGrid = layout == _MineLayoutMode.grid;
+    final incomingIsGrid = layout == MinePageLayoutMode.grid;
     return AppAnimatedSwitcher(
       duration: const Duration(milliseconds: 240),
       reverseDuration: const Duration(milliseconds: 200),
