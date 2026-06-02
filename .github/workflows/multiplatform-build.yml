@@ -54,6 +54,10 @@ on:
         description: "Optional APPREAD_API_BASE_URL dart-define"
         required: false
         default: ""
+      appread_reader_gateway_base_url:
+        description: "Optional APPREAD_READER_GATEWAY_BASE_URL dart-define"
+        required: false
+        default: ""
       appread_app_name:
         description: "APPREAD_APP_NAME dart-define"
         required: true
@@ -216,6 +220,7 @@ jobs:
           ANDROID_TARGET: ${{ inputs.android_target }}
           ANDROID_APK_PROFILE: ${{ inputs.android_apk_profile }}
           APPREAD_API_BASE_URL: ${{ inputs.appread_api_base_url }}
+          APPREAD_READER_GATEWAY_BASE_URL: ${{ inputs.appread_reader_gateway_base_url }}
           APPREAD_APP_NAME: ${{ inputs.appread_app_name }}
           ARTIFACT_NAME: ${{ inputs.artifact_name }}
           BUILD_NAME: ${{ inputs.build_name }}

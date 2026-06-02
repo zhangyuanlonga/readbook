@@ -20,6 +20,7 @@ BUILD_NAME="${BUILD_NAME:-}"
 BUILD_NUMBER="${BUILD_NUMBER:-}"
 FULL_VERSION="${FULL_VERSION:-}"
 APPREAD_API_BASE_URL="${APPREAD_API_BASE_URL:-}"
+APPREAD_READER_GATEWAY_BASE_URL="${APPREAD_READER_GATEWAY_BASE_URL:-}"
 APPREAD_APP_NAME="${APPREAD_APP_NAME:-selune}"
 VERSION_PROMPT="${VERSION_PROMPT:-1}"
 SKIP_CLEAN="${SKIP_CLEAN:-0}"
@@ -370,6 +371,7 @@ mkdir -p "${SESSION_DIR}" "${STAGING_ROOT}"
   echo "build_name: ${BUILD_NAME:-pubspec default}"
   echo "build_number: ${BUILD_NUMBER:-pubspec default}"
   echo "api_base_url: ${APPREAD_API_BASE_URL:-dart default}"
+  echo "reader_gateway_base_url: ${APPREAD_READER_GATEWAY_BASE_URL:-dart default}"
   echo "app_name: ${APPREAD_APP_NAME:-dart default}"
   echo "platforms: ${PLATFORMS[*]}"
   echo ""
@@ -385,6 +387,7 @@ echo "==> Android APK  : ${ANDROID_APK_PROFILE}"
 echo "==> Build name   : ${BUILD_NAME:-pubspec default}"
 echo "==> Build number : ${BUILD_NUMBER:-pubspec default}"
 echo "==> API base URL : ${APPREAD_API_BASE_URL:-dart default}"
+echo "==> Reader API   : ${APPREAD_READER_GATEWAY_BASE_URL:-dart default}"
 echo "==> App name     : ${APPREAD_APP_NAME:-dart default}"
 echo "==> Output folder: ${SESSION_DIR}"
 
@@ -414,6 +417,7 @@ for platform in "${PLATFORMS[@]-}"; do
         BUILD_NAME="${BUILD_NAME}" \
         BUILD_NUMBER="${BUILD_NUMBER}" \
         APPREAD_API_BASE_URL="${APPREAD_API_BASE_URL}" \
+        APPREAD_READER_GATEWAY_BASE_URL="${APPREAD_READER_GATEWAY_BASE_URL}" \
         APPREAD_APP_NAME="${APPREAD_APP_NAME}" \
         "${SCRIPT_DIR}/build_android_artifacts.sh" "${ANDROID_TARGET}" "${BUILD_MODE}"
       ;;
@@ -439,6 +443,7 @@ for platform in "${PLATFORMS[@]-}"; do
           BUILD_NAME="${BUILD_NAME}" \
           BUILD_NUMBER="${BUILD_NUMBER}" \
           APPREAD_API_BASE_URL="${APPREAD_API_BASE_URL}" \
+          APPREAD_READER_GATEWAY_BASE_URL="${APPREAD_READER_GATEWAY_BASE_URL}" \
           APPREAD_APP_NAME="${APPREAD_APP_NAME}" \
           "${SCRIPT_DIR}/build_ios_ipa_nocodesign.sh"
       fi
@@ -455,6 +460,7 @@ for platform in "${PLATFORMS[@]-}"; do
         BUILD_NAME="${BUILD_NAME}" \
         BUILD_NUMBER="${BUILD_NUMBER}" \
         APPREAD_API_BASE_URL="${APPREAD_API_BASE_URL}" \
+        APPREAD_READER_GATEWAY_BASE_URL="${APPREAD_READER_GATEWAY_BASE_URL}" \
         APPREAD_APP_NAME="${APPREAD_APP_NAME}" \
         "${SCRIPT_DIR}/build_macos_artifact.sh" "${BUILD_MODE}"
       ;;
@@ -468,6 +474,7 @@ for platform in "${PLATFORMS[@]-}"; do
         BUILD_NAME="${BUILD_NAME}" \
         BUILD_NUMBER="${BUILD_NUMBER}" \
         APPREAD_API_BASE_URL="${APPREAD_API_BASE_URL}" \
+        APPREAD_READER_GATEWAY_BASE_URL="${APPREAD_READER_GATEWAY_BASE_URL}" \
         APPREAD_APP_NAME="${APPREAD_APP_NAME}" \
         "${SCRIPT_DIR}/build_linux_artifact.sh" "${BUILD_MODE}"
       ;;
@@ -481,6 +488,7 @@ for platform in "${PLATFORMS[@]-}"; do
         BUILD_NAME="${BUILD_NAME}" \
         BUILD_NUMBER="${BUILD_NUMBER}" \
         APPREAD_API_BASE_URL="${APPREAD_API_BASE_URL}" \
+        APPREAD_READER_GATEWAY_BASE_URL="${APPREAD_READER_GATEWAY_BASE_URL}" \
         APPREAD_APP_NAME="${APPREAD_APP_NAME}" \
         "${SCRIPT_DIR}/build_windows_artifact.sh" "${BUILD_MODE}"
       ;;
@@ -490,6 +498,7 @@ for platform in "${PLATFORMS[@]-}"; do
         BUILD_NAME="${BUILD_NAME}" \
         BUILD_NUMBER="${BUILD_NUMBER}" \
         APPREAD_API_BASE_URL="${APPREAD_API_BASE_URL}" \
+        APPREAD_READER_GATEWAY_BASE_URL="${APPREAD_READER_GATEWAY_BASE_URL}" \
         APPREAD_APP_NAME="${APPREAD_APP_NAME}" \
         ARTIFACT_NAME="${ARTIFACT_NAME}" \
         bash -c '
@@ -505,6 +514,9 @@ for platform in "${PLATFORMS[@]-}"; do
         fi
         if [[ -n "${APPREAD_API_BASE_URL}" ]]; then
           flutter_args+=(--dart-define "APPREAD_API_BASE_URL=${APPREAD_API_BASE_URL}")
+        fi
+        if [[ -n "${APPREAD_READER_GATEWAY_BASE_URL}" ]]; then
+          flutter_args+=(--dart-define "APPREAD_READER_GATEWAY_BASE_URL=${APPREAD_READER_GATEWAY_BASE_URL}")
         fi
         if [[ -n "${APPREAD_APP_NAME}" ]]; then
           flutter_args+=(--dart-define "APPREAD_APP_NAME=${APPREAD_APP_NAME}")

@@ -49,6 +49,7 @@ ANDROID_TARGET=both ANDROID_APK_PROFILE=universal ./scripts/build_unified_artifa
 
 # 非交互模式手动指定版本
 APPREAD_API_BASE_URL=https://www.sxyd.lltask.top/api \
+APPREAD_READER_GATEWAY_BASE_URL=https://rust.lltask.top/api/ \
 APPREAD_APP_NAME=selune ARTIFACT_NAME=Selune \
 BUILD_NAME=1.1.0 BUILD_NUMBER=26041801 \
 ./scripts/build_unified_artifacts.sh android,ios release
@@ -68,6 +69,7 @@ GitHub Actions 也提供了手动打包入口：`Actions -> Multiplatform Build 
 - `BUILD_NAME` / `version_name`：给用户看的展示版本，例如 `1.1.0`
 - `BUILD_NUMBER` / `version_code`：给系统比较版本大小的整数构建号，例如 `26041801`
 - `APPREAD_API_BASE_URL`：打包时注入的后端地址，例如 `https://www.sxyd.lltask.top/api`
+- `APPREAD_READER_GATEWAY_BASE_URL`：在线书源 / 服务器书源网关地址，默认 `https://rust.lltask.top/api/`
 - `APPREAD_APP_NAME`：可选，默认 `selune`
 
 更完整的工程交付与移动端发布说明见：`docs/engineering_delivery_guide.md`

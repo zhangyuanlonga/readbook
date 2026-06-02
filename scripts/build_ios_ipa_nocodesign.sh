@@ -15,6 +15,7 @@ BUILD_MODE="${BUILD_MODE:-release}"
 BUILD_NAME="${BUILD_NAME:-}"
 BUILD_NUMBER="${BUILD_NUMBER:-}"
 APPREAD_API_BASE_URL="${APPREAD_API_BASE_URL:-}"
+APPREAD_READER_GATEWAY_BASE_URL="${APPREAD_READER_GATEWAY_BASE_URL:-}"
 APPREAD_APP_NAME="${APPREAD_APP_NAME:-selune}"
 SKIP_CLEAN="${SKIP_CLEAN:-0}"
 SKIP_PUB_GET="${SKIP_PUB_GET:-0}"
@@ -51,6 +52,10 @@ append_dart_defines() {
     printf -v define_value '%q' "--dart-define=APPREAD_API_BASE_URL=${APPREAD_API_BASE_URL}"
     eval "${array_name}+=(${define_value})"
   fi
+  if [[ -n "${APPREAD_READER_GATEWAY_BASE_URL}" ]]; then
+    printf -v define_value '%q' "--dart-define=APPREAD_READER_GATEWAY_BASE_URL=${APPREAD_READER_GATEWAY_BASE_URL}"
+    eval "${array_name}+=(${define_value})"
+  fi
   if [[ -n "${APPREAD_APP_NAME}" ]]; then
     printf -v define_value '%q' "--dart-define=APPREAD_APP_NAME=${APPREAD_APP_NAME}"
     eval "${array_name}+=(${define_value})"
@@ -80,6 +85,7 @@ echo "==> Build mode : ${BUILD_MODE}"
 echo "==> Build name : ${BUILD_NAME:-pubspec default}"
 echo "==> Build number: ${BUILD_NUMBER:-pubspec default}"
 echo "==> API base   : ${APPREAD_API_BASE_URL:-dart default}"
+echo "==> Reader API : ${APPREAD_READER_GATEWAY_BASE_URL:-dart default}"
 echo "==> App name   : ${APPREAD_APP_NAME:-dart default}"
 echo "==> App name   : ${APP_NAME}"
 echo "==> Output dir : ${OUTPUT_DIR}"
