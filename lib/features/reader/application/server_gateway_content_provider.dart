@@ -29,7 +29,7 @@ class ServerGatewayContentProvider extends ContentProvider {
 
   @override
   ContentCapabilities get capabilities => const ContentCapabilities(
-    canSwitchSource: false,
+    canSwitchSource: true,
     canCacheChapter: false,
     canRefreshToc: true,
     canSearchInSource: false,

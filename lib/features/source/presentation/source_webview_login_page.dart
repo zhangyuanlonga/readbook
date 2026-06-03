@@ -1,9 +1,9 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+import '../../../app/platform/app_platform_capabilities.dart';
 import '../../../app/widgets/feature_disabled_page.dart';
 import '../application/source_runtime_session_service.dart';
 import '../application/webview_cookie_bridge.dart';
@@ -33,17 +33,8 @@ class _SourceWebViewLoginPageState
   String? _currentUrl;
   String? _error;
 
-  bool get _isSupportedPlatform {
-    if (kIsWeb) {
-      return false;
-    }
-    return switch (defaultTargetPlatform) {
-      TargetPlatform.android ||
-      TargetPlatform.iOS ||
-      TargetPlatform.macOS => true,
-      _ => false,
-    };
-  }
+  bool get _isSupportedPlatform =>
+      ref.read(appPlatformCapabilitiesProvider).supportsEmbeddedWebView;
 
   @override
   void initState() {
@@ -111,10 +102,16 @@ class _SourceWebViewLoginPageState
   @override
   Widget build(BuildContext context) {
     final title = _pageTitle;
-    if (!_isSupportedPlatform) {
+    final embeddedWebView = ref.watch(
+      appPlatformCapabilitiesProvider.select(
+        (capabilities) => capabilities.embeddedWebView,
+      ),
+    );
+    if (!embeddedWebView.isSupported) {
       return FeatureDisabledPage(
         title: title,
         message:
+            embeddedWebView.reason ??
             '当前平台暂不支持内嵌 WebView。可以在 Android、iOS 或 macOS 客户端中完成书源网页登录，再把会话提交给网关。',
         icon: Icons.language_rounded,
       );

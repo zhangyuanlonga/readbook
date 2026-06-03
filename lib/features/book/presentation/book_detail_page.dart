@@ -627,7 +627,13 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   bool get _isLocalContent => _contentCapabilities.canReindexLocal;
 
   bool get _canSwitchSource {
-    return false;
+    final sourceId = (_activeSourceId ?? '').trim();
+    final detailUrl = (_activeDetailUrl ?? '').trim();
+    return !_isLocalContent &&
+        _contentCapabilities.canSwitchSource &&
+        sourceId.isNotEmpty &&
+        detailUrl.isNotEmpty &&
+        !_isSwitchingSource;
   }
 
   ImageProvider? _resolveDetailCoverBackdropProvider({

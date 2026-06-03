@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../../../core/cache/app_cache_governance_service.dart';
 import 'reader_pagination_models.dart';
 
 typedef ReaderPaginationCacheDirectoryProvider = Future<Directory> Function();
@@ -23,7 +24,7 @@ class ReaderPaginationCacheStats {
   final int persistedBytes;
 }
 
-class ReaderPaginationCacheService {
+class ReaderPaginationCacheService implements AppPaginationLayoutCacheStore {
   ReaderPaginationCacheService({
     ReaderPaginationCacheDirectoryProvider? directoryProvider,
     int maxMemoryEntries = 24,
@@ -129,6 +130,7 @@ class ReaderPaginationCacheService {
     }
   }
 
+  @override
   Future<int> countPersistedChapterLayouts() async {
     final directory = await _directoryProvider();
     if (!await directory.exists()) {
@@ -144,6 +146,7 @@ class ReaderPaginationCacheService {
     return count;
   }
 
+  @override
   Future<int> estimatePersistedChapterLayoutBytes() async {
     final directory = await _directoryProvider();
     if (!await directory.exists()) {
@@ -225,6 +228,7 @@ class ReaderPaginationCacheService {
     );
   }
 
+  @override
   Future<int> prunePersistedChapterLayoutsByBudget({
     required int maxEntries,
     required int maxBytes,

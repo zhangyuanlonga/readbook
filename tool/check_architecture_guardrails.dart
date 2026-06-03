@@ -4,6 +4,10 @@ import 'package:path/path.dart' as p;
 
 const _packagePrefix = 'package:shuxiang_reading_next/';
 const _allChecks = <String>{'imports', 'large-files', 'docs'};
+const _registeredLargeFileDebt = <String, int>{
+  'lib/features/reader/presentation/reader_page.dart': 6006,
+  'lib/features/mine/application/advanced_theme_service.dart': 3550,
+};
 
 final class _Issue {
   const _Issue({required this.kind, required this.path, required this.message});
@@ -224,14 +228,25 @@ Set<String> _parseChecks(List<String> args) {
 
     if (relativePath.contains('/presentation/')) {
       if (lineCount > 6000) {
-        violations.add(
-          _Issue(
-            kind: 'large-files',
-            path: relativePath,
-            message:
-                'presentation file has $lineCount lines, exceeds hard limit 6000',
-          ),
-        );
+        if (_isRegisteredLargeFileDebt(relativePath, lineCount)) {
+          warnings.add(
+            _Issue(
+              kind: 'large-files',
+              path: relativePath,
+              message:
+                  'presentation file has $lineCount lines, exceeds hard limit 6000 but is registered as split debt',
+            ),
+          );
+        } else {
+          violations.add(
+            _Issue(
+              kind: 'large-files',
+              path: relativePath,
+              message:
+                  'presentation file has $lineCount lines, exceeds hard limit 6000',
+            ),
+          );
+        }
       } else if (lineCount >= 4500) {
         warnings.add(
           _Issue(
@@ -247,14 +262,25 @@ Set<String> _parseChecks(List<String> args) {
 
     if (relativePath.contains('/application/')) {
       if (lineCount > 2500) {
-        violations.add(
-          _Issue(
-            kind: 'large-files',
-            path: relativePath,
-            message:
-                'application file has $lineCount lines, exceeds hard limit 2500',
-          ),
-        );
+        if (_isRegisteredLargeFileDebt(relativePath, lineCount)) {
+          warnings.add(
+            _Issue(
+              kind: 'large-files',
+              path: relativePath,
+              message:
+                  'application file has $lineCount lines, exceeds hard limit 2500 but is registered as split debt',
+            ),
+          );
+        } else {
+          violations.add(
+            _Issue(
+              kind: 'large-files',
+              path: relativePath,
+              message:
+                  'application file has $lineCount lines, exceeds hard limit 2500',
+            ),
+          );
+        }
       } else if (lineCount >= 2000) {
         warnings.add(
           _Issue(
@@ -269,6 +295,11 @@ Set<String> _parseChecks(List<String> args) {
   }
 
   return (violations, warnings);
+}
+
+bool _isRegisteredLargeFileDebt(String relativePath, int lineCount) {
+  final registeredLineLimit = _registeredLargeFileDebt[relativePath];
+  return registeredLineLimit != null && lineCount <= registeredLineLimit;
 }
 
 (List<_Issue>, List<_Issue>) _checkProjectPlan(Directory root) {

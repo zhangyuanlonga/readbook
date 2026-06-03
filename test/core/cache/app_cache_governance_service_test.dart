@@ -65,14 +65,13 @@ void main() {
         ),
       );
 
-      await File('${coverDir.path}/cover_a').writeAsBytes(
-        const <int>[1, 2, 3, 4],
-        flush: true,
-      );
+      await File(
+        '${coverDir.path}/cover_a',
+      ).writeAsBytes(const <int>[1, 2, 3, 4], flush: true);
 
       final service = AppCacheGovernanceService(
         database: database,
-        paginationCacheService: paginationCacheService,
+        paginationCacheStore: paginationCacheService,
         coverImageDiskCache: coverImageDiskCache,
       );
       final snapshot = await service.loadSnapshot();
@@ -81,9 +80,7 @@ void main() {
       expect(snapshot.totalEntries, greaterThanOrEqualTo(3));
       expect(snapshot.totalBytes, greaterThan(0));
       expect(
-        snapshot.entries.every(
-          (entry) => entry.deletable && entry.rebuildable,
-        ),
+        snapshot.entries.every((entry) => entry.deletable && entry.rebuildable),
         isTrue,
       );
     });
@@ -109,7 +106,7 @@ void main() {
 
       final service = AppCacheGovernanceService(
         database: database,
-        paginationCacheService: paginationCacheService,
+        paginationCacheStore: paginationCacheService,
         coverImageDiskCache: coverImageDiskCache,
       );
 

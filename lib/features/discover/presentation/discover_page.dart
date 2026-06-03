@@ -87,17 +87,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
                 actions: [
                   IconButton(
                     tooltip: '刷新',
-                    onPressed: () {
-                      _searchDebounce?.cancel();
-                      _searchController.clear();
-                      setState(() {
-                        _searchKeyword = '';
-                        _expandedSourceId = null;
-                        _remoteSearchKeyword = '';
-                        _remoteSearchAsync = null;
-                      });
-                      ref.read(discoverSourcePagerProvider.notifier).refresh();
-                    },
+                    onPressed: _refreshSources,
                     icon: const Icon(Icons.refresh_rounded),
                   ),
                 ],
@@ -154,28 +144,15 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
               ? (sourcesAsync.error as ApiException).gatewayFailure
               : null;
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.error_outline_rounded,
-              size: 48,
-              color: theme.colorScheme.error,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              failure?.message ?? '加载失败',
-              style: theme.textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            Text(
+        child: AppEmptyStateCard(
+          icon: Icons.error_outline_rounded,
+          title: failure?.message ?? '加载失败',
+          description:
               failure == null
-                  ? '请点击刷新重试'
+                  ? '请刷新后重试。'
                   : '${failure.displayCode}：${failure.displayHint}',
-              style: theme.textTheme.bodySmall,
-              textAlign: TextAlign.center,
-            ),
-          ],
+          actionLabel: '刷新',
+          onAction: _refreshSources,
         ),
       );
     }
@@ -200,6 +177,8 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
           icon: Icons.travel_explore_rounded,
           title: '暂无书源',
           description: '服务器暂未返回书源列表',
+          actionLabel: '刷新',
+          onAction: _refreshSources,
         ),
       );
     }
@@ -551,6 +530,18 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
         context.push(route);
       },
     );
+  }
+
+  void _refreshSources() {
+    _searchDebounce?.cancel();
+    _searchController.clear();
+    setState(() {
+      _searchKeyword = '';
+      _expandedSourceId = null;
+      _remoteSearchKeyword = '';
+      _remoteSearchAsync = null;
+    });
+    ref.read(discoverSourcePagerProvider.notifier).refresh();
   }
 }
 

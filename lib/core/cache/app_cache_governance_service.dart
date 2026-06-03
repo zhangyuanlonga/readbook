@@ -1,13 +1,8 @@
 import '../../data/datasources/local/app_database.dart';
-import '../../features/reader/application/reader_pagination_cache_service.dart';
 import 'cache_budget_policy.dart';
 import 'cover_image_disk_cache.dart';
 
-enum AppCacheKind {
-  chapterCaches,
-  paginationLayouts,
-  coverImages,
-}
+enum AppCacheKind { chapterCaches, paginationLayouts, coverImages }
 
 class AppCacheGovernanceEntry {
   const AppCacheGovernanceEntry({
@@ -45,18 +40,31 @@ class AppCacheGovernanceSnapshot {
       entries.fold<int>(0, (sum, item) => sum + item.currentBytes);
 }
 
+abstract interface class AppPaginationLayoutCacheStore {
+  Future<int> countPersistedChapterLayouts();
+
+  Future<int> estimatePersistedChapterLayoutBytes();
+
+  Future<int> prunePersistedChapterLayoutsByBudget({
+    required int maxEntries,
+    required int maxBytes,
+    Duration? stalePeriod,
+  });
+}
+
 class AppCacheGovernanceService {
   AppCacheGovernanceService({
     AppDatabase? database,
-    ReaderPaginationCacheService? paginationCacheService,
+    AppPaginationLayoutCacheStore? paginationCacheStore,
     CoverImageDiskCache? coverImageDiskCache,
   }) : _database = database ?? AppDatabase.instance,
-       _paginationCacheService =
-           paginationCacheService ?? ReaderPaginationCacheService(),
-       _coverImageDiskCache = coverImageDiskCache ?? CoverImageDiskCache.instance;
+       _paginationCacheStore =
+           paginationCacheStore ?? const _EmptyPaginationLayoutCacheStore(),
+       _coverImageDiskCache =
+           coverImageDiskCache ?? CoverImageDiskCache.instance;
 
   final AppDatabase _database;
-  final ReaderPaginationCacheService _paginationCacheService;
+  final AppPaginationLayoutCacheStore _paginationCacheStore;
   final CoverImageDiskCache _coverImageDiskCache;
 
   Future<void> enforceBudgets() async {
@@ -65,7 +73,7 @@ class AppCacheGovernanceService {
       maxBytes: AppCacheBudgetPolicies.chapterCaches.maxBytes,
       stalePeriod: AppCacheBudgetPolicies.chapterCaches.stalePeriod,
     );
-    await _paginationCacheService.prunePersistedChapterLayoutsByBudget(
+    await _paginationCacheStore.prunePersistedChapterLayoutsByBudget(
       maxEntries: AppCacheBudgetPolicies.paginationLayouts.maxEntries,
       maxBytes: AppCacheBudgetPolicies.paginationLayouts.maxBytes,
       stalePeriod: AppCacheBudgetPolicies.paginationLayouts.stalePeriod,
@@ -76,9 +84,9 @@ class AppCacheGovernanceService {
     final chapterEntries = await _database.countChapterCaches();
     final chapterBytes = await _database.estimateChapterCachesBytes();
     final paginationEntries =
-        await _paginationCacheService.countPersistedChapterLayouts();
+        await _paginationCacheStore.countPersistedChapterLayouts();
     final paginationBytes =
-        await _paginationCacheService.estimatePersistedChapterLayoutBytes();
+        await _paginationCacheStore.estimatePersistedChapterLayoutBytes();
     final coverEntries = await _coverImageDiskCache.countAll();
     final coverBytes = await _coverImageDiskCache.estimateAllBytes();
 
@@ -119,5 +127,25 @@ class AppCacheGovernanceService {
         ),
       ],
     );
+  }
+}
+
+class _EmptyPaginationLayoutCacheStore
+    implements AppPaginationLayoutCacheStore {
+  const _EmptyPaginationLayoutCacheStore();
+
+  @override
+  Future<int> countPersistedChapterLayouts() async => 0;
+
+  @override
+  Future<int> estimatePersistedChapterLayoutBytes() async => 0;
+
+  @override
+  Future<int> prunePersistedChapterLayoutsByBudget({
+    required int maxEntries,
+    required int maxBytes,
+    Duration? stalePeriod,
+  }) async {
+    return 0;
   }
 }

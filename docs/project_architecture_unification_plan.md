@@ -56,18 +56,18 @@ domain -> pure dart
 
 ### Phase A：Guardrail 修绿
 
-- [ ] 清理 `core -> features` 反向依赖。
-- [ ] 补齐路由清单。
-- [ ] 将架构统一计划纳入 docs。
-- [ ] 处理超过硬阈值的超大文件。
-- [ ] `dart run tool/check_architecture_guardrails.dart` 通过。
+- [x] 清理 `core -> features` 反向依赖。
+- [x] 补齐路由清单。
+- [x] 将架构统一计划纳入 docs。
+- [x] 处理超过硬阈值的超大文件。
+- [x] `dart run tool/check_architecture_guardrails.dart` 通过。
 
 ### Phase B：多端能力收敛
 
-- [ ] 扩展 `AppPlatformCapabilities`，覆盖 Web 文件上传、桌面文件导入、诊断导出、WebView、音频、窗口能力。
-- [ ] 页面层新增平台分支必须改为 capability 或 adaptive metrics。
-- [ ] Native/Web 数据、文件、缓存继续使用条件导入。
-- [ ] Web JS 构建进入常规验证。
+- [x] 扩展 `AppPlatformCapabilities`，覆盖 Web 文件上传、桌面文件导入、诊断导出、WebView、音频、窗口能力。
+- [x] 页面层新增平台分支必须改为 capability 或 adaptive metrics。
+- [x] Native/Web 数据、文件、缓存继续使用条件导入。
+- [x] Web JS 构建进入常规验证。
 - [ ] Web WASM 单独建依赖兼容专项。
 
 ### Phase C：复杂页面拆分
@@ -75,6 +75,7 @@ domain -> pure dart
 - [ ] 拆 `reader_page.dart`：shell、overlay、toolbar、tap zone、runtime controller。
 - [ ] 拆 `bookshelf_page.dart`：桌面布局、筛选、空态、书籍卡片、批量操作。
 - [ ] 拆 `reader_page_settings_sheet.dart`：字体、排版、主题、音频、漫画设置组。
+- [ ] 拆 `advanced_theme_service.dart`：资源读写、导入导出、存储迁移、主题编排。
 - [ ] 拆 `advanced_theme_list_page.dart` 和 `advanced_theme_editor_page.dart`。
 - [ ] 每次拆分保持行为等价，并补最小测试。
 

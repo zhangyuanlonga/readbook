@@ -1540,6 +1540,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     _clearProgressUiThrottle();
     _clearDeferredProgressUiUpdate();
     _clearPendingSearchCompletion();
+    _progressReportNotifier.value = null;
     setState(() {
       _isSearching = false;
       _activeSearchToken = null;

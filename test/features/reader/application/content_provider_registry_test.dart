@@ -1,10 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shuxiang_reading_next/domain/entities/book.dart';
 import 'package:shuxiang_reading_next/domain/entities/bookshelf_book.dart';
 import 'package:shuxiang_reading_next/features/book/application/book_detail_service.dart';
 import 'package:shuxiang_reading_next/features/reader/application/chapter_content_service.dart';
 import 'package:shuxiang_reading_next/features/reader/application/content_provider.dart';
 import 'package:shuxiang_reading_next/features/reader/application/local/local_reader_identity.dart';
+import 'package:shuxiang_reading_next/features/reader/application/local_content_provider.dart';
+import 'package:shuxiang_reading_next/features/reader/application/server_gateway_content_provider.dart';
 
 class _FakeContentProvider extends ContentProvider {
   const _FakeContentProvider({
@@ -56,6 +59,12 @@ class _FakeContentProvider extends ContentProvider {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
+
   group('ContentProviderRegistry', () {
     const localProvider = _FakeContentProvider(
       label: 'local',
@@ -88,6 +97,17 @@ void main() {
       expect(resolvedBySource, same(localProvider));
       expect(resolvedByBook, same(localProvider));
       expect(resolvedByBook.capabilities.canReindexLocal, isTrue);
+    });
+
+    test('keeps online and local capability boundaries explicit', () {
+      final onlineProvider = ServerGatewayContentProvider();
+      final localProvider = LocalContentProvider();
+
+      expect(onlineProvider.capabilities.canSwitchSource, isTrue);
+      expect(onlineProvider.capabilities.canRefreshToc, isTrue);
+      expect(onlineProvider.capabilities.canReindexLocal, isFalse);
+      expect(localProvider.capabilities.canSwitchSource, isFalse);
+      expect(localProvider.capabilities.canReindexLocal, isTrue);
     });
   });
 }

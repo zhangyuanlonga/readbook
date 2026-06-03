@@ -101,6 +101,7 @@
 - [ ] 拆分 `reader_page.dart`：优先拆 toolbar、overlay、tap zone、reader shell、状态协调器。
 - [ ] 拆分 `bookshelf_page.dart`：优先拆桌面布局、筛选排序、空状态、书籍卡片交互。
 - [ ] 拆分 `reader_page_settings_sheet.dart`：优先拆 typography、spacing、theme、audio、manga 设置组。
+- [ ] 拆分 `advanced_theme_service.dart`：优先拆资源读写、导入导出、存储迁移、主题编排。
 - [ ] 拆分 `advanced_theme_list_page.dart`：优先拆列表、导入导出、预览、空状态。
 - [ ] 拆分 `advanced_theme_editor_page.dart`：优先拆表单区块、资源选择、预览、校验。
 - [ ] 每次只拆一个小区域，保持行为不变。
