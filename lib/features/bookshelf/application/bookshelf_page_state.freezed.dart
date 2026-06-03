@@ -688,7 +688,7 @@ $Res call({
 });
 
 
-
+$BookDisplayStateCopyWith<$Res>? get presentation;
 
 }
 /// @nodoc
@@ -711,7 +711,19 @@ as LocalBook?,presentation: freezed == presentation ? _self.presentation : prese
 as BookDisplayState?,
   ));
 }
+/// Create a copy of BookshelfBookCardState
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$BookDisplayStateCopyWith<$Res>? get presentation {
+    if (_self.presentation == null) {
+    return null;
+  }
 
+  return $BookDisplayStateCopyWith<$Res>(_self.presentation!, (value) {
+    return _then(_self.copyWith(presentation: value));
+  });
+}
 }
 
 
@@ -892,7 +904,7 @@ $Res call({
 });
 
 
-
+@override $BookDisplayStateCopyWith<$Res>? get presentation;
 
 }
 /// @nodoc
@@ -916,7 +928,19 @@ as BookDisplayState?,
   ));
 }
 
+/// Create a copy of BookshelfBookCardState
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$BookDisplayStateCopyWith<$Res>? get presentation {
+    if (_self.presentation == null) {
+    return null;
+  }
 
+  return $BookDisplayStateCopyWith<$Res>(_self.presentation!, (value) {
+    return _then(_self.copyWith(presentation: value));
+  });
+}
 }
 
 /// @nodoc

@@ -1,60 +1,26 @@
 import 'package:flutter/rendering.dart';
+import 'package:freezed_annotation/freezed_annotation.dart';
 
-class ReaderSelectionState {
-  const ReaderSelectionState({
-    this.range,
-    this.status = SelectionStatus.none,
-    this.isActive = false,
-    this.startOffset = 0,
-    this.endOffset = 0,
-    this.snippet = '',
-    this.highlight = false,
-    this.bold = false,
-    this.underline = false,
-    this.wavy = false,
-  });
+part 'reader_selection_state.freezed.dart';
 
-  final SelectedContentRange? range;
-  final SelectionStatus status;
-  final bool isActive;
-  final int startOffset;
-  final int endOffset;
-  final String snippet;
-  final bool highlight;
-  final bool bold;
-  final bool underline;
-  final bool wavy;
+@freezed
+abstract class ReaderSelectionState with _$ReaderSelectionState {
+  const factory ReaderSelectionState({
+    SelectedContentRange? range,
+    @Default(SelectionStatus.none) SelectionStatus status,
+    @Default(false) bool isActive,
+    @Default(0) int startOffset,
+    @Default(0) int endOffset,
+    @Default('') String snippet,
+    @Default(false) bool highlight,
+    @Default(false) bool bold,
+    @Default(false) bool underline,
+    @Default(false) bool wavy,
+  }) = _ReaderSelectionState;
+
+  const ReaderSelectionState._();
 
   bool get hasSnippet => snippet.trim().isNotEmpty;
-
-  ReaderSelectionState copyWith({
-    Object? range = _unset,
-    SelectionStatus? status,
-    bool? isActive,
-    int? startOffset,
-    int? endOffset,
-    String? snippet,
-    bool? highlight,
-    bool? bold,
-    bool? underline,
-    bool? wavy,
-  }) {
-    return ReaderSelectionState(
-      range:
-          identical(range, _unset)
-              ? this.range
-              : range as SelectedContentRange?,
-      status: status ?? this.status,
-      isActive: isActive ?? this.isActive,
-      startOffset: startOffset ?? this.startOffset,
-      endOffset: endOffset ?? this.endOffset,
-      snippet: snippet ?? this.snippet,
-      highlight: highlight ?? this.highlight,
-      bold: bold ?? this.bold,
-      underline: underline ?? this.underline,
-      wavy: wavy ?? this.wavy,
-    );
-  }
 
   ReaderSelectionState clear() {
     return const ReaderSelectionState();
@@ -109,38 +75,25 @@ class ReaderSelectionState {
   }
 }
 
-class ReaderSelectionSnapshot {
-  const ReaderSelectionSnapshot({
-    required this.startOffset,
-    required this.endOffset,
-    required this.snippet,
-    required this.hasHighlight,
-    required this.isBold,
-    required this.isUnderline,
-    required this.isWavy,
-  });
-
-  final int startOffset;
-  final int endOffset;
-  final String snippet;
-  final bool hasHighlight;
-  final bool isBold;
-  final bool isUnderline;
-  final bool isWavy;
+@freezed
+abstract class ReaderSelectionSnapshot with _$ReaderSelectionSnapshot {
+  const factory ReaderSelectionSnapshot({
+    required int startOffset,
+    required int endOffset,
+    required String snippet,
+    required bool hasHighlight,
+    required bool isBold,
+    required bool isUnderline,
+    required bool isWavy,
+  }) = _ReaderSelectionSnapshot;
 }
 
-class ReaderSelectionStyle {
-  const ReaderSelectionStyle({
-    required this.highlight,
-    required this.bold,
-    required this.underline,
-    required this.wavy,
-  });
-
-  final bool highlight;
-  final bool bold;
-  final bool underline;
-  final bool wavy;
+@freezed
+abstract class ReaderSelectionStyle with _$ReaderSelectionStyle {
+  const factory ReaderSelectionStyle({
+    required bool highlight,
+    required bool bold,
+    required bool underline,
+    required bool wavy,
+  }) = _ReaderSelectionStyle;
 }
-
-const Object _unset = Object();

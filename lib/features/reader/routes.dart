@@ -73,24 +73,10 @@ final List<RouteBase> readerRoutes = <RouteBase>[
     },
   ),
   GoRoute(
-    path: '/reader/:bookId/:chapterId',
-    name: 'reader',
+    path: ReaderRouteData.pathPattern,
+    name: ReaderRouteData.routeName,
     pageBuilder: (context, state) {
-      final bookId = state.pathParameters['bookId'] ?? 'unknown-book';
-      final chapterId = state.pathParameters['chapterId'] ?? 'unknown-chapter';
-      final chapterUrl = state.uri.queryParameters['chapterUrl'];
-      final chapterTitle = state.uri.queryParameters['chapterTitle'];
-      final sourceId = state.uri.queryParameters['sourceId'];
-      final detailUrl = state.uri.queryParameters['detailUrl'];
-      final bookmarkId = state.uri.queryParameters['bookmarkId'];
-      final openRequestedAtMs = int.tryParse(
-        state.uri.queryParameters['openRequestedAtMs'] ?? '',
-      );
-      final openRouteKind = state.uri.queryParameters['openRouteKind'];
-      final heroTag = state.uri.queryParameters['heroTag'];
-      final chapterIndex = int.tryParse(
-        state.uri.queryParameters['chapterIndex'] ?? '',
-      );
+      final route = ReaderRouteData.fromUri(state.uri);
 
       return buildFadeTransitionPage(
         state: state,
@@ -99,17 +85,17 @@ final List<RouteBase> readerRoutes = <RouteBase>[
         beginOpacity: 0.88,
         child: _buildReaderRoutePage(
           context,
-          bookId: bookId,
-          chapterId: chapterId,
-          chapterUrl: chapterUrl,
-          chapterTitle: chapterTitle,
-          sourceId: sourceId,
-          detailUrl: detailUrl,
-          chapterIndex: chapterIndex,
-          bookmarkId: bookmarkId,
-          openRequestedAtMs: openRequestedAtMs,
-          openRouteKind: openRouteKind,
-          heroTag: heroTag,
+          bookId: route.bookId,
+          chapterId: route.chapterId,
+          chapterUrl: route.chapterUrl,
+          chapterTitle: route.chapterTitle,
+          sourceId: route.sourceId,
+          detailUrl: route.detailUrl,
+          chapterIndex: route.chapterIndex,
+          bookmarkId: route.bookmarkId,
+          openRequestedAtMs: route.openRequestedAtMs,
+          openRouteKind: route.openRouteKind,
+          heroTag: route.heroTag,
         ),
       );
     },

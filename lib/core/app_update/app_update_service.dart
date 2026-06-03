@@ -30,16 +30,17 @@ class AppUpdateService {
             ? AppApiConfig.appName
             : (appName ?? AppApiConfig.appName).trim();
 
-    final data = await _client.request<Map<String, dynamic>>(
-      method: ApiMethod.post,
-      path: '/v1/app-updates/check',
-      body: {
-        'app_name': resolvedAppName,
-        'version_code': versionCode,
-        'platform': identity.platform,
-      },
-      stage: ErrorStage.unknown,
-      decoder: _decodeMap,
+    final data = await _client.requestSpec(
+      ApiRequestSpec.jsonObject(
+        method: ApiMethod.post,
+        path: '/v1/app-updates/check',
+        body: {
+          'app_name': resolvedAppName,
+          'version_code': versionCode,
+          'platform': identity.platform,
+        },
+        stage: ErrorStage.unknown,
+      ),
     );
 
     return AppUpdateCheckResult.fromJson(data, currentVersionCode: versionCode);
@@ -54,12 +55,5 @@ class AppUpdateService {
       briefMessage: '缺少更新服务地址，请配置 APPREAD_API_BASE_URL。',
       stage: ErrorStage.unknown,
     );
-  }
-
-  Map<String, dynamic> _decodeMap(Object? data) {
-    if (data is Map) {
-      return data.map((key, value) => MapEntry(key.toString(), value));
-    }
-    throw const FormatException('Invalid response payload.');
   }
 }

@@ -1,5 +1,10 @@
+import 'package:json_annotation/json_annotation.dart';
+
 import 'reader_document.dart';
 
+part 'reader_logical_position.g.dart';
+
+@JsonSerializable()
 class ReaderLogicalPosition {
   const ReaderLogicalPosition({
     required this.chapterIndex,
@@ -111,32 +116,12 @@ class ReaderLogicalPosition {
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      'chapterIndex': chapterIndex,
-      'blockIndex': blockIndex,
-      'offsetInBlock': offsetInBlock,
-      'chapterPositionRatio': chapterPositionRatio,
-      'pageIndex': pageIndex,
-      'totalPageCount': totalPageCount,
-      'viewportMode': viewportMode,
-      'zoomScale': zoomScale,
-      'panDx': panDx,
-      'panDy': panDy,
-    };
+    return _$ReaderLogicalPositionToJson(this);
   }
 
   factory ReaderLogicalPosition.fromJson(Map<String, dynamic> json) {
-    return ReaderLogicalPosition(
-      chapterIndex: _requiredInt(json, 'chapterIndex'),
-      blockIndex: _requiredInt(json, 'blockIndex'),
-      offsetInBlock: _requiredInt(json, 'offsetInBlock'),
-      chapterPositionRatio: _requiredDouble(json, 'chapterPositionRatio'),
-      pageIndex: _optionalInt(json['pageIndex']),
-      totalPageCount: _optionalInt(json['totalPageCount']),
-      viewportMode: _optionalString(json['viewportMode']),
-      zoomScale: _optionalDouble(json['zoomScale']),
-      panDx: _optionalDouble(json['panDx']),
-      panDy: _optionalDouble(json['panDy']),
+    return _$ReaderLogicalPositionFromJson(
+      _normalizeReaderLogicalPositionJson(json),
     );
   }
 
@@ -220,4 +205,26 @@ class ReaderLogicalPosition {
     }
     return 1;
   }
+}
+
+Map<String, dynamic> _normalizeReaderLogicalPositionJson(
+  Map<String, dynamic> json,
+) {
+  return <String, dynamic>{
+    'chapterIndex': ReaderLogicalPosition._requiredInt(json, 'chapterIndex'),
+    'blockIndex': ReaderLogicalPosition._requiredInt(json, 'blockIndex'),
+    'offsetInBlock': ReaderLogicalPosition._requiredInt(json, 'offsetInBlock'),
+    'chapterPositionRatio': ReaderLogicalPosition._requiredDouble(
+      json,
+      'chapterPositionRatio',
+    ),
+    'pageIndex': ReaderLogicalPosition._optionalInt(json['pageIndex']),
+    'totalPageCount': ReaderLogicalPosition._optionalInt(
+      json['totalPageCount'],
+    ),
+    'viewportMode': ReaderLogicalPosition._optionalString(json['viewportMode']),
+    'zoomScale': ReaderLogicalPosition._optionalDouble(json['zoomScale']),
+    'panDx': ReaderLogicalPosition._optionalDouble(json['panDx']),
+    'panDy': ReaderLogicalPosition._optionalDouble(json['panDy']),
+  };
 }

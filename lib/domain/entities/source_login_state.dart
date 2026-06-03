@@ -1,92 +1,58 @@
-class SourceLoginState {
-  const SourceLoginState({
-    required this.sourceId,
-    required this.updatedAt,
-    this.loginHeaderJson,
-    this.loginInfoJson,
-    this.sourceVariableJson,
-  });
+// ignore_for_file: invalid_annotation_target
 
-  final String sourceId;
-  final String? loginHeaderJson;
-  final String? loginInfoJson;
-  final String? sourceVariableJson;
-  final DateTime updatedAt;
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part 'source_login_state.freezed.dart';
+part 'source_login_state.g.dart';
+
+@freezed
+abstract class SourceLoginState with _$SourceLoginState {
+  const factory SourceLoginState({
+    @JsonKey(fromJson: _requiredSourceIdFromJson) required String sourceId,
+    @JsonKey(fromJson: _requiredDateTimeFromJson, toJson: _dateTimeToJson)
+    required DateTime updatedAt,
+    @JsonKey(fromJson: _optionalNormalizedStringFromJson)
+    String? loginHeaderJson,
+    @JsonKey(fromJson: _optionalNormalizedStringFromJson) String? loginInfoJson,
+    @JsonKey(fromJson: _optionalNormalizedStringFromJson)
+    String? sourceVariableJson,
+  }) = _SourceLoginState;
+
+  const SourceLoginState._();
+
+  factory SourceLoginState.fromJson(Map<String, dynamic> json) =>
+      _$SourceLoginStateFromJson(json);
 
   bool get isEmpty =>
-      _normalize(loginHeaderJson) == null &&
-      _normalize(loginInfoJson) == null &&
-      _normalize(sourceVariableJson) == null;
-
-  SourceLoginState copyWith({
-    String? sourceId,
-    String? loginHeaderJson,
-    bool clearLoginHeaderJson = false,
-    String? loginInfoJson,
-    bool clearLoginInfoJson = false,
-    String? sourceVariableJson,
-    bool clearSourceVariableJson = false,
-    DateTime? updatedAt,
-  }) {
-    return SourceLoginState(
-      sourceId: sourceId ?? this.sourceId,
-      loginHeaderJson:
-          clearLoginHeaderJson
-              ? null
-              : (loginHeaderJson ?? this.loginHeaderJson),
-      loginInfoJson:
-          clearLoginInfoJson ? null : (loginInfoJson ?? this.loginInfoJson),
-      sourceVariableJson:
-          clearSourceVariableJson
-              ? null
-              : (sourceVariableJson ?? this.sourceVariableJson),
-      updatedAt: updatedAt ?? this.updatedAt,
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return <String, dynamic>{
-      'sourceId': sourceId,
-      'loginHeaderJson': loginHeaderJson,
-      'loginInfoJson': loginInfoJson,
-      'sourceVariableJson': sourceVariableJson,
-      'updatedAt': updatedAt.toIso8601String(),
-    };
-  }
-
-  factory SourceLoginState.fromJson(Map<String, dynamic> json) {
-    return SourceLoginState(
-      sourceId: _requiredString(json, 'sourceId'),
-      loginHeaderJson: _optionalString(json['loginHeaderJson']),
-      loginInfoJson: _optionalString(json['loginInfoJson']),
-      sourceVariableJson: _optionalString(json['sourceVariableJson']),
-      updatedAt: _requiredDateTime(json, 'updatedAt'),
-    );
-  }
-
-  static String _requiredString(Map<String, dynamic> json, String key) {
-    final normalized = _normalize(json[key]?.toString());
-    if (normalized == null) {
-      throw FormatException('Missing required field: $key');
-    }
-    return normalized;
-  }
-
-  static String? _optionalString(Object? value) {
-    return _normalize(value?.toString());
-  }
-
-  static String? _normalize(String? value) {
-    final normalized = (value ?? '').trim();
-    return normalized.isEmpty ? null : normalized;
-  }
-
-  static DateTime _requiredDateTime(Map<String, dynamic> json, String key) {
-    final raw = json[key]?.toString().trim() ?? '';
-    final parsed = DateTime.tryParse(raw);
-    if (parsed == null) {
-      throw FormatException('Missing required datetime field: $key');
-    }
-    return parsed;
-  }
+      _normalizeString(loginHeaderJson) == null &&
+      _normalizeString(loginInfoJson) == null &&
+      _normalizeString(sourceVariableJson) == null;
 }
+
+String _requiredSourceIdFromJson(Object? value) {
+  final normalized = _normalizeString(value?.toString());
+  if (normalized == null) {
+    throw FormatException('Missing required field: sourceId');
+  }
+  return normalized;
+}
+
+String? _optionalNormalizedStringFromJson(Object? value) {
+  return _normalizeString(value?.toString());
+}
+
+String? _normalizeString(String? value) {
+  final normalized = (value ?? '').trim();
+  return normalized.isEmpty ? null : normalized;
+}
+
+DateTime _requiredDateTimeFromJson(Object? value) {
+  final raw = value?.toString().trim() ?? '';
+  final parsed = DateTime.tryParse(raw);
+  if (parsed == null) {
+    throw FormatException('Missing required datetime field: updatedAt');
+  }
+  return parsed;
+}
+
+String _dateTimeToJson(DateTime value) => value.toIso8601String();

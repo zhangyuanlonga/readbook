@@ -1,5 +1,9 @@
 import 'dart:convert';
 
+import 'package:json_annotation/json_annotation.dart';
+
+part 'bookmark.g.dart';
+
 class BookmarkSnippetContent {
   const BookmarkSnippetContent({required this.quote, this.note});
 
@@ -52,6 +56,7 @@ class BookmarkSnippetContent {
   }
 }
 
+@JsonSerializable(createFactory: false)
 class Bookmark {
   const Bookmark({
     required this.id,
@@ -83,8 +88,10 @@ class Bookmark {
   final bool isUnderline;
   final bool isWavy;
   final String? color;
+  @JsonKey(name: 'note')
   final String? noteText;
 
+  @JsonKey(includeFromJson: false, includeToJson: false)
   BookmarkSnippetContent get content {
     final decoded = BookmarkSnippetContent.decode(snippet);
     final explicitNote = noteText?.trim();
@@ -94,10 +101,13 @@ class Bookmark {
     );
   }
 
+  @JsonKey(includeFromJson: false, includeToJson: false)
   String get displaySnippet => content.quote;
 
+  @JsonKey(includeFromJson: false, includeToJson: false)
   String? get note => content.note;
 
+  @JsonKey(includeFromJson: false, includeToJson: false)
   bool get hasNote => content.hasNote;
 
   static String buildSnippetPayload({required String quote, String? note}) {
@@ -141,22 +151,9 @@ class Bookmark {
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'bookId': bookId,
-      'chapterId': chapterId,
-      'chapterIndex': chapterIndex,
-      'startOffset': startOffset,
-      'endOffset': endOffset,
-      'snippet': snippet,
-      'createdAt': createdAt.toIso8601String(),
-      'updatedAt': updatedAt.toIso8601String(),
-      'isBold': isBold,
-      'isUnderline': isUnderline,
-      'isWavy': isWavy,
-      'color': color,
-      'note': note,
-    };
+    final json = _$BookmarkToJson(this);
+    json['note'] = note;
+    return json;
   }
 
   factory Bookmark.fromJson(Map<String, dynamic> json) {

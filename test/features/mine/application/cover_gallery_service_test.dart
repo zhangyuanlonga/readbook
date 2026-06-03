@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shuxiang_reading_next/core/storage/managed_asset_store.dart';
 import 'package:shuxiang_reading_next/domain/entities/cover_gallery.dart';
+import 'package:shuxiang_reading_next/domain/entities/managed_asset.dart';
 import 'package:shuxiang_reading_next/features/mine/application/cover_gallery_service.dart';
 
 void main() {
@@ -48,28 +49,33 @@ void main() {
       });
     });
 
-    test('persists galleries into index file instead of SharedPreferences', () async {
-      final prefs = await SharedPreferences.getInstance();
-      final service = CoverGalleryService(
-        preferences: prefs,
-        assetStore: await _createAssetStore(),
-      );
-      final gallery = CoverGallery(
-        id: 'cover_gallery_a',
-        name: '封面图集A',
-        createdAt: DateTime.parse('2026-05-21T00:00:00.000Z'),
-        updatedAt: DateTime.parse('2026-05-21T00:00:00.000Z'),
-        imagePaths: const <String>[],
-      );
+    test(
+      'persists galleries into index file instead of SharedPreferences',
+      () async {
+        final prefs = await SharedPreferences.getInstance();
+        final service = CoverGalleryService(
+          preferences: prefs,
+          assetStore: await _createAssetStore(),
+        );
+        final gallery = CoverGallery(
+          id: 'cover_gallery_a',
+          name: '封面图集A',
+          createdAt: DateTime.parse('2026-05-21T00:00:00.000Z'),
+          updatedAt: DateTime.parse('2026-05-21T00:00:00.000Z'),
+          imagePaths: const <String>[],
+        );
 
-      await service.saveGalleries(<CoverGallery>[gallery]);
+        await service.saveGalleries(<CoverGallery>[gallery]);
 
-      expect(prefs.containsKey('coverGallery.galleries'), isFalse);
-      final documentsDir = await _pathProviderDocumentsDir();
-      final indexFile = File('${documentsDir.path}/cover_galleries/index.json');
-      expect(await indexFile.exists(), isTrue);
-      expect(await indexFile.readAsString(), contains('cover_gallery_a'));
-    });
+        expect(prefs.containsKey('coverGallery.galleries'), isFalse);
+        final documentsDir = await _pathProviderDocumentsDir();
+        final indexFile = File(
+          '${documentsDir.path}/cover_galleries/index.json',
+        );
+        expect(await indexFile.exists(), isTrue);
+        expect(await indexFile.readAsString(), contains('cover_gallery_a'));
+      },
+    );
 
     test('migrates legacy SharedPreferences payload into index file', () async {
       final prefs = await SharedPreferences.getInstance();
@@ -99,6 +105,41 @@ void main() {
       final indexFile = File('${documentsDir.path}/cover_galleries/index.json');
       expect(await indexFile.exists(), isTrue);
     });
+
+    test(
+      'loadGalleryIndex resolves persisted preview path for gallery cards',
+      () async {
+        final prefs = await SharedPreferences.getInstance();
+        final assetStore = await _createAssetStore();
+        final service = CoverGalleryService(
+          preferences: prefs,
+          assetStore: assetStore,
+        );
+        final managedFile = await assetStore.persistBytes(
+          type: ManagedAssetType.coverGalleryImage,
+          scope: ManagedAssetScope.themeBinding,
+          bytes: const <int>[1, 2, 3],
+          fileName: 'preview.png',
+          collectionId: 'cover_gallery_index_preview',
+          targetNamePrefix: 'preview',
+        );
+
+        await service.saveGalleries(<CoverGallery>[
+          CoverGallery(
+            id: 'cover_gallery_index_preview',
+            name: '封面预览图集',
+            createdAt: DateTime.parse('2026-05-21T00:00:00.000Z'),
+            updatedAt: DateTime.parse('2026-05-21T00:00:00.000Z'),
+            imagePaths: <String>[managedFile.resolvedPath!],
+          ),
+        ]);
+
+        final indexItems = await service.loadGalleryIndex();
+
+        expect(indexItems, hasLength(1));
+        expect(indexItems.first.previewPath, managedFile.resolvedPath);
+      },
+    );
   });
 }
 

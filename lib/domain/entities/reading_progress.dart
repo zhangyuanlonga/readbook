@@ -1,5 +1,10 @@
+import 'package:json_annotation/json_annotation.dart';
+
 import 'reader_logical_position.dart';
 
+part 'reading_progress.g.dart';
+
+@JsonSerializable()
 class ReaderPositionSnapshot {
   const ReaderPositionSnapshot({
     required this.viewportMode,
@@ -28,42 +33,17 @@ class ReaderPositionSnapshot {
   final double? audioSpeed;
 
   Map<String, dynamic> toJson() {
-    return {
-      'viewportMode': viewportMode,
-      'pageIndex': pageIndex,
-      'pageCount': pageCount,
-      'scrollOffset': scrollOffset,
-      'maxScrollExtent': maxScrollExtent,
-      'zoomScale': zoomScale,
-      'panDx': panDx,
-      'panDy': panDy,
-      'audioPositionMs': audioPositionMs,
-      'audioDurationMs': audioDurationMs,
-      'audioSpeed': audioSpeed,
-    };
+    return _$ReaderPositionSnapshotToJson(this);
   }
 
   factory ReaderPositionSnapshot.fromJson(Map<String, dynamic> json) {
-    final viewportMode = (json['viewportMode']?.toString().trim() ?? '');
-    if (viewportMode.isEmpty) {
-      throw const FormatException('Missing required field: viewportMode');
-    }
-    return ReaderPositionSnapshot(
-      viewportMode: viewportMode,
-      pageIndex: ReadingProgress._optionalInt(json['pageIndex']),
-      pageCount: ReadingProgress._optionalInt(json['pageCount']),
-      scrollOffset: ReadingProgress._asDouble(json['scrollOffset']),
-      maxScrollExtent: ReadingProgress._asDouble(json['maxScrollExtent']),
-      zoomScale: ReadingProgress._asDouble(json['zoomScale']),
-      panDx: ReadingProgress._asDouble(json['panDx']),
-      panDy: ReadingProgress._asDouble(json['panDy']),
-      audioPositionMs: ReadingProgress._optionalInt(json['audioPositionMs']),
-      audioDurationMs: ReadingProgress._optionalInt(json['audioDurationMs']),
-      audioSpeed: ReadingProgress._asDouble(json['audioSpeed']),
+    return _$ReaderPositionSnapshotFromJson(
+      _normalizeReaderPositionSnapshotJson(json),
     );
   }
 }
 
+@JsonSerializable(explicitToJson: true)
 class ReadingProgress {
   const ReadingProgress({
     required this.bookId,
@@ -92,39 +72,13 @@ class ReadingProgress {
   final ReaderPositionSnapshot? positionSnapshot;
 
   Map<String, dynamic> toJson() {
-    return {
-      'bookId': bookId,
-      'sourceId': sourceId,
-      'detailUrl': detailUrl,
-      'chapterId': chapterId,
-      'chapterUrl': chapterUrl,
-      'chapterTitle': chapterTitle,
-      'chapterIndex': chapterIndex,
-      'updatedAt': updatedAt.toIso8601String(),
-      'chapterPositionRatio': chapterPositionRatio,
-      if (logicalPosition != null) 'logicalPosition': logicalPosition!.toJson(),
-      if (positionSnapshot != null)
-        'positionSnapshot': positionSnapshot!.toJson(),
-    };
+    final json = _$ReadingProgressToJson(this);
+    json.removeWhere((key, value) => value == null);
+    return json;
   }
 
   factory ReadingProgress.fromJson(Map<String, dynamic> json) {
-    return ReadingProgress(
-      bookId: _requiredString(json, 'bookId'),
-      sourceId: _requiredString(json, 'sourceId'),
-      detailUrl: _requiredString(json, 'detailUrl'),
-      chapterId: _requiredString(json, 'chapterId'),
-      chapterUrl: _requiredString(json, 'chapterUrl'),
-      chapterTitle: _requiredString(json, 'chapterTitle'),
-      chapterIndex: _requiredInt(json, 'chapterIndex'),
-      updatedAt: _requiredDateTime(json, 'updatedAt'),
-      chapterPositionRatio: _requiredDouble(
-        json,
-        'chapterPositionRatio',
-      ).clamp(0.0, 1.0),
-      logicalPosition: _optionalLogicalPosition(json['logicalPosition']),
-      positionSnapshot: _optionalPositionSnapshot(json['positionSnapshot']),
-    );
+    return _$ReadingProgressFromJson(_normalizeReadingProgressJson(json));
   }
 
   static String _requiredString(Map<String, dynamic> json, String key) {
@@ -219,4 +173,52 @@ class ReadingProgress {
       value.map((key, nestedValue) => MapEntry(key.toString(), nestedValue)),
     );
   }
+}
+
+Map<String, dynamic> _normalizeReaderPositionSnapshotJson(
+  Map<String, dynamic> json,
+) {
+  final viewportMode = (json['viewportMode']?.toString().trim() ?? '');
+  if (viewportMode.isEmpty) {
+    throw const FormatException('Missing required field: viewportMode');
+  }
+  return <String, dynamic>{
+    'viewportMode': viewportMode,
+    'pageIndex': ReadingProgress._optionalInt(json['pageIndex']),
+    'pageCount': ReadingProgress._optionalInt(json['pageCount']),
+    'scrollOffset': ReadingProgress._asDouble(json['scrollOffset']),
+    'maxScrollExtent': ReadingProgress._asDouble(json['maxScrollExtent']),
+    'zoomScale': ReadingProgress._asDouble(json['zoomScale']),
+    'panDx': ReadingProgress._asDouble(json['panDx']),
+    'panDy': ReadingProgress._asDouble(json['panDy']),
+    'audioPositionMs': ReadingProgress._optionalInt(json['audioPositionMs']),
+    'audioDurationMs': ReadingProgress._optionalInt(json['audioDurationMs']),
+    'audioSpeed': ReadingProgress._asDouble(json['audioSpeed']),
+  };
+}
+
+Map<String, dynamic> _normalizeReadingProgressJson(Map<String, dynamic> json) {
+  return <String, dynamic>{
+    'bookId': ReadingProgress._requiredString(json, 'bookId'),
+    'sourceId': ReadingProgress._requiredString(json, 'sourceId'),
+    'detailUrl': ReadingProgress._requiredString(json, 'detailUrl'),
+    'chapterId': ReadingProgress._requiredString(json, 'chapterId'),
+    'chapterUrl': ReadingProgress._requiredString(json, 'chapterUrl'),
+    'chapterTitle': ReadingProgress._requiredString(json, 'chapterTitle'),
+    'chapterIndex': ReadingProgress._requiredInt(json, 'chapterIndex'),
+    'updatedAt':
+        ReadingProgress._requiredDateTime(json, 'updatedAt').toIso8601String(),
+    'chapterPositionRatio': ReadingProgress._requiredDouble(
+      json,
+      'chapterPositionRatio',
+    ).clamp(0.0, 1.0),
+    'logicalPosition':
+        ReadingProgress._optionalLogicalPosition(
+          json['logicalPosition'],
+        )?.toJson(),
+    'positionSnapshot':
+        ReadingProgress._optionalPositionSnapshot(
+          json['positionSnapshot'],
+        )?.toJson(),
+  };
 }

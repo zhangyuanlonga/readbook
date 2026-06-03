@@ -1,3 +1,7 @@
+import 'package:json_annotation/json_annotation.dart';
+
+part 'reader_document.g.dart';
+
 abstract class ReaderBlock {
   const ReaderBlock();
 
@@ -42,6 +46,7 @@ abstract class ReaderBlock {
   }
 }
 
+@JsonSerializable(createFactory: false)
 class ReaderTextBlock extends ReaderBlock {
   const ReaderTextBlock({required this.text});
 
@@ -54,10 +59,11 @@ class ReaderTextBlock extends ReaderBlock {
 
   @override
   Map<String, dynamic> toJson() {
-    return {'type': type, 'text': text};
+    return _$ReaderTextBlockToJson(this);
   }
 }
 
+@JsonSerializable(createFactory: false)
 class ReaderListItemBlock extends ReaderBlock {
   const ReaderListItemBlock({required this.text});
 
@@ -70,10 +76,11 @@ class ReaderListItemBlock extends ReaderBlock {
 
   @override
   Map<String, dynamic> toJson() {
-    return {'type': type, 'text': text};
+    return _$ReaderListItemBlockToJson(this);
   }
 }
 
+@JsonSerializable(createFactory: false)
 class ReaderQuoteBlock extends ReaderBlock {
   const ReaderQuoteBlock({required this.text});
 
@@ -86,10 +93,11 @@ class ReaderQuoteBlock extends ReaderBlock {
 
   @override
   Map<String, dynamic> toJson() {
-    return {'type': type, 'text': text};
+    return _$ReaderQuoteBlockToJson(this);
   }
 }
 
+@JsonSerializable(createFactory: false)
 class ReaderCaptionBlock extends ReaderBlock {
   const ReaderCaptionBlock({required this.text});
 
@@ -102,10 +110,11 @@ class ReaderCaptionBlock extends ReaderBlock {
 
   @override
   Map<String, dynamic> toJson() {
-    return {'type': type, 'text': text};
+    return _$ReaderCaptionBlockToJson(this);
   }
 }
 
+@JsonSerializable(createFactory: false)
 class ReaderFootnoteBlock extends ReaderBlock {
   const ReaderFootnoteBlock({required this.text});
 
@@ -118,10 +127,11 @@ class ReaderFootnoteBlock extends ReaderBlock {
 
   @override
   Map<String, dynamic> toJson() {
-    return {'type': type, 'text': text};
+    return _$ReaderFootnoteBlockToJson(this);
   }
 }
 
+@JsonSerializable(createFactory: false)
 class ReaderImageBlock extends ReaderBlock {
   const ReaderImageBlock({required this.imageUrl});
 
@@ -134,10 +144,11 @@ class ReaderImageBlock extends ReaderBlock {
 
   @override
   Map<String, dynamic> toJson() {
-    return {'type': type, 'imageUrl': imageUrl};
+    return _$ReaderImageBlockToJson(this);
   }
 }
 
+@JsonSerializable(createFactory: false)
 class ReaderTitleBlock extends ReaderBlock {
   const ReaderTitleBlock({required this.text, this.level = 1});
 
@@ -151,10 +162,11 @@ class ReaderTitleBlock extends ReaderBlock {
 
   @override
   Map<String, dynamic> toJson() {
-    return {'type': type, 'text': text, 'level': level};
+    return _$ReaderTitleBlockToJson(this);
   }
 }
 
+@JsonSerializable(createFactory: false, explicitToJson: true)
 class ReaderDocument {
   ReaderDocument({required Iterable<ReaderBlock> blocks})
     : blocks = List<ReaderBlock>.unmodifiable(
@@ -226,10 +238,13 @@ class ReaderDocument {
     return ReaderDocument(blocks: blocks);
   }
 
+  @JsonKey(includeFromJson: false, includeToJson: false)
   bool get isEmpty => blocks.isEmpty;
 
+  @JsonKey(includeFromJson: false, includeToJson: false)
   bool get hasImageBlocks => blocks.any((block) => block is ReaderImageBlock);
 
+  @JsonKey(includeFromJson: false, includeToJson: false)
   bool get hasTextBlocks => blocks.any(
     (block) =>
         block is ReaderTextBlock ||
@@ -240,6 +255,7 @@ class ReaderDocument {
         block is ReaderFootnoteBlock,
   );
 
+  @JsonKey(includeFromJson: false, includeToJson: false)
   bool get isPureImageDocument {
     final contentBlocks = blocks
         .where((block) => block is! ReaderTitleBlock)
@@ -248,6 +264,7 @@ class ReaderDocument {
         contentBlocks.every((block) => block is ReaderImageBlock);
   }
 
+  @JsonKey(includeFromJson: false, includeToJson: false)
   List<String> get imageUrls {
     return blocks
         .whereType<ReaderImageBlock>()
@@ -255,6 +272,7 @@ class ReaderDocument {
         .toList(growable: false);
   }
 
+  @JsonKey(includeFromJson: false, includeToJson: false)
   List<String> get paragraphs {
     return blocks
         .map((block) {
@@ -285,8 +303,10 @@ class ReaderDocument {
         .toList(growable: false);
   }
 
+  @JsonKey(includeFromJson: false, includeToJson: false)
   String get compatibilityContent => paragraphs.join('\n\n').trim();
 
+  @JsonKey(includeFromJson: false, includeToJson: false)
   String get debugSummary {
     final textCount = blocks.whereType<ReaderTextBlock>().length;
     final listCount = blocks.whereType<ReaderListItemBlock>().length;
@@ -299,9 +319,7 @@ class ReaderDocument {
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      'blocks': blocks.map((block) => block.toJson()).toList(growable: false),
-    };
+    return _$ReaderDocumentToJson(this);
   }
 
   static String inlineImageParagraph(String imageUrl) {
@@ -416,7 +434,8 @@ class ReaderDocument {
     if (_isAsciiWordLike(previousCode) && _isAsciiWordLike(nextCode)) {
       return true;
     }
-    if (_isAsciiSpacingPunctuation(previousCode) && _isAsciiWordLike(nextCode)) {
+    if (_isAsciiSpacingPunctuation(previousCode) &&
+        _isAsciiWordLike(nextCode)) {
       return true;
     }
     return false;

@@ -1,3 +1,8 @@
+import 'package:json_annotation/json_annotation.dart';
+
+part 'bookshelf_book.g.dart';
+
+@JsonSerializable()
 class BookshelfBook {
   const BookshelfBook({
     required this.bookId,
@@ -50,33 +55,10 @@ class BookshelfBook {
     );
   }
 
-  Map<String, dynamic> toJson() {
-    return {
-      'bookId': bookId,
-      'sourceId': sourceId,
-      'title': title,
-      'detailUrl': detailUrl,
-      'addedAt': addedAt.toIso8601String(),
-      'author': author,
-      'category': category,
-      'coverUrl': coverUrl,
-      'latestChapter': latestChapter,
-    };
-  }
+  Map<String, dynamic> toJson() => _$BookshelfBookToJson(this);
 
-  factory BookshelfBook.fromJson(Map<String, dynamic> json) {
-    return BookshelfBook(
-      bookId: _requiredString(json, 'bookId'),
-      sourceId: _requiredString(json, 'sourceId'),
-      title: _requiredString(json, 'title'),
-      detailUrl: _requiredString(json, 'detailUrl'),
-      addedAt: _requiredDateTime(json, 'addedAt'),
-      author: _optionalString(json['author']),
-      category: _optionalString(json['category']),
-      coverUrl: _optionalString(json['coverUrl']),
-      latestChapter: _optionalString(json['latestChapter']),
-    );
-  }
+  factory BookshelfBook.fromJson(Map<String, dynamic> json) =>
+      _$BookshelfBookFromJson(_normalizeBookshelfBookJson(json));
 
   static String _requiredString(Map<String, dynamic> json, String key) {
     final value = json[key]?.toString().trim() ?? '';
@@ -112,4 +94,18 @@ class BookshelfBook {
 
     return text;
   }
+}
+
+Map<String, dynamic> _normalizeBookshelfBookJson(Map<String, dynamic> json) {
+  return <String, dynamic>{
+    'bookId': BookshelfBook._requiredString(json, 'bookId'),
+    'sourceId': BookshelfBook._requiredString(json, 'sourceId'),
+    'title': BookshelfBook._requiredString(json, 'title'),
+    'detailUrl': BookshelfBook._requiredString(json, 'detailUrl'),
+    'addedAt': BookshelfBook._requiredDateTime(json, 'addedAt').toIso8601String(),
+    'author': BookshelfBook._optionalString(json['author']),
+    'category': BookshelfBook._optionalString(json['category']),
+    'coverUrl': BookshelfBook._optionalString(json['coverUrl']),
+    'latestChapter': BookshelfBook._optionalString(json['latestChapter']),
+  };
 }

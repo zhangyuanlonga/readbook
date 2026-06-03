@@ -19,7 +19,7 @@
 - [x] `test` 下约 237 个 Dart 测试文件。
 - [x] 1000 行以上文件约 39 个，总计约 8 万行。
 - [x] 复杂度主要集中在阅读器、书架、主题、详情页。
-- [x] 最大文件包括：`reader_page.dart` 约 6006 行。
+- [x] 最大文件包括：`reader_page.dart` 约 6012 行。
 - [x] 最大文件包括：`bookshelf_page.dart` 约 5331 行。
 - [x] 最大文件包括：`reader_page_settings_sheet.dart` 约 4575 行。
 - [x] 最大文件包括：`advanced_theme_list_page.dart` 约 4023 行。

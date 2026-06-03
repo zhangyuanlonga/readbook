@@ -33,6 +33,11 @@ Future<void> main(List<String> args) async {
       arguments: ['run', 'tool/check_codebase_engineering_baseline.dart'],
     ),
     const _SuiteStep(
+      name: 'Model Codegen Guard',
+      executable: 'dart',
+      arguments: ['run', 'tool/check_model_codegen_guard.dart'],
+    ),
+    const _SuiteStep(
       name: 'Storage Governance Guard',
       executable: 'dart',
       arguments: ['run', 'tool/check_storage_governance_guard.dart'],
@@ -41,6 +46,11 @@ Future<void> main(List<String> args) async {
       name: 'Route Inventory',
       executable: 'dart',
       arguments: ['run', 'tool/check_route_inventory.dart'],
+    ),
+    const _SuiteStep(
+      name: 'Complex Route String Guard',
+      executable: 'dart',
+      arguments: ['run', 'tool/check_route_string_guard.dart'],
     ),
     const _SuiteStep(
       name: 'UI Component Governance',
@@ -67,7 +77,6 @@ Future<void> main(List<String> args) async {
         'test/features/book/application/book_provider_smoke_test.dart',
         'test/features/bookshelf/application/bookshelf_provider_smoke_test.dart',
         'test/features/search/application/search_provider_smoke_test.dart',
-        'test/features/source/application/source_provider_smoke_test.dart',
       ],
     ),
     _SuiteStep(
@@ -85,9 +94,11 @@ Future<void> main(List<String> args) async {
       executable: flutterCmd,
       arguments: const [
         'test',
-        'test/features/reader/application/reader_source_switch_coordinator_test.dart',
+        'test/features/reader/application/reader_source_switch_target_resolver_test.dart',
+        'test/features/reader/application/source_switch_score_service_test.dart',
         'test/features/reader/presentation/reader_runtime_controller_test.dart',
-        'test/features/source/presentation/source_page_script_tab_test.dart',
+        'test/features/source/application/source_runtime_session_service_test.dart',
+        'test/features/source/application/webview_cookie_bridge_test.dart',
       ],
     ),
     _SuiteStep(

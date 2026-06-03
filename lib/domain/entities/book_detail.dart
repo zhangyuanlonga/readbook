@@ -1,3 +1,8 @@
+import 'package:json_annotation/json_annotation.dart';
+
+part 'book_detail.g.dart';
+
+@JsonSerializable()
 class BookDetail {
   const BookDetail({
     required this.id,
@@ -17,68 +22,59 @@ class BookDetail {
     this.executionContext,
   });
 
+  @JsonKey(fromJson: _requiredDetailId)
   final String id;
+  @JsonKey(fromJson: _requiredSourceId)
   final String sourceId;
+  @JsonKey(fromJson: _requiredTitle)
   final String title;
+  @JsonKey(fromJson: _requiredDetailUrl)
   final String detailUrl;
+  @JsonKey(fromJson: _optionalString)
   final String? author;
+  @JsonKey(fromJson: _optionalString)
   final String? intro;
+  @JsonKey(fromJson: _optionalString)
   final String? coverUrl;
+  @JsonKey(fromJson: _optionalString)
   final String? tocUrl;
+  @JsonKey(fromJson: _optionalString)
   final String? latestChapterTitle;
+  @JsonKey(fromJson: _optionalInt)
   final int? totalChapterNum;
+  @JsonKey(fromJson: _optionalString)
   final String? wordCount;
+  @JsonKey(fromJson: _optionalString)
   final String? category;
+  @JsonKey(fromJson: _stringList)
   final List<String> tags;
+  @JsonKey(fromJson: _optionalString)
   final String? updateTime;
+  @JsonKey(fromJson: _optionalString)
   final String? executionContext;
 
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'sourceId': sourceId,
-      'title': title,
-      'detailUrl': detailUrl,
-      'author': author,
-      'intro': intro,
-      'coverUrl': coverUrl,
-      'tocUrl': tocUrl,
-      'latestChapterTitle': latestChapterTitle,
-      'totalChapterNum': totalChapterNum,
-      'wordCount': wordCount,
-      'category': category,
-      'tags': tags,
-      'updateTime': updateTime,
-      'executionContext': executionContext,
-    };
-  }
+  Map<String, dynamic> toJson() => _$BookDetailToJson(this);
 
-  factory BookDetail.fromJson(Map<String, dynamic> json) {
-    return BookDetail(
-      id: _requiredString(json, 'id'),
-      sourceId: _requiredString(json, 'sourceId'),
-      title: _requiredString(json, 'title'),
-      detailUrl: _requiredString(json, 'detailUrl'),
-      author: _optionalString(json['author']),
-      intro: _optionalString(json['intro']),
-      coverUrl: _optionalString(json['coverUrl']),
-      tocUrl: _optionalString(json['tocUrl']),
-      latestChapterTitle: _optionalString(json['latestChapterTitle']),
-      totalChapterNum: _optionalInt(json['totalChapterNum']),
-      wordCount: _optionalString(json['wordCount']),
-      category: _optionalString(json['category']),
-      tags: _stringList(json['tags']),
-      updateTime: _optionalString(json['updateTime']),
-      executionContext: _optionalString(json['executionContext']),
-    );
-  }
+  factory BookDetail.fromJson(Map<String, dynamic> json) =>
+      _$BookDetailFromJson(json);
 
-  static String _requiredString(Map<String, dynamic> json, String key) {
-    final value = json[key]?.toString().trim() ?? '';
-    if (value.isEmpty) {
+  static String _requiredDetailId(Object? value) => _requiredString(value, 'id');
+
+  static String _requiredSourceId(Object? value) =>
+      _requiredString(value, 'sourceId');
+
+  static String _requiredTitle(Object? value) =>
+      _requiredString(value, 'title');
+
+  static String _requiredDetailUrl(Object? value) =>
+      _requiredString(value, 'detailUrl');
+
+  static String _requiredString(Object? value, String key) {
+    final normalized = value?.toString().trim() ?? '';
+    if (normalized.isEmpty) {
       throw FormatException('Missing required field: $key');
     }
-    return value;
+    return normalized;
   }
 
   static String? _optionalString(Object? value) {
@@ -96,7 +92,10 @@ class BookDetail {
     if (value is int) {
       return value;
     }
-    return int.tryParse(value?.toString() ?? '');
+    if (value is num) {
+      return value.toInt();
+    }
+    return int.tryParse(value?.toString().trim() ?? '');
   }
 
   static List<String> _stringList(Object? value) {

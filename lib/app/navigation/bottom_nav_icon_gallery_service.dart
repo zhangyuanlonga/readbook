@@ -30,48 +30,10 @@ class BottomNavIconGalleryService {
   static const String _activeGalleryIdKey = 'bottomNavIconGallery.activeId';
 
   Future<List<BottomNavIconGalleryIndexItem>> loadGalleryIndex() async {
-    final prefs = await _preferencesFuture;
-    final raw = prefs.getString(_galleriesKey);
-    if (raw == null || raw.trim().isEmpty) {
-      return builtInBottomNavIconGalleries
-          .map(BottomNavIconGalleryIndexItem.fromGallery)
-          .toList(growable: false);
-    }
-
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! List) {
-        return builtInBottomNavIconGalleries
-            .map(BottomNavIconGalleryIndexItem.fromGallery)
-            .toList(growable: false);
-      }
-
-      final customGalleries = decoded
-          .whereType<Map>()
-          .map(
-            (item) => BottomNavIconGallery.fromJson(
-              item.map((key, value) => MapEntry(key.toString(), value)),
-            ),
-          )
-          .where(
-            (gallery) =>
-                !builtInBottomNavIconGalleries.any(
-                  (builtIn) => builtIn.id == gallery.id,
-                ),
-          )
-          .map(BottomNavIconGalleryIndexItem.fromGallery)
-          .toList(growable: false);
-      return <BottomNavIconGalleryIndexItem>[
-        ...builtInBottomNavIconGalleries.map(
-          BottomNavIconGalleryIndexItem.fromGallery,
-        ),
-        ...customGalleries,
-      ];
-    } catch (_) {
-      return builtInBottomNavIconGalleries
-          .map(BottomNavIconGalleryIndexItem.fromGallery)
-          .toList(growable: false);
-    }
+    final galleries = await loadGalleries();
+    return galleries
+        .map(BottomNavIconGalleryIndexItem.fromGallery)
+        .toList(growable: false);
   }
 
   Future<List<BottomNavIconGallery>> loadGalleries() async {

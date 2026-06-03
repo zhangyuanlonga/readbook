@@ -8,6 +8,7 @@ import 'package:shuxiang_reading_next/app/navigation/bottom_nav_icon_gallery_tab
 import 'package:shuxiang_reading_next/app/shell_navigation_provider.dart';
 import 'package:shuxiang_reading_next/core/storage/managed_asset_store.dart';
 import 'package:shuxiang_reading_next/domain/entities/bottom_nav_icon_gallery.dart';
+import 'package:shuxiang_reading_next/domain/entities/managed_asset.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -82,18 +83,72 @@ void main() {
       expect(duplicated.id, isNot(created.id));
 
       final galleriesAfterDuplicate = await service.loadGalleries();
-      expect(galleriesAfterDuplicate.any((item) => item.id == duplicated.id), isTrue);
+      expect(
+        galleriesAfterDuplicate.any((item) => item.id == duplicated.id),
+        isTrue,
+      );
 
       await service.saveActiveGalleryId(duplicated.id);
       await service.deleteGallery(duplicated.id);
 
       final galleriesAfterDelete = await service.loadGalleries();
-      expect(galleriesAfterDelete.any((item) => item.id == duplicated.id), isFalse);
+      expect(
+        galleriesAfterDelete.any((item) => item.id == duplicated.id),
+        isFalse,
+      );
       expect(
         await service.loadActiveGalleryId(),
         defaultBottomNavIconGalleryId,
       );
     });
+
+    test(
+      'loadGalleryIndex resolves persisted icon asset paths for gallery cards',
+      () async {
+        final assetStore = await _createAssetStore();
+        final service = BottomNavIconGalleryService(assetStore: assetStore);
+        final managedFile = await assetStore.persistBytes(
+          type: ManagedAssetType.bottomNavIcon,
+          scope: ManagedAssetScope.bottomNav,
+          bytes: const <int>[1, 2, 3],
+          fileName: 'home.png',
+          collectionId: 'gallery_preview',
+          targetNamePrefix: 'home',
+        );
+        final gallery = BottomNavIconGallery(
+          id: 'gallery_preview',
+          name: '预览图集',
+          createdAt: DateTime.parse('2026-04-10T10:00:00.000Z'),
+          updatedAt: DateTime.parse('2026-04-10T11:00:00.000Z'),
+          isBuiltIn: false,
+          isEditable: true,
+          isDeletable: true,
+          items: {
+            BottomNavIconGalleryTab.home: BottomNavIconSet(
+              lightUnselected: BottomNavIconAssetRef(
+                path: managedFile.resolvedPath!,
+                format: BottomNavIconAssetFormat.png,
+                isAsset: false,
+              ),
+            ),
+          },
+        );
+
+        await service.saveGalleries([gallery]);
+
+        final indexItems = await service.loadGalleryIndex();
+        final customItem = indexItems.singleWhere(
+          (item) => item.id == 'gallery_preview',
+        );
+        final previewAsset =
+            customItem
+                .previewItems[BottomNavIconGalleryTab.home]
+                ?.lightUnselected;
+
+        expect(previewAsset, isNotNull);
+        expect(previewAsset!.path, managedFile.resolvedPath);
+      },
+    );
   });
 
   group('BottomNavIconGallery tab mapper', () {

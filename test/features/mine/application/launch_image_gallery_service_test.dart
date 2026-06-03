@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shuxiang_reading_next/core/storage/managed_asset_store.dart';
 import 'package:shuxiang_reading_next/domain/entities/launch_image_gallery.dart';
+import 'package:shuxiang_reading_next/domain/entities/managed_asset.dart';
 import 'package:shuxiang_reading_next/features/mine/application/launch_image_gallery_service.dart';
 
 void main() {
@@ -76,30 +77,36 @@ void main() {
       expect((await service.loadActiveGallery())?.id, gallery.id);
     });
 
-    test('persists custom galleries into index file instead of SharedPreferences', () async {
-      final prefs = await SharedPreferences.getInstance();
-      final service = LaunchImageGalleryService(
-        preferences: prefs,
-        assetStore: await _createAssetStore(),
-      );
-      final gallery = LaunchImageGallery(
-        id: 'launch_gallery_index',
-        name: '索引启动图集',
-        createdAt: DateTime.parse('2026-05-21T00:00:00.000Z'),
-        updatedAt: DateTime.parse('2026-05-21T00:00:00.000Z'),
-        imagePaths: const <String>[],
-      );
+    test(
+      'persists custom galleries into index file instead of SharedPreferences',
+      () async {
+        final prefs = await SharedPreferences.getInstance();
+        final service = LaunchImageGalleryService(
+          preferences: prefs,
+          assetStore: await _createAssetStore(),
+        );
+        final gallery = LaunchImageGallery(
+          id: 'launch_gallery_index',
+          name: '索引启动图集',
+          createdAt: DateTime.parse('2026-05-21T00:00:00.000Z'),
+          updatedAt: DateTime.parse('2026-05-21T00:00:00.000Z'),
+          imagePaths: const <String>[],
+        );
 
-      await service.saveGalleries(<LaunchImageGallery>[gallery]);
+        await service.saveGalleries(<LaunchImageGallery>[gallery]);
 
-      expect(prefs.containsKey('launchImageGallery.galleries'), isFalse);
-      final documentsDir = await _pathProviderDocumentsDir();
-      final indexFile = File(
-        '${documentsDir.path}/launch_image_galleries/index.json',
-      );
-      expect(await indexFile.exists(), isTrue);
-      expect(await indexFile.readAsString(), contains('launch_gallery_index'));
-    });
+        expect(prefs.containsKey('launchImageGallery.galleries'), isFalse);
+        final documentsDir = await _pathProviderDocumentsDir();
+        final indexFile = File(
+          '${documentsDir.path}/launch_image_galleries/index.json',
+        );
+        expect(await indexFile.exists(), isTrue);
+        expect(
+          await indexFile.readAsString(),
+          contains('launch_gallery_index'),
+        );
+      },
+    );
 
     test('migrates legacy SharedPreferences payload into index file', () async {
       final prefs = await SharedPreferences.getInstance();
@@ -133,6 +140,43 @@ void main() {
       );
       expect(await indexFile.exists(), isTrue);
     });
+
+    test(
+      'loadGalleryIndex resolves persisted preview path for gallery cards',
+      () async {
+        final prefs = await SharedPreferences.getInstance();
+        final assetStore = await _createAssetStore();
+        final service = LaunchImageGalleryService(
+          preferences: prefs,
+          assetStore: assetStore,
+        );
+        final managedFile = await assetStore.persistBytes(
+          type: ManagedAssetType.launchImageGalleryImage,
+          scope: ManagedAssetScope.readerAppearance,
+          bytes: const <int>[1, 2, 3],
+          fileName: 'launch_preview.png',
+          collectionId: 'launch_gallery_index_preview',
+          targetNamePrefix: 'launch_preview',
+        );
+
+        await service.saveGalleries(<LaunchImageGallery>[
+          LaunchImageGallery(
+            id: 'launch_gallery_index_preview',
+            name: '启动图预览图集',
+            createdAt: DateTime.parse('2026-05-21T00:00:00.000Z'),
+            updatedAt: DateTime.parse('2026-05-21T00:00:00.000Z'),
+            imagePaths: <String>[managedFile.resolvedPath!],
+          ),
+        ]);
+
+        final indexItems = await service.loadGalleryIndex();
+        final customItem = indexItems.singleWhere(
+          (item) => item.id == 'launch_gallery_index_preview',
+        );
+
+        expect(customItem.previewPath, managedFile.resolvedPath);
+      },
+    );
 
     test('loads built-in launch gallery by default', () async {
       final service = LaunchImageGalleryService(

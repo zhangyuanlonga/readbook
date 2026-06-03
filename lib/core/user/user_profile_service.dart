@@ -38,13 +38,14 @@ class UserProfileService {
   Future<UserProfile> fetchMe() async {
     _ensureBaseUrl();
     final headers = await _authHeaders();
-    final data = await _client.request<Map<String, dynamic>>(
-      method: ApiMethod.get,
-      path: '/v1/users/me',
-      headers: headers,
-      attachAccessToken: true,
-      stage: ErrorStage.unknown,
-      decoder: _decodeMap,
+    final data = await _client.requestSpec(
+      ApiRequestSpec.jsonObject(
+        method: ApiMethod.get,
+        path: '/v1/users/me',
+        headers: headers,
+        attachAccessToken: true,
+        stage: ErrorStage.unknown,
+      ),
     );
     return UserProfile.fromJson(data);
   }
@@ -64,28 +65,30 @@ class UserProfileService {
 
     Map<String, dynamic> data;
     try {
-      data = await _client.request<Map<String, dynamic>>(
-        method: ApiMethod.patch,
-        path: '/v1/users/me',
-        headers: headers,
-        attachAccessToken: true,
-        stage: ErrorStage.unknown,
-        body: payload,
-        decoder: _decodeMap,
+      data = await _client.requestSpec(
+        ApiRequestSpec.jsonObject(
+          method: ApiMethod.patch,
+          path: '/v1/users/me',
+          headers: headers,
+          attachAccessToken: true,
+          stage: ErrorStage.unknown,
+          body: payload,
+        ),
       );
     } on ApiException catch (error) {
       final normalizedUserId = userId?.trim() ?? '';
       if (!_shouldFallbackToUserId(error) || normalizedUserId.isEmpty) {
         rethrow;
       }
-      data = await _client.request<Map<String, dynamic>>(
-        method: ApiMethod.patch,
-        path: '/v1/users/$normalizedUserId',
-        headers: headers,
-        attachAccessToken: true,
-        stage: ErrorStage.unknown,
-        body: payload,
-        decoder: _decodeMap,
+      data = await _client.requestSpec(
+        ApiRequestSpec.jsonObject(
+          method: ApiMethod.patch,
+          path: '/v1/users/$normalizedUserId',
+          headers: headers,
+          attachAccessToken: true,
+          stage: ErrorStage.unknown,
+          body: payload,
+        ),
       );
     }
 
@@ -117,12 +120,5 @@ class UserProfileService {
       briefMessage: '缺少用户服务地址，请配置 APPREAD_API_BASE_URL。',
       stage: ErrorStage.unknown,
     );
-  }
-
-  Map<String, dynamic> _decodeMap(Object? data) {
-    if (data is Map) {
-      return data.map((key, value) => MapEntry(key.toString(), value));
-    }
-    throw const FormatException('Invalid response payload.');
   }
 }

@@ -1,3 +1,8 @@
+import 'package:json_annotation/json_annotation.dart';
+
+part 'book_metadata_override.g.dart';
+
+@JsonSerializable()
 class BookMetadataOverride {
   const BookMetadataOverride({
     required this.targetKey,
@@ -110,6 +115,11 @@ class BookMetadataOverride {
     );
   }
 
+  Map<String, dynamic> toJson() => _$BookMetadataOverrideToJson(this);
+
+  factory BookMetadataOverride.fromJson(Map<String, dynamic> json) =>
+      _$BookMetadataOverrideFromJson(_normalizeBookMetadataOverrideJson(json));
+
   static String localTargetKey(String bookId) => 'local::${bookId.trim()}';
 
   static String remoteTargetKey({
@@ -123,4 +133,46 @@ class BookMetadataOverride {
     final normalized = (value ?? '').trim();
     return normalized.isEmpty ? null : normalized;
   }
+}
+
+Map<String, dynamic> _normalizeBookMetadataOverrideJson(
+  Map<String, dynamic> json,
+) {
+  final targetKey = json['targetKey']?.toString().trim() ?? '';
+  if (targetKey.isEmpty) {
+    throw const FormatException('Missing required field: targetKey');
+  }
+  final createdAtRaw = json['createdAt']?.toString().trim() ?? '';
+  final updatedAtRaw = json['updatedAt']?.toString().trim() ?? '';
+  final createdAt = DateTime.tryParse(createdAtRaw);
+  final updatedAt = DateTime.tryParse(updatedAtRaw);
+  if (createdAt == null) {
+    throw const FormatException('Missing required datetime field: createdAt');
+  }
+  if (updatedAt == null) {
+    throw const FormatException('Missing required datetime field: updatedAt');
+  }
+
+  return <String, dynamic>{
+    'targetKey': targetKey,
+    'bookId': BookMetadataOverride._normalizeOptional(
+      json['bookId']?.toString(),
+    ),
+    'sourceId': BookMetadataOverride._normalizeOptional(
+      json['sourceId']?.toString(),
+    ),
+    'detailUrl': BookMetadataOverride._normalizeOptional(
+      json['detailUrl']?.toString(),
+    ),
+    'title': BookMetadataOverride._normalizeOptional(json['title']?.toString()),
+    'author': BookMetadataOverride._normalizeOptional(
+      json['author']?.toString(),
+    ),
+    'intro': BookMetadataOverride._normalizeOptional(json['intro']?.toString()),
+    'coverPath': BookMetadataOverride._normalizeOptional(
+      json['coverPath']?.toString(),
+    ),
+    'createdAt': createdAt.toIso8601String(),
+    'updatedAt': updatedAt.toIso8601String(),
+  };
 }

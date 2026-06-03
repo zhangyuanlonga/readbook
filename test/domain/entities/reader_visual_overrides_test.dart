@@ -26,6 +26,8 @@ void main() {
       expect(restored.fontFamilyKey, 'reader_font_family');
       expect(restored.hasCustomFontPathOverride, isTrue);
       expect(restored.customFontPath, 'reader_fonts/demo/font.ttf');
+      expect(overrides.toJson(), isNot(contains('hasFontBindingOverride')));
+      expect(overrides.toJson(), isNot(contains('isEmpty')));
     });
 
     test('empty override reports empty and supports clear helpers', () {

@@ -1,3 +1,7 @@
+import 'package:json_annotation/json_annotation.dart';
+
+part 'bottom_nav_icon_gallery.g.dart';
+
 enum BottomNavIconGalleryTab { home, bookshelf, discover, stats, mine }
 
 enum BottomNavIconAssetFormat { svg, png, gif }
@@ -9,6 +13,7 @@ enum BottomNavIconVariantSlot {
   darkSelected,
 }
 
+@JsonSerializable()
 class BottomNavIconAssetRef {
   const BottomNavIconAssetRef({
     required this.path,
@@ -21,32 +26,12 @@ class BottomNavIconAssetRef {
   final bool isAsset;
 
   Map<String, dynamic> toJson() {
-    return {'path': path, 'format': format.name, 'isAsset': isAsset};
+    return _$BottomNavIconAssetRefToJson(this);
   }
 
   factory BottomNavIconAssetRef.fromJson(Map<String, dynamic> json) {
-    final rawPath = json['path']?.toString().trim() ?? '';
-    if (rawPath.isEmpty) {
-      throw const FormatException('Missing required field: path');
-    }
-
-    final rawFormat = json['format']?.toString().trim() ?? '';
-    final format = switch (rawFormat) {
-      'svg' => BottomNavIconAssetFormat.svg,
-      'png' => BottomNavIconAssetFormat.png,
-      'gif' => BottomNavIconAssetFormat.gif,
-      _ => throw const FormatException('Invalid required field: format'),
-    };
-
-    final rawIsAsset = json['isAsset'];
-    if (rawIsAsset is! bool) {
-      throw const FormatException('Missing required field: isAsset');
-    }
-
-    return BottomNavIconAssetRef(
-      path: rawPath,
-      format: format,
-      isAsset: rawIsAsset,
+    return _$BottomNavIconAssetRefFromJson(
+      _normalizeBottomNavIconAssetRefJson(json),
     );
   }
 
@@ -63,6 +48,35 @@ class BottomNavIconAssetRef {
   }
 }
 
+Map<String, dynamic> _normalizeBottomNavIconAssetRefJson(
+  Map<String, dynamic> json,
+) {
+  final rawPath = json['path']?.toString().trim() ?? '';
+  if (rawPath.isEmpty) {
+    throw const FormatException('Missing required field: path');
+  }
+
+  final rawFormat = json['format']?.toString().trim() ?? '';
+  final format = switch (rawFormat) {
+    'svg' => BottomNavIconAssetFormat.svg,
+    'png' => BottomNavIconAssetFormat.png,
+    'gif' => BottomNavIconAssetFormat.gif,
+    _ => throw const FormatException('Invalid required field: format'),
+  };
+
+  final rawIsAsset = json['isAsset'];
+  if (rawIsAsset is! bool) {
+    throw const FormatException('Missing required field: isAsset');
+  }
+
+  return <String, dynamic>{
+    'path': rawPath,
+    'format': format.name,
+    'isAsset': rawIsAsset,
+  };
+}
+
+@JsonSerializable(explicitToJson: true)
 class BottomNavIconSet {
   const BottomNavIconSet({
     this.lightUnselected,
@@ -77,21 +91,18 @@ class BottomNavIconSet {
   final BottomNavIconAssetRef? darkSelected;
 
   Map<String, dynamic> toJson() {
-    return {
-      if (lightUnselected != null) 'lightUnselected': lightUnselected!.toJson(),
-      if (lightSelected != null) 'lightSelected': lightSelected!.toJson(),
-      if (darkUnselected != null) 'darkUnselected': darkUnselected!.toJson(),
-      if (darkSelected != null) 'darkSelected': darkSelected!.toJson(),
-    };
+    final json = _$BottomNavIconSetToJson(this);
+    json.removeWhere((key, value) => value == null);
+    return json;
   }
 
   factory BottomNavIconSet.fromJson(Map<String, dynamic> json) {
-    return BottomNavIconSet(
-      lightUnselected: _readAsset(json['lightUnselected']),
-      lightSelected: _readAsset(json['lightSelected']),
-      darkUnselected: _readAsset(json['darkUnselected']),
-      darkSelected: _readAsset(json['darkSelected']),
-    );
+    return _$BottomNavIconSetFromJson(<String, dynamic>{
+      'lightUnselected': _readAsset(json['lightUnselected'])?.toJson(),
+      'lightSelected': _readAsset(json['lightSelected'])?.toJson(),
+      'darkUnselected': _readAsset(json['darkUnselected'])?.toJson(),
+      'darkSelected': _readAsset(json['darkSelected'])?.toJson(),
+    });
   }
 
   BottomNavIconSet copyWith({
@@ -162,6 +173,7 @@ class BottomNavIconSet {
   }
 }
 
+@JsonSerializable(explicitToJson: true)
 class BottomNavIconGallery {
   const BottomNavIconGallery({
     required this.id,
@@ -181,76 +193,16 @@ class BottomNavIconGallery {
   final bool isBuiltIn;
   final bool isEditable;
   final bool isDeletable;
+  @JsonKey(fromJson: _itemsFromJson, toJson: _itemsToJson)
   final Map<BottomNavIconGalleryTab, BottomNavIconSet> items;
 
   Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'name': name,
-      'createdAt': createdAt.toIso8601String(),
-      'updatedAt': updatedAt.toIso8601String(),
-      'isBuiltIn': isBuiltIn,
-      'isEditable': isEditable,
-      'isDeletable': isDeletable,
-      'items': {
-        for (final entry in items.entries) entry.key.name: entry.value.toJson(),
-      },
-    };
+    return _$BottomNavIconGalleryToJson(this);
   }
 
   factory BottomNavIconGallery.fromJson(Map<String, dynamic> json) {
-    final rawId = json['id']?.toString().trim() ?? '';
-    if (rawId.isEmpty) {
-      throw const FormatException('Missing required field: id');
-    }
-
-    final rawName = json['name']?.toString().trim() ?? '';
-    if (rawName.isEmpty) {
-      throw const FormatException('Missing required field: name');
-    }
-
-    final createdAt = _readDateTime(json, 'createdAt');
-    final updatedAt = _readDateTime(json, 'updatedAt');
-    final isBuiltIn = _readBool(json, 'isBuiltIn');
-    final isEditable = _readBool(json, 'isEditable');
-    final isDeletable = _readBool(json, 'isDeletable');
-    final rawItems = json['items'];
-    if (rawItems is! Map) {
-      throw const FormatException('Missing required field: items');
-    }
-
-    final items = <BottomNavIconGalleryTab, BottomNavIconSet>{};
-    for (final entry in rawItems.entries) {
-      final tab = switch (entry.key.toString().trim()) {
-        'home' => BottomNavIconGalleryTab.home,
-        'bookshelf' => BottomNavIconGalleryTab.bookshelf,
-        'discover' => BottomNavIconGalleryTab.discover,
-        'stats' => BottomNavIconGalleryTab.stats,
-        'mine' => BottomNavIconGalleryTab.mine,
-        _ => null,
-      };
-      if (tab == null) {
-        continue;
-      }
-      if (entry.value is! Map) {
-        continue;
-      }
-      items[tab] = BottomNavIconSet.fromJson(
-        (entry.value as Map).map(
-          (key, nestedValue) => MapEntry(key.toString(), nestedValue),
-        ),
-      );
-    }
-
-    return BottomNavIconGallery(
-      id: rawId,
-      name: rawName,
-      createdAt: createdAt,
-      updatedAt: updatedAt,
-      isBuiltIn: isBuiltIn,
-      isEditable: isEditable,
-      isDeletable: isDeletable,
-      items: Map<BottomNavIconGalleryTab, BottomNavIconSet>.unmodifiable(items),
+    return _$BottomNavIconGalleryFromJson(
+      _normalizeBottomNavIconGalleryJson(json),
     );
   }
 
@@ -307,4 +259,75 @@ class BottomNavIconGallery {
     }
     return raw;
   }
+
+  static Map<BottomNavIconGalleryTab, BottomNavIconSet> _itemsFromJson(
+    Object? value,
+  ) {
+    if (value is! Map) {
+      return const <BottomNavIconGalleryTab, BottomNavIconSet>{};
+    }
+    final items = <BottomNavIconGalleryTab, BottomNavIconSet>{};
+    for (final entry in value.entries) {
+      final tab = switch (entry.key.toString().trim()) {
+        'home' => BottomNavIconGalleryTab.home,
+        'bookshelf' => BottomNavIconGalleryTab.bookshelf,
+        'discover' => BottomNavIconGalleryTab.discover,
+        'stats' => BottomNavIconGalleryTab.stats,
+        'mine' => BottomNavIconGalleryTab.mine,
+        _ => null,
+      };
+      if (tab == null || entry.value is! Map) {
+        continue;
+      }
+      items[tab] = BottomNavIconSet.fromJson(
+        (entry.value as Map).map(
+          (key, nestedValue) => MapEntry(key.toString(), nestedValue),
+        ),
+      );
+    }
+    return Map<BottomNavIconGalleryTab, BottomNavIconSet>.unmodifiable(items);
+  }
+
+  static Map<String, dynamic> _itemsToJson(
+    Map<BottomNavIconGalleryTab, BottomNavIconSet> value,
+  ) {
+    return <String, dynamic>{
+      for (final entry in value.entries) entry.key.name: entry.value.toJson(),
+    };
+  }
+}
+
+Map<String, dynamic> _normalizeBottomNavIconGalleryJson(
+  Map<String, dynamic> json,
+) {
+  final rawId = json['id']?.toString().trim() ?? '';
+  if (rawId.isEmpty) {
+    throw const FormatException('Missing required field: id');
+  }
+
+  final rawName = json['name']?.toString().trim() ?? '';
+  if (rawName.isEmpty) {
+    throw const FormatException('Missing required field: name');
+  }
+
+  final createdAt = BottomNavIconGallery._readDateTime(json, 'createdAt');
+  final updatedAt = BottomNavIconGallery._readDateTime(json, 'updatedAt');
+  final isBuiltIn = BottomNavIconGallery._readBool(json, 'isBuiltIn');
+  final isEditable = BottomNavIconGallery._readBool(json, 'isEditable');
+  final isDeletable = BottomNavIconGallery._readBool(json, 'isDeletable');
+  final rawItems = json['items'];
+  if (rawItems is! Map) {
+    throw const FormatException('Missing required field: items');
+  }
+
+  return <String, dynamic>{
+    'id': rawId,
+    'name': rawName,
+    'createdAt': createdAt.toIso8601String(),
+    'updatedAt': updatedAt.toIso8601String(),
+    'isBuiltIn': isBuiltIn,
+    'isEditable': isEditable,
+    'isDeletable': isDeletable,
+    'items': rawItems,
+  };
 }

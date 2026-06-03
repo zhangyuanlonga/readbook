@@ -80,4 +80,7 @@ GitHub Actions 也提供了手动打包入口：`Actions -> Multiplatform Build 
 ```bash
 flutter analyze
 flutter test
+dart run tool/check_model_codegen_guard.dart
+dart run tool/check_route_string_guard.dart
+dart run tool/run_architecture_green_suite.dart
 ```

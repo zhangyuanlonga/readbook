@@ -1,5 +1,10 @@
+import 'package:json_annotation/json_annotation.dart';
+
 import 'reader_settings.dart';
 
+part 'reader_visual_overrides.g.dart';
+
+@JsonSerializable(createFactory: false)
 class ReaderVisualOverrides {
   const ReaderVisualOverrides({
     this.hasBackgroundImageOverride = false,
@@ -23,6 +28,7 @@ class ReaderVisualOverrides {
   final bool hasCustomFontPathOverride;
   final String? customFontPath;
 
+  @JsonKey(includeFromJson: false, includeToJson: false)
   bool get hasFontBindingOverride {
     return fontSource != null ||
         systemFontPreset != null ||
@@ -30,6 +36,7 @@ class ReaderVisualOverrides {
         hasCustomFontPathOverride;
   }
 
+  @JsonKey(includeFromJson: false, includeToJson: false)
   bool get isEmpty {
     return !hasBackgroundImageOverride && !hasFontBindingOverride;
   }
@@ -82,18 +89,7 @@ class ReaderVisualOverrides {
     );
   }
 
-  Map<String, dynamic> toJson() {
-    return {
-      'hasBackgroundImageOverride': hasBackgroundImageOverride,
-      'backgroundImageBase64': backgroundImageBase64,
-      'fontSource': fontSource?.name,
-      'systemFontPreset': systemFontPreset?.name,
-      'hasFontFamilyKeyOverride': hasFontFamilyKeyOverride,
-      'fontFamilyKey': fontFamilyKey,
-      'hasCustomFontPathOverride': hasCustomFontPathOverride,
-      'customFontPath': customFontPath,
-    };
-  }
+  Map<String, dynamic> toJson() => _$ReaderVisualOverridesToJson(this);
 
   factory ReaderVisualOverrides.fromJson(Map<String, dynamic> json) {
     final fontSourceName = json['fontSource']?.toString();
@@ -102,7 +98,7 @@ class ReaderVisualOverrides {
     final customFontPath = json['customFontPath']?.toString().trim();
     final backgroundImageBase64 =
         json['backgroundImageBase64']?.toString().trim();
-    return ReaderVisualOverrides(
+    final base = ReaderVisualOverrides(
       hasBackgroundImageOverride:
           _asBool(json['hasBackgroundImageOverride']) ?? false,
       backgroundImageBase64:
@@ -127,7 +123,8 @@ class ReaderVisualOverrides {
           customFontPath == null || customFontPath.isEmpty
               ? null
               : customFontPath,
-    )._normalizeOptionalEnums(
+    );
+    return base._normalizeOptionalEnums(
       rawFontSource: fontSourceName,
       rawSystemFontPreset: systemFontPresetName,
     );

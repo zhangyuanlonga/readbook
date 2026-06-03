@@ -34,5 +34,32 @@ void main() {
       expect(restored.lastFailureKind, SourceHealthFailureKind.timeout);
       expect(restored.userScoreAdjustment, -2);
     });
+
+    test('copyWith can clear nullable fields with null', () {
+      final snapshot = SourceHealthSnapshot(
+        sourceId: 'source_1',
+        level: SourceHealthLevel.warning,
+        enabled: true,
+        cooldownUntil: DateTime.parse('2026-04-05T10:00:00.000Z'),
+        avgSearchLatencyMs: 320,
+        lastFailureAt: DateTime.parse('2026-04-05T09:30:00.000Z'),
+        lastFailureReason: 'timeout',
+        lastFailureKind: SourceHealthFailureKind.timeout,
+      );
+
+      final cleared = snapshot.copyWith(
+        cooldownUntil: null,
+        avgSearchLatencyMs: null,
+        lastFailureAt: null,
+        lastFailureReason: null,
+        lastFailureKind: null,
+      );
+
+      expect(cleared.cooldownUntil, isNull);
+      expect(cleared.avgSearchLatencyMs, isNull);
+      expect(cleared.lastFailureAt, isNull);
+      expect(cleared.lastFailureReason, isNull);
+      expect(cleared.lastFailureKind, isNull);
+    });
   });
 }

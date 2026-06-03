@@ -67,37 +67,21 @@ class LaunchImageGalleryService {
       'launchImageGallery.startupSnapshot.updatedAt';
 
   Future<List<LaunchImageGalleryIndexItem>> loadGalleryIndex() async {
-    final customGalleries = await _loadCustomGalleryIndex();
-    return <LaunchImageGalleryIndexItem>[
-      LaunchImageGalleryIndexItem.fromGallery(defaultLaunchImageGallery),
-      ...customGalleries,
-    ];
-  }
-
-  Future<List<LaunchImageGalleryIndexItem>> _loadCustomGalleryIndex() async {
-    final raw = await _loadPersistedGalleriesRaw();
-    if (raw == null || raw.trim().isEmpty) {
-      return const <LaunchImageGalleryIndexItem>[];
-    }
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! List) {
-        return const <LaunchImageGalleryIndexItem>[];
-      }
-      final items = decoded
-          .whereType<Map>()
-          .map((item) {
-            final gallery = LaunchImageGallery.fromJson(
-              item.map((key, value) => MapEntry(key.toString(), value)),
-            ).copyWith(isBuiltIn: false, isEditable: true, isDeletable: true);
-            return LaunchImageGalleryIndexItem.fromGallery(gallery);
-          })
-          .toList(growable: false);
-      items.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-      return items;
-    } catch (_) {
-      return const <LaunchImageGalleryIndexItem>[];
-    }
+    final galleries = await loadGalleries();
+    return galleries
+        .map(
+          (gallery) => LaunchImageGalleryIndexItem(
+            id: gallery.id,
+            name: gallery.name,
+            updatedAt: gallery.updatedAt,
+            imageCount: gallery.imagePaths.length,
+            isBuiltIn: gallery.isBuiltIn,
+            isEditable: gallery.isEditable,
+            isDeletable: gallery.isDeletable,
+            previewPath: resolveGalleryPreviewPath(gallery),
+          ),
+        )
+        .toList(growable: false);
   }
 
   static bool readStartupEnabled(SharedPreferences prefs) {
@@ -626,19 +610,6 @@ class LaunchImageGalleryIndexItem {
     required this.isDeletable,
     this.previewPath,
   });
-
-  factory LaunchImageGalleryIndexItem.fromGallery(LaunchImageGallery gallery) {
-    return LaunchImageGalleryIndexItem(
-      id: gallery.id,
-      name: gallery.name,
-      updatedAt: gallery.updatedAt,
-      imageCount: gallery.imagePaths.length,
-      isBuiltIn: gallery.isBuiltIn,
-      isEditable: gallery.isEditable,
-      isDeletable: gallery.isDeletable,
-      previewPath: gallery.imagePaths.isEmpty ? null : gallery.imagePaths.first,
-    );
-  }
 
   final String id;
   final String name;

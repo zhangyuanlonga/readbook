@@ -13,6 +13,8 @@ import 'interceptors.dart';
 
 enum ApiMethod { get, post, put, delete, patch, head }
 
+typedef ApiDataDecoder<T> = T Function(Object? data);
+
 class ApiResponse<T> {
   const ApiResponse({
     required this.code,
@@ -44,6 +46,96 @@ class ApiException extends AppException {
 
   final String apiCode;
   final int? statusCode;
+}
+
+class ApiRequestSpec<T> {
+  const ApiRequestSpec({
+    required this.method,
+    required this.path,
+    required this.decoder,
+    this.queryParameters = const <String, dynamic>{},
+    this.body,
+    this.headers = const <String, String>{},
+    this.timeout,
+    this.maxRetries,
+    this.enableRetry = true,
+    this.enableCache = false,
+    this.cacheTtl,
+    this.attachAccessToken = false,
+    this.enableAuthRefresh = true,
+    this.stage = ErrorStage.unknown,
+  });
+
+  static ApiRequestSpec<Map<String, dynamic>> jsonObject({
+    required ApiMethod method,
+    required String path,
+    Map<String, dynamic> queryParameters = const <String, dynamic>{},
+    Object? body,
+    Map<String, String> headers = const <String, String>{},
+    Duration? timeout,
+    int? maxRetries,
+    bool enableRetry = true,
+    bool enableCache = false,
+    Duration? cacheTtl,
+    bool attachAccessToken = false,
+    bool enableAuthRefresh = true,
+    ErrorStage stage = ErrorStage.unknown,
+  }) {
+    return ApiRequestSpec<Map<String, dynamic>>(
+      method: method,
+      path: path,
+      queryParameters: queryParameters,
+      body: body,
+      headers: headers,
+      timeout: timeout,
+      maxRetries: maxRetries,
+      enableRetry: enableRetry,
+      enableCache: enableCache,
+      cacheTtl: cacheTtl,
+      attachAccessToken: attachAccessToken,
+      enableAuthRefresh: enableAuthRefresh,
+      stage: stage,
+      decoder: ApiJsonDecoders.mapObject,
+    );
+  }
+
+  final ApiMethod method;
+  final String path;
+  final Map<String, dynamic> queryParameters;
+  final Object? body;
+  final Map<String, String> headers;
+  final Duration? timeout;
+  final int? maxRetries;
+  final bool enableRetry;
+  final bool enableCache;
+  final Duration? cacheTtl;
+  final bool attachAccessToken;
+  final bool enableAuthRefresh;
+  final ErrorStage stage;
+  final ApiDataDecoder<T> decoder;
+}
+
+final class ApiJsonDecoders {
+  const ApiJsonDecoders._();
+
+  static Map<String, dynamic> mapObject(Object? data) {
+    if (data is Map) {
+      return data.map((key, value) => MapEntry(key.toString(), value));
+    }
+    throw const FormatException('Invalid response payload.');
+  }
+
+  static List<Map<String, dynamic>> mapObjectList(Object? data) {
+    if (data is! List) {
+      throw const FormatException('Invalid response payload.');
+    }
+    return data
+        .whereType<Map>()
+        .map(
+          (item) => item.map((key, value) => MapEntry(key.toString(), value)),
+        )
+        .toList(growable: false);
+  }
 }
 
 class ApiClient {
@@ -286,6 +378,25 @@ class ApiClient {
       briefMessage: '网络请求失败：未知错误',
       stage: stage,
       requestUrl: url,
+    );
+  }
+
+  Future<T> requestSpec<T>(ApiRequestSpec<T> spec) {
+    return request<T>(
+      method: spec.method,
+      path: spec.path,
+      queryParameters: spec.queryParameters,
+      body: spec.body,
+      headers: spec.headers,
+      timeout: spec.timeout,
+      maxRetries: spec.maxRetries,
+      enableRetry: spec.enableRetry,
+      enableCache: spec.enableCache,
+      cacheTtl: spec.cacheTtl,
+      attachAccessToken: spec.attachAccessToken,
+      enableAuthRefresh: spec.enableAuthRefresh,
+      stage: spec.stage,
+      decoder: spec.decoder,
     );
   }
 

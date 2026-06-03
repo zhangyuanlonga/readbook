@@ -1,5 +1,10 @@
+import 'package:json_annotation/json_annotation.dart';
+
 import 'reader_document.dart';
 
+part 'local_chapter.g.dart';
+
+@JsonSerializable(explicitToJson: true)
 class LocalChapter {
   const LocalChapter({
     required this.id,
@@ -31,16 +36,21 @@ class LocalChapter {
   final int? endOffset;
   final ReaderDocument? document;
 
+  @JsonKey(includeFromJson: false, includeToJson: false)
   bool get hasStoredTextContent => content.trim().isNotEmpty;
 
+  @JsonKey(includeFromJson: false, includeToJson: false)
   bool get hasImageContent => imageUrls.isNotEmpty;
 
+  @JsonKey(includeFromJson: false, includeToJson: false)
   bool get hasStructuredContent =>
       document != null && document!.blocks.isNotEmpty;
 
+  @JsonKey(includeFromJson: false, includeToJson: false)
   bool get hasReadablePayload =>
       hasStoredTextContent || hasImageContent || hasStructuredContent;
 
+  @JsonKey(includeFromJson: false, includeToJson: false)
   bool get hasOffsetRange {
     final start = startOffset;
     final end = endOffset;
@@ -85,39 +95,11 @@ class LocalChapter {
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'bookId': bookId,
-      'chapterIndex': chapterIndex,
-      'title': title,
-      'content': content,
-      'imageUrls': imageUrls,
-      'sourceRef': sourceRef,
-      'contentType': contentType,
-      'createdAt': createdAt.toIso8601String(),
-      'updatedAt': updatedAt.toIso8601String(),
-      'startOffset': startOffset,
-      'endOffset': endOffset,
-      'document': document?.toJson(),
-    };
+    return _$LocalChapterToJson(this);
   }
 
   factory LocalChapter.fromJson(Map<String, dynamic> json) {
-    return LocalChapter(
-      id: _requiredString(json, 'id'),
-      bookId: _requiredString(json, 'bookId'),
-      chapterIndex: _requiredInt(json, 'chapterIndex'),
-      title: _requiredString(json, 'title'),
-      content: json['content']?.toString() ?? '',
-      imageUrls: _optionalStringList(json['imageUrls']),
-      sourceRef: _optionalString(json['sourceRef']),
-      contentType: _optionalString(json['contentType']),
-      createdAt: _requiredDateTime(json, 'createdAt'),
-      updatedAt: _requiredDateTime(json, 'updatedAt'),
-      startOffset: _optionalInt(json['startOffset']),
-      endOffset: _optionalInt(json['endOffset']),
-      document: _optionalDocument(json['document']),
-    );
+    return _$LocalChapterFromJson(_normalizeLocalChapterJson(json));
   }
 
   static ReaderDocument? _optionalDocument(Object? value) {
@@ -185,4 +167,24 @@ class LocalChapter {
     final normalized = value?.toString().trim() ?? '';
     return normalized.isEmpty ? null : normalized;
   }
+}
+
+Map<String, dynamic> _normalizeLocalChapterJson(Map<String, dynamic> json) {
+  return <String, dynamic>{
+    'id': LocalChapter._requiredString(json, 'id'),
+    'bookId': LocalChapter._requiredString(json, 'bookId'),
+    'chapterIndex': LocalChapter._requiredInt(json, 'chapterIndex'),
+    'title': LocalChapter._requiredString(json, 'title'),
+    'content': json['content']?.toString() ?? '',
+    'imageUrls': LocalChapter._optionalStringList(json['imageUrls']),
+    'sourceRef': LocalChapter._optionalString(json['sourceRef']),
+    'contentType': LocalChapter._optionalString(json['contentType']),
+    'createdAt':
+        LocalChapter._requiredDateTime(json, 'createdAt').toIso8601String(),
+    'updatedAt':
+        LocalChapter._requiredDateTime(json, 'updatedAt').toIso8601String(),
+    'startOffset': LocalChapter._optionalInt(json['startOffset']),
+    'endOffset': LocalChapter._optionalInt(json['endOffset']),
+    'document': LocalChapter._optionalDocument(json['document'])?.toJson(),
+  };
 }

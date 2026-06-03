@@ -1,3 +1,7 @@
+import 'package:json_annotation/json_annotation.dart';
+
+part 'local_book.g.dart';
+
 enum LocalBookFormat { txt, epub, md, html, pdf, mobi, azw, azw3 }
 
 enum LocalBookIndexStatus { pending, indexing, ready, stale, failed }
@@ -29,6 +33,7 @@ extension LocalBookFormatSemantics on LocalBookFormat {
   bool get supportsBackgroundIndexOnImport => true;
 }
 
+@JsonSerializable()
 class LocalBook {
   const LocalBook({
     required this.id,
@@ -72,13 +77,17 @@ class LocalBook {
   final String? lastError;
   final bool splitLongChapter;
 
+  @JsonKey(includeFromJson: false, includeToJson: false)
   bool get isReadableReady =>
       indexStatus == LocalBookIndexStatus.ready && chapterCount > 0;
 
+  @JsonKey(includeFromJson: false, includeToJson: false)
   bool get needsIndex => !isReadableReady;
 
+  @JsonKey(includeFromJson: false, includeToJson: false)
   bool get supportsBootstrapPreview => format.supportsBootstrapPreview;
 
+  @JsonKey(includeFromJson: false, includeToJson: false)
   bool get requiresManagedAssetDirectory =>
       format.requiresManagedAssetDirectory;
 
@@ -143,53 +152,11 @@ class LocalBook {
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'title': title,
-      'format': format.name,
-      'storagePath': storagePath,
-      'fileSize': fileSize,
-      'createdAt': createdAt.toIso8601String(),
-      'updatedAt': updatedAt.toIso8601String(),
-      'sourcePath': sourcePath,
-      'charset': charset,
-      'author': author,
-      'description': description,
-      'coverPath': coverPath,
-      'sourceFileSize': sourceFileSize,
-      'sourceFileLastModifiedMs': sourceFileLastModifiedMs,
-      'storageFileLastModifiedMs': storageFileLastModifiedMs,
-      'indexStatus': indexStatus.name,
-      'chapterCount': chapterCount,
-      'lastError': lastError,
-      'splitLongChapter': splitLongChapter,
-    };
+    return _$LocalBookToJson(this);
   }
 
   factory LocalBook.fromJson(Map<String, dynamic> json) {
-    return LocalBook(
-      id: _requiredString(json, 'id'),
-      title: _requiredString(json, 'title'),
-      format: _parseFormat(json['format']),
-      storagePath: _requiredString(json, 'storagePath'),
-      fileSize: _requiredInt(json, 'fileSize'),
-      createdAt: _requiredDateTime(json, 'createdAt'),
-      updatedAt: _requiredDateTime(json, 'updatedAt'),
-      sourcePath: _optionalString(json['sourcePath']),
-      charset: _optionalString(json['charset']),
-      author: _optionalString(json['author']),
-      description: _optionalString(json['description']),
-      coverPath: _optionalString(json['coverPath']),
-      sourceFileSize: _optionalInt(json['sourceFileSize']),
-      sourceFileLastModifiedMs: _optionalInt(json['sourceFileLastModifiedMs']),
-      storageFileLastModifiedMs: _optionalInt(
-        json['storageFileLastModifiedMs'],
-      ),
-      indexStatus: _parseIndexStatus(json['indexStatus']),
-      chapterCount: _requiredInt(json, 'chapterCount'),
-      lastError: _optionalString(json['lastError']),
-      splitLongChapter: _optionalBool(json['splitLongChapter']) ?? true,
-    );
+    return _$LocalBookFromJson(_normalizeLocalBookJson(json));
   }
 
   static LocalBookFormat _parseFormat(Object? value) {
@@ -290,4 +257,35 @@ class LocalBook {
     }
     return null;
   }
+}
+
+Map<String, dynamic> _normalizeLocalBookJson(Map<String, dynamic> json) {
+  return <String, dynamic>{
+    'id': LocalBook._requiredString(json, 'id'),
+    'title': LocalBook._requiredString(json, 'title'),
+    'format': LocalBook._parseFormat(json['format']).name,
+    'storagePath': LocalBook._requiredString(json, 'storagePath'),
+    'fileSize': LocalBook._requiredInt(json, 'fileSize'),
+    'createdAt':
+        LocalBook._requiredDateTime(json, 'createdAt').toIso8601String(),
+    'updatedAt':
+        LocalBook._requiredDateTime(json, 'updatedAt').toIso8601String(),
+    'sourcePath': LocalBook._optionalString(json['sourcePath']),
+    'charset': LocalBook._optionalString(json['charset']),
+    'author': LocalBook._optionalString(json['author']),
+    'description': LocalBook._optionalString(json['description']),
+    'coverPath': LocalBook._optionalString(json['coverPath']),
+    'sourceFileSize': LocalBook._optionalInt(json['sourceFileSize']),
+    'sourceFileLastModifiedMs': LocalBook._optionalInt(
+      json['sourceFileLastModifiedMs'],
+    ),
+    'storageFileLastModifiedMs': LocalBook._optionalInt(
+      json['storageFileLastModifiedMs'],
+    ),
+    'indexStatus': LocalBook._parseIndexStatus(json['indexStatus']).name,
+    'chapterCount': LocalBook._requiredInt(json, 'chapterCount'),
+    'lastError': LocalBook._optionalString(json['lastError']),
+    'splitLongChapter':
+        LocalBook._optionalBool(json['splitLongChapter']) ?? true,
+  };
 }

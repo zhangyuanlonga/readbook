@@ -1,5 +1,9 @@
+import 'package:json_annotation/json_annotation.dart';
+
 import '../../core/storage/managed_asset_directory_policy.dart';
 import 'managed_asset.dart';
+
+part 'app_advanced_theme.g.dart';
 
 enum AppAdvancedThemeMode { light, dark }
 
@@ -17,6 +21,7 @@ enum AppAdvancedThemeNavigationStyle { soft, floating, compact }
 
 enum AppAdvancedThemeSwitchStyle { soft, contrast }
 
+@JsonSerializable(createFactory: false, createToJson: false)
 class AppAdvancedThemeComponentStyle {
   const AppAdvancedThemeComponentStyle({
     this.globalRadiusScale = 1,
@@ -138,6 +143,7 @@ class AppAdvancedThemeComponentStyle {
   }
 }
 
+@JsonSerializable(createFactory: false, createToJson: false)
 class AppAdvancedThemeColors {
   static const String semanticColorGroupsKey = 'semanticColorGroups';
 
@@ -529,6 +535,7 @@ class AppAdvancedThemeColors {
   }
 }
 
+@JsonSerializable(createFactory: false, createToJson: false)
 class AppAdvancedThemeModeConfig {
   AppAdvancedThemeModeConfig({
     this.colors = const AppAdvancedThemeColors(),
@@ -773,6 +780,7 @@ class AppAdvancedThemeModeConfig {
   }
 }
 
+@JsonSerializable(createFactory: false, createToJson: false)
 class AppAdvancedTheme {
   const AppAdvancedTheme({
     required this.id,

@@ -1,3 +1,8 @@
+import 'package:json_annotation/json_annotation.dart';
+
+part 'chapter.g.dart';
+
+@JsonSerializable()
 class Chapter {
   const Chapter({
     required this.id,
@@ -9,48 +14,43 @@ class Chapter {
     this.executionContext,
   });
 
+  @JsonKey(fromJson: _requiredId)
   final String id;
+  @JsonKey(fromJson: _requiredBookId)
   final String bookId;
+  @JsonKey(fromJson: _requiredTitle)
   final String title;
+  @JsonKey(fromJson: _stringAllowEmpty)
   final String chapterUrl;
+  @JsonKey(fromJson: _requiredIndex)
   final int index;
   final bool isVolume;
+  @JsonKey(fromJson: _optionalString)
   final String? executionContext;
 
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'bookId': bookId,
-      'title': title,
-      'chapterUrl': chapterUrl,
-      'index': index,
-      'isVolume': isVolume,
-      'executionContext': executionContext,
-    };
-  }
+  Map<String, dynamic> toJson() => _$ChapterToJson(this);
 
-  factory Chapter.fromJson(Map<String, dynamic> json) {
-    return Chapter(
-      id: _requiredString(json, 'id'),
-      bookId: _requiredString(json, 'bookId'),
-      title: _requiredString(json, 'title'),
-      chapterUrl: _stringAllowEmpty(json['chapterUrl']),
-      index: _requiredInt(json, 'index'),
-      isVolume: json['isVolume'] == true,
-      executionContext: _optionalString(json['executionContext']),
-    );
-  }
+  factory Chapter.fromJson(Map<String, dynamic> json) => _$ChapterFromJson(json);
 
-  static String _requiredString(Map<String, dynamic> json, String key) {
-    final value = json[key]?.toString().trim() ?? '';
-    if (value.isEmpty) {
+  static String _requiredId(Object? value) => _requiredString(value, 'id');
+
+  static String _requiredBookId(Object? value) =>
+      _requiredString(value, 'bookId');
+
+  static String _requiredTitle(Object? value) =>
+      _requiredString(value, 'title');
+
+  static int _requiredIndex(Object? value) => _requiredInt(value, 'index');
+
+  static String _requiredString(Object? value, String key) {
+    final normalized = value?.toString().trim() ?? '';
+    if (normalized.isEmpty) {
       throw FormatException('Missing required field: $key');
     }
-    return value;
+    return normalized;
   }
 
-  static int _requiredInt(Map<String, dynamic> json, String key) {
-    final value = json[key];
+  static int _requiredInt(Object? value, String key) {
     if (value is int) {
       return value;
     }

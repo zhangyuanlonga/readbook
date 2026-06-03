@@ -1,3 +1,8 @@
+import 'package:json_annotation/json_annotation.dart';
+
+part 'book.g.dart';
+
+@JsonSerializable()
 class Book {
   const Book({
     required this.id,
@@ -88,45 +93,11 @@ class Book {
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'sourceId': sourceId,
-      'title': title,
-      'detailUrl': detailUrl,
-      'tocUrl': tocUrl,
-      'author': author,
-      'intro': intro,
-      'coverUrl': coverUrl,
-      'latestChapter': latestChapter,
-      'wordCount': wordCount,
-      'category': category,
-      'tags': tags,
-      'updateTime': updateTime,
-      'infoHtml': infoHtml,
-      'tocHtml': tocHtml,
-      'executionContext': executionContext,
-    };
+    return _$BookToJson(this);
   }
 
   factory Book.fromJson(Map<String, dynamic> json) {
-    return Book(
-      id: _requiredString(json, 'id'),
-      sourceId: _requiredString(json, 'sourceId'),
-      title: _requiredString(json, 'title'),
-      detailUrl: _requiredString(json, 'detailUrl'),
-      tocUrl: _optionalString(json['tocUrl']),
-      author: _optionalString(json['author']),
-      intro: _optionalString(json['intro']),
-      coverUrl: _optionalString(json['coverUrl']),
-      latestChapter: _optionalString(json['latestChapter']),
-      wordCount: _optionalString(json['wordCount']),
-      category: _optionalString(json['category']),
-      tags: _stringList(json['tags']),
-      updateTime: _optionalString(json['updateTime']),
-      infoHtml: _optionalString(json['infoHtml']),
-      tocHtml: _optionalString(json['tocHtml']),
-      executionContext: _optionalString(json['executionContext']),
-    );
+    return _$BookFromJson(_normalizeBookJson(json));
   }
 
   static const Object _sentinel = Object();
@@ -159,4 +130,25 @@ class Book {
         .where((item) => item.isNotEmpty)
         .toList(growable: false);
   }
+}
+
+Map<String, dynamic> _normalizeBookJson(Map<String, dynamic> json) {
+  return <String, dynamic>{
+    'id': Book._requiredString(json, 'id'),
+    'sourceId': Book._requiredString(json, 'sourceId'),
+    'title': Book._requiredString(json, 'title'),
+    'detailUrl': Book._requiredString(json, 'detailUrl'),
+    'tocUrl': Book._optionalString(json['tocUrl']),
+    'author': Book._optionalString(json['author']),
+    'intro': Book._optionalString(json['intro']),
+    'coverUrl': Book._optionalString(json['coverUrl']),
+    'latestChapter': Book._optionalString(json['latestChapter']),
+    'wordCount': Book._optionalString(json['wordCount']),
+    'category': Book._optionalString(json['category']),
+    'tags': Book._stringList(json['tags']),
+    'updateTime': Book._optionalString(json['updateTime']),
+    'infoHtml': Book._optionalString(json['infoHtml']),
+    'tocHtml': Book._optionalString(json['tocHtml']),
+    'executionContext': Book._optionalString(json['executionContext']),
+  };
 }

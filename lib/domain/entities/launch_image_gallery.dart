@@ -1,3 +1,8 @@
+import 'package:json_annotation/json_annotation.dart';
+
+part 'launch_image_gallery.g.dart';
+
+@JsonSerializable()
 class LaunchImageGallery {
   const LaunchImageGallery({
     required this.id,
@@ -20,46 +25,11 @@ class LaunchImageGallery {
   final bool isDeletable;
 
   Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'name': name,
-      'createdAt': createdAt.toIso8601String(),
-      'updatedAt': updatedAt.toIso8601String(),
-      'imagePaths': imagePaths,
-      'isBuiltIn': isBuiltIn,
-      'isEditable': isEditable,
-      'isDeletable': isDeletable,
-    };
+    return _$LaunchImageGalleryToJson(this);
   }
 
   factory LaunchImageGallery.fromJson(Map<String, dynamic> json) {
-    final rawId = json['id']?.toString().trim() ?? '';
-    if (rawId.isEmpty) {
-      throw const FormatException('Missing required field: id');
-    }
-    final rawName = json['name']?.toString().trim() ?? '';
-    if (rawName.isEmpty) {
-      throw const FormatException('Missing required field: name');
-    }
-    final rawPaths = json['imagePaths'];
-    final imagePaths =
-        rawPaths is List
-            ? rawPaths
-                .map((item) => item.toString().trim())
-                .where((item) => item.isNotEmpty)
-                .toList(growable: false)
-            : const <String>[];
-
-    return LaunchImageGallery(
-      id: rawId,
-      name: rawName,
-      createdAt: _readDateTime(json, 'createdAt'),
-      updatedAt: _readDateTime(json, 'updatedAt'),
-      imagePaths: imagePaths,
-      isBuiltIn: _readBool(json, 'isBuiltIn') ?? false,
-      isEditable: _readBool(json, 'isEditable') ?? true,
-      isDeletable: _readBool(json, 'isDeletable') ?? true,
-    );
+    return _$LaunchImageGalleryFromJson(_normalizeLaunchImageGalleryJson(json));
   }
 
   LaunchImageGallery copyWith({
@@ -110,4 +80,38 @@ class LaunchImageGallery {
     }
     return parsed;
   }
+}
+
+Map<String, dynamic> _normalizeLaunchImageGalleryJson(
+  Map<String, dynamic> json,
+) {
+  final rawId = json['id']?.toString().trim() ?? '';
+  if (rawId.isEmpty) {
+    throw const FormatException('Missing required field: id');
+  }
+  final rawName = json['name']?.toString().trim() ?? '';
+  if (rawName.isEmpty) {
+    throw const FormatException('Missing required field: name');
+  }
+  final rawPaths = json['imagePaths'];
+  final imagePaths =
+      rawPaths is List
+          ? rawPaths
+              .map((item) => item.toString().trim())
+              .where((item) => item.isNotEmpty)
+              .toList(growable: false)
+          : const <String>[];
+
+  return <String, dynamic>{
+    'id': rawId,
+    'name': rawName,
+    'createdAt':
+        LaunchImageGallery._readDateTime(json, 'createdAt').toIso8601String(),
+    'updatedAt':
+        LaunchImageGallery._readDateTime(json, 'updatedAt').toIso8601String(),
+    'imagePaths': imagePaths,
+    'isBuiltIn': LaunchImageGallery._readBool(json, 'isBuiltIn') ?? false,
+    'isEditable': LaunchImageGallery._readBool(json, 'isEditable') ?? true,
+    'isDeletable': LaunchImageGallery._readBool(json, 'isDeletable') ?? true,
+  };
 }

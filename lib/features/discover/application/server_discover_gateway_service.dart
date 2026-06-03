@@ -85,8 +85,7 @@ class ServerDiscoverGatewayService {
   }) async {
     final started = DateTime.now();
     try {
-      final response = await _client.request<_ExploreBooksResponse>(
-        method: ApiMethod.post,
+      final response = await _requestGatewayRest(
         path: 'v1/explore',
         body: <String, Object?>{
           'sourceId': fromServerGatewaySourceId(source.id),
@@ -95,10 +94,7 @@ class ServerDiscoverGatewayService {
           if (category.filters.isNotEmpty) 'filters': category.filters,
           'options': <String, Object?>{'timeoutMs': 30000},
         },
-        attachAccessToken: true,
-        enableRetry: false,
         timeout: const Duration(seconds: 35),
-        stage: ErrorStage.source,
         decoder: _ExploreBooksResponse.fromEnvelopeData,
       );
       _sourceHealthService.markDiscoverBooksSuccess(sourceId: source.id);
@@ -143,7 +139,7 @@ class ServerDiscoverGatewayService {
     String? keyword,
   }) async {
     final normalizedKeyword = keyword?.trim() ?? '';
-    return _client.request<_GatewaySourcePage>(
+    return _requestGatewayRest(
       method: ApiMethod.get,
       path: 'v1/sources',
       queryParameters: <String, dynamic>{
@@ -152,10 +148,7 @@ class ServerDiscoverGatewayService {
         'pageSize': pageSize,
         if (normalizedKeyword.isNotEmpty) 'keyword': normalizedKeyword,
       },
-      attachAccessToken: true,
-      enableRetry: false,
       timeout: const Duration(seconds: 15),
-      stage: ErrorStage.source,
       decoder: _GatewaySourcePage.fromEnvelopeData,
     );
   }
@@ -166,17 +159,13 @@ class ServerDiscoverGatewayService {
     final gatewaySourceId = toServerGatewaySourceId(source.id);
     final started = DateTime.now();
     try {
-      final response = await _client.request<_ExploreKindsResponse>(
-        method: ApiMethod.post,
+      final response = await _requestGatewayRest(
         path: 'v1/explore-kinds',
         body: <String, Object?>{
           'sourceId': source.id,
           'options': <String, Object?>{'debug': false},
         },
-        attachAccessToken: true,
-        enableRetry: false,
         timeout: const Duration(seconds: 20),
-        stage: ErrorStage.source,
         decoder: _ExploreKindsResponse.fromEnvelopeData,
       );
       final latency = DateTime.now().difference(started).inMilliseconds;
@@ -249,6 +238,27 @@ class ServerDiscoverGatewayService {
       status: _statusFromHealth(source.healthStatus, 0),
       latencyMs: null,
       categories: const <DiscoverSourceCategory>[],
+    );
+  }
+
+  Future<T> _requestGatewayRest<T>({
+    ApiMethod method = ApiMethod.post,
+    required String path,
+    Map<String, dynamic> queryParameters = const <String, dynamic>{},
+    Object? body,
+    required Duration timeout,
+    required ApiDataDecoder<T> decoder,
+  }) {
+    return _client.request<T>(
+      method: method,
+      path: path,
+      queryParameters: queryParameters,
+      body: body,
+      attachAccessToken: true,
+      enableRetry: false,
+      timeout: timeout,
+      stage: ErrorStage.source,
+      decoder: decoder,
     );
   }
 }

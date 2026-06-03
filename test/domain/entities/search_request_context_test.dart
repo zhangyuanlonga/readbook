@@ -50,6 +50,24 @@ void main() {
       expect(restored.extraParams, context.extraParams);
     });
 
+    test('clearSourceId removes source binding and keeps other fields', () {
+      final context = SearchRequestContext(
+        keyword: '完美世界',
+        page: 4,
+        pageSize: 10,
+        sourceId: 'source-c',
+        extraParams: const {'tag': 'hot'},
+      );
+
+      final cleared = context.clearSourceId();
+
+      expect(cleared.keyword, '完美世界');
+      expect(cleared.page, 4);
+      expect(cleared.pageSize, 10);
+      expect(cleared.sourceId, isNull);
+      expect(cleared.extraParams, const {'tag': 'hot'});
+    });
+
     test('validates invalid keyword and page values', () {
       expect(
         () => SearchRequestContext(keyword: '   '),

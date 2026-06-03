@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:cookie_jar/cookie_jar.dart';
 import 'package:charset/charset.dart';
 import 'package:dio/dio.dart';
 
@@ -26,6 +27,7 @@ class AppHttpClient {
     Dio? dio,
     AppLogger? logger,
     SourceRateLimiter? rateLimiter,
+    CookieJar? cookieJar,
     Duration defaultConnectTimeout = const Duration(seconds: 8),
     Duration defaultReceiveTimeout = const Duration(seconds: 12),
     Map<String, String> defaultHeaders = const {
@@ -38,6 +40,7 @@ class AppHttpClient {
   }) : _dio = dio ?? Dio(),
        _logger = logger ?? AppLogger.instance,
        _rateLimiter = rateLimiter ?? SourceRateLimiter(),
+       _cookieJar = cookieJar ?? CookieJar(),
        _defaultConnectTimeout = defaultConnectTimeout,
        _defaultReceiveTimeout = defaultReceiveTimeout,
        _defaultHeaders = Map.unmodifiable({...defaultHeaders}) {
@@ -49,11 +52,10 @@ class AppHttpClient {
   final Dio _dio;
   final AppLogger _logger;
   final SourceRateLimiter _rateLimiter;
+  final CookieJar _cookieJar;
   final Duration _defaultConnectTimeout;
   final Duration _defaultReceiveTimeout;
   final Map<String, String> _defaultHeaders;
-  final Map<String, Map<String, String>> _cookieStoreByHost =
-      <String, Map<String, String>>{};
 
   Future<HttpResponsePayload> get(RequestContext context) async {
     final totalAttempts = context.maxRetries + 1;
@@ -130,7 +132,7 @@ class AppHttpClient {
       ..._defaultHeaders,
       ...context.headers,
     };
-    _applyCookieHeader(context: context, headers: mergedHeaders);
+    await _applyCookieHeader(context: context, headers: mergedHeaders);
 
     if (context.contentType != null && context.contentType!.trim().isNotEmpty) {
       mergedHeaders['Content-Type'] = context.contentType!;
@@ -162,17 +164,20 @@ class AppHttpClient {
               (statusCode) => statusCode != null && statusCode < 600,
         ),
       );
-      _storeResponseCookies(context: context, headers: response.headers.map);
+      await _storeResponseCookies(
+        context: context,
+        headers: response.headers.map,
+      );
       return _Success(response);
     } on DioException catch (error) {
       return _Failure(error);
     }
   }
 
-  void _applyCookieHeader({
+  Future<void> _applyCookieHeader({
     required RequestContext context,
     required Map<String, String> headers,
-  }) {
+  }) async {
     if (!context.enabledCookieJar) {
       return;
     }
@@ -183,30 +188,30 @@ class AppHttpClient {
       return;
     }
 
-    final host = _resolveCookieHost(context.url);
-    if (host.isEmpty) {
+    final uri = Uri.tryParse(context.url.trim());
+    if (uri == null || uri.host.trim().isEmpty) {
       return;
     }
-    final bucket = _cookieStoreByHost[host];
-    if (bucket == null || bucket.isEmpty) {
+    final cookies = await _cookieJar.loadForRequest(uri);
+    if (cookies.isEmpty) {
       return;
     }
 
-    headers['Cookie'] = bucket.entries
-        .map((entry) => '${entry.key}=${entry.value}')
+    headers['Cookie'] = cookies
+        .map((cookie) => '${cookie.name}=${cookie.value}')
         .join('; ');
   }
 
-  void _storeResponseCookies({
+  Future<void> _storeResponseCookies({
     required RequestContext context,
     required Map<String, List<String>> headers,
-  }) {
+  }) async {
     if (!context.enabledCookieJar) {
       return;
     }
 
-    final host = _resolveCookieHost(context.url);
-    if (host.isEmpty) {
+    final uri = Uri.tryParse(context.url.trim());
+    if (uri == null || uri.host.trim().isEmpty) {
       return;
     }
 
@@ -219,55 +224,22 @@ class AppHttpClient {
     if (setCookieValues.isEmpty) {
       return;
     }
-
-    final bucket = _cookieStoreByHost.putIfAbsent(
-      host,
-      () => <String, String>{},
-    );
-
+    final cookies = <Cookie>[];
     for (final rawCookie in setCookieValues) {
-      final pair = _parseSetCookiePair(rawCookie);
-      if (pair == null) {
+      final normalized = rawCookie.trim();
+      if (normalized.isEmpty) {
         continue;
       }
-      if (pair.$2.isEmpty) {
-        bucket.remove(pair.$1);
-      } else {
-        bucket[pair.$1] = pair.$2;
+      try {
+        cookies.add(Cookie.fromSetCookieValue(normalized));
+      } catch (_) {
+        continue;
       }
     }
-  }
-
-  String _resolveCookieHost(String requestUrl) {
-    final uri = Uri.tryParse(requestUrl.trim());
-    if (uri == null || uri.host.trim().isEmpty) {
-      return '';
+    if (cookies.isEmpty) {
+      return;
     }
-    return uri.host.toLowerCase();
-  }
-
-  (String, String)? _parseSetCookiePair(String rawCookie) {
-    final normalized = rawCookie.trim();
-    if (normalized.isEmpty) {
-      return null;
-    }
-
-    final firstPart = normalized.split(';').first.trim();
-    if (firstPart.isEmpty) {
-      return null;
-    }
-
-    final separator = firstPart.indexOf('=');
-    if (separator <= 0) {
-      return null;
-    }
-
-    final key = firstPart.substring(0, separator).trim();
-    final value = firstPart.substring(separator + 1).trim();
-    if (key.isEmpty) {
-      return null;
-    }
-    return (key, value);
+    await _cookieJar.saveFromResponse(uri, cookies);
   }
 
   String _decodeResponseBody({

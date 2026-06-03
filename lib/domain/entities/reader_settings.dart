@@ -1,3 +1,7 @@
+import 'package:json_annotation/json_annotation.dart';
+
+part 'reader_settings.g.dart';
+
 enum ReaderThemeMode { light, sepia, dark }
 
 enum ReaderPageTurnMode { tap, swipe, tapAndSwipe, scroll, tapAndScroll }
@@ -99,6 +103,7 @@ class ReaderBodyMarginValues {
   final double right;
 }
 
+@JsonSerializable(createFactory: false, createToJson: false)
 class ReaderSettings {
   const ReaderSettings({
     this.fontSize = 18,

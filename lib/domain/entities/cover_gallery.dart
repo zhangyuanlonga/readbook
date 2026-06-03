@@ -1,3 +1,8 @@
+import 'package:json_annotation/json_annotation.dart';
+
+part 'cover_gallery.g.dart';
+
+@JsonSerializable()
 class CoverGallery {
   const CoverGallery({
     required this.id,
@@ -14,40 +19,11 @@ class CoverGallery {
   final List<String> imagePaths;
 
   Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'name': name,
-      'createdAt': createdAt.toIso8601String(),
-      'updatedAt': updatedAt.toIso8601String(),
-      'imagePaths': imagePaths,
-    };
+    return _$CoverGalleryToJson(this);
   }
 
   factory CoverGallery.fromJson(Map<String, dynamic> json) {
-    final rawId = json['id']?.toString().trim() ?? '';
-    if (rawId.isEmpty) {
-      throw const FormatException('Missing required field: id');
-    }
-    final rawName = json['name']?.toString().trim() ?? '';
-    if (rawName.isEmpty) {
-      throw const FormatException('Missing required field: name');
-    }
-    final rawPaths = json['imagePaths'];
-    final imagePaths =
-        rawPaths is List
-            ? rawPaths
-                .map((item) => item.toString().trim())
-                .where((item) => item.isNotEmpty)
-                .toList(growable: false)
-            : const <String>[];
-
-    return CoverGallery(
-      id: rawId,
-      name: rawName,
-      createdAt: _readDateTime(json, 'createdAt'),
-      updatedAt: _readDateTime(json, 'updatedAt'),
-      imagePaths: imagePaths,
-    );
+    return _$CoverGalleryFromJson(_normalizeCoverGalleryJson(json));
   }
 
   CoverGallery copyWith({
@@ -74,4 +50,33 @@ class CoverGallery {
     }
     return parsed;
   }
+}
+
+Map<String, dynamic> _normalizeCoverGalleryJson(Map<String, dynamic> json) {
+  final rawId = json['id']?.toString().trim() ?? '';
+  if (rawId.isEmpty) {
+    throw const FormatException('Missing required field: id');
+  }
+  final rawName = json['name']?.toString().trim() ?? '';
+  if (rawName.isEmpty) {
+    throw const FormatException('Missing required field: name');
+  }
+  final rawPaths = json['imagePaths'];
+  final imagePaths =
+      rawPaths is List
+          ? rawPaths
+              .map((item) => item.toString().trim())
+              .where((item) => item.isNotEmpty)
+              .toList(growable: false)
+          : const <String>[];
+
+  return <String, dynamic>{
+    'id': rawId,
+    'name': rawName,
+    'createdAt':
+        CoverGallery._readDateTime(json, 'createdAt').toIso8601String(),
+    'updatedAt':
+        CoverGallery._readDateTime(json, 'updatedAt').toIso8601String(),
+    'imagePaths': imagePaths,
+  };
 }

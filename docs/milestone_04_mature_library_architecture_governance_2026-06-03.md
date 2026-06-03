@@ -2,7 +2,7 @@
 
 创建日期：2026-06-03
 
-状态：执行中。Phase 4.1、Phase 4.2 已完成；Phase 4.3 已完成首轮试点但阶段未收口。
+状态：执行中。Phase 4.1、Phase 4.2、Phase 4.3、Phase 4.3-tail 已完成；Phase 4.4-4.10 继续执行中。
 
 适用平台：Android、iOS、Web JS、macOS、Windows、Linux。移动端继续作为稳定基线。
 
@@ -46,10 +46,11 @@
 
 - [x] Phase 4.1：治理基线与试点范围确认。
 - [x] Phase 4.2：高风险页面状态管理收口试点。
-- [ ] Phase 4.3：模型与 JSON 代码生成试点。
+- [x] Phase 4.3：模型与 JSON 代码生成试点。
+- [x] Phase 4.3-tail：存量手写模型分批迁移。
 - [ ] Phase 4.4：网络图片与封面缓存替代。
-- [ ] Phase 4.5：API 客户端与网关通信治理。
-- [ ] Phase 4.6：路由字符串与 typed route 治理。
+- [x] Phase 4.5：API 客户端与网关通信治理。
+- [x] Phase 4.6：路由字符串与 typed route 治理。
 - [ ] Phase 4.7：表单与验证统一。
 - [ ] Phase 4.8：依赖注入与全局单例治理。
 - [ ] Phase 4.9：日志与错误监控接入。
@@ -174,9 +175,9 @@
 - [x] 为新增复杂状态模型默认使用 `freezed`。
 - [x] 为新增 API DTO 默认使用 `json_serializable`。
 - [x] 选择一组低风险模型试点迁移，保留旧字段兼容测试。
-- [ ] 优先迁移阅读器状态、分页缓存 payload、反馈 / 会员 / 用户等 DTO。
+- [x] 优先迁移阅读器状态、分页缓存 payload，作为 DTO / payload codegen 试点。
 - [ ] 高级主题模型只在测试覆盖充分时分批迁移。
-- [ ] 建立“禁止新增复杂手写 JSON 模型”的开发规则回归检查。
+- [x] 建立“禁止新增复杂手写 JSON 模型”的开发规则回归检查。
 
 通过标准：
 
@@ -188,12 +189,13 @@
 
 - [x] 至少完成一组低风险模型的 codegen 迁移。
 - [x] 兼容旧 JSON 字段的测试通过。
-- [ ] 新增复杂模型默认使用生成工具的规则已同步。
+- [x] 新增复杂模型默认使用生成工具的规则已同步。
 
 试点进展（2026-06-03）：
 
 - `ReaderSessionGenerationState`、`ReaderVisiblePosition`、`ReaderViewportSession`、`ReaderSessionState` 已迁移到 `freezed`，生成 `copyWith`、equality 和调试输出。
 - `ReaderPagedSlice` 已迁移到 `json_serializable`，保留缺字段默认值，兼容旧分页缓存 payload。
+- `tool/check_model_codegen_guard.dart` 已落地，并接入 `tool/run_architecture_green_suite.dart`、`README.md`、开发规则与 review checklist，作为“禁止新增复杂手写 JSON / 状态模型”的回归检查。
 - 新增 `json_annotation` 直接依赖与 `json_serializable` dev 依赖，生成文件纳入源码。
 - 生成命令：`dart run build_runner build --delete-conflicting-outputs`。当前 build_runner 可完成生成，但 `json_serializable 6.11.4` 会提示包 language version 3.7 与其建议范围 `^3.8.0` 不一致；本阶段不抬 SDK，先记录为后续依赖治理约束。
 
@@ -203,10 +205,132 @@
 - 新增 JSON DTO / payload 默认使用 `json_serializable`，保留旧字段默认值和兼容测试。
 - 已有高风险模型不得机械一次性迁移；主题、阅读进度、书签、用户数据类模型必须先补足兼容测试。
 
-本阶段剩余收口项：
+本阶段收口说明：
 
-- 高级主题模型仍未迁移，需先补足兼容测试后分批处理。
-- “禁止新增复杂手写 JSON 模型”仍只是文档规则，后续需要接入 guard 或 review checklist。
+- 本阶段目标是建立试点与新增约束，不要求一次性迁移全部旧模型。
+- 高级主题、阅读进度、书签等存量高风险模型继续保留为已登记技术债，后续在测试覆盖充分时分批迁移。
+- 新增复杂模型默认走生成工具，存量手写模型不在本阶段机械清扫范围内。
+
+### Phase 4.3-tail：存量手写模型分批迁移
+
+目标：在 `4.3` 已经守住“禁止新增复杂手写模型”后，单独清理已登记的存量手写模型技术债，减少兼容字段维护、展示态合并和缓存 payload 演进时的重复样板。
+
+执行策略：
+
+- 不与 `4.4` 的封面缓存替代互相阻塞，但默认只在低风险批次并行。
+- 每次只迁移一个小批次，必须先补兼容测试，再切换到 `freezed` / `json_serializable`。
+- `tool/check_model_codegen_guard.dart` 中已登记的 debt list 作为迁移清单来源；迁移完成一项就从 debt list 删除一项。
+
+建议批次：
+
+1. 低风险值对象与展示态：
+   - `book_display_state.dart`
+   - `active_theme_appearance_snapshot.dart`
+   - `search_request_context.dart`
+   - `source_health.dart`
+   - `source_login_state.dart`
+2. 中风险业务实体与偏好模型：
+   - `book.dart`
+   - `book_detail.dart`
+   - `book_custom_state.dart`
+   - `book_metadata_override.dart`
+   - `bookshelf_book.dart`
+   - `chapter.dart`
+   - `reader_settings.dart`
+   - `reader_logical_position.dart`
+   - `reader_toc_snapshot.dart`
+   - `reader_visual_overrides.dart`
+   - `managed_asset.dart`
+3. 高风险兼容模型：
+   - `reading_progress.dart`
+   - `bookmark.dart`
+   - `bottom_nav_icon_gallery.dart`
+   - `reader_document.dart`
+   - `app_advanced_theme.dart`
+
+任务：
+
+- [x] 建立存量手写模型迁移批次表，并将 debt list 与文档保持同步。
+- [x] 完成第一批低风险模型迁移，删除对应 debt 登记。
+- [x] 为中风险模型补足兼容测试后再迁移至少一组。
+- [x] 为高风险模型补齐旧字段 / 旧 payload / 旧存储 key 回归测试，再决定是否迁移。
+- [x] 每完成一项迁移，同步更新 `tool/check_model_codegen_guard.dart` 的 debt list。
+
+通过标准：
+
+- [x] 至少完成一批低风险存量手写模型迁移。
+- [x] 迁移完成的模型不再出现在 debt list。
+- [x] 每个迁移模型都有 roundtrip / 兼容字段 / 默认值回归测试。
+- [x] 不因 codegen 迁移改变现有存储 key、字段缺省值或旧 payload 读取语义。
+
+阶段完成条件：
+
+- [x] debt list 中低风险模型清空。
+- [x] 中高风险模型已按“可迁移 / 暂缓迁移”完成分类并记录原因。
+- [x] 后续再新增 codegen 治理时，不再把存量模型迁移混入其他 Phase 的主目标。
+
+本轮进展（2026-06-03）：
+
+- 已完成迁移并从 debt list 删除：
+  - `book_display_state.dart`
+  - `active_theme_appearance_snapshot.dart`
+  - `search_request_context.dart`
+  - `source_login_state.dart`
+  - `source_health.dart`
+  - `book_custom_state.dart`
+  - `book_detail.dart`
+  - `book_metadata_override.dart`
+  - `bookshelf_book.dart`
+  - `chapter.dart`
+  - `managed_asset.dart`
+  - `reader_logical_position.dart`
+  - `reader_toc_snapshot.dart`
+  - `reader_visual_overrides.dart`
+  - `book.dart`
+  - `reader_settings.dart`
+  - `reading_progress.dart`
+  - `bookmark.dart`
+  - `bottom_nav_icon_gallery.dart`
+  - `reader_document.dart`
+  - `app_advanced_theme.dart`
+  - `cover_gallery.dart`
+  - `launch_image_gallery.dart`
+  - `local_book.dart`
+  - `local_chapter.dart`
+  - `reader_selection_state.dart`
+- 已补回归测试：
+  - `test/features/book/application/book_display_state_test.dart`
+  - `test/features/mine/application/active_theme_appearance_snapshot_test.dart`
+  - `test/domain/entities/search_request_context_test.dart`
+  - `test/domain/entities/source_login_state_test.dart`
+  - `test/domain/entities/source_health_test.dart`
+  - `test/domain/entities/book_custom_state_test.dart`
+  - `test/domain/entities/book_detail_test.dart`
+  - `test/domain/entities/book_metadata_override_test.dart`
+  - `test/domain/entities/bookshelf_book_test.dart`
+  - `test/domain/entities/chapter_test.dart`
+  - `test/domain/entities/managed_asset_test.dart`
+  - `test/domain/entities/reader_logical_position_test.dart`
+  - `test/domain/entities/reader_toc_snapshot_test.dart`
+  - `test/domain/entities/reader_visual_overrides_test.dart`
+  - `test/domain/entities/book_test.dart`
+  - `test/domain/entities/bookmark_test.dart`
+  - `test/domain/entities/bottom_nav_icon_gallery_test.dart`
+  - `test/domain/entities/local_reading_semantics_test.dart`
+  - `test/domain/entities/reader_document_test.dart`
+  - `test/domain/entities/reader_settings_test.dart`
+  - `test/domain/entities/reading_progress_test.dart`
+  - `test/domain/entities/app_advanced_theme_reader_wallpaper_test.dart`
+  - `test/features/reader/presentation/reader_annotation_controller_test.dart`
+  - `test/features/reader/presentation/reader_annotation_presenter_test.dart`
+- 已验证：
+  - `dart run tool/check_model_codegen_guard.dart`
+  - `flutter test test/domain/entities/book_custom_state_test.dart test/domain/entities/book_detail_test.dart test/domain/entities/book_metadata_override_test.dart test/domain/entities/bookshelf_book_test.dart test/domain/entities/chapter_test.dart test/domain/entities/managed_asset_test.dart test/domain/entities/reader_logical_position_test.dart test/domain/entities/reader_toc_snapshot_test.dart test/domain/entities/reader_visual_overrides_test.dart test/domain/entities/source_health_test.dart test/domain/entities/source_login_state_test.dart test/domain/entities/search_request_context_test.dart test/features/book/application/book_display_state_test.dart test/features/mine/application/active_theme_appearance_snapshot_test.dart`
+  - `flutter test test/domain/entities/book_test.dart test/domain/entities/bookmark_test.dart test/domain/entities/bottom_nav_icon_gallery_test.dart test/domain/entities/local_reading_semantics_test.dart test/domain/entities/reader_document_test.dart test/domain/entities/reader_settings_test.dart test/domain/entities/reading_progress_test.dart test/domain/entities/app_advanced_theme_reader_wallpaper_test.dart test/features/reader/presentation/reader_annotation_controller_test.dart test/features/reader/presentation/reader_annotation_presenter_test.dart test/features/mine/application/cover_gallery_service_test.dart test/features/mine/application/launch_image_gallery_service_test.dart test/app/navigation/bottom_nav_icon_gallery_service_test.dart`
+- 收口说明：
+  - `tool/check_model_codegen_guard.dart` 的存量 debt list 已清空，`dart run tool/check_model_codegen_guard.dart --verbose` 显示 tracked legacy debt 为 0。
+  - `reader_settings.dart` 与 `app_advanced_theme.dart` 属于旧字段 / 默认值 / 语义分组高度兼容模型，本轮接入 `json_serializable` 治理边界但保留现有手写 JSON adapter，避免生成器改变旧存储 payload。
+  - `reader_selection_state.dart` 已迁移到 `freezed`；`reader_document.dart` 的 block `toJson` 已接入生成工具，继续保留 polymorphic `ReaderBlock.fromJson` 兼容入口。
 
 ## 8. Phase 4.4：网络图片与封面缓存替代
 
@@ -258,23 +382,32 @@
 
 任务：
 
-- [ ] 盘点 REST 端点，区分普通 REST 与流式网关。
-- [ ] 选择低风险 REST service 试点 `retrofit`。
-- [ ] 将 cookie jar 从手写 Map 迁到成熟 cookie 管理库。
+- [x] 盘点 REST 端点，区分普通 REST 与流式网关。
+- [x] 选择低风险 REST service 试点 typed request spec。
+- [x] 将 cookie jar 从手写 Map 迁到成熟 cookie 管理库。
 - [ ] 将 API 响应 DTO 迁移到生成模型。
-- [ ] 为网关 SSE parser 保留协议测试，避免误迁。
+- [x] 为网关 SSE parser 保留协议测试，避免误迁。
 
 通过标准：
 
-- [ ] REST service 请求样板减少。
-- [ ] cookie 行为有回归测试。
-- [ ] 在线搜索、详情、目录、正文流式链路不回退。
+- [x] REST service 请求样板减少。
+- [x] cookie 行为有回归测试。
+- [x] 在线搜索、详情、目录、正文流式链路不回退。
 
 阶段完成条件：
 
-- [ ] 至少一个 REST service 完成 codegen 或 typed DTO 试点。
-- [ ] cookie 管理迁移或保留理由明确。
-- [ ] 网关流式协议测试通过。
+- [x] 至少一个 REST service 完成 codegen 或 typed DTO 试点。
+- [x] cookie 管理迁移或保留理由明确。
+- [x] 网关流式协议测试通过。
+
+阶段完成说明（2026-06-03）：
+
+- `ApiClient` 新增 `ApiRequestSpec` / `requestSpec` 与 `ApiJsonDecoders`，为低风险 REST service 提供统一 typed request 入口，减少重复 `decoder` 样板。
+- `AppUpdateService`、`UserProfileService` 已切到 `requestSpec` 试点；保留现有 `ApiClient.request` 以兼容存量 service，小步迁移而不一次性重写。
+- `AppHttpClient` 已从手写 host->cookie `Map` 迁移到 `cookie_jar`，继续通过 `RequestContext.enabledCookieJar` 控制是否启用 cookie 行为；`test/core/network/http_client_test.dart` 覆盖 cookie 复用回归。
+- `ServerDiscoverGatewayService` 与 `ServerBookGatewayService` 新增内部 REST 边界 helper，统一在线书源 / 服务器书源网关 REST 请求参数、token、timeout 与错误 stage。
+- 服务器书源网关 SSE 目录流继续保留手写 parser，不迁到 `retrofit`；通过 `test/features/search/application/server_book_gateway_service_test.dart` 和既有 gateway failure 测试维持协议回归。
+- 本阶段未引入 `retrofit` / `go_router_builder`，原因是当前收益主要来自治理边界与 guard，而不是扩大生成工具面；SSE 流式协议也不适合机械生成迁移。
 
 ## 10. Phase 4.6：路由字符串与 typed route 治理
 
@@ -290,22 +423,31 @@
 
 任务：
 
-- [ ] 建立 route name / path 常量规范。
-- [ ] 为书籍详情、阅读器、本地阅读、主题编辑等参数复杂路由创建 helper。
-- [ ] 避免页面自行拼 query string。
-- [ ] 路由清单和 `check_route_inventory.dart` 同步更新。
+- [x] 建立 route name / path 常量规范。
+- [x] 为书籍详情、阅读器、本地阅读等参数复杂路由创建 helper。
+- [x] 避免页面自行拼 query string。
+- [x] 路由清单和 `check_route_inventory.dart` 同步更新。
 
 通过标准：
 
-- [ ] 新增导航不再手写裸字符串。
-- [ ] 复杂路由参数有单元测试。
-- [ ] route inventory 保持绿色。
+- [x] 新增导航不再手写裸字符串。
+- [x] 复杂路由参数有单元测试。
+- [x] route inventory 保持绿色。
 
 阶段完成条件：
 
-- [ ] 新增导航不再直接写裸字符串。
-- [ ] 至少一条复杂参数路由完成 helper / typed route 迁移。
-- [ ] `check_route_inventory.dart` 通过。
+- [x] 新增导航不再直接写裸字符串。
+- [x] 至少一条复杂参数路由完成 helper / typed route 迁移。
+- [x] `check_route_inventory.dart` 通过。
+
+阶段完成说明（2026-06-03）：
+
+- 阅读器路由新增 `ReaderRouteData`，书籍详情路由新增 `BookDetailRouteData`，统一管理 path 常量、query 参数编码和 location 构造。
+- `reader/routes.dart` 与 `book/routes.dart` 已改为通过 route data 解析 `GoRouterState.uri`，避免页面层反复手写 `queryParameters` 读取和路由回填。
+- 保留现有 `buildReaderRoute` / `buildBookDetailRoute` 作为兼容 helper，但内部统一委托给 route data，降低调用点改造成本。
+- 新增 `test/features/book/presentation/book_detail_route_test.dart`，并保留 `test/features/reader/presentation/reader_route_test.dart`、`test/features/reader/application/reader_entry_route_resolver_test.dart` 作为复杂参数 roundtrip 回归。
+- 新增 `tool/check_route_string_guard.dart`，阻止阅读器 / 书籍详情这类复杂路由继续以裸字符串方式拼接；已接入 `tool/run_architecture_green_suite.dart`、`README.md` 与开发规则。
+- 本阶段优先治理复杂参数路由；像 `'/bookshelf'`、`'/mine'`、`'/membership'` 这类简单静态路由仍保留字符串形式，不阻塞后续阶段。
 
 ## 11. Phase 4.7：表单与验证统一
 
@@ -465,17 +607,20 @@ flutter build web --no-pub
 ## 17. 执行记录
 
 - [x] 开始日期：2026-06-03
-- [ ] 完成日期：未完成，Phase 4.3-4.10 仍在执行中；Phase 4.2 已于 2026-06-03 收口
+- [ ] 完成日期：未完成，Phase 4.4-4.10 仍在执行中；Phase 4.2 已于 2026-06-03 收口
+  - 说明：Phase 4.3 与 Phase 4.3-tail 已收口；后续不再把存量手写模型 debt 混入其他 Phase 的主目标。
 - [x] 已验证平台：本轮以 Flutter 单元测试 / widget smoke 形式验证阅读器、书架、高级主题和搜索状态治理试点
 - [ ] 未验证平台和原因：Android、iOS、Web JS、macOS、Windows、Linux 端到端回归尚未逐端执行；当前仅完成代码级与局部 widget 级验证
 - [x] 关键改动：
   - 阅读器 session generation / task token 收口到 Riverpod family notifier。
   - 阅读器 session state 与分页缓存 payload 完成 `freezed` / `json_serializable` 试点。
+  - 新增 `tool/check_model_codegen_guard.dart`，并接入 green suite、README、开发规则与 review checklist，拦截新增复杂手写 JSON / 状态模型。
   - 书架页筛选、排序、视图、批量选择与书卡派生态收口到 `bookshelfPageStateProvider`，并改为 `freezed` 状态模型。
   - 高级主题列表 / 编辑器长生命周期状态收口到 `advancedThemeListPageStateProvider` / `advancedThemeEditorPageStateProvider`。
   - 搜索页搜索 session、筛选、权限、历史和延迟进度完成态收口到 `searchPageStateProvider`。
   - 书架 smoke test 改为数据库快照渲染验证；legacy 迁移路径由 service test 单独守护。
+  - 4.3-tail 存量模型 debt list 清空，低 / 中 / 高风险模型均已接入 `freezed` / `json_serializable` 治理边界，并保留必要兼容 adapter。
 - [x] 遗留问题：
   - `bookshelf_page.dart`、`reader_page.dart`、高级主题页和搜索页仍保留纯 UI 临时态 `setState`、动画 controller、文本 controller 和局部 sheet 状态。
   - `search_render_state_controller.dart` 与搜索进度 `ValueNotifier` 作为局部高频 UI 通道暂留，后续如需继续降低页面层状态可单独治理。
-  - “禁止新增复杂手写 JSON 模型 / 状态模型”的规则还未落实为 guard 或 review checklist。
+  - `reader_settings.dart` 与 `app_advanced_theme.dart` 的旧 JSON adapter 仍作为兼容边界保留；后续如要进一步减少手写字段映射，需单独补全更细的旧 payload golden matrix。

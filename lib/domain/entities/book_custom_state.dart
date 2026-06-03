@@ -1,3 +1,8 @@
+import 'package:json_annotation/json_annotation.dart';
+
+part 'book_custom_state.g.dart';
+
+@JsonSerializable()
 class BookCustomState {
   const BookCustomState({
     required this.bookId,
@@ -43,25 +48,10 @@ class BookCustomState {
     );
   }
 
-  Map<String, dynamic> toJson() {
-    return <String, dynamic>{
-      'bookId': bookId,
-      'sourceId': sourceId,
-      'detailUrl': detailUrl,
-      'customVariableJson': customVariableJson,
-      'updatedAt': updatedAt.toIso8601String(),
-    };
-  }
+  Map<String, dynamic> toJson() => _$BookCustomStateToJson(this);
 
-  factory BookCustomState.fromJson(Map<String, dynamic> json) {
-    return BookCustomState(
-      bookId: _requiredString(json, 'bookId'),
-      sourceId: _requiredString(json, 'sourceId'),
-      detailUrl: json['detailUrl']?.toString() ?? '',
-      customVariableJson: _optionalString(json['customVariableJson']),
-      updatedAt: _requiredDateTime(json, 'updatedAt'),
-    );
-  }
+  factory BookCustomState.fromJson(Map<String, dynamic> json) =>
+      _$BookCustomStateFromJson(_normalizeBookCustomStateJson(json));
 
   static String _requiredString(Map<String, dynamic> json, String key) {
     final normalized = _normalize(json[key]?.toString());
@@ -88,4 +78,17 @@ class BookCustomState {
     }
     return parsed;
   }
+}
+
+Map<String, dynamic> _normalizeBookCustomStateJson(Map<String, dynamic> json) {
+  return <String, dynamic>{
+    'bookId': BookCustomState._requiredString(json, 'bookId'),
+    'sourceId': BookCustomState._requiredString(json, 'sourceId'),
+    'detailUrl': json['detailUrl']?.toString() ?? '',
+    'customVariableJson': BookCustomState._optionalString(
+      json['customVariableJson'],
+    ),
+    'updatedAt': BookCustomState._requiredDateTime(json, 'updatedAt')
+        .toIso8601String(),
+  };
 }

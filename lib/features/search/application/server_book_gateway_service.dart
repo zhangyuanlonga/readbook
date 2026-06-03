@@ -47,8 +47,7 @@ class ServerBookGatewayService {
     bool refresh = false,
   }) {
     final gatewaySourceId = toServerGatewaySourceId(sourceId);
-    return _client.request<ServerGatewayDetailResult>(
-      method: ApiMethod.post,
+    return _requestGatewayRest(
       path: 'v1/books/detail',
       body: {
         'bookRef': {
@@ -68,8 +67,6 @@ class ServerBookGatewayService {
         },
         'options': {'refresh': refresh, 'timeoutMs': 15000},
       },
-      attachAccessToken: true,
-      enableRetry: false,
       timeout: const Duration(seconds: 25),
       stage: ErrorStage.detail,
       decoder:
@@ -96,8 +93,7 @@ class ServerBookGatewayService {
     final gatewaySourceId = toServerGatewaySourceId(sourceId);
     final effectiveTocUrl =
         (tocUrl ?? '').trim().isNotEmpty ? tocUrl!.trim() : detailUrl.trim();
-    return _client.request<ServerGatewayTocResult>(
-      method: ApiMethod.post,
+    return _requestGatewayRest(
       path: 'v1/books/toc',
       body: {
         'bookRef': {
@@ -110,8 +106,6 @@ class ServerBookGatewayService {
         },
         'options': {'refresh': refresh, 'timeoutMs': 60000},
       },
-      attachAccessToken: true,
-      enableRetry: false,
       timeout: const Duration(seconds: 70),
       stage: ErrorStage.toc,
       decoder:
@@ -302,8 +296,7 @@ class ServerBookGatewayService {
     bool refresh = false,
   }) {
     final gatewaySourceId = toServerGatewaySourceId(sourceId);
-    return _client.request<ServerGatewayContentResult>(
-      method: ApiMethod.post,
+    return _requestGatewayRest(
       path: 'v1/books/content',
       body: {
         'bookRef': {
@@ -329,11 +322,28 @@ class ServerBookGatewayService {
           'timeoutMs': 45000,
         },
       },
-      attachAccessToken: true,
-      enableRetry: false,
       timeout: const Duration(seconds: 55),
       stage: ErrorStage.content,
       decoder: ServerGatewayContentResult.fromEnvelopeData,
+    );
+  }
+
+  Future<T> _requestGatewayRest<T>({
+    required String path,
+    required Object body,
+    required Duration timeout,
+    required ErrorStage stage,
+    required ApiDataDecoder<T> decoder,
+  }) {
+    return _client.request<T>(
+      method: ApiMethod.post,
+      path: path,
+      body: body,
+      attachAccessToken: true,
+      enableRetry: false,
+      timeout: timeout,
+      stage: stage,
+      decoder: decoder,
     );
   }
 

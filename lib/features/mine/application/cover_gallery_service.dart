@@ -29,37 +29,18 @@ class CoverGalleryService {
   static const String _indexFileName = 'index.json';
 
   Future<List<CoverGalleryIndexItem>> loadGalleryIndex() async {
-    final raw = await _loadPersistedGalleriesRaw();
-    if (raw == null || raw.trim().isEmpty) {
-      return const <CoverGalleryIndexItem>[];
-    }
-
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! List) {
-        return const <CoverGalleryIndexItem>[];
-      }
-      final items = decoded
-          .whereType<Map>()
-          .map((item) {
-            final gallery = CoverGallery.fromJson(
-              item.map((key, value) => MapEntry(key.toString(), value)),
-            );
-            return CoverGalleryIndexItem(
-              id: gallery.id,
-              name: gallery.name,
-              updatedAt: gallery.updatedAt,
-              imageCount: gallery.imagePaths.length,
-              previewPath:
-                  gallery.imagePaths.isEmpty ? null : gallery.imagePaths.first,
-            );
-          })
-          .toList(growable: false);
-      items.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-      return items;
-    } catch (_) {
-      return const <CoverGalleryIndexItem>[];
-    }
+    final galleries = await loadGalleries();
+    return galleries
+        .map(
+          (gallery) => CoverGalleryIndexItem(
+            id: gallery.id,
+            name: gallery.name,
+            updatedAt: gallery.updatedAt,
+            imageCount: gallery.imagePaths.length,
+            previewPath: resolveGalleryPreviewPath(gallery),
+          ),
+        )
+        .toList(growable: false);
   }
 
   Future<List<CoverGallery>> loadGalleries() async {
@@ -284,6 +265,23 @@ class CoverGalleryService {
       ManagedAssetType.coverGalleryImage,
       collectionId: galleryId,
     );
+  }
+
+  String? resolveGalleryPreviewPath(CoverGallery? gallery) {
+    if (gallery == null) {
+      return null;
+    }
+    for (final rawPath in gallery.imagePaths) {
+      final normalized = rawPath.trim();
+      if (normalized.isEmpty) {
+        continue;
+      }
+      final file = File(normalized);
+      if (file.existsSync() || normalized.startsWith('assets/')) {
+        return file.path;
+      }
+    }
+    return null;
   }
 
   Future<File> _indexFile() async {
