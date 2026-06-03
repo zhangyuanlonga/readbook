@@ -31,6 +31,7 @@ import '../../book/application/book_display_state.dart';
 import '../../book/application/book_presentation_query_service.dart';
 import '../../book/presentation/book_detail_route.dart';
 import '../../mine/application/advanced_theme_provider.dart';
+import '../application/search_page_state.dart';
 import '../application/search_service.dart';
 import '../application/search_history_service.dart';
 import '../application/server_online_search_service.dart';
@@ -56,6 +57,8 @@ class SearchPage extends ConsumerStatefulWidget {
 }
 
 enum _SearchMoreAction { serverSources, togglePrecise, clearSourceFilter }
+
+typedef _DeferredProgressUiUpdate = DeferredSearchProgressUiUpdate;
 
 class _SearchPageState extends ConsumerState<SearchPage> {
   final TextEditingController _keywordController = TextEditingController();
@@ -84,40 +87,174 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   static const Duration _scrollUiResumeDelay = Duration(milliseconds: 180);
   static const Duration _scrollUiMaxDeferredWindow = Duration(seconds: 2);
 
-  bool _isSearching = false;
-  bool _isLoadingServerSourceCount = false;
   final ValueNotifier<SearchExecutionReport?> _progressReportNotifier =
       ValueNotifier<SearchExecutionReport?>(null);
   final SearchRenderStateController _renderStateController =
       SearchRenderStateController(pageSize: _searchResultPageSize);
   SearchCancellationToken? _activeSearchToken;
-  int _searchSessionId = 0;
-  SearchContentMode _searchContentMode = SearchContentMode.novel;
-  bool _isPreciseBookMatch = false;
-  bool _aggregateByTitleAuthorEnabled = true;
-  int _availableServerSourceCount = 0;
-  Set<String> _selectedServerSourceIds = <String>{};
   final ScrollController _pageScrollController = ScrollController();
-  bool _isAppendingResults = false;
-  Map<String, BookDisplayState> _bookPresentationByTargetKey =
-      const <String, BookDisplayState>{};
-  SearchExecutionReport? _pendingProgressReport;
   Timer? _progressUiTimer;
-  DateTime? _lastProgressUiUpdateAt;
-  bool _isListScrollActive = false;
   Timer? _scrollUiResumeTimer;
   Timer? _scrollUiForceFlushTimer;
-  _DeferredProgressUiUpdate? _deferredProgressUiUpdate;
-  int? _pendingSearchCompletionSessionId;
-  SearchCancellationToken? _pendingSearchCompletionToken;
-  bool _isCheckingOnlineSearchAccess = true;
-  bool _hasOnlineSearchAccess = false;
-  String? _onlineSearchAccessMessage;
   StreamSubscription<AuthEvent>? _authEventSubscription;
-  int _onlineSearchAccessRequestId = 0;
 
-  // Search history
-  List<String> _searchHistory = const <String>[];
+  SearchPageState get _pageState => ref.read(searchPageStateProvider);
+
+  SearchPageStateNotifier get _pageStateNotifier =>
+      ref.read(searchPageStateProvider.notifier);
+
+  bool get _isSearching => _pageState.isSearching;
+  set _isSearching(bool value) {
+    _pageStateNotifier.update((state) => state.copyWith(isSearching: value));
+  }
+
+  bool get _isLoadingServerSourceCount => _pageState.isLoadingServerSourceCount;
+  set _isLoadingServerSourceCount(bool value) {
+    _pageStateNotifier.update(
+      (state) => state.copyWith(isLoadingServerSourceCount: value),
+    );
+  }
+
+  int get _searchSessionId => _pageState.searchSessionId;
+  set _searchSessionId(int value) {
+    _pageStateNotifier.update(
+      (state) => state.copyWith(searchSessionId: value),
+    );
+  }
+
+  SearchContentMode get _searchContentMode => _pageState.searchContentMode;
+  set _searchContentMode(SearchContentMode value) {
+    _pageStateNotifier.update(
+      (state) => state.copyWith(searchContentMode: value),
+    );
+  }
+
+  bool get _isPreciseBookMatch => _pageState.isPreciseBookMatch;
+  set _isPreciseBookMatch(bool value) {
+    _pageStateNotifier.update(
+      (state) => state.copyWith(isPreciseBookMatch: value),
+    );
+  }
+
+  bool get _aggregateByTitleAuthorEnabled =>
+      _pageState.aggregateByTitleAuthorEnabled;
+  set _aggregateByTitleAuthorEnabled(bool value) {
+    _pageStateNotifier.update(
+      (state) => state.copyWith(aggregateByTitleAuthorEnabled: value),
+    );
+  }
+
+  int get _availableServerSourceCount => _pageState.availableServerSourceCount;
+  set _availableServerSourceCount(int value) {
+    _pageStateNotifier.update(
+      (state) => state.copyWith(availableServerSourceCount: value),
+    );
+  }
+
+  Set<String> get _selectedServerSourceIds =>
+      _pageState.selectedServerSourceIds;
+  set _selectedServerSourceIds(Set<String> value) {
+    _pageStateNotifier.update(
+      (state) => state.copyWith(selectedServerSourceIds: value),
+    );
+  }
+
+  bool get _isAppendingResults => _pageState.isAppendingResults;
+  set _isAppendingResults(bool value) {
+    _pageStateNotifier.update(
+      (state) => state.copyWith(isAppendingResults: value),
+    );
+  }
+
+  Map<String, BookDisplayState> get _bookPresentationByTargetKey =>
+      _pageState.bookPresentationByTargetKey;
+  set _bookPresentationByTargetKey(Map<String, BookDisplayState> value) {
+    _pageStateNotifier.update(
+      (state) => state.copyWith(bookPresentationByTargetKey: value),
+    );
+  }
+
+  SearchExecutionReport? get _pendingProgressReport =>
+      _pageState.pendingProgressReport;
+  set _pendingProgressReport(SearchExecutionReport? value) {
+    _pageStateNotifier.update(
+      (state) => state.copyWith(pendingProgressReport: value),
+    );
+  }
+
+  DateTime? get _lastProgressUiUpdateAt => _pageState.lastProgressUiUpdateAt;
+  set _lastProgressUiUpdateAt(DateTime? value) {
+    _pageStateNotifier.update(
+      (state) => state.copyWith(lastProgressUiUpdateAt: value),
+    );
+  }
+
+  bool get _isListScrollActive => _pageState.isListScrollActive;
+  set _isListScrollActive(bool value) {
+    _pageStateNotifier.update(
+      (state) => state.copyWith(isListScrollActive: value),
+    );
+  }
+
+  DeferredSearchProgressUiUpdate? get _deferredProgressUiUpdate =>
+      _pageState.deferredProgressUiUpdate;
+  set _deferredProgressUiUpdate(DeferredSearchProgressUiUpdate? value) {
+    _pageStateNotifier.update(
+      (state) => state.copyWith(deferredProgressUiUpdate: value),
+    );
+  }
+
+  int? get _pendingSearchCompletionSessionId =>
+      _pageState.pendingSearchCompletionSessionId;
+  set _pendingSearchCompletionSessionId(int? value) {
+    _pageStateNotifier.update(
+      (state) => state.copyWith(pendingSearchCompletionSessionId: value),
+    );
+  }
+
+  SearchCancellationToken? get _pendingSearchCompletionToken =>
+      _pageState.pendingSearchCompletionToken;
+  set _pendingSearchCompletionToken(SearchCancellationToken? value) {
+    _pageStateNotifier.update(
+      (state) => state.copyWith(pendingSearchCompletionToken: value),
+    );
+  }
+
+  bool get _isCheckingOnlineSearchAccess =>
+      _pageState.isCheckingOnlineSearchAccess;
+  set _isCheckingOnlineSearchAccess(bool value) {
+    _pageStateNotifier.update(
+      (state) => state.copyWith(isCheckingOnlineSearchAccess: value),
+    );
+  }
+
+  bool get _hasOnlineSearchAccess => _pageState.hasOnlineSearchAccess;
+  set _hasOnlineSearchAccess(bool value) {
+    _pageStateNotifier.update(
+      (state) => state.copyWith(hasOnlineSearchAccess: value),
+    );
+  }
+
+  String? get _onlineSearchAccessMessage =>
+      _pageState.onlineSearchAccessMessage;
+  set _onlineSearchAccessMessage(String? value) {
+    _pageStateNotifier.update(
+      (state) => state.copyWith(onlineSearchAccessMessage: value),
+    );
+  }
+
+  int get _onlineSearchAccessRequestId =>
+      _pageState.onlineSearchAccessRequestId;
+  set _onlineSearchAccessRequestId(int value) {
+    _pageStateNotifier.update(
+      (state) => state.copyWith(onlineSearchAccessRequestId: value),
+    );
+  }
+
+  List<String> get _searchHistory => _pageState.searchHistory;
+  set _searchHistory(List<String> value) {
+    _pageStateNotifier.update((state) => state.copyWith(searchHistory: value));
+  }
 
   String get _serverSourceMenuLabel {
     if (_isLoadingServerSourceCount && _availableServerSourceCount == 0) {
@@ -176,6 +313,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(searchPageStateProvider);
     final theme = Theme.of(context);
     ref.watch(activeAdvancedThemeProvider);
     final palette = resolveAdvancedThemePalette(
@@ -1649,22 +1787,6 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     _deferredProgressUiUpdate = null;
     _isListScrollActive = false;
   }
-}
-
-class _DeferredProgressUiUpdate {
-  const _DeferredProgressUiUpdate({
-    required this.report,
-    required this.token,
-    required this.sessionId,
-    required this.forceRenderState,
-    required this.isFinalReport,
-  });
-
-  final SearchExecutionReport report;
-  final SearchCancellationToken token;
-  final int sessionId;
-  final bool forceRenderState;
-  final bool isFinalReport;
 }
 
 class _ServerSourceFilterSheet extends StatefulWidget {

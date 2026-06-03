@@ -43,6 +43,7 @@ import '../application/bookshelf_system_settings_service.dart';
 import '../application/bookshelf_external_import_coordinator.dart';
 import '../application/bookshelf_flow_coordinator.dart';
 import '../application/bookshelf_page_route_service.dart';
+import '../application/bookshelf_page_state.dart';
 import '../application/bookshelf_presentation_query_service.dart';
 import '../application/bookshelf_reader_open_service.dart';
 import '../application/local_book_import_service.dart';
@@ -68,61 +69,20 @@ part 'bookshelf_page_sections.dart';
 part 'bookshelf_page_flow.dart';
 part 'bookshelf_page_selection.dart';
 
-enum _BookshelfFilter { all, local, novel, manga, custom }
+typedef _BookshelfFilter = BookshelfFilter;
 
 enum _BookshelfMoreAction { selectBooks, sortBooks, settings, importLocal }
 
-enum _BookshelfSortMode {
-  defaultOrder,
-  recentRead,
-  readingProgress,
-  createdAt,
-  author,
-  title,
-}
+typedef _BookshelfSortMode = BookshelfSortMode;
 
-enum _BookshelfViewKind { base, tag, category }
+typedef _BookshelfViewKind = BookshelfViewKind;
 
 enum _BookshelfGridVisualStyle { standard, overlayTitle, coverOnly }
 
 enum _BookshelfSearchQuickFilterContent { none, tags, categories }
 
-enum _BookshelfBatchAction { delete, updateCover }
-
-class _BookshelfSelectionState {
-  const _BookshelfSelectionState({
-    this.enabled = false,
-    this.selectedKeys = const <String>{},
-    this.activeAction,
-  });
-
-  final bool enabled;
-  final Set<String> selectedKeys;
-  final _BookshelfBatchAction? activeAction;
-
-  bool get isBusy => activeAction != null;
-  bool get isDeleting => activeAction == _BookshelfBatchAction.delete;
-  bool get isUpdatingCover => activeAction == _BookshelfBatchAction.updateCover;
-  int get selectedCount => selectedKeys.length;
-
-  _BookshelfSelectionState copyWith({
-    bool? enabled,
-    Set<String>? selectedKeys,
-    bool clearSelectedKeys = false,
-    _BookshelfBatchAction? activeAction,
-    bool clearActiveAction = false,
-  }) {
-    return _BookshelfSelectionState(
-      enabled: enabled ?? this.enabled,
-      selectedKeys:
-          clearSelectedKeys
-              ? const <String>{}
-              : Set<String>.unmodifiable(selectedKeys ?? this.selectedKeys),
-      activeAction:
-          clearActiveAction ? null : (activeAction ?? this.activeAction),
-    );
-  }
-}
+typedef _BookshelfBatchAction = BookshelfBatchAction;
+typedef _BookshelfSelectionState = BookshelfSelectionState;
 
 List<String> mergeBookshelfTaxonomyNames({
   required Map<String, int> counts,
@@ -152,44 +112,7 @@ List<String> mergeBookshelfTaxonomyNames({
   return <String>[...names, ...remaining];
 }
 
-class _BookshelfViewSelection {
-  const _BookshelfViewSelection.base(this.filter)
-    : kind = _BookshelfViewKind.base,
-      tag = null,
-      category = null;
-
-  const _BookshelfViewSelection.tag(this.tag)
-    : kind = _BookshelfViewKind.tag,
-      filter = _BookshelfFilter.custom,
-      category = null;
-
-  const _BookshelfViewSelection.category(this.category)
-    : kind = _BookshelfViewKind.category,
-      filter = _BookshelfFilter.custom,
-      tag = null;
-
-  final _BookshelfViewKind kind;
-  final _BookshelfFilter filter;
-  final String? tag;
-  final String? category;
-
-  bool get isTag => kind == _BookshelfViewKind.tag;
-  bool get isCategory => kind == _BookshelfViewKind.category;
-  bool get isUncategorized =>
-      isCategory && (category == null || category!.isEmpty);
-
-  @override
-  bool operator ==(Object other) {
-    return other is _BookshelfViewSelection &&
-        other.kind == kind &&
-        other.filter == filter &&
-        other.tag == tag &&
-        other.category == category;
-  }
-
-  @override
-  int get hashCode => Object.hash(kind, filter, tag, category);
-}
+typedef _BookshelfViewSelection = BookshelfViewSelection;
 
 class _BookshelfProgressDisplay {
   const _BookshelfProgressDisplay({
@@ -522,64 +445,7 @@ class _BookshelfAnimatedProgressBar extends StatelessWidget {
   }
 }
 
-class _BookshelfBookCardState {
-  const _BookshelfBookCardState({
-    this.progress,
-    this.latestCachedChapterTitle,
-    this.cachedChapterCount = 0,
-    this.localBook,
-    this.presentation,
-  });
-
-  final ReadingProgress? progress;
-  final String? latestCachedChapterTitle;
-  final int cachedChapterCount;
-  final LocalBook? localBook;
-  final BookDisplayState? presentation;
-
-  _BookshelfBookCardState copyWith({
-    ReadingProgress? progress,
-    bool clearProgress = false,
-    String? latestCachedChapterTitle,
-    bool clearLatestCachedChapterTitle = false,
-    int? cachedChapterCount,
-    LocalBook? localBook,
-    bool clearLocalBook = false,
-    BookDisplayState? presentation,
-    bool clearPresentation = false,
-  }) {
-    return _BookshelfBookCardState(
-      progress: clearProgress ? null : (progress ?? this.progress),
-      latestCachedChapterTitle:
-          clearLatestCachedChapterTitle
-              ? null
-              : (latestCachedChapterTitle ?? this.latestCachedChapterTitle),
-      cachedChapterCount: cachedChapterCount ?? this.cachedChapterCount,
-      localBook: clearLocalBook ? null : (localBook ?? this.localBook),
-      presentation:
-          clearPresentation ? null : (presentation ?? this.presentation),
-    );
-  }
-
-  @override
-  bool operator ==(Object other) {
-    return other is _BookshelfBookCardState &&
-        other.progress == progress &&
-        other.latestCachedChapterTitle == latestCachedChapterTitle &&
-        other.cachedChapterCount == cachedChapterCount &&
-        other.localBook == localBook &&
-        other.presentation == presentation;
-  }
-
-  @override
-  int get hashCode => Object.hash(
-    progress,
-    latestCachedChapterTitle,
-    cachedChapterCount,
-    localBook,
-    presentation,
-  );
-}
+typedef _BookshelfBookCardState = BookshelfBookCardState;
 
 class BookshelfPage extends ConsumerStatefulWidget {
   const BookshelfPage({super.key, this.prefetchAnnouncementOnInit = false});
@@ -639,8 +505,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       const <String, ReadingProgress>{};
   Map<String, String> _latestCachedChapterByBookKey = const <String, String>{};
   Map<String, int> _cachedChapterCountByBookKey = const <String, int>{};
-  final Map<String, ValueNotifier<_BookshelfBookCardState>>
-  _bookCardStateNotifiers = <String, ValueNotifier<_BookshelfBookCardState>>{};
   String? _pressedBookKey;
   Map<String, int> _sourceTypeBySourceId = const <String, int>{};
   Map<String, LocalBook> _localBooksById = const <String, LocalBook>{};
@@ -664,7 +528,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   List<String> _categoryOrder = const <String>[];
   Map<String, BookshelfTaxonomyItem> _categoryItemByName =
       const <String, BookshelfTaxonomyItem>{};
-  List<_BookshelfFilter> _baseFilterOrder = _kDefaultBaseFilters;
   bool _bookshelfMetadataReady = false;
   Object? _derivedBookshelfFingerprint;
   List<BookshelfBook> _filteredBooksCache = const <BookshelfBook>[];
@@ -673,7 +536,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   List<String> _userTagsCache = const <String>[];
   List<String> _userCategoriesCache = const <String>[];
   bool _useGridView = false;
-  _BookshelfSortMode _sortMode = _BookshelfSortMode.defaultOrder;
   bool _gridAdaptiveColumns = BookshelfService.defaultGridAdaptiveColumns;
   int _gridColumnCount = BookshelfService.defaultGridColumnCount;
   double _gridCrossSpacing = BookshelfService.defaultGridCrossSpacing;
@@ -708,9 +570,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   bool _listPinSearchBar = BookshelfService.defaultListPinSearchBar;
   _BookshelfSearchQuickFilterContent _listQuickFilterContent =
       _BookshelfSearchQuickFilterContent.none;
-  _BookshelfViewSelection _activeView = const _BookshelfViewSelection.base(
-    _BookshelfFilter.all,
-  );
   String _bookshelfSearchKeyword = '';
   bool _isBookshelfSearchExpanded = false;
   String? _openingBookId;
@@ -718,7 +577,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   bool _isCoverRefreshActive = false;
   bool _isConsumingExternalImportPayloads = false;
   ImportExportTaskStatus? _taskStatus;
-  _BookshelfSelectionState _selectionState = const _BookshelfSelectionState();
   int _loadTicket = 0;
   bool _hasActiveAnnouncement = false;
   RouteInformationProvider? _routeInformationProvider;
@@ -768,6 +626,37 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     'manhua',
     'manhwa',
   };
+
+  BookshelfPageState get _bookshelfPageState =>
+      ref.read(bookshelfPageStateProvider);
+
+  BookshelfPageStateNotifier get _bookshelfPageStateNotifier =>
+      ref.read(bookshelfPageStateProvider.notifier);
+
+  List<_BookshelfFilter> get _baseFilterOrder =>
+      _bookshelfPageState.baseFilterOrder;
+
+  set _baseFilterOrder(List<_BookshelfFilter> value) {
+    _bookshelfPageStateNotifier.setBaseFilterOrder(value);
+  }
+
+  _BookshelfSortMode get _sortMode => _bookshelfPageState.sortMode;
+
+  set _sortMode(_BookshelfSortMode value) {
+    _bookshelfPageStateNotifier.setSortMode(value);
+  }
+
+  _BookshelfViewSelection get _activeView => _bookshelfPageState.activeView;
+
+  set _activeView(_BookshelfViewSelection value) {
+    _bookshelfPageStateNotifier.setActiveView(value);
+  }
+
+  _BookshelfSelectionState get _selectionState => _bookshelfPageState.selection;
+
+  set _selectionState(_BookshelfSelectionState value) {
+    _bookshelfPageStateNotifier.setSelection(value);
+  }
 
   @override
   void initState() {
@@ -863,9 +752,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     _bookshelfScrollController.dispose();
     _bookshelfSearchFocusNode.dispose();
     _bookshelfSearchController.dispose();
-    for (final notifier in _bookCardStateNotifiers.values) {
-      notifier.dispose();
-    }
     super.dispose();
   }
 
@@ -1809,18 +1695,30 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }
 
   Widget _buildReactiveGridCard(BookshelfBook book) {
-    return ValueListenableBuilder<_BookshelfBookCardState>(
-      valueListenable: _ensureBookCardStateNotifier(book),
-      builder: (context, cardState, _) {
+    final bookKey = _bookKey(book);
+    return Consumer(
+      builder: (context, ref, _) {
+        final cardState = ref.watch(
+          bookshelfPageStateProvider.select(
+            (state) =>
+                state.cardStatesByKey[bookKey] ?? _createBookCardState(book),
+          ),
+        );
         return _buildGridCard(book, cardState: cardState);
       },
     );
   }
 
   Widget _buildReactiveBookCard(BookshelfBook book) {
-    return ValueListenableBuilder<_BookshelfBookCardState>(
-      valueListenable: _ensureBookCardStateNotifier(book),
-      builder: (context, cardState, _) {
+    final bookKey = _bookKey(book);
+    return Consumer(
+      builder: (context, ref, _) {
+        final cardState = ref.watch(
+          bookshelfPageStateProvider.select(
+            (state) =>
+                state.cardStatesByKey[bookKey] ?? _createBookCardState(book),
+          ),
+        );
         return _buildBookCard(book, cardState: cardState);
       },
     );
@@ -3225,16 +3123,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     return '${(sourceId ?? '').trim()}::${(bookId ?? '').trim()}::${(detailUrl ?? '').trim()}';
   }
 
-  ValueNotifier<_BookshelfBookCardState> _ensureBookCardStateNotifier(
-    BookshelfBook book,
-  ) {
-    final key = _bookKey(book);
-    return _bookCardStateNotifiers.putIfAbsent(
-      key,
-      () => ValueNotifier<_BookshelfBookCardState>(_createBookCardState(book)),
-    );
-  }
-
   _BookshelfBookCardState _createBookCardState(BookshelfBook book) {
     final key = _bookKey(book);
     return _BookshelfBookCardState(
@@ -3247,21 +3135,14 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }
 
   void _syncBookCardStateNotifiers(Iterable<BookshelfBook> books) {
-    final validKeys =
-        books.map(_bookKey).where((key) => key.isNotEmpty).toSet();
-    final staleKeys = _bookCardStateNotifiers.keys
-        .where((key) => !validKeys.contains(key))
-        .toList(growable: false);
-    for (final key in staleKeys) {
-      _bookCardStateNotifiers.remove(key)?.dispose();
-    }
-    for (final book in books) {
-      final notifier = _ensureBookCardStateNotifier(book);
-      final nextState = _createBookCardState(book);
-      if (notifier.value != nextState) {
-        notifier.value = nextState;
-      }
-    }
+    final booksByKey = <String, BookshelfBook>{
+      for (final book in books)
+        if (_bookKey(book).isNotEmpty) _bookKey(book): book,
+    };
+    _bookshelfPageStateNotifier.syncCardStates(
+      validKeys: booksByKey.keys,
+      resolveState: (key) => _createBookCardState(booksByKey[key]!),
+    );
   }
 
   void _updateBookCardState(
@@ -3276,8 +3157,12 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     BookDisplayState? presentation,
     bool clearPresentation = false,
   }) {
-    final notifier = _ensureBookCardStateNotifier(book);
-    final nextState = notifier.value.copyWith(
+    final key = _bookKey(book);
+    final currentState = _bookshelfPageStateNotifier.cardStateFor(
+      key,
+      _createBookCardState(book),
+    );
+    final nextState = currentState.copyWithCard(
       progress: progress,
       clearProgress: clearProgress,
       latestCachedChapterTitle: latestCachedChapterTitle,
@@ -3288,9 +3173,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       presentation: presentation,
       clearPresentation: clearPresentation,
     );
-    if (notifier.value != nextState) {
-      notifier.value = nextState;
-    }
+    _bookshelfPageStateNotifier.setCardState(key, nextState);
   }
 
   void _updateBookCardStatesForBooks(

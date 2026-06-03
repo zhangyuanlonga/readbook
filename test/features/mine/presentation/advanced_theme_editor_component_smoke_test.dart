@@ -120,40 +120,54 @@ void main() {
 
     for (var index = 0; index < 20; index += 1) {
       await tester.pump(const Duration(milliseconds: 100));
-      if (find.text('组件风格').evaluate().isNotEmpty) {
+      if (find
+          .byKey(const ValueKey<String>('advanced_theme_editor_scroll'))
+          .evaluate()
+          .isNotEmpty) {
         break;
       }
     }
+    final editorScroll = find.byKey(
+      const ValueKey<String>('advanced_theme_editor_scroll'),
+    );
     expect(find.text('壁纸图片适配'), findsNothing);
     expect(find.text('阅读器图片适配'), findsNothing);
-    await tester.scrollUntilVisible(
-      find.text('全局圆角'),
-      320,
-      scrollable: find.byType(Scrollable).first,
-    );
+    await _dragUntilFound(tester, editorScroll, find.text('视觉资源'));
     await tester.pump();
 
-    expect(find.text('组件风格'), findsOneWidget);
-    expect(find.text('全局圆角'), findsOneWidget);
-    expect(find.text('卡片风格'), findsOneWidget);
-    expect(find.text('按钮风格'), findsOneWidget);
-    expect(find.text('输入框风格'), findsOneWidget);
-    expect(find.text('弹层风格'), findsOneWidget);
-    expect(find.text('导航栏风格'), findsOneWidget);
-    expect(find.text('切换风格'), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.text('视觉资源'),
-      320,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pump();
     expect(find.text('视觉资源'), findsOneWidget);
+    await _dragUntilFound(tester, editorScroll, find.text('圆角比例'));
+    await tester.pump();
+
+    expect(find.text('风格组件'), findsOneWidget);
+    expect(find.text('组件样式'), findsOneWidget);
+    expect(find.text('圆角比例'), findsOneWidget);
+    expect(find.text('卡片'), findsOneWidget);
+    expect(find.text('按钮'), findsOneWidget);
+    expect(find.text('输入框'), findsOneWidget);
+    expect(find.text('导航'), findsOneWidget);
+    expect(find.text('切换'), findsOneWidget);
     expect(find.text('风格组件'), findsOneWidget);
     expect(find.text('预览'), findsNothing);
     expect(find.text('页面预览'), findsNothing);
     expect(find.text('搜索预览'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+}
+
+Future<void> _dragUntilFound(
+  WidgetTester tester,
+  Finder scrollable,
+  Finder target, {
+  int maxIterations = 24,
+}) async {
+  for (var index = 0; index < maxIterations; index += 1) {
+    if (target.evaluate().isNotEmpty) {
+      return;
+    }
+    await tester.drag(scrollable, const Offset(0, -320));
+    await tester.pump(const Duration(milliseconds: 80));
+  }
 }
 
 class _FakeAdvancedThemeEditorStateService

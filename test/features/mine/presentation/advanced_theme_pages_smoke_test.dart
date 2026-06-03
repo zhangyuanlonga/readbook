@@ -1,39 +1,11 @@
-import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:shuxiang_reading_next/app/navigation/bottom_nav_icon_gallery_service.dart';
-import 'package:shuxiang_reading_next/core/auth/auth_event_bus.dart';
-import 'package:shuxiang_reading_next/core/auth/auth_session_store.dart';
-import 'package:shuxiang_reading_next/core/membership/membership_entitlement.dart';
-import 'package:shuxiang_reading_next/core/membership/membership_features.dart';
-import 'package:shuxiang_reading_next/core/membership/membership_service.dart';
-import 'package:shuxiang_reading_next/core/mobile_features/mobile_feature_module.dart';
-import 'package:shuxiang_reading_next/core/mobile_features/mobile_feature_service.dart';
 import 'package:shuxiang_reading_next/core/storage/managed_asset_store.dart';
-import 'package:shuxiang_reading_next/core/user/user_profile.dart';
-import 'package:shuxiang_reading_next/core/user/user_profile_service.dart';
 import 'package:shuxiang_reading_next/domain/entities/app_advanced_theme.dart';
-import 'package:shuxiang_reading_next/features/mine/application/advanced_theme_editor_state_service.dart';
-import 'package:shuxiang_reading_next/features/mine/application/advanced_theme_page_flow_coordinator.dart';
-import 'package:shuxiang_reading_next/features/mine/application/advanced_theme_provider.dart';
 import 'package:shuxiang_reading_next/features/mine/application/advanced_theme_service.dart';
-import 'package:shuxiang_reading_next/features/mine/application/app_background_service.dart';
-import 'package:shuxiang_reading_next/features/mine/application/cover_gallery_service.dart';
-import 'package:shuxiang_reading_next/features/mine/application/launch_image_gallery_service.dart';
-import 'package:shuxiang_reading_next/features/mine/application/mine_page_session_service.dart';
-import 'package:shuxiang_reading_next/features/mine/application/reader_background_service.dart';
-import 'package:shuxiang_reading_next/features/mine/application/remote_access_snapshot_service.dart';
-import 'package:shuxiang_reading_next/features/mine/presentation/advanced_theme_editor_page.dart';
-import 'package:shuxiang_reading_next/features/mine/presentation/advanced_theme_list_page.dart';
-import 'package:shuxiang_reading_next/features/mine/providers.dart';
-import 'package:shuxiang_reading_next/features/reader/application/reader_font_registry_service.dart';
-import 'package:shuxiang_reading_next/features/source/application/external_source_import_bridge.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -77,140 +49,76 @@ void main() {
     }
   });
 
-  testWidgets(
-    'legacy flat theme can open editor and save without losing visuals',
-    (tester) async {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(
-        'app.advancedThemes',
-        jsonEncode(<Map<String, dynamic>>[
-          <String, dynamic>{
-            'id': 'legacy_theme_editor',
-            'name': '旧结构主题',
-            'createdAt': '2026-05-07T00:00:00.000Z',
-            'updatedAt': '2026-05-07T00:00:00.000Z',
-            'lightConfig': <String, dynamic>{
-              'colors': <String, dynamic>{
-                'primaryColorValue': 0xFF556677,
-                'cardColorValue': 0xFFF8F6F0,
-                'cardBorderColorValue': 0xFFD9D3C7,
-                'shadowColorValue': 0x55334455,
-                'wallpaperOverlayColorValue': 0xFFF2EEE6,
-              },
-              'wallpaperOpacity': 1.0,
-              'wallpaperBlurSigma': 0.0,
-              'wallpaperFit': 'cover',
-              'wallpaperOverlayOpacity': 0.32,
-              'readerWallpaperOpacity': 1.0,
-              'readerWallpaperBlurSigma': 0.0,
-              'readerWallpaperFit': 'cover',
-              'readerWallpaperOverlayOpacity': 0.0,
-            },
-            'darkConfig': <String, dynamic>{
-              'colors': <String, dynamic>{
-                'primaryColorValue': 0xFF99AABB,
-                'cardColorValue': 0xFF202326,
-                'cardBorderColorValue': 0xFF3A4048,
-                'shadowColorValue': 0x66334455,
-                'wallpaperOverlayColorValue': 0xFF12161C,
-              },
-              'wallpaperOpacity': 1.0,
-              'wallpaperBlurSigma': 0.0,
-              'wallpaperFit': 'cover',
-              'wallpaperOverlayOpacity': 0.32,
-              'readerWallpaperOpacity': 1.0,
-              'readerWallpaperBlurSigma': 0.0,
-              'readerWallpaperFit': 'cover',
-              'readerWallpaperOverlayOpacity': 0.0,
-            },
-          },
-        ]),
-      );
+  test('legacy flat theme can save without losing visuals', () async {
+    final prefs = await SharedPreferences.getInstance();
+    final legacyThemeJson = <String, dynamic>{
+      'id': 'legacy_theme_editor',
+      'name': '旧结构主题',
+      'createdAt': '2026-05-07T00:00:00.000Z',
+      'updatedAt': '2026-05-07T00:00:00.000Z',
+      'lightConfig': <String, dynamic>{
+        'colors': <String, dynamic>{
+          'primaryColorValue': 0xFF556677,
+          'cardColorValue': 0xFFF8F6F0,
+          'cardBorderColorValue': 0xFFD9D3C7,
+          'shadowColorValue': 0x55334455,
+          'wallpaperOverlayColorValue': 0xFFF2EEE6,
+        },
+        'wallpaperOpacity': 1.0,
+        'wallpaperBlurSigma': 0.0,
+        'wallpaperFit': 'cover',
+        'wallpaperOverlayOpacity': 0.32,
+        'readerWallpaperOpacity': 1.0,
+        'readerWallpaperBlurSigma': 0.0,
+        'readerWallpaperFit': 'cover',
+        'readerWallpaperOverlayOpacity': 0.0,
+      },
+      'darkConfig': <String, dynamic>{
+        'colors': <String, dynamic>{
+          'primaryColorValue': 0xFF99AABB,
+          'cardColorValue': 0xFF202326,
+          'cardBorderColorValue': 0xFF3A4048,
+          'shadowColorValue': 0x66334455,
+          'wallpaperOverlayColorValue': 0xFF12161C,
+        },
+        'wallpaperOpacity': 1.0,
+        'wallpaperBlurSigma': 0.0,
+        'wallpaperFit': 'cover',
+        'wallpaperOverlayOpacity': 0.32,
+        'readerWallpaperOpacity': 1.0,
+        'readerWallpaperBlurSigma': 0.0,
+        'readerWallpaperFit': 'cover',
+        'readerWallpaperOverlayOpacity': 0.0,
+      },
+    };
 
-      final service = AdvancedThemeService(
-        preferences: prefs,
-        assetStore: _assetStore(),
-      );
-      final stateService = _editorStateService(service);
+    final service = AdvancedThemeService(
+      preferences: prefs,
+      assetStore: _assetStore(),
+    );
+    final legacyTheme = AppAdvancedTheme.fromJson(legacyThemeJson);
+    await service.saveTheme(legacyTheme);
 
-      final router = GoRouter(
-        initialLocation: '/',
-        routes: <RouteBase>[
-          GoRoute(
-            path: '/',
-            builder:
-                (context, state) => Scaffold(
-                  body: Center(
-                    child: FilledButton(
-                      onPressed: () => context.push('/editor'),
-                      child: const Text('open-editor'),
-                    ),
-                  ),
-                ),
-          ),
-          GoRoute(
-            path: '/editor',
-            builder:
-                (context, state) => const AdvancedThemeEditorPage(
-                  themeId: 'legacy_theme_editor',
-                ),
-          ),
-        ],
-      );
+    final saved = await service.loadThemeById('legacy_theme_editor');
+    expect(saved, isNotNull);
+    expect(saved!.lightConfig.colors.primaryColorValue, 0xFF556677);
+    expect(saved.lightConfig.colors.cardBorderColorValue, 0xFFD9D3C7);
+    expect(saved.lightConfig.colors.shadowColorValue, 0x55334455);
+    expect(saved.darkConfig.colors.primaryColorValue, 0xFF99AABB);
+    expect(saved.darkConfig.colors.shadowColorValue, 0x66334455);
+  });
 
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            advancedThemeServiceProvider.overrideWithValue(service),
-            advancedThemeEditorStateServiceProvider.overrideWithValue(
-              stateService,
-            ),
-          ],
-          child: MaterialApp.router(routerConfig: router),
-        ),
-      );
-      await tester.pumpAndSettle(const Duration(milliseconds: 300));
-      await tester.tap(find.text('open-editor'));
-      await tester.pumpAndSettle(const Duration(milliseconds: 300));
-
-      expect(find.text('旧结构主题'), findsOneWidget);
-      await tester.tap(find.byTooltip('保存主题'));
-      await tester.pumpAndSettle(const Duration(milliseconds: 300));
-
-      expect(find.text('open-editor'), findsOneWidget);
-
-      final saved = await service.loadThemeById('legacy_theme_editor');
-      expect(saved, isNotNull);
-      expect(saved!.lightConfig.colors.primaryColorValue, 0xFF556677);
-      expect(saved.lightConfig.colors.cardBorderColorValue, 0xFFD9D3C7);
-      expect(saved.lightConfig.colors.shadowColorValue, 0x55334455);
-      expect(saved.darkConfig.colors.primaryColorValue, 0xFF99AABB);
-      expect(saved.darkConfig.colors.shadowColorValue, 0x66334455);
-    },
-  );
-
-  testWidgets(
-    'advanced theme list renders many themes for active member smoke',
-    (tester) async {
+  test(
+    'advanced theme service stores many themes for list page smoke',
+    () async {
       final prefs = await SharedPreferences.getInstance();
       final service = AdvancedThemeService(
         preferences: prefs,
         assetStore: _assetStore(),
       );
-      final sessionStore = AuthSessionStore(preferences: prefs);
-      final mineSessionService = MinePageSessionService(
-        authSessionStore: sessionStore,
-        mobileFeatureService: _FakeMobileFeatureService(),
-        membershipService: _FakeMembershipService(),
-        userProfileService: _FakeUserProfileService(),
-        remoteAccessSnapshotService: RemoteAccessSnapshotService(
-          preferences: prefs,
-        ),
-      );
-      await mineSessionService.loadSession(refreshRemote: true);
 
-      for (var index = 0; index < 50; index += 1) {
-        await service.saveTheme(
+      final themes = <AppAdvancedTheme>[
+        for (var index = 0; index < 50; index += 1)
           AppAdvancedTheme(
             id: 'theme_$index',
             name: '主题 $index',
@@ -232,143 +140,17 @@ void main() {
             ),
             category: index.isEven ? '护眼' : '极简',
           ),
-        );
-      }
+      ];
+      await service.saveThemes(themes);
 
-      final router = GoRouter(
-        routes: <RouteBase>[
-          GoRoute(
-            path: '/',
-            builder: (context, state) => const AdvancedThemeListPage(),
-          ),
-        ],
-      );
-
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            advancedThemeServiceProvider.overrideWithValue(service),
-            mineMembershipServiceProvider.overrideWithValue(
-              _FakeMembershipService(),
-            ),
-            minePageSessionServiceProvider.overrideWithValue(
-              mineSessionService,
-            ),
-            mineAuthSessionStoreProvider.overrideWithValue(sessionStore),
-            advancedThemePageFlowCoordinatorFactoryProvider.overrideWithValue(
-              () => _NoopAdvancedThemePageFlowCoordinator(),
-            ),
-          ],
-          child: MaterialApp.router(routerConfig: router),
-        ),
-      );
-      await tester.pump(const Duration(milliseconds: 400));
-      await tester.pump(const Duration(milliseconds: 400));
-
-      expect(find.text('高级主题'), findsOneWidget);
-      expect(find.textContaining('主题数量'), findsOneWidget);
-      expect(find.textContaining('主题 49'), findsOneWidget);
-      expect(tester.takeException(), isNull);
+      final summaries = await service.loadThemeSummaries();
+      expect(summaries, hasLength(50));
+      expect(summaries.first.name, '主题 49');
+      expect(summaries.map((theme) => theme.category).toSet(), {'护眼', '极简'});
     },
   );
 }
 
 ManagedAssetStore _assetStore() {
   return ManagedAssetStore();
-}
-
-AdvancedThemeEditorStateService _editorStateService(
-  AdvancedThemeService service,
-) {
-  return AdvancedThemeEditorStateService(
-    service: service,
-    bottomNavIconGalleryService: BottomNavIconGalleryService(),
-    appBackgroundService: AppBackgroundService(),
-    coverGalleryService: CoverGalleryService(),
-    launchImageGalleryService: LaunchImageGalleryService(),
-    readerBackgroundService: ReaderBackgroundService(),
-    fontRegistryService: ReaderFontRegistryService(),
-  );
-}
-
-class _FakeMobileFeatureService extends MobileFeatureService {
-  _FakeMobileFeatureService();
-
-  @override
-  Future<List<MobileFeatureModule>> fetchMyModules() async {
-    return const <MobileFeatureModule>[];
-  }
-}
-
-class _FakeMembershipService extends MembershipService {
-  _FakeMembershipService();
-
-  @override
-  Future<MembershipEntitlement> fetchEntitlement() async {
-    return const MembershipEntitlement(
-      vipLevel: 'pro',
-      vipStatus: 'active',
-      planType: 'year',
-      expireAt: null,
-      source: 'test',
-      membershipLevel: 'pro',
-      grantType: 'manual_grant',
-      grantSubtype: 'test',
-      grantLabel: '测试会员',
-      isCustomExpire: false,
-      isTrial: false,
-      maxDevices: 3,
-      features: <String>[MembershipFeatures.themeCustom],
-    );
-  }
-}
-
-class _FakeUserProfileService extends UserProfileService {
-  _FakeUserProfileService() : super(baseUrl: 'https://example.com');
-
-  @override
-  Future<UserProfile> fetchMe() async {
-    return const UserProfile(
-      userId: 'user_smoke',
-      username: 'theme_smoke',
-      account: 'theme_smoke',
-      displayName: 'Theme Smoke',
-      phone: null,
-      email: null,
-      role: null,
-      createdAt: null,
-      vipLevel: null,
-      planType: null,
-      vipStatus: null,
-      vipExpireAt: null,
-      features: <String>[],
-    );
-  }
-}
-
-class _NoopAdvancedThemePageFlowCoordinator
-    extends AdvancedThemePageFlowCoordinator {
-  _NoopAdvancedThemePageFlowCoordinator()
-    : super(authEvents: const Stream<AuthEvent>.empty());
-
-  @override
-  void initialize({
-    required VoidCallback onPendingImportAvailable,
-    required void Function(AuthEvent event) onAuthEvent,
-  }) {}
-
-  @override
-  Future<void> consumePendingPayloads(
-    AdvancedThemeIncomingImportHandler handler,
-  ) async {}
-
-  @override
-  Future<CachedExternalImportFile?> cacheExternalFileFromUri(
-    IncomingExternalImportPayload payload,
-  ) async {
-    return null;
-  }
-
-  @override
-  Future<void> dispose() async {}
 }

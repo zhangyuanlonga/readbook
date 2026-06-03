@@ -33,6 +33,7 @@ import '../../../core/auth/auth_event_bus.dart';
 import '../../../core/auth/auth_session_store.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
 import '../application/advanced_theme_export_error_formatter.dart';
+import '../application/advanced_theme_list_page_state.dart';
 import '../application/advanced_theme_resource_reference_service.dart';
 import '../application/advanced_theme_service.dart';
 import '../../source/application/external_import_diagnostics.dart';
@@ -63,7 +64,7 @@ enum _AdvancedThemeListMoreAction {
   selectThemes,
 }
 
-enum _AdvancedThemeSortMode { updatedDesc, nameAsc, categoryAsc }
+typedef _AdvancedThemeSortMode = AdvancedThemeSortMode;
 
 enum _AdvancedThemeExportDispatchStatus { completed, cancelled, failed }
 
@@ -183,20 +184,101 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   final TextEditingController _searchController = TextEditingController();
   final Map<String, ImageProvider<Object>> _previewWallpaperImageProviders =
       <String, ImageProvider<Object>>{};
-  List<AdvancedThemeSummary> _themeSummaries = const <AdvancedThemeSummary>[];
-  String _searchQuery = '';
-  String? _selectedCategory;
-  Set<String> _selectedThemeIds = <String>{};
-  bool _isLoading = true;
-  bool _isSaving = false;
-  bool _isConsumingExternalImportPayloads = false;
-  bool _isAccessLoading = true;
-  bool _canUseAdvancedThemes = false;
-  bool _isSelectionMode = false;
-  bool _floatingEditEnabled = false;
-  _AdvancedThemeSortMode _themeSortMode = _AdvancedThemeSortMode.updatedDesc;
-  String? _savingStatusText;
-  int _summaryLoadToken = 0;
+
+  AdvancedThemeListPageState get _pageState =>
+      ref.read(advancedThemeListPageStateProvider);
+
+  AdvancedThemeListPageStateNotifier get _pageStateNotifier =>
+      ref.read(advancedThemeListPageStateProvider.notifier);
+
+  List<AdvancedThemeSummary> get _themeSummaries => _pageState.themeSummaries;
+  set _themeSummaries(List<AdvancedThemeSummary> value) {
+    _pageStateNotifier.update((state) => state.copyWith(themeSummaries: value));
+  }
+
+  String get _searchQuery => _pageState.searchQuery;
+  set _searchQuery(String value) {
+    _pageStateNotifier.update((state) => state.copyWith(searchQuery: value));
+  }
+
+  String? get _selectedCategory => _pageState.selectedCategory;
+  set _selectedCategory(String? value) {
+    _pageStateNotifier.update(
+      (state) => state.copyWith(selectedCategory: value),
+    );
+  }
+
+  Set<String> get _selectedThemeIds => _pageState.selectedThemeIds;
+  set _selectedThemeIds(Set<String> value) {
+    _pageStateNotifier.update(
+      (state) => state.copyWith(selectedThemeIds: value),
+    );
+  }
+
+  bool get _isLoading => _pageState.isLoading;
+  set _isLoading(bool value) {
+    _pageStateNotifier.update((state) => state.copyWith(isLoading: value));
+  }
+
+  bool get _isSaving => _pageState.isSaving;
+  set _isSaving(bool value) {
+    _pageStateNotifier.update((state) => state.copyWith(isSaving: value));
+  }
+
+  bool get _isConsumingExternalImportPayloads =>
+      _pageState.isConsumingExternalImportPayloads;
+  set _isConsumingExternalImportPayloads(bool value) {
+    _pageStateNotifier.update(
+      (state) => state.copyWith(isConsumingExternalImportPayloads: value),
+    );
+  }
+
+  bool get _isAccessLoading => _pageState.isAccessLoading;
+  set _isAccessLoading(bool value) {
+    _pageStateNotifier.update(
+      (state) => state.copyWith(isAccessLoading: value),
+    );
+  }
+
+  bool get _canUseAdvancedThemes => _pageState.canUseAdvancedThemes;
+  set _canUseAdvancedThemes(bool value) {
+    _pageStateNotifier.update(
+      (state) => state.copyWith(canUseAdvancedThemes: value),
+    );
+  }
+
+  bool get _isSelectionMode => _pageState.isSelectionMode;
+  set _isSelectionMode(bool value) {
+    _pageStateNotifier.update(
+      (state) => state.copyWith(isSelectionMode: value),
+    );
+  }
+
+  bool get _floatingEditEnabled => _pageState.floatingEditEnabled;
+  set _floatingEditEnabled(bool value) {
+    _pageStateNotifier.update(
+      (state) => state.copyWith(floatingEditEnabled: value),
+    );
+  }
+
+  _AdvancedThemeSortMode get _themeSortMode => _pageState.themeSortMode;
+  set _themeSortMode(_AdvancedThemeSortMode value) {
+    _pageStateNotifier.update((state) => state.copyWith(themeSortMode: value));
+  }
+
+  String? get _savingStatusText => _pageState.savingStatusText;
+  set _savingStatusText(String? value) {
+    _pageStateNotifier.update(
+      (state) => state.copyWith(savingStatusText: value),
+    );
+  }
+
+  int get _summaryLoadToken => _pageState.summaryLoadToken;
+  set _summaryLoadToken(int value) {
+    _pageStateNotifier.update(
+      (state) => state.copyWith(summaryLoadToken: value),
+    );
+  }
 
   @override
   void initState() {
@@ -2209,6 +2291,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(advancedThemeListPageStateProvider);
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;

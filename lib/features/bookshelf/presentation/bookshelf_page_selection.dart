@@ -11,7 +11,7 @@ extension on _BookshelfPageState {
 
   void _setSelectionEnabled(bool enabled, {Set<String>? selectedKeys}) {
     _updateSelectionState(
-      _selectionState.copyWith(
+      _selectionState.copyWithSelection(
         enabled: enabled,
         selectedKeys: selectedKeys,
         clearSelectedKeys: !enabled && selectedKeys == null,
@@ -22,7 +22,7 @@ extension on _BookshelfPageState {
 
   void _setSelectionAction(_BookshelfBatchAction? action) {
     _updateSelectionState(
-      _selectionState.copyWith(
+      _selectionState.copyWithSelection(
         activeAction: action,
         clearActiveAction: action == null,
       ),

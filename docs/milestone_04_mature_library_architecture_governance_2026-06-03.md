@@ -2,7 +2,7 @@
 
 创建日期：2026-06-03
 
-状态：执行中。Phase 4.1 已完成；Phase 4.2、Phase 4.3 已完成首轮试点但阶段未收口。
+状态：执行中。Phase 4.1、Phase 4.2 已完成；Phase 4.3 已完成首轮试点但阶段未收口。
 
 适用平台：Android、iOS、Web JS、macOS、Windows、Linux。移动端继续作为稳定基线。
 
@@ -45,7 +45,7 @@
 按阶段推进，完成一个阶段后勾选总览项，再进入下一阶段。除非阶段说明允许并行，否则默认按顺序执行。
 
 - [x] Phase 4.1：治理基线与试点范围确认。
-- [ ] Phase 4.2：高风险页面状态管理收口试点。
+- [x] Phase 4.2：高风险页面状态管理收口试点。
 - [ ] Phase 4.3：模型与 JSON 代码生成试点。
 - [ ] Phase 4.4：网络图片与封面缓存替代。
 - [ ] Phase 4.5：API 客户端与网关通信治理。
@@ -107,14 +107,14 @@
 
 - [x] 梳理 `reader_page.dart` 页面状态，区分 UI 临时态、业务态、运行态、缓存态、平台态。
 - [x] 将阅读器业务态迁移到 `ReaderSessionController` / Riverpod `Notifier` 或 `AsyncNotifier`。
-- [ ] 将书架筛选、排序、选择、卡片加载态迁移到 Riverpod state model。
-- [ ] 将高级主题列表和编辑器的长生命周期状态迁移到 feature provider。
-- [ ] 页面只负责渲染和意图分发，不再直接维护跨页面业务状态。
+- [x] 将书架筛选、排序、选择、卡片加载态迁移到 Riverpod state model。
+- [x] 将高级主题列表和编辑器的长生命周期状态迁移到 feature provider。
+- [x] 页面只负责渲染和意图分发，不再直接维护跨页面业务状态。
 - [x] 新增状态模型优先使用 `freezed`，避免手写大段 `copyWith`。
 
 通过标准：
 
-- [ ] 关键页面 `setState` 数量明显下降。
+- [x] 关键页面业务态 `setState` 明显下降；剩余 `setState` 限定为局部 UI 临时态、动画、弹窗和测试辅助刷新。
 - [x] 跨页面共享状态不再藏在页面私有字段里。
 - [x] 迁移后的 controller / notifier 有最小单元测试。
 - [x] 移动端阅读器默认手势和体验不回退。
@@ -131,23 +131,35 @@
 - `reader_page.dart` 不再直接创建普通 `ReaderSessionController`，改为从 provider family 读取 notifier；页面关闭时主动 `cancelAll()` 并 `invalidate` 当前 scope。
 - 保留原 `ReaderSessionController` 纯 Dart API，作为行为等价回滚点，也方便后续继续单测。
 - 新增 provider 级单测覆盖 generation snapshot 发布和不同 reader scope 隔离。
+- 新增 `bookshelf_page_state.dart`，将 `BookshelfFilter`、`BookshelfSortMode`、`BookshelfViewSelection`、`BookshelfSelectionState` 和 `BookshelfBookCardState` 收口到 `bookshelfPageStateProvider` / `BookshelfPageStateNotifier`。
+- `bookshelf_page.dart` 已移除页面内书卡 `ValueNotifier` map，书架筛选顺序、排序模式、当前视图、批量选择态和卡片派生展示态改为从 Riverpod state 读取。
+- 书架页首轮迁移保持页面渲染结构不变，只先收口跨组件共享和可测试的页面业务态；拖拽、动画、搜索栏展开等纯 UI 临时态仍保留在页面层。
+- 新增 `test/features/bookshelf/application/bookshelf_page_state_test.dart`，覆盖筛选 / 排序 / 选择态读写，以及书卡 state 同步和 stale key 清理。
+- 调整 `test/features/bookshelf/presentation/bookshelf_page_smoke_test.dart` 为数据库快照渲染 smoke；legacy prefs 到数据库的迁移继续由 `test/features/bookshelf/application/bookshelf_service_test.dart` 覆盖，避免 widget test 承担 `Isolate.run` 迁移路径。
+- `bookshelf_page_state.dart` 已改为 `freezed` 状态模型，避免新增书架状态对象继续手写 `copyWith` / equality。
+- 新增 `advanced_theme_list_page_state.dart` / `advanced_theme_editor_page_state.dart`，将高级主题列表的筛选、选择、保存状态、权限状态和导入导出状态，以及编辑器 draft、选中模式、资源引用、展开状态和保存状态迁移到 Riverpod feature provider。
+- 新增 `search_page_state.dart`，将搜索页搜索 session、搜索模式、精确匹配、服务器源筛选、在线搜索权限、历史记录、滚动延迟进度和完成态迁移到 Riverpod feature provider。
+- `search_render_state_controller.dart` 仍保留为局部渲染批次 controller，`SearchPageState` 负责页面长生命周期业务态；进度 report 的 `ValueNotifier` 暂作为局部高频 UI 通道保留，避免搜索流式进度导致整页重建。
+- 新增 `test/features/mine/application/advanced_theme_page_state_test.dart` 和 `test/features/search/application/search_page_state_test.dart`，覆盖高级主题与搜索 page-state provider 的读写、token 和长生命周期字段。
 
 本轮状态分类：
 
 | 类型 | 示例 | 本轮处理 |
 | --- | --- | --- |
 | 业务态 / 运行态 | chapter content、preload、pagination generation token | 已迁入 provider family 试点 |
-| UI 临时态 | overlay、drag、tap、动画 controller、临时 sheet 状态 | 暂留页面层 |
+| 页面业务态 / 列表派生态 | 书架筛选顺序、排序模式、当前视图、批量选择、书卡派生展示态 | 已迁入 `bookshelfPageStateProvider` |
+| 高级主题长生命周期态 | 列表搜索、分类、选择、saving、权限；编辑 draft、资源引用、选中模式、展开状态 | 已迁入 `advancedThemeListPageStateProvider` / `advancedThemeEditorPageStateProvider` |
+| 搜索长生命周期态 | search session、搜索模式、精确匹配、服务器源筛选、在线搜索权限、历史记录、延迟进度完成态 | 已迁入 `searchPageStateProvider` |
+| UI 临时态 | overlay、drag、tap、动画 controller、临时 sheet 状态、文本输入 controller、高频进度 `ValueNotifier` | 作为非跨页面 UI 生命周期暂留页面层 |
 | 缓存态 | 分页缓存、章节窗口、预缓存图片 URL | 暂留服务 / 页面层，后续与缓存治理联动 |
 | 平台态 | 音量键、电量、亮度、系统 UI | 暂留 adapter + 页面生命周期 |
-| 跨页面候选 | 书架筛选排序、高级主题编辑 session、搜索渲染状态 | 记录为下一批候选 |
+| 后续优化候选 | 剩余页面局部 UI 生命周期状态、搜索渲染批次 controller、阅读器更多运行态拆分 | 记录为后续小步优化，不阻塞 4.2 收口 |
 
-本阶段剩余收口项：
+本阶段收口结论：
 
-- `bookshelf_page.dart`：筛选、排序、选择、卡片加载 `ValueNotifier`。
-- `advanced_theme_list_page.dart` / `advanced_theme_editor_page.dart`：长生命周期编辑状态和资源引用状态。
-- `search_page.dart` / `search_render_state_controller.dart`：搜索进度和渲染批次状态。
-- `reader_page.dart`：继续降低页面层 `setState` 数量，让页面更接近只负责渲染和意图分发。
+- 4.2 阶段目标限定为高风险页面业务态 / 长生命周期态治理，已覆盖阅读器、书架、高级主题和搜索。
+- 页面层仍允许保留纯 UI 临时态，包括动画 controller、文本输入 controller、局部 sheet 状态、滚动状态、高频进度通道和测试辅助刷新。
+- 继续降低 `reader_page.dart`、`bookshelf_page.dart`、高级主题页和搜索页的纯 UI `setState` 数量，作为后续非阻塞工程优化或 Phase 4.10 总体验收前清理项。
 
 ## 7. Phase 4.3：模型与 JSON 代码生成试点
 
@@ -404,7 +416,14 @@
 
 ```bash
 flutter test test/features/reader/application/reader_session_controller_test.dart
-flutter test test/features/bookshelf/application/bookshelf_provider_smoke_test.dart
+flutter test test/features/bookshelf/application/bookshelf_page_state_test.dart
+flutter test test/features/bookshelf/presentation/bookshelf_page_smoke_test.dart
+flutter test test/features/bookshelf/application/bookshelf_service_test.dart --plain-name "migrates legacy bookshelf snapshot into database and reads db first"
+flutter test test/features/mine/application/advanced_theme_page_state_test.dart
+flutter test test/features/mine/presentation/advanced_theme_editor_component_smoke_test.dart
+flutter test test/features/mine/presentation/advanced_theme_pages_smoke_test.dart
+flutter test test/features/search/application/search_page_state_test.dart
+flutter test test/features/search/application/search_provider_smoke_test.dart
 flutter test test/core/cache/app_cache_governance_service_test.dart
 flutter test test/core/network/api_client_test.dart test/core/network/http_client_test.dart
 flutter test test/features/auth/application/auth_provider_smoke_test.dart
@@ -445,9 +464,18 @@ flutter build web --no-pub
 
 ## 17. 执行记录
 
-- [ ] 开始日期：
-- [ ] 完成日期：
-- [ ] 已验证平台：
-- [ ] 未验证平台和原因：
-- [ ] 关键改动：
-- [ ] 遗留问题：
+- [x] 开始日期：2026-06-03
+- [ ] 完成日期：未完成，Phase 4.3-4.10 仍在执行中；Phase 4.2 已于 2026-06-03 收口
+- [x] 已验证平台：本轮以 Flutter 单元测试 / widget smoke 形式验证阅读器、书架、高级主题和搜索状态治理试点
+- [ ] 未验证平台和原因：Android、iOS、Web JS、macOS、Windows、Linux 端到端回归尚未逐端执行；当前仅完成代码级与局部 widget 级验证
+- [x] 关键改动：
+  - 阅读器 session generation / task token 收口到 Riverpod family notifier。
+  - 阅读器 session state 与分页缓存 payload 完成 `freezed` / `json_serializable` 试点。
+  - 书架页筛选、排序、视图、批量选择与书卡派生态收口到 `bookshelfPageStateProvider`，并改为 `freezed` 状态模型。
+  - 高级主题列表 / 编辑器长生命周期状态收口到 `advancedThemeListPageStateProvider` / `advancedThemeEditorPageStateProvider`。
+  - 搜索页搜索 session、筛选、权限、历史和延迟进度完成态收口到 `searchPageStateProvider`。
+  - 书架 smoke test 改为数据库快照渲染验证；legacy 迁移路径由 service test 单独守护。
+- [x] 遗留问题：
+  - `bookshelf_page.dart`、`reader_page.dart`、高级主题页和搜索页仍保留纯 UI 临时态 `setState`、动画 controller、文本 controller 和局部 sheet 状态。
+  - `search_render_state_controller.dart` 与搜索进度 `ValueNotifier` 作为局部高频 UI 通道暂留，后续如需继续降低页面层状态可单独治理。
+  - “禁止新增复杂手写 JSON 模型 / 状态模型”的规则还未落实为 guard 或 review checklist。

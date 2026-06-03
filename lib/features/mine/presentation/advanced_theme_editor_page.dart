@@ -26,6 +26,7 @@ import '../../../domain/entities/bottom_nav_icon_gallery.dart';
 import '../../../domain/entities/cover_gallery.dart';
 import '../../../domain/entities/launch_image_gallery.dart';
 import '../../reader/application/reader_font_registry_service.dart';
+import '../application/advanced_theme_editor_page_state.dart';
 import '../application/advanced_theme_provider.dart';
 import '../application/advanced_theme_editor_state_service.dart';
 import '../application/advanced_theme_service.dart';
@@ -71,21 +72,100 @@ class _AdvancedThemeEditorPageState
   };
   final ValueNotifier<int> _colorPreviewRevision = ValueNotifier<int>(0);
 
-  AppAdvancedTheme? _draft;
-  AppAdvancedThemeMode _selectedMode = AppAdvancedThemeMode.light;
-  List<String> _backgroundLibraryPaths = const <String>[];
-  List<String> _readerBackgroundLibraryPaths = const <String>[];
-  List<BottomNavIconGallery> _bottomNavGalleries =
-      const <BottomNavIconGallery>[];
-  List<CoverGallery> _coverGalleries = const <CoverGallery>[];
-  List<LaunchImageGallery> _launchImageGalleries = const <LaunchImageGallery>[];
-  List<ReaderCustomFontEntry> _availableFonts = const <ReaderCustomFontEntry>[];
-  String? _activeBottomNavGalleryName;
-  bool _strengthControlsExpanded = true;
-  bool _componentControlsExpanded = true;
-  bool _isEditingName = false;
-  bool _isLoading = true;
-  bool _isSaving = false;
+  AdvancedThemeEditorPageState get _pageState =>
+      ref.read(advancedThemeEditorPageStateProvider);
+
+  AdvancedThemeEditorPageStateNotifier get _pageStateNotifier =>
+      ref.read(advancedThemeEditorPageStateProvider.notifier);
+
+  AppAdvancedTheme? get _draft => _pageState.draft;
+  set _draft(AppAdvancedTheme? value) {
+    _pageStateNotifier.update((state) => state.copyWith(draft: value));
+  }
+
+  AppAdvancedThemeMode get _selectedMode => _pageState.selectedMode;
+  set _selectedMode(AppAdvancedThemeMode value) {
+    _pageStateNotifier.update((state) => state.copyWith(selectedMode: value));
+  }
+
+  List<String> get _backgroundLibraryPaths => _pageState.backgroundLibraryPaths;
+  set _backgroundLibraryPaths(List<String> value) {
+    _pageStateNotifier.update(
+      (state) => state.copyWith(backgroundLibraryPaths: value),
+    );
+  }
+
+  List<String> get _readerBackgroundLibraryPaths =>
+      _pageState.readerBackgroundLibraryPaths;
+  set _readerBackgroundLibraryPaths(List<String> value) {
+    _pageStateNotifier.update(
+      (state) => state.copyWith(readerBackgroundLibraryPaths: value),
+    );
+  }
+
+  List<BottomNavIconGallery> get _bottomNavGalleries =>
+      _pageState.bottomNavGalleries;
+  set _bottomNavGalleries(List<BottomNavIconGallery> value) {
+    _pageStateNotifier.update(
+      (state) => state.copyWith(bottomNavGalleries: value),
+    );
+  }
+
+  List<CoverGallery> get _coverGalleries => _pageState.coverGalleries;
+  set _coverGalleries(List<CoverGallery> value) {
+    _pageStateNotifier.update((state) => state.copyWith(coverGalleries: value));
+  }
+
+  List<LaunchImageGallery> get _launchImageGalleries =>
+      _pageState.launchImageGalleries;
+  set _launchImageGalleries(List<LaunchImageGallery> value) {
+    _pageStateNotifier.update(
+      (state) => state.copyWith(launchImageGalleries: value),
+    );
+  }
+
+  List<ReaderCustomFontEntry> get _availableFonts => _pageState.availableFonts;
+  set _availableFonts(List<ReaderCustomFontEntry> value) {
+    _pageStateNotifier.update((state) => state.copyWith(availableFonts: value));
+  }
+
+  String? get _activeBottomNavGalleryName =>
+      _pageState.activeBottomNavGalleryName;
+  set _activeBottomNavGalleryName(String? value) {
+    _pageStateNotifier.update(
+      (state) => state.copyWith(activeBottomNavGalleryName: value),
+    );
+  }
+
+  bool get _strengthControlsExpanded => _pageState.strengthControlsExpanded;
+  set _strengthControlsExpanded(bool value) {
+    _pageStateNotifier.update(
+      (state) => state.copyWith(strengthControlsExpanded: value),
+    );
+  }
+
+  bool get _componentControlsExpanded => _pageState.componentControlsExpanded;
+  set _componentControlsExpanded(bool value) {
+    _pageStateNotifier.update(
+      (state) => state.copyWith(componentControlsExpanded: value),
+    );
+  }
+
+  bool get _isEditingName => _pageState.isEditingName;
+  set _isEditingName(bool value) {
+    _pageStateNotifier.update((state) => state.copyWith(isEditingName: value));
+  }
+
+  bool get _isLoading => _pageState.isLoading;
+  set _isLoading(bool value) {
+    _pageStateNotifier.update((state) => state.copyWith(isLoading: value));
+  }
+
+  bool get _isSaving => _pageState.isSaving;
+  set _isSaving(bool value) {
+    _pageStateNotifier.update((state) => state.copyWith(isSaving: value));
+  }
+
   bool _didInitialize = false;
 
   @override
@@ -143,7 +223,10 @@ class _AdvancedThemeEditorPageState
     if (!mounted) {
       return;
     }
-    setState(mutation);
+    mutation();
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   void _handleColorControllerChanged() {
@@ -2097,6 +2180,7 @@ class _AdvancedThemeEditorPageState
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(advancedThemeEditorPageStateProvider);
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     final topInset =
@@ -2291,6 +2375,9 @@ class _AdvancedThemeEditorPageState
                                 'advanced_theme_editor',
                               ),
                               child: ListView(
+                                key: const ValueKey<String>(
+                                  'advanced_theme_editor_scroll',
+                                ),
                                 keyboardDismissBehavior:
                                     ScrollViewKeyboardDismissBehavior.onDrag,
                                 padding: EdgeInsets.fromLTRB(
