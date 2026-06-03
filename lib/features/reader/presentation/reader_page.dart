@@ -332,6 +332,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   late final SourceHealthService _sourceHealthService;
   late final RemoteContentTaskConflictService _taskConflictService;
   late final RemoteContentTaskSchedulerService _taskScheduler;
+  late final String _readerSessionScopeKey;
   final ReaderSourceSwitchCoordinator _sourceSwitchCoordinator =
       const ReaderSourceSwitchCoordinator();
   final ReaderSourceSwitchTargetResolver _sourceSwitchTargetResolver =
@@ -340,8 +341,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const ScrollTextReaderRenderer();
   final PagedTextReaderRenderer _pagedTextRenderer =
       const PagedTextReaderRenderer();
-  final ReaderSessionController _readerSessionController =
-      ReaderSessionController();
+  late final ReaderSessionControllerNotifier _readerSessionController;
   final ReaderPreloadController _preloadController =
       const ReaderPreloadController();
   final ReaderPreloadFailureMemory _preloadFailureMemory =
@@ -1728,6 +1728,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   @override
   void initState() {
     super.initState();
+    _readerSessionScopeKey =
+        '${widget.bookId}|${widget.chapterId}|${widget.sourceId ?? ''}|'
+        '${widget.openRouteKind ?? ''}|${widget.openRequestedAtMs ?? 0}';
+    _readerSessionController = ref.read(
+      readerSessionControllerProvider(_readerSessionScopeKey).notifier,
+    );
     _initializeReaderPage();
   }
 

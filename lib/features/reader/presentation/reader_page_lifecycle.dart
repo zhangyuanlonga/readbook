@@ -148,6 +148,7 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
     WidgetsBinding.instance.removeObserver(this);
     _cancelActiveSwitchSourceSearch();
     _readerSessionController.cancelAll();
+    ref.invalidate(readerSessionControllerProvider(_readerSessionScopeKey));
     _flushProgressSave();
     _commitReadingRecordSession(
       endRatio: _activeReadingRecordSession?.furthestPositionRatio,

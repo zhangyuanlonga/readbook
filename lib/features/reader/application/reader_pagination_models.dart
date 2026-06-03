@@ -1,9 +1,14 @@
+import 'package:json_annotation/json_annotation.dart';
+
+part 'reader_pagination_models.g.dart';
+
+@JsonSerializable()
 class ReaderPagedSlice {
   const ReaderPagedSlice({
-    required this.paragraphIndex,
-    required this.start,
-    required this.end,
-    required this.height,
+    this.paragraphIndex = 0,
+    this.start = 0,
+    this.end = 0,
+    this.height = 0,
   });
 
   final int paragraphIndex;
@@ -11,22 +16,10 @@ class ReaderPagedSlice {
   final int end;
   final double height;
 
-  Map<String, Object> toJson() {
-    return <String, Object>{
-      'paragraphIndex': paragraphIndex,
-      'start': start,
-      'end': end,
-      'height': height,
-    };
-  }
+  Map<String, Object?> toJson() => _$ReaderPagedSliceToJson(this);
 
   factory ReaderPagedSlice.fromJson(Map<String, dynamic> json) {
-    return ReaderPagedSlice(
-      paragraphIndex: (json['paragraphIndex'] as num?)?.toInt() ?? 0,
-      start: (json['start'] as num?)?.toInt() ?? 0,
-      end: (json['end'] as num?)?.toInt() ?? 0,
-      height: (json['height'] as num?)?.toDouble() ?? 0,
-    );
+    return _$ReaderPagedSliceFromJson(json);
   }
 }
 

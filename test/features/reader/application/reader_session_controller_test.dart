@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shuxiang_reading_next/features/reader/application/reader_session_controller.dart';
+import 'package:shuxiang_reading_next/features/reader/application/reader_session_state.dart';
 
 void main() {
   group('ReaderSessionController', () {
@@ -76,6 +78,48 @@ void main() {
         controller.isActivePaginationTaskToken(result.paginationTaskToken!),
         isTrue,
       );
+    });
+  });
+
+  group('readerSessionControllerProvider', () {
+    test('publishes generation snapshots after task mutations', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      final provider = readerSessionControllerProvider('reader-a');
+      final notifier = container.read(provider.notifier);
+
+      final chapter = notifier.nextChapterContentToken();
+      final preload = notifier.nextPreloadTaskToken();
+
+      expect(chapter, 1);
+      expect(preload, 1);
+      expect(
+        container.read(provider),
+        const ReaderSessionGenerationState(
+          chapterContentGeneration: 1,
+          preloadGeneration: 1,
+        ),
+      );
+
+      notifier.cancelPreloadTasks();
+
+      expect(notifier.isActiveChapterContentToken(chapter), isTrue);
+      expect(notifier.isActivePreloadTaskToken(preload), isFalse);
+      expect(container.read(provider).preloadGeneration, 2);
+    });
+
+    test('keeps reader page scopes isolated', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      final first = readerSessionControllerProvider('reader-a');
+      final second = readerSessionControllerProvider('reader-b');
+
+      container.read(first.notifier).nextChapterContentToken();
+
+      expect(container.read(first).chapterContentGeneration, 1);
+      expect(container.read(second).chapterContentGeneration, 0);
     });
   });
 }

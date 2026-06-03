@@ -1,6 +1,6 @@
 # Selune 项目文档入口
 
-更新时间：2026-06-02
+更新时间：2026-06-03
 
 本目录只保留对后续开发有决策价值的文档：核心方针、开发规则、平台规则、当前里程碑、长期回归清单。历史草稿、重复计划、一次性工作流文档不再保留，避免后续开发者在旧口径里迷路。
 
@@ -19,6 +19,7 @@
 - [里程碑 01：多端底座绿线与在线阅读闭环](milestone_01_multiplatform_foundation_online_reading_2026-06-02.md)
 - [里程碑 02：桌面 UI 与交互体验成型](milestone_02_desktop_ui_interaction_2026-06-02.md)
 - [里程碑 03：本地内容与资源能力多端化](milestone_03_local_content_resource_multiplatform_2026-06-02.md)
+- [里程碑 04：成熟库替代与架构样板治理](milestone_04_mature_library_architecture_governance_2026-06-03.md)
 - [缓存治理优化计划](cache_governance_optimization_plan_2026-06-02.md)
 - [代码库工程治理专项 Backlog](codebase_engineering_governance_backlog_2026-06-02.md)
 - [桌面端工程提效与底座优化里程碑](desktop_engineering_productivity_milestone_2026-06-01.md)

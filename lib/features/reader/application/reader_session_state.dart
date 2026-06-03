@@ -1,48 +1,49 @@
+import 'package:freezed_annotation/freezed_annotation.dart';
+
 import 'reader_logical_position.dart';
 import '../../../domain/entities/reading_progress.dart';
 
+part 'reader_session_state.freezed.dart';
+
 enum TextReaderRendererKind { scroll, paged }
 
-class ReaderVisiblePosition {
-  const ReaderVisiblePosition({
-    this.pageIndex,
-    this.pageCount,
-    this.scrollOffset,
-    this.maxScrollExtent,
-  });
-
-  final int? pageIndex;
-  final int? pageCount;
-  final double? scrollOffset;
-  final double? maxScrollExtent;
+@freezed
+abstract class ReaderSessionGenerationState
+    with _$ReaderSessionGenerationState {
+  const factory ReaderSessionGenerationState({
+    @Default(0) int chapterContentGeneration,
+    @Default(0) int preloadGeneration,
+    @Default(0) int paginationGeneration,
+  }) = _ReaderSessionGenerationState;
 }
 
-class ReaderViewportSession {
-  const ReaderViewportSession({
-    required this.viewportMode,
-    this.pageIndex,
-    this.pageCount,
-    this.scrollOffset,
-    this.maxScrollExtent,
-    this.zoomScale,
-    this.panDx,
-    this.panDy,
-    this.audioPositionMs,
-    this.audioDurationMs,
-    this.audioSpeed,
-  });
+@freezed
+abstract class ReaderVisiblePosition with _$ReaderVisiblePosition {
+  const factory ReaderVisiblePosition({
+    int? pageIndex,
+    int? pageCount,
+    double? scrollOffset,
+    double? maxScrollExtent,
+  }) = _ReaderVisiblePosition;
+}
 
-  final String viewportMode;
-  final int? pageIndex;
-  final int? pageCount;
-  final double? scrollOffset;
-  final double? maxScrollExtent;
-  final double? zoomScale;
-  final double? panDx;
-  final double? panDy;
-  final int? audioPositionMs;
-  final int? audioDurationMs;
-  final double? audioSpeed;
+@freezed
+abstract class ReaderViewportSession with _$ReaderViewportSession {
+  const ReaderViewportSession._();
+
+  const factory ReaderViewportSession({
+    required String viewportMode,
+    int? pageIndex,
+    int? pageCount,
+    double? scrollOffset,
+    double? maxScrollExtent,
+    double? zoomScale,
+    double? panDx,
+    double? panDy,
+    int? audioPositionMs,
+    int? audioDurationMs,
+    double? audioSpeed,
+  }) = _ReaderViewportSession;
 
   ReaderPositionSnapshot toPositionSnapshot() {
     return ReaderPositionSnapshot(
@@ -61,55 +62,18 @@ class ReaderViewportSession {
   }
 }
 
-class ReaderSessionState {
-  const ReaderSessionState({
-    required this.currentChapterIndex,
-    required this.currentChapterId,
-    required this.currentChapterUrl,
-    required this.currentChapterTitle,
-    required this.logicalPosition,
-    required this.visiblePosition,
-    required this.viewportSession,
-    required this.rendererKind,
-    required this.isAutoReading,
-    required this.isChapterTransitioning,
-  });
-
-  final int currentChapterIndex;
-  final String currentChapterId;
-  final String currentChapterUrl;
-  final String currentChapterTitle;
-  final ReaderLogicalPosition logicalPosition;
-  final ReaderVisiblePosition visiblePosition;
-  final ReaderViewportSession viewportSession;
-  final TextReaderRendererKind rendererKind;
-  final bool isAutoReading;
-  final bool isChapterTransitioning;
-
-  ReaderSessionState copyWith({
-    int? currentChapterIndex,
-    String? currentChapterId,
-    String? currentChapterUrl,
-    String? currentChapterTitle,
-    ReaderLogicalPosition? logicalPosition,
-    ReaderVisiblePosition? visiblePosition,
-    ReaderViewportSession? viewportSession,
-    TextReaderRendererKind? rendererKind,
-    bool? isAutoReading,
-    bool? isChapterTransitioning,
-  }) {
-    return ReaderSessionState(
-      currentChapterIndex: currentChapterIndex ?? this.currentChapterIndex,
-      currentChapterId: currentChapterId ?? this.currentChapterId,
-      currentChapterUrl: currentChapterUrl ?? this.currentChapterUrl,
-      currentChapterTitle: currentChapterTitle ?? this.currentChapterTitle,
-      logicalPosition: logicalPosition ?? this.logicalPosition,
-      visiblePosition: visiblePosition ?? this.visiblePosition,
-      viewportSession: viewportSession ?? this.viewportSession,
-      rendererKind: rendererKind ?? this.rendererKind,
-      isAutoReading: isAutoReading ?? this.isAutoReading,
-      isChapterTransitioning:
-          isChapterTransitioning ?? this.isChapterTransitioning,
-    );
-  }
+@freezed
+abstract class ReaderSessionState with _$ReaderSessionState {
+  const factory ReaderSessionState({
+    required int currentChapterIndex,
+    required String currentChapterId,
+    required String currentChapterUrl,
+    required String currentChapterTitle,
+    required ReaderLogicalPosition logicalPosition,
+    required ReaderVisiblePosition visiblePosition,
+    required ReaderViewportSession viewportSession,
+    required TextReaderRendererKind rendererKind,
+    required bool isAutoReading,
+    required bool isChapterTransitioning,
+  }) = _ReaderSessionState;
 }

@@ -1,3 +1,7 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'reader_session_state.dart';
+
 enum ReaderSessionTaskKind { chapterContent, preload, pagination }
 
 enum ReaderSessionIntentKind {
@@ -46,10 +50,104 @@ class ReaderSessionIntentResult {
   final int? paginationTaskToken;
 }
 
+final readerSessionControllerProvider = NotifierProvider.family<
+  ReaderSessionControllerNotifier,
+  ReaderSessionGenerationState,
+  String
+>(ReaderSessionControllerNotifier.new);
+
+class ReaderSessionControllerNotifier
+    extends FamilyNotifier<ReaderSessionGenerationState, String> {
+  final ReaderSessionController _controller = ReaderSessionController();
+
+  @override
+  ReaderSessionGenerationState build(String arg) {
+    return _controller.snapshot;
+  }
+
+  int nextChapterContentToken() {
+    final token = _controller.nextChapterContentToken();
+    state = _controller.snapshot;
+    return token;
+  }
+
+  int nextPreloadTaskToken() {
+    final token = _controller.nextPreloadTaskToken();
+    state = _controller.snapshot;
+    return token;
+  }
+
+  int nextPaginationTaskToken() {
+    final token = _controller.nextPaginationTaskToken();
+    state = _controller.snapshot;
+    return token;
+  }
+
+  ReaderSessionTaskToken nextToken(ReaderSessionTaskKind kind) {
+    final token = _controller.nextToken(kind);
+    state = _controller.snapshot;
+    return token;
+  }
+
+  ReaderSessionIntentResult beginIntent(ReaderSessionIntent intent) {
+    final result = _controller.beginIntent(intent);
+    state = _controller.snapshot;
+    return result;
+  }
+
+  bool isActiveChapterContentToken(int token) {
+    return _controller.isActiveChapterContentToken(token);
+  }
+
+  bool isActivePreloadTaskToken(int token) {
+    return _controller.isActivePreloadTaskToken(token);
+  }
+
+  bool isActivePaginationTaskToken(int token) {
+    return _controller.isActivePaginationTaskToken(token);
+  }
+
+  bool isActive(ReaderSessionTaskToken token) {
+    return _controller.isActive(token);
+  }
+
+  void cancelChapterContentRequests() {
+    _controller.cancelChapterContentRequests();
+    state = _controller.snapshot;
+  }
+
+  void cancelPreloadTasks() {
+    _controller.cancelPreloadTasks();
+    state = _controller.snapshot;
+  }
+
+  void cancelPaginationTasks() {
+    _controller.cancelPaginationTasks();
+    state = _controller.snapshot;
+  }
+
+  void cancelAll() {
+    _controller.cancelAll();
+    state = _controller.snapshot;
+  }
+
+  int get chapterContentGeneration => _controller.chapterContentGeneration;
+  int get preloadGeneration => _controller.preloadGeneration;
+  int get paginationGeneration => _controller.paginationGeneration;
+}
+
 class ReaderSessionController {
   int _chapterContentGeneration = 0;
   int _preloadGeneration = 0;
   int _paginationGeneration = 0;
+
+  ReaderSessionGenerationState get snapshot {
+    return ReaderSessionGenerationState(
+      chapterContentGeneration: _chapterContentGeneration,
+      preloadGeneration: _preloadGeneration,
+      paginationGeneration: _paginationGeneration,
+    );
+  }
 
   int nextChapterContentToken() {
     _chapterContentGeneration += 1;
