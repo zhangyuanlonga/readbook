@@ -1,3 +1,8 @@
+import 'package:json_annotation/json_annotation.dart';
+
+part 'user_profile.g.dart';
+
+@JsonSerializable(fieldRename: FieldRename.snake, createToJson: false)
 class UserProfile {
   const UserProfile({
     required this.userId,
@@ -15,18 +20,31 @@ class UserProfile {
     required this.features,
   });
 
+  @JsonKey(fromJson: _requiredUserIdFromJson)
   final String userId;
+  @JsonKey(fromJson: _requiredUsernameFromJson)
   final String username;
+  @JsonKey(fromJson: _requiredAccountFromJson)
   final String account;
+  @JsonKey(fromJson: _optionalStringFromJson)
   final String? displayName;
+  @JsonKey(fromJson: _optionalStringFromJson)
   final String? phone;
+  @JsonKey(fromJson: _optionalStringFromJson)
   final String? email;
+  @JsonKey(fromJson: _optionalStringFromJson)
   final String? role;
+  @JsonKey(fromJson: _optionalUtcDateTimeFromJson)
   final DateTime? createdAt;
+  @JsonKey(fromJson: _optionalStringFromJson)
   final String? vipLevel;
+  @JsonKey(fromJson: _optionalStringFromJson)
   final String? planType;
+  @JsonKey(fromJson: _optionalStringFromJson)
   final String? vipStatus;
+  @JsonKey(fromJson: _optionalUtcDateTimeFromJson)
   final DateTime? vipExpireAt;
+  @JsonKey(fromJson: _featuresFromJson)
   final List<String> features;
 
   String get loginIdentity {
@@ -52,53 +70,60 @@ class UserProfile {
     }
     final data = rawUser.map((key, value) => MapEntry(key.toString(), value));
 
-    String? readOptionalString(String key) {
-      final value = data[key]?.toString().trim() ?? '';
-      return value.isEmpty ? null : value;
+    if (!_hasText(data['username']) && _hasText(data['account'])) {
+      data['username'] = data['account'];
+    }
+    if (!_hasText(data['account']) && _hasText(data['username'])) {
+      data['account'] = data['username'];
     }
 
-    String requireOneOf(List<String> keys) {
-      for (final key in keys) {
-        final value = readOptionalString(key);
-        if (value != null && value.isNotEmpty) {
-          return value;
-        }
-      }
-      throw FormatException('Missing required fields: ${keys.join(", ")}');
-    }
+    return UserProfile._fromUserJson(data);
+  }
 
-    DateTime? readTime(String key) {
-      final raw = data[key]?.toString().trim() ?? '';
-      if (raw.isEmpty) {
-        return null;
-      }
-      return DateTime.tryParse(raw)?.toUtc();
-    }
+  factory UserProfile._fromUserJson(Map<String, dynamic> json) =>
+      _$UserProfileFromJson(json);
 
-    List<String> readFeatures(Object? raw) {
-      if (raw is List) {
-        return raw
-            .map((item) => item?.toString().trim() ?? '')
-            .where((item) => item.isNotEmpty)
-            .toList(growable: false);
-      }
+  static bool _hasText(Object? value) {
+    return (value?.toString().trim() ?? '').isNotEmpty;
+  }
+
+  static String _requiredUserIdFromJson(Object? value) =>
+      _requiredString(value, 'user_id');
+
+  static String _requiredUsernameFromJson(Object? value) =>
+      _requiredString(value, 'username, account');
+
+  static String _requiredAccountFromJson(Object? value) =>
+      _requiredString(value, 'account, username');
+
+  static String _requiredString(Object? value, String key) {
+    final normalized = value?.toString().trim() ?? '';
+    if (normalized.isEmpty) {
+      throw FormatException('Missing required fields: $key');
+    }
+    return normalized;
+  }
+
+  static String? _optionalStringFromJson(Object? value) {
+    final normalized = value?.toString().trim() ?? '';
+    return normalized.isEmpty ? null : normalized;
+  }
+
+  static DateTime? _optionalUtcDateTimeFromJson(Object? value) {
+    final raw = value?.toString().trim() ?? '';
+    if (raw.isEmpty) {
+      return null;
+    }
+    return DateTime.tryParse(raw)?.toUtc();
+  }
+
+  static List<String> _featuresFromJson(Object? value) {
+    if (value is! List) {
       return const <String>[];
     }
-
-    return UserProfile(
-      userId: requireOneOf(const <String>['user_id']),
-      username: requireOneOf(const <String>['username', 'account']),
-      account: requireOneOf(const <String>['account', 'username']),
-      displayName: readOptionalString('display_name'),
-      phone: readOptionalString('phone'),
-      email: readOptionalString('email'),
-      role: readOptionalString('role'),
-      createdAt: readTime('created_at'),
-      vipLevel: readOptionalString('vip_level'),
-      planType: readOptionalString('plan_type'),
-      vipStatus: readOptionalString('vip_status'),
-      vipExpireAt: readTime('vip_expire_at'),
-      features: readFeatures(data['features']),
-    );
+    return value
+        .map((item) => item?.toString().trim() ?? '')
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
   }
 }

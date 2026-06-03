@@ -33,4 +33,21 @@ void main() {
       expect(profile.features, <String>['theme_custom']);
     },
   );
+
+  test('UserProfile accepts account-only profile payloads', () {
+    final profile = UserProfile.fromJson(<String, dynamic>{
+      'user': <String, dynamic>{
+        'user_id': 'usr_2',
+        'account': 'reader002',
+        'display_name': ' Reader Two ',
+        'features': <Object?>[' theme_custom ', '', null],
+      },
+    });
+
+    expect(profile.userId, 'usr_2');
+    expect(profile.username, 'reader002');
+    expect(profile.account, 'reader002');
+    expect(profile.displayName, 'Reader Two');
+    expect(profile.features, <String>['theme_custom']);
+  });
 }

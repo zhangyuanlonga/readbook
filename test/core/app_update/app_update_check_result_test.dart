@@ -40,7 +40,10 @@ void main() {
       expect(result.release?.appName, 'reader-app');
       expect(result.release?.versionCode, 10023);
       expect(result.release?.forceUpdate, isTrue);
-      expect(result.release?.downloads.first.downloadUrl, 'https://example.com/app.apk');
+      expect(
+        result.release?.downloads.first.downloadUrl,
+        'https://example.com/app.apk',
+      );
       expect(result.release?.changelog, '修复已知问题，优化体验');
     });
 
@@ -68,6 +71,33 @@ void main() {
       expect(result.forceUpdate, isFalse);
       expect(result.release, isNotNull);
       expect(result.release?.forceUpdate, isFalse);
+    });
+
+    test('keeps legacy aliases and scalar coercion during DTO codegen', () {
+      final result = AppUpdateCheckResult.fromJson({
+        'hasUpdate': 'true',
+        'forceUpdate': '0',
+        'latestVersion': {
+          'id': 42,
+          'app_name': 'reader-app',
+          'version_code': '10023',
+          'downloads': [
+            {
+              'platform': 'android',
+              'label': '',
+              'download_url': 'https://example.com/app.apk',
+              'file_name': ' app.apk ',
+            },
+          ],
+        },
+      }, currentVersionCode: 10012);
+
+      expect(result.hasUpdate, isTrue);
+      expect(result.forceUpdate, isFalse);
+      expect(result.release?.id, '42');
+      expect(result.release?.versionCode, 10023);
+      expect(result.release?.downloads.single.label, isNull);
+      expect(result.release?.downloads.single.fileName, 'app.apk');
     });
   });
 }

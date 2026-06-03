@@ -1,3 +1,8 @@
+import 'package:json_annotation/json_annotation.dart';
+
+part 'app_update_release.g.dart';
+
+@JsonSerializable(fieldRename: FieldRename.snake, createToJson: false)
 class AppUpdateReleaseDownload {
   const AppUpdateReleaseDownload({
     required this.platform,
@@ -6,26 +11,25 @@ class AppUpdateReleaseDownload {
     required this.fileName,
   });
 
+  @JsonKey(fromJson: _nullableStringFromJson)
   final String? platform;
+  @JsonKey(fromJson: _nullableStringFromJson)
   final String? label;
+  @JsonKey(fromJson: _nullableStringFromJson)
   final String? downloadUrl;
+  @JsonKey(fromJson: _nullableStringFromJson)
   final String? fileName;
 
-  factory AppUpdateReleaseDownload.fromJson(Map<String, dynamic> json) {
-    String? readString(String key) {
-      final value = json[key]?.toString().trim() ?? '';
-      return value.isEmpty ? null : value;
-    }
+  factory AppUpdateReleaseDownload.fromJson(Map<String, dynamic> json) =>
+      _$AppUpdateReleaseDownloadFromJson(json);
 
-    return AppUpdateReleaseDownload(
-      platform: readString('platform'),
-      label: readString('label'),
-      downloadUrl: readString('download_url'),
-      fileName: readString('file_name'),
-    );
+  static String? _nullableStringFromJson(Object? value) {
+    final normalized = value?.toString().trim() ?? '';
+    return normalized.isEmpty ? null : normalized;
   }
 }
 
+@JsonSerializable(fieldRename: FieldRename.snake, createToJson: false)
 class AppUpdateRelease {
   const AppUpdateRelease({
     required this.id,
@@ -38,79 +42,74 @@ class AppUpdateRelease {
     required this.changelog,
   });
 
+  @JsonKey(fromJson: _nullableStringFromJson)
   final String? id;
+  @JsonKey(fromJson: _nullableStringFromJson)
   final String? appName;
+  @JsonKey(fromJson: _nullableStringFromJson)
   final String? versionName;
+  @JsonKey(fromJson: _nullableIntFromJson)
   final int? versionCode;
+  @JsonKey(fromJson: _nullableBoolFromJson)
   final bool? forceUpdate;
+  @JsonKey(fromJson: _nullableStringFromJson)
   final String? downloadUrl;
+  @JsonKey(fromJson: _downloadsFromJson)
   final List<AppUpdateReleaseDownload> downloads;
+  @JsonKey(fromJson: _nullableStringFromJson)
   final String? changelog;
 
-  factory AppUpdateRelease.fromJson(Map<String, dynamic> json) {
-    int? readInt(String key) {
-      final value = json[key];
-      if (value is int) {
-        return value;
-      }
-      if (value is num) {
-        return value.toInt();
-      }
-      if (value is String) {
-        return int.tryParse(value.trim());
-      }
-      return null;
-    }
+  factory AppUpdateRelease.fromJson(Map<String, dynamic> json) =>
+      _$AppUpdateReleaseFromJson(json);
 
-    bool? readBool(String key) {
-      final value = json[key];
-      if (value is bool) {
-        return value;
-      }
-      if (value is num) {
-        return value != 0;
-      }
-      if (value is String) {
-        final normalized = value.trim().toLowerCase();
-        if (normalized == 'true' || normalized == '1') {
-          return true;
-        }
-        if (normalized == 'false' || normalized == '0') {
-          return false;
-        }
-      }
-      return null;
-    }
+  static String? _nullableStringFromJson(Object? value) {
+    final normalized = value?.toString().trim() ?? '';
+    return normalized.isEmpty ? null : normalized;
+  }
 
-    String? readString(String key) {
-      final value = json[key]?.toString().trim() ?? '';
-      return value.isEmpty ? null : value;
+  static int? _nullableIntFromJson(Object? value) {
+    if (value is int) {
+      return value;
     }
+    if (value is num) {
+      return value.toInt();
+    }
+    if (value is String) {
+      return int.tryParse(value.trim());
+    }
+    return null;
+  }
 
-    List<AppUpdateReleaseDownload> readDownloads(String key) {
-      final value = json[key];
-      if (value is! List) {
-        return const [];
+  static bool? _nullableBoolFromJson(Object? value) {
+    if (value is bool) {
+      return value;
+    }
+    if (value is num) {
+      return value != 0;
+    }
+    if (value is String) {
+      final normalized = value.trim().toLowerCase();
+      if (normalized == 'true' || normalized == '1') {
+        return true;
       }
-      return value
-          .whereType<Map>()
-          .map(
-            (item) => AppUpdateReleaseDownload.fromJson(
-              item.map((key, value) => MapEntry(key.toString(), value)),
-            ),
-          )
-          .toList(growable: false);
+      if (normalized == 'false' || normalized == '0') {
+        return false;
+      }
     }
+    return null;
+  }
 
-    return AppUpdateRelease(
-      id: readString('id'),
-      appName: readString('app_name'),
-      versionName: readString('version_name'),
-      versionCode: readInt('version_code'),
-      forceUpdate: readBool('force_update'),
-      downloadUrl: readString('download_url'),
-      downloads: readDownloads('downloads'),
-      changelog: readString('changelog'),
-    );
+  static List<AppUpdateReleaseDownload> _downloadsFromJson(Object? value) {
+    if (value is! List) {
+      return const <AppUpdateReleaseDownload>[];
+    }
+    return value
+        .whereType<Map>()
+        .map(
+          (item) => AppUpdateReleaseDownload.fromJson(
+            item.map((key, value) => MapEntry(key.toString(), value)),
+          ),
+        )
+        .toList(growable: false);
   }
 }

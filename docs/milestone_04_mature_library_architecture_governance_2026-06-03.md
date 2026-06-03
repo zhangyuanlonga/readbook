@@ -385,7 +385,7 @@
 - [x] 盘点 REST 端点，区分普通 REST 与流式网关。
 - [x] 选择低风险 REST service 试点 typed request spec。
 - [x] 将 cookie jar 从手写 Map 迁到成熟 cookie 管理库。
-- [ ] 将 API 响应 DTO 迁移到生成模型。
+- [x] 将 API 响应 DTO 迁移到生成模型。
 - [x] 为网关 SSE parser 保留协议测试，避免误迁。
 
 通过标准：
@@ -404,6 +404,7 @@
 
 - `ApiClient` 新增 `ApiRequestSpec` / `requestSpec` 与 `ApiJsonDecoders`，为低风险 REST service 提供统一 typed request 入口，减少重复 `decoder` 样板。
 - `AppUpdateService`、`UserProfileService` 已切到 `requestSpec` 试点；保留现有 `ApiClient.request` 以兼容存量 service，小步迁移而不一次性重写。
+- `AppUpdateCheckResponseDto` / `AppUpdateRelease` / `UserProfile` 已接入 `json_serializable`，补齐低风险 REST API 响应 DTO 生成模型迁移；保留 `currentVersionCode` 计算、`username/account` 互为兜底、camelCase/蛇形别名与 scalar coercion 兼容规则。此项此前因 Phase 4.3-tail 的模型 codegen guard 尚未收敛而暂停，现已在 4.3-tail 完成后补齐。
 - `AppHttpClient` 已从手写 host->cookie `Map` 迁移到 `cookie_jar`，继续通过 `RequestContext.enabledCookieJar` 控制是否启用 cookie 行为；`test/core/network/http_client_test.dart` 覆盖 cookie 复用回归。
 - `ServerDiscoverGatewayService` 与 `ServerBookGatewayService` 新增内部 REST 边界 helper，统一在线书源 / 服务器书源网关 REST 请求参数、token、timeout 与错误 stage。
 - 服务器书源网关 SSE 目录流继续保留手写 parser，不迁到 `retrofit`；通过 `test/features/search/application/server_book_gateway_service_test.dart` 和既有 gateway failure 测试维持协议回归。
