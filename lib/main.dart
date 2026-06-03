@@ -1,7 +1,8 @@
 import 'package:shuxiang_reading_next/app/bootstrap.dart';
+import 'package:shuxiang_reading_next/app/error_monitoring_bootstrap.dart';
 
 Future<void> main() async {
-  await bootstrap();
+  await runAppWithErrorMonitoring(bootstrap);
 }
 
 //  ```bash

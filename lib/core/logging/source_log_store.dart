@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 
 import '../errors/app_exception.dart';
+import 'error_monitoring_service.dart';
 
 enum AppLogLevel { info, warn, error }
 
@@ -24,7 +25,7 @@ class AppLogEntry {
   final AppException? exception;
 
   Map<String, Object?> get details {
-    return <String, Object?>{
+    final merged = <String, Object?>{
       ...context,
       if (exception != null) ...{
         'code': exception!.code.name,
@@ -34,6 +35,7 @@ class AppLogEntry {
         'briefMessage': exception!.briefMessage,
       },
     }..removeWhere((key, value) => value == null);
+    return AppErrorMonitoringService.sanitizeContext(merged);
   }
 
   String toMultilineText() {

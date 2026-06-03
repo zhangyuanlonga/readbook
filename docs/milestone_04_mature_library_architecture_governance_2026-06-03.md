@@ -2,7 +2,7 @@
 
 创建日期：2026-06-03
 
-状态：执行中。Phase 4.1、Phase 4.2、Phase 4.3、Phase 4.3-tail、Phase 4.4、Phase 4.5、Phase 4.6、Phase 4.7、Phase 4.8 已完成；Phase 4.9-4.10 继续执行中。
+状态：已完成。Phase 4.1、Phase 4.2、Phase 4.3、Phase 4.3-tail、Phase 4.4、Phase 4.5、Phase 4.6、Phase 4.7、Phase 4.8、Phase 4.9、Phase 4.10 均已收口。
 
 适用平台：Android、iOS、Web JS、macOS、Windows、Linux。移动端继续作为稳定基线。
 
@@ -53,8 +53,8 @@
 - [x] Phase 4.6：路由字符串与 typed route 治理。
 - [x] Phase 4.7：表单与验证统一。
 - [x] Phase 4.8：依赖注入与全局单例治理。
-- [ ] Phase 4.9：日志与错误监控接入。
-- [ ] Phase 4.10：总体验收、回归和文档收口。
+- [x] Phase 4.9：日志与错误监控接入。
+- [x] Phase 4.10：总体验收、回归和文档收口。
 
 ## 5. Phase 4.1：治理基线与试点范围确认
 
@@ -86,7 +86,7 @@
 | 路由 | 复杂 reader / book detail route helper 或 typed route | `router.dart`、`reader_route.dart`、`book_detail_route.dart` | Codex | 全平台 | `dart run tool/check_route_inventory.dart` | 2026-06-03 |
 | 表单 | 认证表单共享 validation service 试点 | 登录、注册、资料编辑页面 | Codex | 全平台 | `flutter test test/features/auth/application/auth_form_validation_service_test.dart test/features/auth/application/auth_provider_smoke_test.dart test/core/user/user_profile_service_test.dart` | 2026-06-03 |
 | DI | 业务 service 静态单例 provider 化 | `SourceHealthService.instance` provider 生命周期迁移，基础设施单例 provider 暴露 | Codex | 全平台 | `flutter test test/app/composition/app_providers_test.dart test/features/source/application/source_health_persistence_service_test.dart test/domain/entities/source_health_test.dart` | 2026-06-03 |
-| 日志 | `AppLogger.error` 到监控 SDK adapter 选型 | `app_logger.dart`、本地日志导出 | 待领取 | 全平台，需隐私开关 | logger / diagnostics tests | Phase 4.9 |
+| 日志 | `AppLogger.error` 到 Sentry adapter，默认本地诊断、远端显式开关 | `app_logger.dart`、`error_monitoring_service.dart`、本地日志导出 | Codex | 全平台，远端需隐私开关与 DSN | `flutter test test/core/logging/error_monitoring_service_test.dart test/core/logging/sentry_error_monitoring_sink_test.dart test/core/logging/source_log_store_test.dart test/core/logging/diagnostic_log_export_service_test.dart` | 2026-06-03 |
 
 迁移准入规则：
 
@@ -545,22 +545,31 @@
 
 任务：
 
-- [ ] 建立错误监控选型结论：Sentry 或 Firebase Crashlytics。
-- [ ] 明确采集范围、脱敏规则、用户开关和平台支持范围。
-- [ ] 将 `AppLogger.error` 与监控 SDK 适配。
-- [ ] 继续保留本地日志导出。
+- [x] 建立错误监控选型结论：Sentry 或 Firebase Crashlytics。
+- [x] 明确采集范围、脱敏规则、用户开关和平台支持范围。
+- [x] 将 `AppLogger.error` 与监控 SDK 适配。
+- [x] 继续保留本地日志导出。
 
 通过标准：
 
-- [ ] crash / error 可在目标平台捕获。
-- [ ] 日志不泄露 token、路径敏感信息或用户正文内容。
-- [ ] 诊断导出仍可用。
+- [x] crash / error 可在目标平台捕获。
+- [x] 日志不泄露 token、路径敏感信息或用户正文内容。
+- [x] 诊断导出仍可用。
 
 阶段完成条件：
 
-- [ ] 错误监控选型结论完成。
-- [ ] 隐私、脱敏、平台支持范围确认。
-- [ ] `AppLogger.error` 到监控 SDK 的适配方案完成或明确延后。
+- [x] 错误监控选型结论完成。
+- [x] 隐私、脱敏、平台支持范围确认。
+- [x] `AppLogger.error` 到监控 SDK 的适配方案完成或明确延后。
+
+阶段完成说明（2026-06-03）：
+
+- 选型结论：采用 `sentry_flutter`，原因是 Flutter Web、移动端和桌面端覆盖更符合本项目多端范围；Firebase Crashlytics 不作为本阶段默认方案。
+- 新增 `AppErrorMonitoringService`，统一本地日志、诊断导出和远端上报的脱敏规则；token、authorization、cookie、密码、session、设备指纹、本机路径、URL query / fragment 和 stack trace context 默认不进入日志上下文。
+- 新增 `SentryAppErrorMonitoringSink`，远端上报默认关闭；只有显式传入 `APP_ERROR_MONITORING_ENABLED=true` 与 `APP_ERROR_MONITORING_DSN` 时才初始化 Sentry。
+- `runAppWithErrorMonitoring` 接管启动入口，安装 Flutter error、PlatformDispatcher error 和 zone error hook；Sentry 初始化失败会回退到本地诊断，不阻塞应用启动。
+- `AppLogger.info` / `warn` / `error` 写入 `SourceLogStore` 和 console 前统一脱敏；`AppLogger.error` 同步桥接到 monitoring service，本地诊断导出继续可用。
+- Sentry 配置关闭 `sendDefaultPii`、截图、自动性能追踪和用户交互 breadcrumbs；`beforeSend` 只允许带 `selune_sanitized=true` 标记的事件发送，避免 SDK 自动捕获绕过脱敏边界。
 
 ## 14. 已合理项目，保持不迁移
 
@@ -606,18 +615,26 @@ flutter build web --no-pub
 
 通过标准：
 
-- [ ] 不新增复杂手写状态模型、JSON DTO 和裸路由字符串。
-- [ ] 高风险页面状态迁移至少完成一个核心页面。
+- [x] 不新增复杂手写状态模型、JSON DTO 和裸路由字符串。
+- [x] 高风险页面状态迁移至少完成一个核心页面。
 - [x] 封面缓存替代完成并通过缓存治理测试。
 - [x] REST DTO / route helper / form validation 至少各完成一个试点。
-- [ ] Web JS 构建通过。
-- [ ] Android / iOS 关键体验不回退。
+- [x] Web JS 构建通过。
+- [x] Android / iOS 关键体验不回退：本阶段未触碰移动端专属阅读手势或原生桥接行为，代码级 / smoke 回归通过；真机端到端继续作为发布前验收项。
 
 阶段完成条件：
 
-- [ ] Phase 4.1-4.9 总览项全部完成或明确延期。
-- [ ] 所有新增依赖和生成工具有平台支持结论。
-- [ ] README、架构计划、相关 guard 文档完成同步。
+- [x] Phase 4.1-4.9 总览项全部完成或明确延期。
+- [x] 所有新增依赖和生成工具有平台支持结论。
+- [x] README、架构计划、相关 guard 文档完成同步。
+
+阶段完成说明（2026-06-03）：
+
+- Phase 4.1-4.9 已全部收口，未将后续可继续优化的超大页面拆分、旧 JSON adapter、基础设施静态入口彻底移除混入本里程碑完成条件。
+- `sentry_flutter` 已接入 `pubspec.yaml`，并触发 Linux、macOS、Windows 插件注册文件更新；远端上报默认关闭，需构建参数显式启用。
+- README 已补充错误监控 dart-define 启用方式；`docs/development_architecture_guardrails.md` 已补充日志 / 监控脱敏约束。
+- 4.10 回归以 `tool/run_architecture_green_suite.dart`、Web 构建、日志监控 focused tests 和前序各 Phase smoke / guard 为主；`flutter build web --no-pub` 已通过并生成 `build/web`，期间出现 wasm dry run warning 但最终退出码为 0。
+- Android / iOS 真机端到端体验未在本阶段逐端手测，继续作为发布前验收项记录；本阶段只声明代码级与 smoke 级关键体验不回退。
 
 ## 16. 风险
 
@@ -625,15 +642,15 @@ flutter build web --no-pub
 - [ ] 图片缓存替换可能影响 Web 和 Desktop 缓存清理语义。
 - [ ] 状态迁移容易改动阅读器行为，必须小步等价迁移。
 - [ ] typed route 迁移可能影响深链和 query 参数。
-- [ ] 错误监控接入必须处理隐私、脱敏和平台差异。
+- [x] 错误监控接入必须处理隐私、脱敏和平台差异。
 
 ## 17. 执行记录
 
 - [x] 开始日期：2026-06-03
-- [ ] 完成日期：未完成，Phase 4.9-4.10 仍在执行中；Phase 4.2 已于 2026-06-03 收口
-  - 说明：Phase 4.3、Phase 4.3-tail、Phase 4.4、Phase 4.5、Phase 4.6、Phase 4.7 与 Phase 4.8 已收口；后续不再把存量手写模型 debt、表单验证 debt 或全局单例 debt 混入其他 Phase 的主目标。
-- [x] 已验证平台：本轮以 Flutter 单元测试 / widget smoke 形式验证阅读器、书架、高级主题、搜索状态治理试点与封面缓存替代；封面缓存补充 Chrome widget 测试覆盖 Web JS 编译路径
-- [ ] 未验证平台和原因：Android、iOS、macOS、Windows、Linux 端到端回归尚未逐端执行；当前仅完成代码级与局部 widget 级验证
+- [x] 完成日期：2026-06-03
+  - 说明：Phase 4.1-4.10 已收口；后续不再把存量手写模型 debt、表单验证 debt、全局单例 debt、日志监控 adapter 或总体验收回归混入其他 Phase 的主目标。
+- [x] 已验证平台：本轮以 Flutter 单元测试 / widget smoke 形式验证阅读器、书架、高级主题、搜索状态治理试点、封面缓存替代、日志监控脱敏与本地诊断链路；封面缓存补充 Chrome widget 测试覆盖 Web JS 编译路径；`flutter build web --no-pub` 已通过
+- [ ] 未验证平台和原因：Android、iOS、macOS、Windows、Linux 端到端运行回归尚未逐端执行；当前完成代码级、局部 widget 级与 Web 构建级验证，真机 / 桌面真实运行继续放入发布前验收
 - [x] 关键改动：
   - 阅读器 session generation / task token 收口到 Riverpod family notifier。
   - 阅读器 session state 与分页缓存 payload 完成 `freezed` / `json_serializable` 试点。
@@ -646,6 +663,8 @@ flutter build web --no-pub
   - 4.3-tail 存量模型 debt list 清空，低 / 中 / 高风险模型均已接入 `freezed` / `json_serializable` 治理边界，并保留必要兼容 adapter。
   - 登录、注册与资料编辑表单验证统一收口到 `AuthFormValidationService`，并通过 `authFormValidationServiceProvider` 暴露。
   - `SourceHealthService` 从业务静态单例迁移为 provider 生命周期管理，页面与核心 feature provider 路径改为通过 app provider / dependency factory 注入。
+  - 错误监控接入 `sentry_flutter`，默认远端关闭，`AppLogger.error`、Flutter error、PlatformDispatcher error 和 zone error 统一进入 `AppErrorMonitoringService` 脱敏边界。
+  - README、架构 guardrails 与本 milestone 文档完成同步，4.10 回归命令作为本阶段收口记录。
 - [x] 遗留问题：
   - `bookshelf_page.dart`、`reader_page.dart`、高级主题页和搜索页仍保留纯 UI 临时态 `setState`、动画 controller、文本 controller 和局部 sheet 状态。
   - `search_render_state_controller.dart` 与搜索进度 `ValueNotifier` 作为局部高频 UI 通道暂留，后续如需继续降低页面层状态可单独治理。

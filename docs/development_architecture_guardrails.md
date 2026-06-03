@@ -91,6 +91,7 @@ shared
 - 如网络、日志、错误、设备、缓存、认证、系统能力封装
 - 可放无业务语义的平台能力封装和文件/媒体/设备适配
 - 不放具体业务页面逻辑
+- 日志、诊断导出和远端错误监控必须通过统一脱敏入口；不得直接上报 token、cookie、密码、本机路径、URL query / fragment、设备指纹或用户正文内容
 
 `lib/domain/`
 
@@ -672,6 +673,7 @@ UI 改动必须以“同一套业务语义，多端不同呈现”为原则：
 - Web 编译边界：`flutter analyze` + `flutter build web --debug --no-web-resources-cdn --no-wasm-dry-run`。
 - 数据库/条件导入：`flutter analyze` + 当前端测试 + Web 或 native build 基线。
 - 模型 / DTO / 状态对象：`flutter analyze` + `dart run tool/check_model_codegen_guard.dart` + 对应兼容测试。
+- 日志 / 错误监控：`flutter analyze` + logging tests；新增远端上报字段必须证明经过 `AppErrorMonitoringService` 脱敏。
 - Web 首屏验证必须使用本地 Flutter Web 资源；`flutter run -d chrome` 和 Web 产物构建默认带 `--no-web-resources-cdn`，避免 CanvasKit / Roboto 依赖外网导致白屏。
 - Web 首屏还必须检查插件注册日志；native/mobile 优先插件如编码检测、PDF 不得在 Web 注册阶段抛错，必要时用 Web stub 或条件依赖把能力降级到 application 层。本地 WebView / JS runtime 已移除，不得作为 Web 首屏依赖重新引入。
 - 桌面 UI 改动至少验证一个真实桌面端 run 日志，RenderFlex overflow 视为失败，不能只依赖 widget smoke。

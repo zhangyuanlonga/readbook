@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:logger/logger.dart';
 
 import '../errors/app_exception.dart';
+import 'error_monitoring_service.dart';
 import 'source_log_store.dart';
 
 class AppLogger {
@@ -12,29 +15,35 @@ class AppLogger {
     printer: PrettyPrinter(methodCount: 0, errorMethodCount: 8),
   );
   final SourceLogStore _store = SourceLogStore.instance;
+  final AppErrorMonitoringService _monitoring =
+      AppErrorMonitoringService.instance;
 
   void info(String message, {Map<String, Object?> context = const {}}) {
+    final sanitizedMessage = AppErrorMonitoringService.sanitizeMessage(message);
+    final sanitizedContext = AppErrorMonitoringService.sanitizeContext(context);
     _store.add(
       AppLogEntry(
         timestamp: DateTime.now(),
         level: AppLogLevel.info,
-        message: message,
-        context: context,
+        message: sanitizedMessage,
+        context: sanitizedContext,
       ),
     );
-    _logger.i(_joinMessage(message, context));
+    _logger.i(_joinMessage(sanitizedMessage, sanitizedContext));
   }
 
   void warn(String message, {Map<String, Object?> context = const {}}) {
+    final sanitizedMessage = AppErrorMonitoringService.sanitizeMessage(message);
+    final sanitizedContext = AppErrorMonitoringService.sanitizeContext(context);
     _store.add(
       AppLogEntry(
         timestamp: DateTime.now(),
         level: AppLogLevel.warn,
-        message: message,
-        context: context,
+        message: sanitizedMessage,
+        context: sanitizedContext,
       ),
     );
-    _logger.w(_joinMessage(message, context));
+    _logger.w(_joinMessage(sanitizedMessage, sanitizedContext));
   }
 
   void error(
@@ -51,21 +60,31 @@ class AppLogger {
         'requestUrl': exception.requestUrl,
       },
     };
+    final sanitizedMessage = AppErrorMonitoringService.sanitizeMessage(message);
+    final sanitizedMerged = AppErrorMonitoringService.sanitizeContext(merged);
 
     _store.add(
       AppLogEntry(
         timestamp: DateTime.now(),
         level: AppLogLevel.error,
-        message: message,
-        context: merged,
-        exception: exception,
+        message: sanitizedMessage,
+        context: sanitizedMerged,
       ),
     );
 
     _logger.e(
-      _joinMessage(message, merged),
-      error: exception?.cause ?? exception,
+      _joinMessage(sanitizedMessage, sanitizedMerged),
+      error: AppErrorMonitoringService.sanitizeThrowableForLog(
+        exception?.cause ?? exception,
+      ),
       stackTrace: exception?.stackTrace,
+    );
+    unawaited(
+      _monitoring.captureLoggerError(
+        message,
+        exception: exception,
+        context: context,
+      ),
     );
   }
 

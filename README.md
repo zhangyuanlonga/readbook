@@ -73,6 +73,16 @@ GitHub Actions 也提供了手动打包入口：`Actions -> Multiplatform Build 
 - `PDFIUM_DOWNLOAD_BASE_URL`：PDF 阅读原生库下载基地址，默认 `https://ghfast.top/https://github.com/bblanchon/pdfium-binaries/releases/download`
 - `APPREAD_APP_NAME`：可选，默认 `selune`
 
+错误监控默认只启用本地诊断日志，不会上报远端。需要接入 Sentry 时，构建或运行命令显式传入：
+
+```bash
+--dart-define=APP_ERROR_MONITORING_ENABLED=true \
+--dart-define=APP_ERROR_MONITORING_DSN=<sentry-dsn> \
+--dart-define=APP_ERROR_MONITORING_ENVIRONMENT=production
+```
+
+远端监控仅发送经过 `AppErrorMonitoringService` 脱敏的错误事件；token、cookie、密码、本机路径、URL query / fragment、设备指纹等敏感信息会被过滤。本地诊断导出继续可用，也复用同一套脱敏规则。
+
 更完整的工程交付与移动端发布说明见：`docs/engineering_delivery_guide.md`
 
 ## 开发检查
