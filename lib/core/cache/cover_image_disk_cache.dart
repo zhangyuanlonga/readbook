@@ -1,359 +1,143 @@
-import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
-
-import 'package:crypto/crypto.dart' as crypto;
-import 'package:dio/dio.dart';
-import 'package:flutter/services.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
 class CoverImageDiskCache {
-  CoverImageDiskCache({Dio? dio})
-    : _dio =
-          dio ??
-          Dio(
-            BaseOptions(
-              connectTimeout: const Duration(seconds: 8),
-              receiveTimeout: const Duration(seconds: 15),
-              responseType: ResponseType.bytes,
-              followRedirects: true,
-              validateStatus:
-                  (statusCode) =>
-                      statusCode != null &&
-                      statusCode >= 200 &&
-                      statusCode < 300,
-              headers: const {
-                'User-Agent':
-                    'Mozilla/5.0 (Linux; Android 13; Pixel 7 Build/TQ3A.230901.001) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
-              },
-            ),
-          );
+  CoverImageDiskCache({CacheManager? cacheManager})
+    : _cacheManager = cacheManager;
 
   static final CoverImageDiskCache instance = CoverImageDiskCache();
 
-  final Dio _dio;
-  final Map<String, Future<File?>> _inflight = <String, Future<File?>>{};
-  final _AsyncSemaphore _downloadGate = _AsyncSemaphore(4);
-  Directory? _cacheDir;
+  static const Duration defaultStalePeriod = Duration(days: 30);
+  static const int defaultMaxEntries = 300;
+  static const Map<String, String> defaultHttpHeaders = <String, String>{
+    'User-Agent':
+        'Mozilla/5.0 (Linux; Android 13; Pixel 7 Build/TQ3A.230901.001) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+  };
 
-  static const Duration _stalePeriod = Duration(days: 30);
+  static const String _cacheKey = 'shuxiang_reading_next_cover_images';
 
-  Future<File?> resolve(String imageUrl) async {
-    final normalizedUrl = imageUrl.trim();
-    if (normalizedUrl.isEmpty) {
-      return null;
-    }
+  CacheManager? _cacheManager;
 
-    final uri = Uri.tryParse(normalizedUrl);
-    if (uri == null) {
-      return null;
-    }
-
-    if (uri.scheme == 'file') {
-      final localFile = File.fromUri(uri);
-      return await _hasReadableBytes(localFile) ? localFile : null;
-    }
-
-    if (uri.scheme != 'http' && uri.scheme != 'https') {
-      return null;
-    }
-
-    final cacheKey = crypto.md5.convert(utf8.encode(normalizedUrl)).toString();
-    final task = _inflight.putIfAbsent(
-      cacheKey,
-      () => _resolveInternal(cacheKey: cacheKey, imageUrl: normalizedUrl),
-    );
-
-    try {
-      return await task;
-    } finally {
-      _inflight.remove(cacheKey);
-    }
-  }
+  BaseCacheManager get cacheManager => _ensureCacheManager();
 
   Future<int> clearAll() async {
-    final directory = await _ensureCacheDir();
-    if (!await directory.exists()) {
-      return 0;
-    }
-
-    var deletedCount = 0;
-    await for (final entity in directory.list(followLinks: false)) {
-      if (entity is! File) {
-        continue;
-      }
-
-      try {
-        if (await entity.exists()) {
-          await entity.delete();
-          deletedCount++;
-        }
-      } catch (_) {
-        // Ignore single-file cleanup failure and continue.
-      }
-    }
-
-    return deletedCount;
-  }
-
-  Future<int> countAll() async {
-    final directory = await _ensureCacheDir();
-    if (!await directory.exists()) {
-      return 0;
-    }
-
-    var count = 0;
-    await for (final entity in directory.list(followLinks: false)) {
-      if (entity is File) {
-        count++;
-      }
-    }
+    final count = await countAll();
+    await _ensureCacheManager().emptyCache();
     return count;
   }
 
-  Future<int> estimateAllBytes() async {
-    final directory = await _ensureCacheDir();
-    if (!await directory.exists()) {
+  Future<int> countAll() async {
+    if (kIsWeb) {
       return 0;
     }
+    final objects = await _loadCacheObjects();
+    return objects.length;
+  }
 
-    var bytes = 0;
-    await for (final entity in directory.list(followLinks: false)) {
-      if (entity is! File) {
-        continue;
-      }
-      try {
-        bytes += await entity.length();
-      } catch (_) {
-        // Ignore single-file stat failure.
-      }
+  Future<int> estimateAllBytes() async {
+    if (kIsWeb) {
+      return 0;
     }
-    return bytes;
+    return _ensureCacheManager().store.getCacheSize();
   }
 
   Future<int> compact({
-    Duration stalePeriod = _stalePeriod,
-    int maxEntries = 300,
+    Duration stalePeriod = defaultStalePeriod,
+    int maxEntries = defaultMaxEntries,
     int maxBytes = -1,
   }) async {
-    final directory = await _ensureCacheDir();
-    if (!await directory.exists()) {
+    if (kIsWeb) {
       return 0;
     }
 
-    final files = <File>[];
-    await for (final entity in directory.list(followLinks: false)) {
-      if (entity is File) {
-        files.add(entity);
-      }
+    final cacheManager = _ensureCacheManager();
+    final repository = cacheManager.config.repo;
+    await repository.open();
+    final removals = <String>{};
+
+    for (final object in await repository.getOldObjects(stalePeriod)) {
+      removals.add(object.key);
+    }
+    for (final object in await repository.getObjectsOverCapacity(maxEntries)) {
+      removals.add(object.key);
     }
 
-    var deletedCount = 0;
-    var totalBytes = 0;
-    final retainedFiles = <File>[];
-    final now = DateTime.now();
-    for (final file in files) {
-      try {
-        final stat = await file.stat();
-        if (now.difference(stat.modified) > stalePeriod) {
-          await file.delete();
-          deletedCount++;
-          continue;
-        }
-        totalBytes += stat.size;
-        retainedFiles.add(file);
-      } catch (_) {
-        // Ignore single-file cleanup failure and continue.
-      }
-    }
-
-    retainedFiles.sort(
-      (a, b) => a.statSync().modified.compareTo(b.statSync().modified),
-    );
-    var overflowCount = retainedFiles.length - maxEntries.clamp(0, 1 << 30);
     final normalizedMaxBytes = maxBytes < 0 ? -1 : maxBytes;
-    for (final file in retainedFiles) {
-      if (overflowCount <= 0 &&
-          (normalizedMaxBytes < 0 || totalBytes <= normalizedMaxBytes)) {
-        break;
-      }
-      try {
-        if (await file.exists()) {
-          final length = await file.length();
-          await file.delete();
-          deletedCount++;
-          overflowCount--;
-          totalBytes -= length;
+    if (normalizedMaxBytes >= 0) {
+      var retained = await repository.getAllObjects();
+      retained = retained
+        .where((object) => !removals.contains(object.key))
+        .toList(growable: false)..sort((a, b) {
+        final leftTouched = a.touched ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final rightTouched =
+            b.touched ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return leftTouched.compareTo(rightTouched);
+      });
+
+      var retainedBytes = retained.fold<int>(
+        0,
+        (sum, object) => sum + (object.length ?? 0),
+      );
+      for (final object in retained) {
+        if (retainedBytes <= normalizedMaxBytes) {
+          break;
         }
-      } catch (_) {
-        // Ignore single-file cleanup failure and continue.
+        removals.add(object.key);
+        retainedBytes -= object.length ?? 0;
       }
     }
 
-    return deletedCount;
+    for (final key in removals) {
+      await cacheManager.removeFile(key);
+    }
+    return removals.length;
   }
 
   Future<bool> clearByUrl(String imageUrl) async {
-    final file = await _cacheFileForUrl(imageUrl);
-    if (file == null) {
+    final normalizedUrl = _normalizeHttpUrl(imageUrl);
+    if (normalizedUrl == null) {
       return false;
     }
 
-    try {
-      if (await file.exists()) {
-        await file.delete();
-        return true;
-      }
-    } catch (_) {
-      return false;
-    }
-    return false;
+    final cacheManager = _ensureCacheManager();
+    final cached = await cacheManager.getFileFromCache(
+      normalizedUrl,
+      ignoreMemCache: true,
+    );
+    await cacheManager.removeFile(normalizedUrl);
+    return cached != null;
   }
 
-  Future<File?> _resolveInternal({
-    required String cacheKey,
-    required String imageUrl,
-  }) async {
-    final directory = await _ensureCacheDir();
-    final file = File(p.join(directory.path, cacheKey));
-
-    try {
-      if (await _isUsable(file)) {
-        return file;
-      }
-    } catch (_) {
-      // Ignore cache read failures and retry network download.
-    }
-
-    return _downloadGate.run(() async {
-      try {
-        if (await _isUsable(file)) {
-          return file;
-        }
-      } catch (_) {
-        // Ignore cache read failures and retry network download.
-      }
-
-      try {
-        final response = await _dio.get<List<int>>(imageUrl);
-        final bytes = response.data ?? const <int>[];
-        if (bytes.isEmpty) {
-          return await _hasReadableBytes(file) ? file : null;
-        }
-
-        final tempFile = File('${file.path}.tmp');
-        await tempFile.writeAsBytes(bytes, flush: true);
-        if (await file.exists()) {
-          await file.delete();
-        }
-        await tempFile.rename(file.path);
-        return file;
-      } catch (_) {
-        return await _hasReadableBytes(file) ? file : null;
-      }
-    });
+  Future<List<CacheObject>> _loadCacheObjects() async {
+    final repository = _ensureCacheManager().config.repo;
+    await repository.open();
+    return repository.getAllObjects();
   }
 
-  Future<File?> _cacheFileForUrl(String imageUrl) async {
+  CacheManager _ensureCacheManager() {
+    return _cacheManager ??= _buildDefaultCacheManager();
+  }
+
+  static CacheManager _buildDefaultCacheManager() {
+    return CacheManager(
+      Config(
+        _cacheKey,
+        stalePeriod: defaultStalePeriod,
+        maxNrOfCacheObjects: defaultMaxEntries,
+      ),
+    );
+  }
+
+  static String? _normalizeHttpUrl(String imageUrl) {
     final normalizedUrl = imageUrl.trim();
     if (normalizedUrl.isEmpty) {
       return null;
     }
 
     final uri = Uri.tryParse(normalizedUrl);
-    if (uri == null || !uri.hasScheme) {
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
       return null;
     }
-
-    final cacheKey = crypto.md5.convert(utf8.encode(normalizedUrl)).toString();
-    final directory = await _ensureCacheDir();
-    return File(p.join(directory.path, cacheKey));
-  }
-
-  Future<Directory> _ensureCacheDir() async {
-    final cached = _cacheDir;
-    if (cached != null) {
-      return cached;
-    }
-
-    final baseDir = await _resolveBaseDir();
-    final directory = Directory(
-      p.join(baseDir.path, 'shuxiang_reading_next', 'covers'),
-    );
-    if (!await directory.exists()) {
-      await directory.create(recursive: true);
-    }
-
-    _cacheDir = directory;
-    return directory;
-  }
-
-  Future<Directory> _resolveBaseDir() async {
-    final isFlutterTest = Platform.environment.containsKey('FLUTTER_TEST');
-    if (isFlutterTest) {
-      return Directory.systemTemp;
-    }
-
-    try {
-      return await getApplicationSupportDirectory();
-    } on MissingPluginException {
-      return Directory.systemTemp;
-    } catch (_) {
-      return Directory.systemTemp;
-    }
-  }
-
-  Future<bool> _isUsable(File file) async {
-    if (!await _hasReadableBytes(file)) {
-      return false;
-    }
-
-    final stat = await file.stat();
-    final age = DateTime.now().difference(stat.modified);
-    return age <= _stalePeriod;
-  }
-
-  Future<bool> _hasReadableBytes(File file) async {
-    if (!await file.exists()) {
-      return false;
-    }
-    return await file.length() > 0;
-  }
-}
-
-class _AsyncSemaphore {
-  _AsyncSemaphore(this._maxConcurrent);
-
-  final int _maxConcurrent;
-  final List<Completer<void>> _waiters = <Completer<void>>[];
-  int _running = 0;
-
-  Future<T> run<T>(Future<T> Function() task) async {
-    await _acquire();
-    try {
-      return await task();
-    } finally {
-      _release();
-    }
-  }
-
-  Future<void> _acquire() {
-    if (_running < _maxConcurrent) {
-      _running += 1;
-      return Future<void>.value();
-    }
-    final completer = Completer<void>();
-    _waiters.add(completer);
-    return completer.future;
-  }
-
-  void _release() {
-    if (_waiters.isEmpty) {
-      _running -= 1;
-      return;
-    }
-    final next = _waiters.removeAt(0);
-    next.complete();
+    return normalizedUrl;
   }
 }

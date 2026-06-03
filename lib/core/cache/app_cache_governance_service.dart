@@ -78,6 +78,11 @@ class AppCacheGovernanceService {
       maxBytes: AppCacheBudgetPolicies.paginationLayouts.maxBytes,
       stalePeriod: AppCacheBudgetPolicies.paginationLayouts.stalePeriod,
     );
+    await _coverImageDiskCache.compact(
+      maxEntries: AppCacheBudgetPolicies.coverImages.maxEntries,
+      maxBytes: AppCacheBudgetPolicies.coverImages.maxBytes,
+      stalePeriod: AppCacheBudgetPolicies.coverImages.stalePeriod,
+    );
   }
 
   Future<AppCacheGovernanceSnapshot> loadSnapshot() async {

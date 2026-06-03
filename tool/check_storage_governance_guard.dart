@@ -13,7 +13,6 @@ const Set<String> _approvedJsonBackedPreferenceWrites = <String>{
 };
 
 const Set<String> _approvedTemporaryDirectoryUsages = <String>{
-  'lib/core/cache/cover_image_disk_cache.dart|Directory.systemTemp',
   'lib/core/logging/diagnostic_log_export_service_io.dart|getTemporaryDirectory',
   'lib/data/datasources/local/app_database_connection_native.dart|Directory.systemTemp',
   'lib/features/mine/application/advanced_theme_service.dart|Directory.systemTemp.createTemp',

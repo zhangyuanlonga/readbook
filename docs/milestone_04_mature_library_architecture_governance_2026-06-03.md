@@ -347,23 +347,30 @@
 
 任务：
 
-- [ ] 建立统一 `ResolvedBookCover` 图片加载适配层。
-- [ ] 用成熟库替换 `CoverImageDiskCache` 的下载、磁盘缓存和过期逻辑。
-- [ ] 将封面缓存继续纳入 `AppCacheGovernanceService`。
-- [ ] 确认 Web JS、macOS、Android、iOS 行为一致或有明确降级。
-- [ ] 删除或冻结旧手写缓存实现。
+- [x] 建立统一 `ResolvedBookCover` 图片加载适配层。
+- [x] 用成熟库替换 `CoverImageDiskCache` 的下载、磁盘缓存和过期逻辑。
+- [x] 将封面缓存继续纳入 `AppCacheGovernanceService`。
+- [x] 确认 Web JS、macOS、Android、iOS 行为一致或有明确降级。
+- [x] 删除或冻结旧手写缓存实现。
 
 通过标准：
 
-- [ ] 封面加载、失败占位、缓存命中、清理都可验证。
-- [ ] 缓存治理不误删用户资产。
-- [ ] 不再维护手写下载并发和磁盘过期逻辑。
+- [x] 封面加载、失败占位、缓存命中、清理都可验证。
+- [x] 缓存治理不误删用户资产。
+- [x] 不再维护手写下载并发和磁盘过期逻辑。
 
 阶段完成条件：
 
-- [ ] 封面缓存替代完成。
-- [ ] Web / Native 降级策略确认。
-- [ ] 缓存治理测试通过。
+- [x] 封面缓存替代完成。
+- [x] Web / Native 降级策略确认。
+- [x] 缓存治理测试通过。
+
+阶段完成说明（2026-06-03）：
+
+- `ResolvedBookCoverView` 继续作为业务图片加载适配层，保留真实封面、自定义封面、主题图集封面与占位 fallback 的解析顺序。
+- `DiskCachedCoverImage` 已从 Stateful + `CoverImageDiskCache.resolve` 文件下载流程改为统一使用 `cached_network_image` + `flutter_cache_manager`；Web 走 `cached_network_image_web` 的 minimal support，无本地磁盘缓存，失败占位行为保持一致。
+- `CoverImageDiskCache` 保留类名作为兼容门面，但内部不再维护 Dio 下载、inflight 合并、并发信号量、文件命名和磁盘过期扫描；统计、清理、按 URL 清理与预算裁剪改走 `flutter_cache_manager` 的 cache manager / repository。
+- `AppCacheGovernanceService.enforceBudgets()` 已纳入封面缓存 compact；`test/core/cache/app_cache_governance_service_test.dart` 覆盖封面缓存预算治理调用，`test/app/widgets/disk_cached_cover_image_test.dart` 覆盖失败占位与 Native cache manager 注入。
 
 ## 9. Phase 4.5：API 客户端与网关通信治理
 

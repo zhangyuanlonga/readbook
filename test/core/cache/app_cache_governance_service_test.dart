@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shuxiang_reading_next/core/cache/app_cache_governance_service.dart';
+import 'package:shuxiang_reading_next/core/cache/cache_budget_policy.dart';
 import 'package:shuxiang_reading_next/core/cache/cover_image_disk_cache.dart';
 import 'package:shuxiang_reading_next/data/datasources/local/app_database.dart';
 import 'package:shuxiang_reading_next/features/reader/application/reader_pagination_cache_service.dart';
@@ -14,7 +15,7 @@ void main() {
     late Directory paginationDir;
     late Directory coverDir;
     late ReaderPaginationCacheService paginationCacheService;
-    late CoverImageDiskCache coverImageDiskCache;
+    late _TestCoverImageDiskCache coverImageDiskCache;
 
     setUp(() async {
       database = AppDatabase(executor: NativeDatabase.memory());
@@ -85,7 +86,7 @@ void main() {
       );
     });
 
-    test('enforces chapter and pagination cache budgets', () async {
+    test('enforces chapter, pagination and cover cache budgets', () async {
       for (var index = 0; index < 4; index++) {
         await database.upsertChapterCache(
           cacheKey: 'src|chapter_$index',
@@ -118,6 +119,15 @@ void main() {
 
       expect(chapterCount, lessThanOrEqualTo(4));
       expect(paginationCount, lessThanOrEqualTo(3));
+      expect(coverImageDiskCache.compactCalls, 1);
+      expect(
+        coverImageDiskCache.lastCompactMaxEntries,
+        AppCacheBudgetPolicies.coverImages.maxEntries,
+      );
+      expect(
+        coverImageDiskCache.lastCompactMaxBytes,
+        AppCacheBudgetPolicies.coverImages.maxBytes,
+      );
     });
   });
 }
@@ -126,6 +136,9 @@ class _TestCoverImageDiskCache extends CoverImageDiskCache {
   _TestCoverImageDiskCache(this._directory);
 
   final Directory _directory;
+  int compactCalls = 0;
+  int? lastCompactMaxEntries;
+  int? lastCompactMaxBytes;
 
   @override
   Future<int> countAll() async {
@@ -154,5 +167,17 @@ class _TestCoverImageDiskCache extends CoverImageDiskCache {
       bytes += await entity.length();
     }
     return bytes;
+  }
+
+  @override
+  Future<int> compact({
+    Duration stalePeriod = CoverImageDiskCache.defaultStalePeriod,
+    int maxEntries = CoverImageDiskCache.defaultMaxEntries,
+    int maxBytes = -1,
+  }) async {
+    compactCalls += 1;
+    lastCompactMaxEntries = maxEntries;
+    lastCompactMaxBytes = maxBytes;
+    return 0;
   }
 }

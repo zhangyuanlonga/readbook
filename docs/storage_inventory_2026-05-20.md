@@ -158,7 +158,7 @@
 
 | 模块 | 当前存储位置 | key / 目录规则 | 是否持续增长 | 是否可重建 | 是否用户资产 | 建议目标位置 | 风险等级 |
 |---|---|---|---|---|---|---|---|
-| 封面磁盘缓存 | `CoverImageDiskCache`，优先 `ApplicationSupport`，部分平台 fallback `Directory.systemTemp` | URL MD5 文件名 | 是 | 是 | 否 | 保持缓存目录，后续纳入预算协议 | 中 |
+| 封面磁盘缓存 | `CoverImageDiskCache` 兼容门面 + `cached_network_image` / `flutter_cache_manager`，Web 为 minimal support / 无本地磁盘缓存 | `flutter_cache_manager` cache key / repository | 是 | 是 | 否 | 已纳入 `AppCacheGovernanceService` 预算治理，移除自研下载与临时目录 fallback | 中 |
 | 阅读分页缓存 | `ApplicationSupport` 下分页缓存目录 | 章节签名文件 | 是 | 是 | 否 | 保持缓存目录，后续纳入预算协议 | 中 |
 | 章节缓存 | `chapter_caches` 数据库表 | `sourceId|chapterUrl` | 是 | 是 | 否 | 保持数据库缓存表 | 中 |
 | 搜索故障导出临时文件 | `ApplicationSupport` / 临时导出目录 | 按导出任务生成 | 否 | 是 | 否 | 保持临时导出 | 低 |
