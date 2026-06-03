@@ -2,7 +2,7 @@
 
 创建日期：2026-06-03
 
-状态：执行中。Phase 4.1、Phase 4.2、Phase 4.3、Phase 4.3-tail、Phase 4.4、Phase 4.5、Phase 4.6 已完成；Phase 4.7-4.10 继续执行中。
+状态：执行中。Phase 4.1、Phase 4.2、Phase 4.3、Phase 4.3-tail、Phase 4.4、Phase 4.5、Phase 4.6、Phase 4.7、Phase 4.8 已完成；Phase 4.9-4.10 继续执行中。
 
 适用平台：Android、iOS、Web JS、macOS、Windows、Linux。移动端继续作为稳定基线。
 
@@ -51,8 +51,8 @@
 - [x] Phase 4.4：网络图片与封面缓存替代。
 - [x] Phase 4.5：API 客户端与网关通信治理。
 - [x] Phase 4.6：路由字符串与 typed route 治理。
-- [ ] Phase 4.7：表单与验证统一。
-- [ ] Phase 4.8：依赖注入与全局单例治理。
+- [x] Phase 4.7：表单与验证统一。
+- [x] Phase 4.8：依赖注入与全局单例治理。
 - [ ] Phase 4.9：日志与错误监控接入。
 - [ ] Phase 4.10：总体验收、回归和文档收口。
 
@@ -82,10 +82,10 @@
 | 模型状态 | 阅读器 session state 使用 `freezed` 生成 `copyWith` / equality | `reader_session_state.dart` | Codex | 全平台 | `flutter test test/features/reader/application/reader_session_state_test.dart` | 2026-06-03 |
 | JSON payload | 分页缓存 slice 使用 `json_serializable` 生成 JSON 样板 | `reader_pagination_models.dart` | Codex | 全平台 | `flutter test test/features/reader/application/reader_pagination_cache_service_test.dart` | 2026-06-03 |
 | 图片缓存 | `ResolvedBookCover` 适配层 + `cached_network_image` / `flutter_cache_manager` 评估 | `resolved_book_cover.dart`、`disk_cached_cover_image.dart`、缓存治理服务 | Codex | Android、iOS、Web JS、Desktop | `flutter test test/app/widgets/resolved_book_cover_test.dart test/app/widgets/disk_cached_cover_image_test.dart test/core/cache/app_cache_governance_service_test.dart`；`flutter test --platform chrome test/app/widgets/disk_cached_cover_image_test.dart` | 2026-06-03 |
-| API | 低风险 REST DTO / service，暂不触碰 SSE 网关协议 | `api_client.dart`、在线书籍详情 / 账号类 DTO | 待领取 | 全平台 | API client 与网关协议测试 | Phase 4.5 |
-| 路由 | 复杂 reader / book detail route helper 或 typed route | `router.dart`、`reader_route.dart`、`book_detail_route.dart` | 待领取 | 全平台 | `dart run tool/check_route_inventory.dart` | Phase 4.6 |
-| 表单 | 认证表单共享 validation model 或 `formz` 试点 | 登录、注册、资料编辑页面 | 待领取 | 全平台 | auth / profile widget tests | Phase 4.7 |
-| DI | 业务 service 静态单例 provider 化 | `SourceHealthService.instance` 等业务单例 | 待领取 | 全平台 | provider override 单元测试 | Phase 4.8 |
+| API | 低风险 REST DTO / service，暂不触碰 SSE 网关协议 | `api_client.dart`、在线书籍详情 / 账号类 DTO | Codex | 全平台 | API client 与网关协议测试 | 2026-06-03 |
+| 路由 | 复杂 reader / book detail route helper 或 typed route | `router.dart`、`reader_route.dart`、`book_detail_route.dart` | Codex | 全平台 | `dart run tool/check_route_inventory.dart` | 2026-06-03 |
+| 表单 | 认证表单共享 validation service 试点 | 登录、注册、资料编辑页面 | Codex | 全平台 | `flutter test test/features/auth/application/auth_form_validation_service_test.dart test/features/auth/application/auth_provider_smoke_test.dart test/core/user/user_profile_service_test.dart` | 2026-06-03 |
+| DI | 业务 service 静态单例 provider 化 | `SourceHealthService.instance` provider 生命周期迁移，基础设施单例 provider 暴露 | Codex | 全平台 | `flutter test test/app/composition/app_providers_test.dart test/features/source/application/source_health_persistence_service_test.dart test/domain/entities/source_health_test.dart` | 2026-06-03 |
 | 日志 | `AppLogger.error` 到监控 SDK adapter 选型 | `app_logger.dart`、本地日志导出 | 待领取 | 全平台，需隐私开关 | logger / diagnostics tests | Phase 4.9 |
 
 迁移准入规则：
@@ -466,26 +466,33 @@
 
 推荐方案：
 
-- 认证表单和资料表单优先试点 `formz`。
+- 认证表单和资料表单优先试点共享 validation service；当前规模不额外引入 `formz`。
 - 简单设置表单继续使用 Flutter 原生控件和项目内部 validator。
 
 任务：
 
-- [ ] 将账号、密码、确认密码、邮箱、手机号等规则收敛到统一验证模型。
-- [ ] 登录 / 注册表单试点 `formz` 或共享 validation service。
-- [ ] 保留服务端错误展示和当前交互体验。
+- [x] 将账号、密码、确认密码、邮箱、手机号等规则收敛到统一验证模型。
+- [x] 登录 / 注册表单试点共享 validation service。
+- [x] 保留服务端错误展示和当前交互体验。
 
 通过标准：
 
-- [ ] 重复 validator 数量下降。
-- [ ] 表单错误文案一致。
-- [ ] 登录、注册、资料编辑测试通过。
+- [x] 重复 validator 数量下降。
+- [x] 表单错误文案一致。
+- [x] 登录、注册、资料编辑测试通过。
 
 阶段完成条件：
 
-- [ ] 认证或资料表单完成一个验证模型试点。
-- [ ] 重复 validator 有统一落点。
-- [ ] 表单交互和服务端错误展示不回退。
+- [x] 认证或资料表单完成一个验证模型试点。
+- [x] 重复 validator 有统一落点。
+- [x] 表单交互和服务端错误展示不回退。
+
+阶段完成说明（2026-06-03）：
+
+- 新增 `AuthFormValidationService`，统一账号、必填密码、新密码、确认密码、可选邮箱、可选手机号和密码强度展示规则。
+- `AuthPage` 登录 / 注册表单改为读取 `authFormValidationServiceProvider`，页面不再保留私有 required / confirm password validator。
+- `UserProfilePage` 资料编辑 sheet 改为复用同一验证服务，提交前统一校验账号、手机号、邮箱、新密码和确认密码，服务端错误展示保持原链路。
+- 新增 `test/features/auth/application/auth_form_validation_service_test.dart`，并扩展 `auth_provider_smoke_test.dart` 覆盖 provider 暴露。
 
 ## 12. Phase 4.8：依赖注入与全局单例治理
 
@@ -497,22 +504,30 @@
 
 任务：
 
-- [ ] 盘点全局 `instance` 和静态 `StreamController`。
-- [ ] 优先将业务 service 单例迁移为 provider 管理。
-- [ ] 保留底层日志等少数基础设施单例，但通过 provider 暴露。
-- [ ] 页面不得直接访问 `*.instance`，必须通过 provider / dependency factory。
+- [x] 盘点全局 `instance` 和静态 `StreamController`。
+- [x] 优先将业务 service 单例迁移为 provider 管理。
+- [x] 保留底层日志等少数基础设施单例，但通过 provider 暴露。
+- [x] 页面不得直接访问 `*.instance`，必须通过 provider / dependency factory。
 
 通过标准：
 
-- [ ] 页面层直接使用静态单例数量下降。
-- [ ] 测试可通过 provider override 替换依赖。
-- [ ] 事件流订阅有明确生命周期。
+- [x] 页面层直接使用静态单例数量下降。
+- [x] 测试可通过 provider override 替换依赖。
+- [x] 事件流订阅有明确生命周期。
 
 阶段完成条件：
 
-- [ ] 全局 `instance` 清单完成。
-- [ ] 至少迁移一个业务 service 到 provider 生命周期管理。
-- [ ] 页面层直接访问静态单例数量下降。
+- [x] 全局 `instance` 清单完成。
+- [x] 至少迁移一个业务 service 到 provider 生命周期管理。
+- [x] 页面层直接访问静态单例数量下降。
+
+阶段完成说明（2026-06-03）：
+
+- 完成全局 `*.instance` 扫描，确认本阶段优先迁移业务运行态 `SourceHealthService`，`AppDatabase`、`AuthEventBus`、`AppLogger`、`SourceLogStore`、`CoverImageDiskCache` 等基础设施单例保留兼容实现并通过 app provider 暴露。
+- `appSourceHealthServiceProvider` 改为创建 provider 生命周期内的 `SourceHealthService`，并在 dispose 时取消持久化 debounce timer。
+- 书籍详情、发现网关、书架 / 阅读器依赖工厂等主 provider 路径显式注入 `appSourceHealthServiceProvider`；旧 service 构造器仍保留 `SourceHealthService.instance` 兜底，作为非 provider 手动构造兼容边界。
+- `BookDetailPage`、错误中心和封面缓存组件改为通过 app provider 获取 logger / log store / cover cache / source health 依赖，减少页面层直接访问静态单例。
+- 新增 `test/app/composition/app_providers_test.dart` 验证 provider 管理实例和 override 注入链路，保留源健康持久化与实体测试作为生命周期回归。
 
 ## 13. Phase 4.9：日志与错误监控接入
 
@@ -594,7 +609,7 @@ flutter build web --no-pub
 - [ ] 不新增复杂手写状态模型、JSON DTO 和裸路由字符串。
 - [ ] 高风险页面状态迁移至少完成一个核心页面。
 - [x] 封面缓存替代完成并通过缓存治理测试。
-- [ ] REST DTO / route helper / form validation 至少各完成一个试点。
+- [x] REST DTO / route helper / form validation 至少各完成一个试点。
 - [ ] Web JS 构建通过。
 - [ ] Android / iOS 关键体验不回退。
 
@@ -615,8 +630,8 @@ flutter build web --no-pub
 ## 17. 执行记录
 
 - [x] 开始日期：2026-06-03
-- [ ] 完成日期：未完成，Phase 4.7-4.10 仍在执行中；Phase 4.2 已于 2026-06-03 收口
-  - 说明：Phase 4.3、Phase 4.3-tail、Phase 4.4、Phase 4.5 与 Phase 4.6 已收口；后续不再把存量手写模型 debt 混入其他 Phase 的主目标。
+- [ ] 完成日期：未完成，Phase 4.9-4.10 仍在执行中；Phase 4.2 已于 2026-06-03 收口
+  - 说明：Phase 4.3、Phase 4.3-tail、Phase 4.4、Phase 4.5、Phase 4.6、Phase 4.7 与 Phase 4.8 已收口；后续不再把存量手写模型 debt、表单验证 debt 或全局单例 debt 混入其他 Phase 的主目标。
 - [x] 已验证平台：本轮以 Flutter 单元测试 / widget smoke 形式验证阅读器、书架、高级主题、搜索状态治理试点与封面缓存替代；封面缓存补充 Chrome widget 测试覆盖 Web JS 编译路径
 - [ ] 未验证平台和原因：Android、iOS、macOS、Windows、Linux 端到端回归尚未逐端执行；当前仅完成代码级与局部 widget 级验证
 - [x] 关键改动：
@@ -629,7 +644,10 @@ flutter build web --no-pub
   - 搜索页搜索 session、筛选、权限、历史和延迟进度完成态收口到 `searchPageStateProvider`。
   - 书架 smoke test 改为数据库快照渲染验证；legacy 迁移路径由 service test 单独守护。
   - 4.3-tail 存量模型 debt list 清空，低 / 中 / 高风险模型均已接入 `freezed` / `json_serializable` 治理边界，并保留必要兼容 adapter。
+  - 登录、注册与资料编辑表单验证统一收口到 `AuthFormValidationService`，并通过 `authFormValidationServiceProvider` 暴露。
+  - `SourceHealthService` 从业务静态单例迁移为 provider 生命周期管理，页面与核心 feature provider 路径改为通过 app provider / dependency factory 注入。
 - [x] 遗留问题：
   - `bookshelf_page.dart`、`reader_page.dart`、高级主题页和搜索页仍保留纯 UI 临时态 `setState`、动画 controller、文本 controller 和局部 sheet 状态。
   - `search_render_state_controller.dart` 与搜索进度 `ValueNotifier` 作为局部高频 UI 通道暂留，后续如需继续降低页面层状态可单独治理。
   - `reader_settings.dart` 与 `app_advanced_theme.dart` 的旧 JSON adapter 仍作为兼容边界保留；后续如要进一步减少手写字段映射，需单独补全更细的旧 payload golden matrix。
+  - `AppDatabase`、`AuthEventBus`、`AppLogger`、`SourceLogStore`、`CoverImageDiskCache` 等基础设施单例仍保留底层兼容实现；后续如需彻底移除静态入口，应拆成独立架构阶段。

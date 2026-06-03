@@ -7,6 +7,7 @@ import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/platform/app_platform_capabilities.dart';
+import '../../../app/composition/app_providers.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
 import '../../../app/widgets/import_export_task_overlay.dart';
 import '../../../core/logging/diagnostic_log_export_service.dart';
@@ -20,13 +21,19 @@ class ErrorCenterPage extends ConsumerStatefulWidget {
 }
 
 class _ErrorCenterPageState extends ConsumerState<ErrorCenterPage> {
-  final SourceLogStore _store = SourceLogStore.instance;
-  final DiagnosticLogExportService _exportService =
-      DiagnosticLogExportService();
+  late final SourceLogStore _store;
+  late final DiagnosticLogExportService _exportService;
   bool _includeInfoLogs = false;
   bool _isExporting = false;
   ImportExportTaskStatus? _taskStatus;
   int _selectedEntryIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _store = ref.read(appSourceLogStoreProvider);
+    _exportService = DiagnosticLogExportService(store: _store);
+  }
 
   @override
   Widget build(BuildContext context) {

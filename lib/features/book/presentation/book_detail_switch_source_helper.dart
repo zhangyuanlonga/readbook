@@ -28,10 +28,11 @@ class BookDetailSwitchSourceHelper {
     required SearchService switchSourceSearchService,
     required SearchHitCacheService searchHitCacheService,
     required SourceSwitchScoreService switchSourceScoreService,
+    required SourceHealthService sourceHealthService,
   }) : _switchSourceSearchService = switchSourceSearchService,
        _searchHitCacheService = searchHitCacheService,
        _switchSourceScoreService = switchSourceScoreService,
-       _sourceHealthService = SourceHealthService.instance;
+       _sourceHealthService = sourceHealthService;
 
   final SearchService _switchSourceSearchService;
   final SearchHitCacheService _searchHitCacheService;

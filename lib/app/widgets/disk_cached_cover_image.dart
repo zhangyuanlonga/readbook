@@ -1,9 +1,11 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../composition/app_providers.dart';
 import '../../core/cache/cover_image_disk_cache.dart';
 
-class DiskCachedCoverImage extends StatelessWidget {
+class DiskCachedCoverImage extends ConsumerWidget {
   const DiskCachedCoverImage({
     super.key,
     required this.imageUrl,
@@ -24,7 +26,7 @@ class DiskCachedCoverImage extends StatelessWidget {
   final int? cacheHeight;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final normalizedUrl = (imageUrl ?? '').trim();
     if (normalizedUrl.isEmpty) {
       return fallback;
@@ -33,7 +35,7 @@ class DiskCachedCoverImage extends StatelessWidget {
     return CachedNetworkImage(
       imageUrl: normalizedUrl,
       cacheKey: normalizedUrl,
-      cacheManager: CoverImageDiskCache.instance.cacheManager,
+      cacheManager: ref.watch(appCoverImageDiskCacheProvider).cacheManager,
       httpHeaders: CoverImageDiskCache.defaultHttpHeaders,
       width: width,
       height: height,

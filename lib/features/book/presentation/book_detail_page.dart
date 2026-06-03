@@ -11,6 +11,7 @@ import 'package:html/parser.dart' as html_parser;
 import 'package:path/path.dart' as p;
 import 'package:share_plus/share_plus.dart';
 
+import '../../../app/composition/app_providers.dart' as app_providers;
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/layout/app_adaptive.dart';
@@ -245,7 +246,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   late final BookDetailActionService _actionService;
   late final BookDetailCatalogService _catalogService;
   late final BookDetailService _bookDetailService;
-  final AppLogger _logger = AppLogger.instance;
+  late final AppLogger _logger;
   final Stopwatch _detailOpenStopwatch = Stopwatch()..start();
   final BookDisplayStateResolver _bookMetadataPresentationResolver =
       const BookDisplayStateResolver();
@@ -276,6 +277,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   @override
   void initState() {
     super.initState();
+    _logger = ref.read(app_providers.appLoggerProvider);
     final dependencies = ref.read(bookDetailDependenciesProvider);
     _bookmarkRepository = ref.read(bookBookmarkRepositoryProvider);
     _bookMetadataOverrideRepository = ref.read(
@@ -325,6 +327,9 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       switchSourceSearchService: _switchSourceSearchService,
       searchHitCacheService: _searchHitCacheService,
       switchSourceScoreService: _switchSourceScoreService,
+      sourceHealthService: ref.read(
+        app_providers.appSourceHealthServiceProvider,
+      ),
     );
     final initialBook = widget.initialBook;
     _activeSourceId =

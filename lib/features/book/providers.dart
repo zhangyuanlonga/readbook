@@ -80,7 +80,11 @@ final bookLocalBookRepositoryProvider = Provider<LocalBookRepository>((ref) {
 });
 
 final bookDetailServiceProvider = Provider<BookDetailService>((ref) {
-  return BookDetailService();
+  return BookDetailService(
+    sourceHealthService: ref.watch(
+      app_providers.appSourceHealthServiceProvider,
+    ),
+  );
 });
 
 final bookDetailBookshelfServiceProvider = Provider<BookshelfService>((ref) {

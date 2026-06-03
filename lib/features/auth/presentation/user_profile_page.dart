@@ -14,8 +14,9 @@ import '../../../core/errors/app_exception.dart';
 import '../../../core/user/user_profile.dart';
 import '../../../core/user/user_profile_service.dart';
 import '../../mine/application/mine_page_session_service.dart';
-import '../providers.dart';
 import '../../mine/providers.dart';
+import '../application/auth_form_validation_service.dart';
+import '../providers.dart';
 
 class UserProfilePage extends ConsumerStatefulWidget {
   const UserProfilePage({super.key});
@@ -946,6 +947,7 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
       maxWidth: 520,
       builder: (surfaceContext) {
         return _EditProfileSurface(
+          validationService: ref.read(authFormValidationServiceProvider),
           initialAccount:
               profile?.account ?? session.account ?? session.username ?? '',
           initialDisplayName:
@@ -1028,12 +1030,14 @@ class _ProfileRow {
 
 class _EditProfileSurface extends StatefulWidget {
   const _EditProfileSurface({
+    required this.validationService,
     required this.initialAccount,
     required this.initialDisplayName,
     required this.initialPhone,
     required this.initialEmail,
   });
 
+  final AuthFormValidationService validationService;
   final String initialAccount;
   final String initialDisplayName;
   final String initialPhone;
@@ -1195,31 +1199,30 @@ class _EditProfileSurfaceState extends State<_EditProfileSurface> {
   void _submit() {
     final account = _accountController.text.trim();
     final displayName = _displayNameController.text.trim();
+    final phone = _phoneController.text.trim();
+    final email = _emailController.text.trim();
     final password = _passwordController.text;
     final confirmPassword = _confirmPasswordController.text;
-    if (account.isEmpty) {
+    final validationError =
+        widget.validationService.validateAccount(account) ??
+        widget.validationService.validateOptionalPhone(phone) ??
+        widget.validationService.validateOptionalEmail(email) ??
+        widget.validationService.validateOptionalNewPassword(password) ??
+        widget.validationService.validateOptionalConfirmPassword(
+          confirmPassword,
+          password: password,
+        );
+    if (validationError != null) {
       setState(() {
-        _errorText = '账号不能为空';
-      });
-      return;
-    }
-    if (password.isNotEmpty && password.length < 6) {
-      setState(() {
-        _errorText = '新密码至少需要 6 位';
-      });
-      return;
-    }
-    if (password != confirmPassword) {
-      setState(() {
-        _errorText = '两次输入的新密码不一致';
+        _errorText = validationError;
       });
       return;
     }
     Navigator.of(context).pop(
       UserProfileUpdateInput(
         displayName: displayName.isEmpty ? account : displayName,
-        phone: _phoneController.text.trim(),
-        email: _emailController.text.trim(),
+        phone: phone,
+        email: email,
         password: password.trim(),
       ),
     );

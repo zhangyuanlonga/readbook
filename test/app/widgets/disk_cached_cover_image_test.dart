@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shuxiang_reading_next/app/widgets/disk_cached_cover_image.dart';
 import 'package:shuxiang_reading_next/core/cache/cover_image_disk_cache.dart';
@@ -7,10 +8,12 @@ import 'package:shuxiang_reading_next/core/cache/cover_image_disk_cache.dart';
 void main() {
   testWidgets('falls back immediately when cover url is empty', (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(
-        home: DiskCachedCoverImage(
-          imageUrl: ' ',
-          fallback: Text('fallback-cover'),
+      const ProviderScope(
+        child: MaterialApp(
+          home: DiskCachedCoverImage(
+            imageUrl: ' ',
+            fallback: Text('fallback-cover'),
+          ),
         ),
       ),
     );
@@ -22,14 +25,16 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      const MaterialApp(
-        home: DiskCachedCoverImage(
-          imageUrl: 'https://example.com/cover.jpg',
-          fallback: Text('fallback-cover'),
-          width: 80,
-          height: 120,
-          cacheWidth: 160,
-          cacheHeight: 240,
+      const ProviderScope(
+        child: MaterialApp(
+          home: DiskCachedCoverImage(
+            imageUrl: 'https://example.com/cover.jpg',
+            fallback: Text('fallback-cover'),
+            width: 80,
+            height: 120,
+            cacheWidth: 160,
+            cacheHeight: 240,
+          ),
         ),
       ),
     );

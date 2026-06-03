@@ -50,6 +50,11 @@ class SourceHealthService {
     );
   }
 
+  void dispose() {
+    _persistDebounceTimer?.cancel();
+    _persistDebounceTimer = null;
+  }
+
   SourceHealthSnapshot snapshotFor(String sourceId, {bool enabled = true}) {
     final normalizedSourceId = sourceId.trim();
     if (normalizedSourceId.isEmpty) {

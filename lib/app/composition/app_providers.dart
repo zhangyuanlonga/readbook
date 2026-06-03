@@ -2,6 +2,9 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/auth_event_bus.dart';
+import '../../core/cache/cover_image_disk_cache.dart';
+import '../../core/logging/app_logger.dart';
+import '../../core/logging/source_log_store.dart';
 import '../../data/datasources/local/app_database.dart';
 import '../../data/repositories/book_metadata_override_repository_impl.dart';
 import '../../data/repositories/bookmark_repository_impl.dart';
@@ -27,6 +30,18 @@ final appCapabilitiesProvider = Provider<AppPlatformCapabilities>((ref) {
   return ref.watch(appPlatformCapabilitiesProvider);
 });
 
+final appLoggerProvider = Provider<AppLogger>((ref) {
+  return AppLogger.instance;
+});
+
+final appSourceLogStoreProvider = Provider<SourceLogStore>((ref) {
+  return SourceLogStore.instance;
+});
+
+final appCoverImageDiskCacheProvider = Provider<CoverImageDiskCache>((ref) {
+  return CoverImageDiskCache.instance;
+});
+
 final bookmarkRepositoryProvider = Provider<BookmarkRepository>((ref) {
   return BookmarkRepositoryImpl(ref.watch(appDatabaseProvider));
 });
@@ -41,7 +56,9 @@ final localBookRepositoryProvider = Provider<LocalBookRepository>((ref) {
 });
 
 final appSourceHealthServiceProvider = Provider<SourceHealthService>((ref) {
-  return SourceHealthService.instance;
+  final service = SourceHealthService();
+  ref.onDispose(service.dispose);
+  return service;
 });
 
 final appRemoteContentTaskSchedulerServiceProvider =

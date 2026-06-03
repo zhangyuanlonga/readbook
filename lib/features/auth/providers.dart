@@ -4,6 +4,13 @@ import '../../core/auth/auth_service.dart';
 import '../../core/auth/auth_session_secret_store.dart';
 import '../../core/auth/auth_session_store.dart';
 import '../../core/user/user_profile_service.dart';
+import 'application/auth_form_validation_service.dart';
+
+final authFormValidationServiceProvider = Provider<AuthFormValidationService>((
+  ref,
+) {
+  return const AuthFormValidationService();
+});
 
 final authSessionSecretStoreProvider = Provider<AuthSessionSecretStore>((ref) {
   return createDefaultAuthSessionSecretStore();

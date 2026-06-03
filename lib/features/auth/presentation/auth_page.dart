@@ -9,6 +9,7 @@ import '../../../app/motion/app_motion_widgets.dart';
 import '../../../core/auth/auth_service.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/network/api_client.dart';
+import '../application/auth_form_validation_service.dart';
 import '../providers.dart';
 
 class AuthPage extends ConsumerStatefulWidget {
@@ -31,6 +32,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmController = TextEditingController();
   late final AuthService _authService;
+  late final AuthFormValidationService _validationService;
 
   bool _isRegister = false;
   bool _isSubmitting = false;
@@ -43,6 +45,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
   void initState() {
     super.initState();
     _authService = ref.read(authServiceProvider);
+    _validationService = ref.read(authFormValidationServiceProvider);
   }
 
   @override
@@ -917,7 +920,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
               autofillHints: const [AutofillHints.username],
               keyboardType: TextInputType.text,
               textInputAction: TextInputAction.next,
-              validator: (value) => _requiredValidator(value, '账号'),
+              validator: _validationService.validateAccount,
               decoration:
                   desktopStyled
                       ? _buildDesktopInputDecoration(
@@ -946,7 +949,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
               obscureText: _obscurePassword,
               textInputAction:
                   _isRegister ? TextInputAction.next : TextInputAction.done,
-              validator: (value) => _requiredValidator(value, '密码'),
+              validator: _validationService.validateRequiredPassword,
               decoration:
                   desktopStyled
                       ? _buildDesktopInputDecoration(
@@ -1026,7 +1029,11 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                 enableSuggestions: false,
                 obscureText: _obscureConfirm,
                 textInputAction: TextInputAction.done,
-                validator: _confirmPasswordValidator,
+                validator:
+                    (value) => _validationService.validateConfirmPassword(
+                      value,
+                      password: _passwordController.text,
+                    ),
                 decoration:
                     desktopStyled
                         ? _buildDesktopInputDecoration(
@@ -1081,26 +1088,17 @@ class _AuthPageState extends ConsumerState<AuthPage> {
 
   Widget _buildPasswordStrengthHint(BuildContext context) {
     final password = _passwordController.text;
-    final score =
-        [
-          password.length >= 8,
-          RegExp(r'[A-Za-z]').hasMatch(password),
-          RegExp(r'\d').hasMatch(password),
-          RegExp(r'[^A-Za-z0-9]').hasMatch(password),
-        ].where((matched) => matched).length;
-    final label = switch (score) {
-      0 || 1 => '密码强度：偏弱',
-      2 || 3 => '密码强度：适中',
-      _ => '密码强度：较强',
-    };
+    final strength = _validationService.resolvePasswordStrength(password);
     final colorScheme = Theme.of(context).colorScheme;
     return Align(
       alignment: Alignment.centerLeft,
       child: Text(
-        password.isEmpty ? '建议使用 8 位以上，并混合字母和数字。' : label,
+        password.isEmpty ? '建议使用 8 位以上，并混合字母和数字。' : strength.label,
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
           color:
-              score >= 3 ? colorScheme.primary : colorScheme.onSurfaceVariant,
+              strength.isStrongPresentation
+                  ? colorScheme.primary
+                  : colorScheme.onSurfaceVariant,
         ),
       ),
     );
@@ -1301,24 +1299,6 @@ class _AuthPageState extends ConsumerState<AuthPage> {
       _autovalidateMode = AutovalidateMode.disabled;
       _formKey = GlobalKey<FormState>();
     });
-  }
-
-  String? _requiredValidator(String? value, String fieldName) {
-    if ((value ?? '').trim().isEmpty) {
-      return '请输入$fieldName';
-    }
-    return null;
-  }
-
-  String? _confirmPasswordValidator(String? value) {
-    final confirm = value ?? '';
-    if (confirm.isEmpty) {
-      return '请再次输入密码';
-    }
-    if (confirm != _passwordController.text) {
-      return '两次密码输入不一致';
-    }
-    return null;
   }
 
   Future<void> _submit() async {

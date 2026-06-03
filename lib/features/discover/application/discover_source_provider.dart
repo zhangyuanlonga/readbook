@@ -1,11 +1,16 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/composition/app_providers.dart' as app_providers;
 import 'server_discover_gateway_service.dart';
 import '../domain/discover_source_summary.dart';
 
 final serverDiscoverGatewayServiceProvider =
     Provider<ServerDiscoverGatewayService>((ref) {
-      return ServerDiscoverGatewayService();
+      return ServerDiscoverGatewayService(
+        sourceHealthService: ref.watch(
+          app_providers.appSourceHealthServiceProvider,
+        ),
+      );
     });
 
 final discoverSourcePagerProvider =
