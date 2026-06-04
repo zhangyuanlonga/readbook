@@ -171,6 +171,16 @@ class AppPlatformCapabilities {
   bool get isWebJsTarget => buildTarget == AppPlatformBuildTarget.webJs;
   bool get isWebWasmTarget => buildTarget == AppPlatformBuildTarget.webWasm;
 
+  /// 头像选择是否应直接走文件选择器。
+  ///
+  /// Web 和桌面端没有稳定的“相册 / 文件”双入口语义，直接打开文件选择器更符合
+  /// 平台习惯；Android/iOS 保留相册、文件、拍照等动作面板，避免误删移动端能力。
+  bool get shouldUseFilePickerForProfileAvatar =>
+      isWeb ||
+      platform == TargetPlatform.macOS ||
+      platform == TargetPlatform.windows ||
+      platform == TargetPlatform.linux;
+
   bool get supportsLocalReading =>
       supportsLocalFileImport &&
       supportsManagedFileStorage &&

@@ -26,7 +26,7 @@
 | temp-dir | `lib/core/logging/diagnostic_log_export_service_io.dart|getTemporaryDirectory` | 诊断导出临时文件，用户可通过分享 / 保存拿到结果。 | 临时文件可被系统清理，不应承载长期诊断资产。 | 保持临时导出；如需长期保存，让用户选择目标或走 Documents。 | 诊断导出明确只作为临时中转，或改为用户选择保存路径。 | 暂留 |
 | temp-dir | `lib/data/datasources/local/app_database_connection_native.dart|Directory.systemTemp` | Flutter test 环境数据库落入系统临时目录，避免污染真实 support 目录。 | 只应在测试环境使用。 | 保持 `FLUTTER_TEST` 分支，并确保生产使用 application support。 | 测试数据库路径有更明确 test harness；生产分支不使用系统临时目录。 | 暂留 |
 | temp-dir | `lib/features/mine/application/advanced_theme_service.dart|Directory.systemTemp.createTemp` | 高级主题导入 / 导出工作目录，属于可删除临时中转。 | 不能把主题资源最终落在临时目录。 | 保持临时工作目录，最终资源写入托管目录 / index。 | 导入导出任务队列化后，由统一 temp workspace service 管理。 | 暂留 |
-| temp-dir | `lib/features/mine/presentation/advanced_theme_list_page.dart|getTemporaryDirectory` | 高级主题页面导出 zip / 预览等临时文件。 | presentation 层直接使用临时目录，后续维护成本高。 | 下沉到 advanced theme export service / temp workspace service。 | 页面不再直接取临时目录，改由 application service 返回导出文件。 | 待迁移 |
+| temp-dir | `lib/features/mine/application/advanced_theme_service.dart|getTemporaryDirectory` | 高级主题单包 / 批量包导出分享文件和批量导入导出工作目录，属于可删除临时中转。 | 临时文件不能作为最终用户资产；Web / 移动 / 桌面分享或保存流程必须由调用方决定最终去向。 | 保持在 application service 内集中管理，页面只拿 `File` 或导入摘要；后续如任务队列化，再迁到统一 temp workspace service。 | 高级主题导入导出任务统一进入 temp workspace service，或所有临时文件都由成熟队列 / cache adapter 管理。 | 已迁入服务层 |
 | managed-dir | `lib/features/mine/application/advanced_theme_service.dart|advanced_themes` | 高级主题资源目录，归类为用户资产，目前使用 Documents/advanced_themes。 | 直接拼目录容易绕过 `ManagedAssetDirectoryPolicy`。 | 逐步收敛到 `ManagedAssetStore` / policy，保留旧目录兼容。 | 主题目录解析全走 managed asset policy，旧目录只作为兼容读取。 | 暂留 |
 | managed-dir | `lib/features/mine/application/mine_page_session_service.dart|profile_avatars` | 用户头像本地文件目录，归类为用户资产。 | 直接拼目录可能误删或路径不统一。 | 纳入 `ManagedAssetDirectoryPolicy` 和 `ManagedAssetStore`。 | 头像保存、删除、路径持久化全走 managed asset service。 | 待迁移 |
 
@@ -35,7 +35,7 @@
 - 当前 baseline 没有新增 violation，但不是最终理想状态。
 - P0 风险集中在用户资产和资源目录：`advanced_themes`、`profile_avatars`、阅读器背景图路径。
 - 低风险项是小型 UI 偏好：最近正文颜色、搜索历史，但仍应优先改为 typed preference / StringList。
-- presentation 层直接 `getTemporaryDirectory` 是后续低风险迁移入口，优先下沉到 application service。
+- 高级主题 presentation 层直接 `getTemporaryDirectory` 已迁入 application service；后续重点是把 service 内多个临时工作区收敛到统一 temp workspace service。
 
 ## 4. 维护命令
 

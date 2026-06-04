@@ -16,7 +16,7 @@ const Set<String> _approvedTemporaryDirectoryUsages = <String>{
   'lib/core/logging/diagnostic_log_export_service_io.dart|getTemporaryDirectory',
   'lib/data/datasources/local/app_database_connection_native.dart|Directory.systemTemp',
   'lib/features/mine/application/advanced_theme_service.dart|Directory.systemTemp.createTemp',
-  'lib/features/mine/presentation/advanced_theme_list_page.dart|getTemporaryDirectory',
+  'lib/features/mine/application/advanced_theme_service.dart|getTemporaryDirectory',
 };
 
 const Set<String> _approvedStartupCleanupUsages = <String>{};

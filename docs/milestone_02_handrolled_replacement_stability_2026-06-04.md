@@ -30,34 +30,73 @@
 
 ### M2-04 高级主题页面文件策略下沉
 
-- [ ] M2-04-01 定位 `advanced_theme_list_page.dart` 中页面层直接创建临时目录、读写 ZIP、写 manifest 的位置。
-- [ ] M2-04-02 设计 `AdvancedThemeService` 或相邻 application service 的批量主题包导入导出 API。
-- [ ] M2-04-03 将批量主题包识别逻辑从页面迁到 application 层。
-- [ ] M2-04-04 将批量主题包拆包临时目录逻辑从页面迁到 application 层。
-- [ ] M2-04-05 将批量主题包打包 manifest / ZIP 逻辑从页面迁到 application 层。
-- [ ] M2-04-06 页面只保留文件选择、进度显示、保存位置选择和分享分发。
-- [ ] M2-04-07 为 application 层导入导出 API 补中文维护注释，说明临时目录、用户资产和跨端边界。
-- [ ] M2-04-08 补或调整 `advanced_theme_service_test.dart`，覆盖批量包 manifest、缺文件、成功导入、失败计数。
-- [ ] M2-04-09 运行 storage guard，若页面层临时目录白名单减少，同步 storage baseline 矩阵。
-- [ ] M2-04-10 记录 Android、iOS、Web JS、macOS、Windows、Linux 影响和未验证原因。
+- [x] M2-04-01 定位 `advanced_theme_list_page.dart` 中页面层直接创建临时目录、读写 ZIP、写 manifest 的位置。
+- [x] M2-04-02 设计 `AdvancedThemeService` 或相邻 application service 的批量主题包导入导出 API。
+- [x] M2-04-03 将批量主题包识别逻辑从页面迁到 application 层。
+- [x] M2-04-04 将批量主题包拆包临时目录逻辑从页面迁到 application 层。
+- [x] M2-04-05 将批量主题包打包 manifest / ZIP 逻辑从页面迁到 application 层。
+- [x] M2-04-06 页面只保留文件选择、进度显示、保存位置选择和分享分发。
+- [x] M2-04-07 为 application 层导入导出 API 补中文维护注释，说明临时目录、用户资产和跨端边界。
+- [x] M2-04-08 补或调整 `advanced_theme_service_test.dart`，覆盖批量包 manifest、缺文件、成功导入、失败计数。
+- [x] M2-04-09 运行 storage guard，若页面层临时目录白名单减少，同步 storage baseline 矩阵。
+- [x] M2-04-10 记录 Android、iOS、Web JS、macOS、Windows、Linux 影响和未验证原因。
+
+执行记录：
+
+| 项目 | 内容 |
+| --- | --- |
+| 任务编号 | M2-04 |
+| 手搓点 | 高级主题列表页面直接处理 ZIP、manifest、临时目录和批量导入导出协议，页面职责过重。 |
+| 替换方式 | 将批量包识别、拆包、打包、单包临时导出和批量临时导出下沉到 `AdvancedThemeService`，页面只保留文件选择、进度 UI、保存位置选择和分享分发。 |
+| 行为等价 | 官方 ZIP、旧 JSON、Red、RGShare 和批量包导入仍复用原导入语义；主题资源最终仍落入托管主题目录，临时目录只作可删除中转。 |
+| 多端影响 | Android、iOS、Web JS、macOS、Windows、Linux 均为代码层职责收敛；文件选择、保存和分享仍由页面 / 平台插件处理。当前未跑六端真机构建，需后续手测补验。 |
+| 验证 | `dart analyze`、`flutter test test/features/mine/application/advanced_theme_service_test.dart`、storage guard、baseline guard、docs guard、green suite dry-run。 |
+| 中文注释 | `AdvancedThemeService` 新增临时目录、用户资产、跨端文件名、批量包协议和页面 / service 边界说明。 |
+| 下一步 | 建议执行 M2-06-01，先扫描 presentation 层平台散点，再决定是否处理登录 / 我的页平台 capability。 |
 
 ### M2-05 超大页面继续拆分
 
-- [ ] M2-05-01 选择一个低风险 reader settings 区块，确认只包含 UI 展示和意图分发。
-- [ ] M2-05-02 抽出独立 widget 文件，保持参数明确，不读取全局状态。
-- [ ] M2-05-03 为抽出 widget 补必要中文注释或调用边界说明。
-- [ ] M2-05-04 运行相关 reader settings smoke / controller 测试。
-- [ ] M2-05-05 更新大文件治理记录，说明减少的职责而不是只写减少行数。
-- [ ] M2-05-06 选择一个 bookshelf 页面低风险区块重复执行同样拆分。
-- [ ] M2-05-07 选择一个 advanced theme editor 低风险区块重复执行同样拆分。
+- [x] M2-05-01 选择一个低风险 reader settings 区块，确认只包含 UI 展示和意图分发。
+- [x] M2-05-02 抽出独立 widget 文件，保持参数明确，不读取全局状态。
+- [x] M2-05-03 为抽出 widget 补必要中文注释或调用边界说明。
+- [x] M2-05-04 运行相关 reader settings smoke / controller 测试。
+- [x] M2-05-05 更新大文件治理记录，说明减少的职责而不是只写减少行数。
+- [x] M2-05-06 选择一个 bookshelf 页面低风险区块重复执行同样拆分。
+- [x] M2-05-07 选择一个 advanced theme editor 低风险区块重复执行同样拆分。
+
+执行记录：
+
+| 项目 | 内容 |
+| --- | --- |
+| 任务编号 | M2-05 |
+| 手搓点 | `reader_page_settings_sheet.dart`、`bookshelf_page_flow.dart`、`advanced_theme_editor_page.dart` 内存在局部 builder 和资源选择卡片，页面继续膨胀且样式难复用。 |
+| 替换方式 | 抽出 `ReaderTypographySliderRow`、`BookshelfSettingsSwitchTile`、`AdvancedThemeLaunchGallerySelectionCard` 三个纯参数 widget。 |
+| 行为等价 | 原页面仍负责 draft、保存、预览弹窗和回调分发；新 widget 不读取 provider、不持久化、不改变业务状态。 |
+| 多端影响 | Android、iOS、Web JS、macOS、Windows、Linux 均为 UI 职责拆分；未改变文件、路由、存储或平台插件调用。 |
+| 验证 | `dart analyze`、reader settings / bookshelf / advanced theme editor 相关 smoke 测试。 |
+| 中文注释 | 三个新 widget 均补中文 Dartdoc，说明展示职责和调用边界。 |
+| 下一步 | 继续 M2-06，收敛 presentation 层平台散点。 |
 
 ### M2-06 平台散点收敛
 
-- [ ] M2-06-01 扫描 presentation 层 `kIsWeb`、`defaultTargetPlatform`、`Platform`、`dart:io` 使用点。
-- [ ] M2-06-02 选取一个登录或我的页平台分支，改为读取 capability / adapter。
-- [ ] M2-06-03 为 capability 语义补中文 Dartdoc，说明支持平台和降级方式。
-- [ ] M2-06-04 运行架构 guard 和对应页面 smoke。
-- [ ] M2-06-05 记录本次减少的平台散点数量。
+- [x] M2-06-01 扫描 presentation 层 `kIsWeb`、`defaultTargetPlatform`、`Platform`、`dart:io` 使用点。
+- [x] M2-06-02 选取一个登录或我的页平台分支，改为读取 capability / adapter。
+- [x] M2-06-03 为 capability 语义补中文 Dartdoc，说明支持平台和降级方式。
+- [x] M2-06-04 运行架构 guard 和对应页面 smoke。
+- [x] M2-06-05 记录本次减少的平台散点数量。
+
+执行记录：
+
+| 项目 | 内容 |
+| --- | --- |
+| 任务编号 | M2-06 |
+| 手搓点 | 我的页头像选择来源直接拼 `kIsWeb`、`defaultTargetPlatform` 和桌面平台枚举，平台语义散落在 presentation 层。 |
+| 替换方式 | 在 `AppPlatformCapabilities` 增加 `shouldUseFilePickerForProfileAvatar`，我的页改为读取 capability。 |
+| 行为等价 | Web / macOS / Windows / Linux 仍直接走文件选择；Android / iOS 仍展示相册、文件、拍照等动作面板。 |
+| 多端影响 | Android、iOS、Web JS、macOS、Windows、Linux 行为保持等价；平台语义集中到 app platform capability。 |
+| 验证 | 扫描后本次减少我的页 `defaultTargetPlatform` 直接判断 3 处，`kIsWeb` 头像来源判断 1 处；目标 analyze、capability 单测、页面 smoke、architecture guard。 |
+| 中文注释 | `shouldUseFilePickerForProfileAvatar` 补中文 Dartdoc，解释 Web / 桌面降级和移动端保留动作面板原因。 |
+| 下一步 | 建议执行 M2-07-01，盘点本地解析与平台 IO 隔离。 |
 
 ### M2-07 本地解析与平台 IO 隔离
 

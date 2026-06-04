@@ -1239,161 +1239,18 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                       double step = 1,
                       bool showValueLabel = true,
                     }) {
-                      final safeValue = value.clamp(min, max).toDouble();
-                      final textScale = MediaQuery.textScalerOf(
-                        context,
-                      ).scale(1);
-
-                      void nudge(double delta) {
-                        final next =
-                            (safeValue + delta).clamp(min, max).toDouble();
-                        onChanged(next);
-                      }
-
-                      Widget controls({required bool stacked}) {
-                        return Row(
-                          children: [
-                            if (!stacked)
-                              SizedBox(
-                                width: compactScaleValue(28),
-                                child: Text(
-                                  label,
-                                  style: Theme.of(
-                                    context,
-                                  ).textTheme.bodySmall?.copyWith(
-                                    fontSize:
-                                        (Theme.of(
-                                              context,
-                                            ).textTheme.bodySmall?.fontSize ??
-                                            12) *
-                                        compactSheetScale *
-                                        0.95,
-                                  ),
-                                ),
-                              ),
-                            if (stacked) const SizedBox.shrink(),
-                            IconButton(
-                              visualDensity: VisualDensity.compact,
-                              constraints: BoxConstraints(
-                                minWidth: compactScaleValue(28),
-                                minHeight: compactScaleValue(28),
-                              ),
-                              onPressed: () => nudge(-step),
-                              icon: Icon(
-                                Icons.remove_rounded,
-                                size: compactScaleValue(16),
-                              ),
-                            ),
-                            Expanded(
-                              child: buildPreviewAwareSlider(
-                                min: min,
-                                max: max,
-                                divisions: divisions,
-                                value: safeValue,
-                                onChanged: onChanged,
-                              ),
-                            ),
-                            IconButton(
-                              visualDensity: VisualDensity.compact,
-                              constraints: BoxConstraints(
-                                minWidth: compactScaleValue(28),
-                                minHeight: compactScaleValue(28),
-                              ),
-                              onPressed: () => nudge(step),
-                              icon: Icon(
-                                Icons.add_rounded,
-                                size: compactScaleValue(16),
-                              ),
-                            ),
-                            if (showValueLabel && !stacked)
-                              SizedBox(
-                                width: compactScaleValue(54),
-                                child: Text(
-                                  valueLabel,
-                                  textAlign: TextAlign.right,
-                                  style: Theme.of(
-                                    context,
-                                  ).textTheme.bodySmall?.copyWith(
-                                    fontSize:
-                                        (Theme.of(
-                                              context,
-                                            ).textTheme.bodySmall?.fontSize ??
-                                            12) *
-                                        compactSheetScale *
-                                        0.94,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        );
-                      }
-
-                      Widget stackedLabel() {
-                        return Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                label,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.bodySmall?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize:
-                                      (Theme.of(
-                                            context,
-                                          ).textTheme.bodySmall?.fontSize ??
-                                          12) *
-                                      compactSheetScale *
-                                      0.95,
-                                ),
-                              ),
-                            ),
-                            if (showValueLabel)
-                              Text(
-                                valueLabel,
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.bodySmall?.copyWith(
-                                  color:
-                                      Theme.of(
-                                        context,
-                                      ).colorScheme.onSurfaceVariant,
-                                  fontSize:
-                                      (Theme.of(
-                                            context,
-                                          ).textTheme.bodySmall?.fontSize ??
-                                          12) *
-                                      compactSheetScale *
-                                      0.94,
-                                ),
-                              ),
-                          ],
-                        );
-                      }
-
-                      return Padding(
-                        padding: EdgeInsets.symmetric(
-                          vertical: compactScaleValue(0.5),
-                        ),
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            final stacked =
-                                textScale >= 1.2 && constraints.maxWidth < 360;
-                            if (!stacked) {
-                              return controls(stacked: false);
-                            }
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                stackedLabel(),
-                                SizedBox(height: compactScaleValue(2)),
-                                controls(stacked: true),
-                              ],
-                            );
-                          },
-                        ),
+                      return ReaderTypographySliderRow(
+                        label: label,
+                        value: value,
+                        min: min,
+                        max: max,
+                        divisions: divisions,
+                        valueLabel: valueLabel,
+                        onChanged: onChanged,
+                        compactSheetScale: compactSheetScale,
+                        step: step,
+                        showValueLabel: showValueLabel,
+                        sliderBuilder: buildPreviewAwareSlider,
                       );
                     }
 

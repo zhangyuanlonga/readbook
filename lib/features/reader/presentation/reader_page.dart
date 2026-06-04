@@ -166,6 +166,7 @@ import 'reader_runtime_controller.dart';
 import 'reader_tap_zone_resolver.dart';
 import 'reader_text_paged_view.dart';
 import 'reader_viewport_builder.dart';
+import 'widgets/reader_typography_slider_row.dart';
 
 part 'reader_page_content_loading.dart';
 part 'reader_page_selection.dart';

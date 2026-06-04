@@ -29,6 +29,9 @@ void main() {
     final supportDir = await Directory.systemTemp.createTemp(
       'theme_test_support_',
     );
+    final temporaryDir = await Directory.systemTemp.createTemp(
+      'theme_test_temporary_',
+    );
     _latestPathProviderDocumentsDir = documentsDir;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(pathProviderChannel, (call) async {
@@ -37,6 +40,9 @@ void main() {
           }
           if (call.method == 'getApplicationSupportDirectory') {
             return supportDir.path;
+          }
+          if (call.method == 'getTemporaryDirectory') {
+            return temporaryDir.path;
           }
           return null;
         });
@@ -49,6 +55,9 @@ void main() {
       }
       if (supportDir.existsSync()) {
         await supportDir.delete(recursive: true);
+      }
+      if (temporaryDir.existsSync()) {
+        await temporaryDir.delete(recursive: true);
       }
     });
   });
@@ -644,6 +653,156 @@ void main() {
       );
     },
   );
+
+  test('writes batch bundle manifest and imports all nested themes', () async {
+    final service = AdvancedThemeService(assetStore: await _createAssetStore());
+    final firstTheme = AppAdvancedTheme(
+      id: 'theme_batch_first',
+      name: '批量一',
+      createdAt: DateTime.parse('2026-06-04T00:00:00.000Z'),
+      updatedAt: DateTime.parse('2026-06-04T00:00:00.000Z'),
+      lightConfig: AppAdvancedThemeModeConfig(
+        colors: AppAdvancedThemeColors(primaryColorValue: 0xFF112233),
+      ),
+      darkConfig: AppAdvancedThemeModeConfig(),
+    );
+    final secondTheme = AppAdvancedTheme(
+      id: 'theme_batch_second',
+      name: '批量二',
+      createdAt: DateTime.parse('2026-06-04T00:00:00.000Z'),
+      updatedAt: DateTime.parse('2026-06-04T00:00:00.000Z'),
+      lightConfig: AppAdvancedThemeModeConfig(),
+      darkConfig: AppAdvancedThemeModeConfig(
+        colors: AppAdvancedThemeColors(primaryColorValue: 0xFF445566),
+      ),
+    );
+    await service.saveTheme(firstTheme);
+    await service.saveTheme(secondTheme);
+    final summaries = await service.loadThemeSummaries();
+    final directory = await Directory.systemTemp.createTemp(
+      'theme_batch_export_',
+    );
+    addTearDown(() async {
+      if (directory.existsSync()) {
+        await directory.delete(recursive: true);
+      }
+    });
+    final outputFile = File('${directory.path}/batch.zip');
+
+    await service.writeThemeBatchBundleFile(
+      summaries: summaries,
+      outputFile: outputFile,
+    );
+
+    expect(service.isBatchThemeBundleFile(path: outputFile.path), isTrue);
+    final archive = ZipDecoder().decodeBytes(await outputFile.readAsBytes());
+    final manifestFile = archive.findFile('manifest.json');
+    expect(manifestFile, isNotNull);
+    final manifest = jsonDecode(
+      utf8.decode(List<int>.from(manifestFile!.content)),
+    ) as Map;
+    expect(manifest['type'], 'advanced_theme_batch_bundle');
+    expect(manifest['version'], 1);
+    expect(manifest['themes'], isA<List>());
+    expect(manifest['themes'], hasLength(2));
+
+    final importService = AdvancedThemeService(
+      assetStore: await _createAssetStore(),
+    );
+    final summary = await importService.importThemeBatchFile(
+      path: outputFile.path,
+      mimeType: 'application/zip',
+    );
+
+    expect(summary.successCount, 2);
+    expect(summary.failureCount, 0);
+    final importedThemes = await importService.loadThemes();
+    expect(importedThemes.map((theme) => theme.name), containsAll(['批量一', '批量二']));
+  });
+
+  test('rejects batch bundle without manifest', () async {
+    final service = AdvancedThemeService(assetStore: await _createAssetStore());
+    final directory = await Directory.systemTemp.createTemp(
+      'theme_batch_invalid_',
+    );
+    addTearDown(() async {
+      if (directory.existsSync()) {
+        await directory.delete(recursive: true);
+      }
+    });
+    final file = File('${directory.path}/missing_manifest.zip');
+    await file.writeAsBytes(
+      _buildZipPackageBytes(<String, List<int>>{
+        'themes/001.zip': const <int>[1, 2, 3],
+      }),
+      flush: true,
+    );
+
+    expect(service.isBatchThemeBundleFile(path: file.path), isFalse);
+    await expectLater(
+      service.importThemeBatchFile(path: file.path, mimeType: 'application/zip'),
+      throwsA(isA<FormatException>()),
+    );
+  });
+
+  test('counts missing nested theme file as batch import failure', () async {
+    final service = AdvancedThemeService(assetStore: await _createAssetStore());
+    final validTheme = AppAdvancedTheme(
+      id: 'theme_batch_valid',
+      name: '可导入主题',
+      createdAt: DateTime.parse('2026-06-04T00:00:00.000Z'),
+      updatedAt: DateTime.parse('2026-06-04T00:00:00.000Z'),
+      lightConfig: AppAdvancedThemeModeConfig(),
+      darkConfig: AppAdvancedThemeModeConfig(),
+    );
+    final validBundle = await service.encodeThemeBundleZip(validTheme);
+    final directory = await Directory.systemTemp.createTemp(
+      'theme_batch_missing_nested_',
+    );
+    addTearDown(() async {
+      if (directory.existsSync()) {
+        await directory.delete(recursive: true);
+      }
+    });
+    final manifestBytes = utf8.encode(
+      jsonEncode(<String, Object?>{
+        'type': 'advanced_theme_batch_bundle',
+        'version': 1,
+        'themes': <Map<String, Object?>>[
+          <String, Object?>{
+            'id': 'theme_batch_valid',
+            'name': '可导入主题',
+            'file': 'themes/001.zip',
+          },
+          <String, Object?>{
+            'id': 'theme_batch_missing',
+            'name': '缺失主题',
+            'file': 'themes/missing.zip',
+          },
+        ],
+      }),
+    );
+    final file = File('${directory.path}/partial.zip');
+    await file.writeAsBytes(
+      _buildZipPackageBytes(<String, List<int>>{
+        'manifest.json': manifestBytes,
+        'themes/001.zip': validBundle,
+      }),
+      flush: true,
+    );
+
+    final summary = await service.importThemeBatchFile(
+      path: file.path,
+      mimeType: 'application/zip',
+    );
+
+    expect(summary.successCount, 1);
+    expect(summary.failureCount, 1);
+    expect(summary.lastError, contains('批量主题包缺少主题文件'));
+    final themes = await service.loadThemes();
+    expect(themes, hasLength(1));
+    expect(themes.first.name, '可导入主题');
+  });
 
   test('imports Red bottom nav gif pack and maps legacy notes tab', () async {
     final assetStore = await _createAssetStore();

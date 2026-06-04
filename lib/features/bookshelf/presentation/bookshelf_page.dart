@@ -64,6 +64,7 @@ import '../../source/application/external_source_import_bridge.dart';
 import '../../source/application/remote_content_task_conflict_service.dart';
 import 'widgets/bookshelf_grid_sliver.dart';
 import 'widgets/bookshelf_page_sections.dart';
+import 'widgets/bookshelf_settings_switch_tile.dart';
 
 part 'bookshelf_page_sections.dart';
 part 'bookshelf_page_flow.dart';

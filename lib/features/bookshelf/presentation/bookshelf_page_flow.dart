@@ -488,58 +488,11 @@ extension on _BookshelfPageState {
               String? subtitle,
               required ValueChanged<bool>? onChanged,
             }) {
-              final enabled = onChanged != null;
-              return Padding(
-                padding: const EdgeInsets.fromLTRB(12, 5, 12, 5),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(minHeight: 48),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              title,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                                color:
-                                    enabled
-                                        ? colorScheme.onSurface
-                                        : colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                            if (subtitle != null) ...[
-                              const SizedBox(height: 3),
-                              Text(
-                                subtitle,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  fontSize: 12.5,
-                                  color: colorScheme.onSurfaceVariant,
-                                  height: 1.3,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      SizedBox(
-                        width: 64,
-                        child: Align(
-                          alignment: Alignment.centerRight,
-                          child: Switch.adaptive(
-                            value: value,
-                            onChanged: onChanged,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+              return BookshelfSettingsSwitchTile(
+                value: value,
+                title: title,
+                subtitle: subtitle,
+                onChanged: onChanged,
               );
             }
 

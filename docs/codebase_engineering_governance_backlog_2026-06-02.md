@@ -98,6 +98,7 @@
 
 - [x] 首轮试点：`home_page.dart` 拆出移动/桌面 dashboard 布局壳。
 - [x] 首轮试点：`home_page.dart` 拆出首页指标展示与阅读目标弧线 painter。
+- [x] M2-05 首轮：`reader_page_settings_sheet.dart` 抽出排版滑杆行，`bookshelf_page_flow.dart` 抽出设置开关行，`advanced_theme_editor_page.dart` 抽出启动图集选择卡。
 - [ ] 拆分 `reader_page.dart`：优先拆 toolbar、overlay、tap zone、reader shell、状态协调器。
 - [ ] 拆分 `bookshelf_page.dart`：优先拆桌面布局、筛选排序、空状态、书籍卡片交互。
 - [ ] 拆分 `reader_page_settings_sheet.dart`：优先拆 typography、spacing、theme、audio、manga 设置组。
@@ -110,6 +111,7 @@
 ## 8. Phase F：平台判断收敛
 
 - [ ] 盘点约 155 处平台判断，按 Web、Desktop、Mobile、文件系统、窗口、设备能力分类。
+- [x] M2-06 首轮：我的页头像选择来源改读 `AppPlatformCapabilities.shouldUseFilePickerForProfileAvatar`。
 - [ ] 将窗口能力收敛到 desktop/window adapter。
 - [ ] 将文件选择、路径、缓存目录能力收敛到 platform storage facade。
 - [ ] 将 Web 特有能力收敛到 web capability service。

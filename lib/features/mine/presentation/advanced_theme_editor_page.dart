@@ -32,6 +32,7 @@ import '../application/advanced_theme_editor_state_service.dart';
 import '../application/advanced_theme_service.dart';
 import '../application/theme_semantic_spec.dart';
 import '../providers.dart';
+import 'widgets/advanced_theme_launch_gallery_selection_card.dart';
 
 part 'advanced_theme_editor_page_flow.dart';
 
@@ -920,8 +921,7 @@ class _AdvancedThemeEditorPageState
                                 (_, __) => const SizedBox(height: 10),
                             itemBuilder: (context, index) {
                               final gallery = _launchImageGalleries[index];
-                              return _buildLaunchGallerySelectionCard(
-                                context,
+                              return AdvancedThemeLaunchGallerySelectionCard(
                                 title: gallery.name,
                                 subtitle:
                                     gallery.imagePaths.isEmpty
@@ -936,6 +936,32 @@ class _AdvancedThemeEditorPageState
                                     selectedId = gallery.id;
                                   });
                                 },
+                                previewThumbBuilder:
+                                    ({
+                                      required previewPath,
+                                      required title,
+                                      required width,
+                                      required height,
+                                      required borderRadius,
+                                      required onTap,
+                                      onLongPress,
+                                    }) => _buildGalleryPreviewThumb(
+                                      context,
+                                      previewPath: previewPath,
+                                      title: title,
+                                      width: width,
+                                      height: height,
+                                      borderRadius: borderRadius,
+                                      onTap: onTap,
+                                      onLongPress: onLongPress,
+                                    ),
+                                onPreviewLongPress:
+                                    (previewPath) => unawaited(
+                                      _showImagePreviewDialog(
+                                        imagePath: previewPath,
+                                        title: gallery.name,
+                                      ),
+                                    ),
                               );
                             },
                           ),
@@ -1605,109 +1631,6 @@ class _AdvancedThemeEditorPageState
                 ),
               ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLaunchGallerySelectionCard(
-    BuildContext context, {
-    required String title,
-    required String subtitle,
-    required List<String> previewPaths,
-    required bool selected,
-    required VoidCallback onTap,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-          decoration: BoxDecoration(
-            color:
-                selected
-                    ? colorScheme.primaryContainer.withValues(alpha: 0.46)
-                    : colorScheme.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color:
-                  selected
-                      ? colorScheme.primary
-                      : colorScheme.outlineVariant.withValues(alpha: 0.45),
-              width: selected ? 1.5 : 1,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  if (selected)
-                    Icon(
-                      Icons.check_circle_rounded,
-                      color: colorScheme.primary,
-                      size: 18,
-                    ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text(
-                subtitle,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                height: 96,
-                child: Row(
-                  children: List.generate(3, (index) {
-                    final previewPath =
-                        index < previewPaths.length
-                            ? previewPaths[index]
-                            : null;
-                    return Expanded(
-                      child: Padding(
-                        padding: EdgeInsets.only(right: index == 2 ? 0 : 6),
-                        child: SizedBox(
-                          height: 96,
-                          child: _buildGalleryPreviewThumb(
-                            context,
-                            previewPath: previewPath,
-                            title: title,
-                            width: double.infinity,
-                            height: 96,
-                            borderRadius: 12,
-                            onTap: onTap,
-                            onLongPress:
-                                previewPath == null
-                                    ? null
-                                    : () => unawaited(
-                                      _showImagePreviewDialog(
-                                        imagePath: previewPath,
-                                        title: title,
-                                      ),
-                                    ),
-                          ),
-                        ),
-                      ),
-                    );
-                  }),
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );

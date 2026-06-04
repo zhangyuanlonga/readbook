@@ -13,6 +13,7 @@ import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/navigation/bottom_nav_icon_gallery_provider.dart';
 import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/navigation/app_navigation_style_provider.dart';
+import '../../../app/platform/app_platform_capabilities.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/theme/app_border_tokens.dart';
 import '../../../app/theme/app_theme_palette.dart';
@@ -356,10 +357,8 @@ class _MinePageState extends ConsumerState<MinePage> {
   }
 
   Future<ImageSelectionSource?> _selectAvatarImageSource() async {
-    if (kIsWeb ||
-        defaultTargetPlatform == TargetPlatform.macOS ||
-        defaultTargetPlatform == TargetPlatform.windows ||
-        defaultTargetPlatform == TargetPlatform.linux) {
+    final capabilities = ref.read(appPlatformCapabilitiesProvider);
+    if (capabilities.shouldUseFilePickerForProfileAvatar) {
       return ImageSelectionSource.files;
     }
     return showAdaptiveActionSurface<ImageSelectionSource>(

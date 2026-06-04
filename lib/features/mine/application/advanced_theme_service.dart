@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:archive/archive.dart';
 import 'package:archive/archive_io.dart';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:path/path.dart' as p;
@@ -22,6 +21,40 @@ import 'launch_image_gallery_service.dart';
 import '../../reader/application/reader_font_registry_service.dart';
 import 'reader_background_service.dart';
 
+/// 高级主题导入任务的业务阶段。
+///
+/// 该状态只描述 application 层正在处理的文件策略阶段，页面层可以把它映射成
+/// 列表项图标、进度文案或任务中心状态。不要把页面动画、弹窗状态塞进这里，
+/// 避免服务层反向依赖 presentation。
+enum AdvancedThemeImportProgressStage { reading, parsing, importing }
+
+/// 批量主题导入结果。
+///
+/// `successCount` 统计实际写入主题库的主题数量，`failureCount` 统计批量包中
+/// 单个条目失败的数量。只要至少成功导入一个主题，批量导入就允许返回结果；
+/// 如果全部失败，服务会抛出 `FormatException`，让调用方按导入失败处理。
+class AdvancedThemeBatchImportSummary {
+  const AdvancedThemeBatchImportSummary({
+    required this.successCount,
+    required this.failureCount,
+    this.lastError,
+  });
+
+  final int successCount;
+  final int failureCount;
+  final String? lastError;
+
+  bool get hasSuccess => successCount > 0;
+}
+
+typedef AdvancedThemeBatchImportProgressCallback =
+    void Function(AdvancedThemeImportProgressStage stage, String message);
+
+typedef AdvancedThemeBatchExportProgressCallback =
+    void Function(String message);
+
+enum _AdvancedThemeImportPackageKind { official, red, rgshare }
+
 class AdvancedThemeService {
   static const String _activeThemeIdKey = 'app.advancedThemes.activeId';
   static const String _activeThemeAppearanceSnapshotKey =
@@ -31,6 +64,8 @@ class AdvancedThemeService {
   static const int _colorExportVersion = 2;
   static const String _bundleExportType = 'advanced_theme_bundle';
   static const int _bundleExportVersion = 1;
+  static const String _batchBundleType = 'advanced_theme_batch_bundle';
+  static const int _batchBundleVersion = 1;
 
   AdvancedThemeService({
     SharedPreferences? preferences,
@@ -580,6 +615,511 @@ class AdvancedThemeService {
 
   String createThemeId() {
     return 'advanced_theme_${_uuid.v4()}';
+  }
+
+  /// 生成单个主题 ZIP 导出的稳定文件名。
+  ///
+  /// 文件名规则集中在服务层，保证桌面保存、移动端分享和后续批量包内嵌文件
+  /// 使用同一套非法字符替换策略，避免页面各自拼接导致跨平台文件名差异。
+  String themeBundleExportFileName(AppAdvancedTheme theme) {
+    return '${_normalizedExportFileName(theme.name)}.zip';
+  }
+
+  /// 生成批量主题 ZIP 导出的稳定文件名。
+  ///
+  /// `now` 仅供测试固定时间使用；生产调用默认使用当前时间。
+  String themeBatchBundleExportFileName({DateTime? now}) {
+    return 'advanced_themes_batch_${_formattedTimestampForFileName(now ?? DateTime.now())}.zip';
+  }
+
+  /// 将单个主题包写入指定文件。
+  ///
+  /// 调用方负责选择目标位置或分享策略；服务层只负责主题包编码和文件写入，
+  /// 保证 ZIP 内容与 `importThemeBundleZipFile` 的兼容语义一致。
+  Future<File> writeThemeBundleZipFile({
+    required AppAdvancedTheme theme,
+    required File outputFile,
+  }) async {
+    final bytes = await encodeThemeBundleZip(theme);
+    await outputFile.writeAsBytes(bytes, flush: true);
+    return outputFile;
+  }
+
+  /// 将单个主题包写入临时目录，供移动端分享等一次性分发流程使用。
+  ///
+  /// 临时目录只作为可删除中转，不承载用户资产；真正的主题资源导入仍由
+  /// `importThemeBundleZipFile` / `importThemeBundleZipBytes` 落入托管资源目录。
+  Future<File> writeThemeBundleZipToTemporaryFile(
+    AppAdvancedTheme theme,
+  ) async {
+    final tempDir = await getTemporaryDirectory();
+    final file = File(p.join(tempDir.path, themeBundleExportFileName(theme)));
+    return writeThemeBundleZipFile(theme: theme, outputFile: file);
+  }
+
+  /// 判断一个 ZIP 是否为高级主题批量包。
+  ///
+  /// 该判断会读取 ZIP manifest，但不会导入主题、不会写用户资产。页面层只需要
+  /// 拿到布尔结果决定任务文案；批量包协议细节统一保留在 application 层。
+  bool isBatchThemeBundleFile({
+    required String path,
+    String? mimeType,
+    List<int>? bytes,
+  }) {
+    if (!_isZipThemeFile(path: path, mimeType: mimeType, bytes: bytes)) {
+      return false;
+    }
+    try {
+      Archive archive;
+      if (bytes == null) {
+        final input = InputFileStream(path);
+        try {
+          archive = ZipDecoder().decodeStream(input, verify: false);
+        } finally {
+          input.close();
+        }
+      } else {
+        archive = ZipDecoder().decodeBytes(bytes, verify: false);
+      }
+      final manifestFile = archive.findFile('manifest.json');
+      if (manifestFile == null) {
+        return false;
+      }
+      final decoded = jsonDecode(
+        utf8.decode(_archiveFileBytes(manifestFile), allowMalformed: true),
+      );
+      if (decoded is! Map) {
+        return false;
+      }
+      final manifest = decoded.map(
+        (key, value) => MapEntry(key.toString(), value),
+      );
+      return manifest['type']?.toString().trim() == _batchBundleType;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 导入单个主题文件，自动识别官方 ZIP、旧 JSON、Red 和 RGShare 包。
+  ///
+  /// 这个入口用于批量导入队列和外部文件导入，避免页面层重复嗅探文件头、
+  /// 判断扩展名或读取 ZIP manifest。旧 payload、重复导入指纹和用户资产写入
+  /// 仍复用现有各格式导入方法，保证行为等价。
+  Future<AppAdvancedTheme> importThemeFile({
+    required String path,
+    String? mimeType,
+  }) async {
+    final packageKind = await _detectImportPackageKind(
+      path: path,
+      mimeType: mimeType,
+    );
+    if (packageKind == _AdvancedThemeImportPackageKind.official &&
+        _isZipThemeFile(path: path, mimeType: mimeType)) {
+      return importThemeBundleZipFile(path);
+    }
+    final bytes = await File(path).readAsBytes();
+    return importThemeBytes(path: path, bytes: bytes, mimeType: mimeType);
+  }
+
+  /// 导入内存中的主题文件内容，自动识别官方 ZIP、旧 JSON、Red 和 RGShare 包。
+  Future<AppAdvancedTheme> importThemeBytes({
+    required String path,
+    required List<int> bytes,
+    String? mimeType,
+  }) async {
+    final packageKind = await _detectImportPackageKind(
+      path: path,
+      mimeType: mimeType,
+      bytes: bytes,
+    );
+    return switch (packageKind) {
+      _AdvancedThemeImportPackageKind.red => importRedThemePackageBytes(bytes),
+      _AdvancedThemeImportPackageKind.rgshare =>
+        importRgShareThemePackageBytes(bytes),
+      _AdvancedThemeImportPackageKind.official =>
+        _isZipThemeFile(path: path, mimeType: mimeType, bytes: bytes)
+            ? importThemeBundleZipBytes(bytes)
+            : importThemeColorJson(utf8.decode(bytes, allowMalformed: true)),
+    };
+  }
+
+  /// 导入一个队列文件；如果文件是批量包，会拆包后逐个导入内部主题 ZIP。
+  ///
+  /// 批量包拆包工作区只使用临时目录，并在 finally 中递归清理。这里不把批量包
+  /// 解出的 ZIP 当作用户资产保存，避免系统临时目录和真实主题资源目录混淆。
+  Future<AdvancedThemeBatchImportSummary> importThemeBatchFile({
+    required String path,
+    String? mimeType,
+    AdvancedThemeBatchImportProgressCallback? onProgress,
+  }) async {
+    onProgress?.call(
+      AdvancedThemeImportProgressStage.reading,
+      '正在准备导入...',
+    );
+    await _yieldToEventLoop();
+    if (isBatchThemeBundleFile(path: path, mimeType: mimeType)) {
+      onProgress?.call(
+        AdvancedThemeImportProgressStage.parsing,
+        '正在解析批量主题包',
+      );
+      await _yieldToEventLoop();
+      return _importThemeBatchBundleFile(path, onProgress: onProgress);
+    }
+    onProgress?.call(
+      AdvancedThemeImportProgressStage.importing,
+      '正在导入主题资源',
+    );
+    await _yieldToEventLoop();
+    await importThemeFile(path: path, mimeType: mimeType);
+    return const AdvancedThemeBatchImportSummary(
+      successCount: 1,
+      failureCount: 0,
+    );
+  }
+
+  /// 将多个主题摘要打包成批量主题包并写入指定文件。
+  ///
+  /// 批量包内部仍由 `encodeThemeBundleZip` 生成单个官方主题包，manifest 只记录
+  /// 批量索引和内部 ZIP 路径。这样可以复用单主题导入兼容逻辑，也方便后续把
+  /// 批量任务迁到队列或 isolate 时保持协议稳定。
+  Future<File> writeThemeBatchBundleFile({
+    required List<AdvancedThemeSummary> summaries,
+    required File outputFile,
+    AdvancedThemeBatchExportProgressCallback? onProgress,
+  }) async {
+    final manifestThemes = <Map<String, Object?>>[];
+    final tempDir = await getTemporaryDirectory();
+    final workingDirectory = Directory(
+      p.join(
+        tempDir.path,
+        'advanced_theme_batch_work_${DateTime.now().microsecondsSinceEpoch}',
+      ),
+    );
+    var index = 0;
+
+    if (!await workingDirectory.exists()) {
+      await workingDirectory.create(recursive: true);
+    }
+
+    final encoder = ZipFileEncoder();
+    var encoderCreated = false;
+    try {
+      encoder.create(outputFile.path, level: ZipFileEncoder.gzip);
+      encoderCreated = true;
+      for (final summary in summaries) {
+        final theme = await loadThemeById(summary.id);
+        if (theme == null) {
+          continue;
+        }
+        // 批量导出保持严格串行，避免一次构建多个主题 ZIP 导致内存峰值放大。
+        index += 1;
+        onProgress?.call('正在打包 ${theme.name} ($index/${summaries.length})');
+        final normalizedName = _normalizedExportFileName(theme.name);
+        final innerZipName =
+            '${index.toString().padLeft(3, '0')}_$normalizedName.zip';
+        final tempThemeFile = File(p.join(workingDirectory.path, innerZipName));
+        final bundleBytes = await encodeThemeBundleZip(theme);
+        await tempThemeFile.writeAsBytes(bundleBytes, flush: true);
+        final bundlePath = 'themes/$innerZipName';
+        await encoder.addFile(tempThemeFile, bundlePath);
+        manifestThemes.add(<String, Object?>{
+          'id': theme.id,
+          'name': theme.name,
+          'file': bundlePath,
+        });
+        if (await tempThemeFile.exists()) {
+          await tempThemeFile.delete();
+        }
+        await _yieldToEventLoop();
+      }
+
+      if (manifestThemes.isEmpty) {
+        throw const FormatException('没有可打包的主题内容。');
+      }
+
+      onProgress?.call('正在写入批量导出清单...');
+      final manifestBytes = utf8.encode(
+        const JsonEncoder.withIndent('  ').convert(<String, Object?>{
+          'type': _batchBundleType,
+          'version': _batchBundleVersion,
+          'generatedAt': DateTime.now().toIso8601String(),
+          'themes': manifestThemes,
+        }),
+      );
+      encoder.addArchiveFile(
+        ArchiveFile('manifest.json', manifestBytes.length, manifestBytes),
+      );
+      return outputFile;
+    } finally {
+      if (encoderCreated) {
+        await encoder.close();
+      }
+      if (await workingDirectory.exists()) {
+        await workingDirectory.delete(recursive: true);
+      }
+    }
+  }
+
+  /// 将多个主题摘要打包到临时目录，供移动端分享等一次性分发流程使用。
+  Future<File> writeThemeBatchBundleToTemporaryFile({
+    required List<AdvancedThemeSummary> summaries,
+    AdvancedThemeBatchExportProgressCallback? onProgress,
+  }) async {
+    final tempDir = await getTemporaryDirectory();
+    final file = File(
+      p.join(tempDir.path, themeBatchBundleExportFileName()),
+    );
+    return writeThemeBatchBundleFile(
+      summaries: summaries,
+      outputFile: file,
+      onProgress: onProgress,
+    );
+  }
+
+  Future<AdvancedThemeBatchImportSummary> _importThemeBatchBundleFile(
+    String path, {
+    AdvancedThemeBatchImportProgressCallback? onProgress,
+  }) async {
+    final input = InputFileStream(path);
+    late final Archive archive;
+    try {
+      archive = ZipDecoder().decodeStream(input, verify: false);
+    } finally {
+      input.close();
+    }
+    final manifestFile = archive.findFile('manifest.json');
+    if (manifestFile == null) {
+      throw const FormatException('批量主题包缺少 manifest.json。');
+    }
+    final decoded = jsonDecode(
+      utf8.decode(_archiveFileBytes(manifestFile), allowMalformed: true),
+    );
+    if (decoded is! Map) {
+      throw const FormatException('批量主题包配置无效。');
+    }
+    final manifest = decoded.map(
+      (key, value) => MapEntry(key.toString(), value),
+    );
+    final type = manifest['type']?.toString().trim() ?? '';
+    if (type != _batchBundleType) {
+      throw const FormatException('不支持的批量主题包类型。');
+    }
+    final version = manifest['version'];
+    final normalizedVersion =
+        version is num ? version.toInt() : int.tryParse('$version');
+    if (normalizedVersion != _batchBundleVersion) {
+      throw const FormatException('不支持的批量主题包版本。');
+    }
+
+    final entries = manifest['themes'];
+    if (entries is! List || entries.isEmpty) {
+      throw const FormatException('批量主题包中没有可导入的主题。');
+    }
+
+    var successCount = 0;
+    var failureCount = 0;
+    String? lastError;
+    final tempDir = await getTemporaryDirectory();
+    final workingDirectory = Directory(
+      p.join(
+        tempDir.path,
+        'advanced_theme_batch_import_${DateTime.now().microsecondsSinceEpoch}',
+      ),
+    );
+    if (!await workingDirectory.exists()) {
+      await workingDirectory.create(recursive: true);
+    }
+    final importableEntries = entries.whereType<Map>().toList(growable: false);
+    try {
+      for (var index = 0; index < importableEntries.length; index += 1) {
+        final item = importableEntries[index];
+        final entry = item.map((key, value) => MapEntry(key.toString(), value));
+        final bundlePath = entry['file']?.toString().trim() ?? '';
+        if (bundlePath.isEmpty) {
+          failureCount += 1;
+          lastError = '批量主题包条目缺少文件路径。';
+          continue;
+        }
+        final themeName = entry['name']?.toString().trim() ?? '';
+        onProgress?.call(
+          AdvancedThemeImportProgressStage.importing,
+          themeName.isEmpty
+              ? '正在导入主题 ${index + 1}/${importableEntries.length}'
+              : '正在导入 $themeName ${index + 1}/${importableEntries.length}',
+        );
+        await _yieldToEventLoop();
+        final archiveFile = archive.findFile(bundlePath);
+        if (archiveFile == null) {
+          failureCount += 1;
+          lastError = '批量主题包缺少主题文件：$bundlePath';
+          continue;
+        }
+        final tempThemeFile = File(
+          p.join(
+            workingDirectory.path,
+            '${index.toString().padLeft(3, '0')}.zip',
+          ),
+        );
+        try {
+          final output = OutputFileStream(tempThemeFile.path);
+          try {
+            archiveFile.writeContent(output);
+          } finally {
+            output.close();
+          }
+          await importThemeFile(
+            path: tempThemeFile.path,
+            mimeType: 'application/zip',
+          );
+          successCount += 1;
+        } catch (error) {
+          failureCount += 1;
+          lastError = _formatBatchImportItemError(error);
+        } finally {
+          if (await tempThemeFile.exists()) {
+            await tempThemeFile.delete();
+          }
+        }
+      }
+    } finally {
+      if (await workingDirectory.exists()) {
+        await workingDirectory.delete(recursive: true);
+      }
+    }
+
+    if (successCount == 0) {
+      throw FormatException(lastError ?? '批量主题包中没有成功导入的主题。');
+    }
+    return AdvancedThemeBatchImportSummary(
+      successCount: successCount,
+      failureCount: failureCount,
+      lastError: lastError,
+    );
+  }
+
+  Future<_AdvancedThemeImportPackageKind> _detectImportPackageKind({
+    required String path,
+    String? mimeType,
+    List<int>? bytes,
+  }) async {
+    final normalizedMime = mimeType?.trim().toLowerCase() ?? '';
+    final normalizedExtension = p.extension(path).trim().toLowerCase();
+    if (normalizedExtension == '.rgshare') {
+      return _AdvancedThemeImportPackageKind.rgshare;
+    }
+    if (normalizedMime.contains('octet-stream') &&
+        normalizedExtension == '.red') {
+      return _AdvancedThemeImportPackageKind.red;
+    }
+    if (normalizedExtension == '.red') {
+      return _AdvancedThemeImportPackageKind.red;
+    }
+    final resolvedBytes = bytes ?? await File(path).readAsBytes();
+    final sniffedKind = _detectImportPackageKindFromBytes(resolvedBytes);
+    if (sniffedKind != null) {
+      return sniffedKind;
+    }
+    return _AdvancedThemeImportPackageKind.official;
+  }
+
+  _AdvancedThemeImportPackageKind? _detectImportPackageKindFromBytes(
+    List<int> bytes,
+  ) {
+    if (_hasRedHeader(bytes)) {
+      return _AdvancedThemeImportPackageKind.red;
+    }
+    if (!_looksLikeZip(bytes)) {
+      return null;
+    }
+
+    try {
+      final archive = ZipDecoder().decodeBytes(bytes, verify: false);
+      if (archive.findFile('manifest.json') != null) {
+        return _AdvancedThemeImportPackageKind.official;
+      }
+      final themeFile = archive.findFile('theme.json');
+      if (themeFile == null) {
+        return _AdvancedThemeImportPackageKind.official;
+      }
+      final decoded = jsonDecode(
+        utf8.decode(_archiveFileBytes(themeFile), allowMalformed: true),
+      );
+      if (decoded is! Map) {
+        return _AdvancedThemeImportPackageKind.official;
+      }
+      final payload = decoded.map(
+        (key, value) => MapEntry(key.toString(), value),
+      );
+      if (_looksLikeRgShareTheme(payload)) {
+        return _AdvancedThemeImportPackageKind.rgshare;
+      }
+      if (_looksLikeRedTheme(payload)) {
+        return _AdvancedThemeImportPackageKind.red;
+      }
+    } catch (_) {
+      return null;
+    }
+    return _AdvancedThemeImportPackageKind.official;
+  }
+
+  bool _looksLikeRgShareTheme(Map<String, dynamic> payload) {
+    return payload.containsKey('1') &&
+        payload.containsKey('2') &&
+        payload.containsKey('4');
+  }
+
+  bool _looksLikeRedTheme(Map<String, dynamic> payload) {
+    return payload['light'] is Map && payload['dark'] is Map;
+  }
+
+  bool _hasRedHeader(List<int> bytes) {
+    return bytes.length >= 4 &&
+        bytes[0] == 0x52 &&
+        bytes[1] == 0x45 &&
+        bytes[2] == 0x44;
+  }
+
+  bool _isZipThemeFile({
+    required String path,
+    String? mimeType,
+    List<int>? bytes,
+  }) {
+    final normalizedMime = mimeType?.trim().toLowerCase() ?? '';
+    if (normalizedMime.contains('zip')) {
+      return true;
+    }
+    if (p.extension(path).trim().toLowerCase() == '.zip') {
+      return true;
+    }
+    return bytes != null && _looksLikeZip(bytes);
+  }
+
+  String _normalizedExportFileName(String name) {
+    final normalized = name.trim().replaceAll(RegExp(r'[\\/:*?"<>|]+'), '_');
+    return normalized.isEmpty ? 'advanced_theme' : normalized;
+  }
+
+  String _formattedTimestampForFileName(DateTime value) {
+    String twoDigits(int input) => input.toString().padLeft(2, '0');
+    return '${value.year}${twoDigits(value.month)}${twoDigits(value.day)}_${twoDigits(value.hour)}${twoDigits(value.minute)}${twoDigits(value.second)}';
+  }
+
+  Future<void> _yieldToEventLoop() {
+    return Future<void>.delayed(const Duration(milliseconds: 16));
+  }
+
+  String _formatBatchImportItemError(Object error) {
+    if (error is FormatException && error.message.trim().isNotEmpty) {
+      return error.message.trim();
+    }
+    final normalized = error.toString().trim();
+    if (normalized.startsWith('Exception: ')) {
+      return normalized.substring('Exception: '.length).trim();
+    }
+    if (normalized.startsWith('Error: ')) {
+      return normalized.substring('Error: '.length).trim();
+    }
+    return normalized.isEmpty ? '主题导入失败。' : normalized;
   }
 
   Future<AppAdvancedTheme> importThemeColorJson(String rawJson) async {
