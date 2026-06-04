@@ -38,6 +38,7 @@ const _$ManagedAssetTypeEnumMap = {
   ManagedAssetType.readerFont: 'readerFont',
   ManagedAssetType.customBookCover: 'customBookCover',
   ManagedAssetType.localBookArtifact: 'localBookArtifact',
+  ManagedAssetType.profileAvatar: 'profileAvatar',
 };
 
 const _$ManagedAssetScopeEnumMap = {
@@ -50,6 +51,7 @@ const _$ManagedAssetScopeEnumMap = {
   ManagedAssetScope.bottomNav: 'bottomNav',
   ManagedAssetScope.typography: 'typography',
   ManagedAssetScope.localBook: 'localBook',
+  ManagedAssetScope.userProfile: 'userProfile',
 };
 
 const _$ManagedAssetRootEnumMap = {

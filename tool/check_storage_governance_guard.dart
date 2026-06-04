@@ -21,8 +21,8 @@ const Set<String> _approvedTemporaryDirectoryUsages = <String>{
 const Set<String> _approvedStartupCleanupUsages = <String>{};
 
 const Set<String> _approvedManagedDirectoryUsages = <String>{
+  'lib/core/storage/managed_asset_directory_policy.dart|profile_avatars',
   'lib/features/mine/application/advanced_theme_service.dart|advanced_themes',
-  'lib/features/mine/application/mine_page_session_service.dart|profile_avatars',
 };
 
 final RegExp _dartImportSharedPreferencesPattern = RegExp(
@@ -201,7 +201,9 @@ int _compareIssues(_StorageIssue left, _StorageIssue right) {
 List<_JsonPreferenceWrite> _findJsonBackedPreferenceWrites(Directory root) {
   final writes = <_JsonPreferenceWrite>[];
   for (final file in _dartFilesUnder(root, 'lib')) {
-    final relativePath = p.relative(file.path, from: root.path);
+    final relativePath = p
+        .relative(file.path, from: root.path)
+        .replaceAll('\\', '/');
     final content = file.readAsStringSync();
     if (!_dartImportSharedPreferencesPattern.hasMatch(content)) {
       continue;
@@ -299,7 +301,9 @@ List<_StorageIssue> _scanPatternUsages({
 }) {
   final issues = <_StorageIssue>[];
   for (final file in _dartFilesUnder(root, relativePath)) {
-    final relativeFilePath = p.relative(file.path, from: root.path);
+    final relativeFilePath = p
+        .relative(file.path, from: root.path)
+        .replaceAll('\\', '/');
     final lines = file.readAsLinesSync();
     for (var index = 0; index < lines.length; index++) {
       final line = lines[index];

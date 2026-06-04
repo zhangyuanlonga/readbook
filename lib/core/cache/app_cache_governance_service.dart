@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import '../../data/datasources/local/app_database.dart';
 import 'cache_budget_policy.dart';
 import 'cover_image_disk_cache.dart';
@@ -50,6 +52,8 @@ abstract interface class AppPaginationLayoutCacheStore {
     required int maxBytes,
     Duration? stalePeriod,
   });
+
+  Future<int> clearPersistedChapterLayouts();
 }
 
 class AppCacheGovernanceService {
@@ -68,20 +72,47 @@ class AppCacheGovernanceService {
   final CoverImageDiskCache _coverImageDiskCache;
 
   Future<void> enforceBudgets() async {
-    await _database.pruneChapterCachesByBudget(
-      maxEntries: AppCacheBudgetPolicies.chapterCaches.maxEntries,
-      maxBytes: AppCacheBudgetPolicies.chapterCaches.maxBytes,
-      stalePeriod: AppCacheBudgetPolicies.chapterCaches.stalePeriod,
+    await _runCleanup(
+      kind: AppCacheKind.chapterCaches,
+      action:
+          () => _database.pruneChapterCachesByBudget(
+            maxEntries: AppCacheBudgetPolicies.chapterCaches.maxEntries,
+            maxBytes: AppCacheBudgetPolicies.chapterCaches.maxBytes,
+            stalePeriod: AppCacheBudgetPolicies.chapterCaches.stalePeriod,
+          ),
     );
-    await _paginationCacheStore.prunePersistedChapterLayoutsByBudget(
-      maxEntries: AppCacheBudgetPolicies.paginationLayouts.maxEntries,
-      maxBytes: AppCacheBudgetPolicies.paginationLayouts.maxBytes,
-      stalePeriod: AppCacheBudgetPolicies.paginationLayouts.stalePeriod,
+    await _runCleanup(
+      kind: AppCacheKind.paginationLayouts,
+      action:
+          () => _paginationCacheStore.prunePersistedChapterLayoutsByBudget(
+            maxEntries: AppCacheBudgetPolicies.paginationLayouts.maxEntries,
+            maxBytes: AppCacheBudgetPolicies.paginationLayouts.maxBytes,
+            stalePeriod: AppCacheBudgetPolicies.paginationLayouts.stalePeriod,
+          ),
     );
-    await _coverImageDiskCache.compact(
-      maxEntries: AppCacheBudgetPolicies.coverImages.maxEntries,
-      maxBytes: AppCacheBudgetPolicies.coverImages.maxBytes,
-      stalePeriod: AppCacheBudgetPolicies.coverImages.stalePeriod,
+    await _runCleanup(
+      kind: AppCacheKind.coverImages,
+      action:
+          () => _coverImageDiskCache.compact(
+            maxEntries: AppCacheBudgetPolicies.coverImages.maxEntries,
+            maxBytes: AppCacheBudgetPolicies.coverImages.maxBytes,
+            stalePeriod: AppCacheBudgetPolicies.coverImages.stalePeriod,
+          ),
+    );
+  }
+
+  Future<void> clearRebuildableCaches() async {
+    await _runCleanup(
+      kind: AppCacheKind.chapterCaches,
+      action: _database.clearChapterCaches,
+    );
+    await _runCleanup(
+      kind: AppCacheKind.paginationLayouts,
+      action: _paginationCacheStore.clearPersistedChapterLayouts,
+    );
+    await _runCleanup(
+      kind: AppCacheKind.coverImages,
+      action: _coverImageDiskCache.clearAll,
     );
   }
 
@@ -133,6 +164,23 @@ class AppCacheGovernanceService {
       ],
     );
   }
+
+  Future<void> _runCleanup({
+    required AppCacheKind kind,
+    required Future<Object?> Function() action,
+  }) async {
+    try {
+      await action();
+    } catch (error, stackTrace) {
+      developer.log(
+        'Cache cleanup failed and was skipped: ${kind.name}.',
+        name: 'app.cache.governance',
+        error: error,
+        stackTrace: stackTrace,
+        level: 900,
+      );
+    }
+  }
 }
 
 class _EmptyPaginationLayoutCacheStore
@@ -153,4 +201,7 @@ class _EmptyPaginationLayoutCacheStore
   }) async {
     return 0;
   }
+
+  @override
+  Future<int> clearPersistedChapterLayouts() async => 0;
 }

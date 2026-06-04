@@ -5,7 +5,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shuxiang_reading_next/core/cache/app_cache_governance_service.dart';
 import 'package:shuxiang_reading_next/core/cache/cache_budget_policy.dart';
 import 'package:shuxiang_reading_next/core/cache/cover_image_disk_cache.dart';
+import 'package:shuxiang_reading_next/core/storage/managed_asset_store.dart';
 import 'package:shuxiang_reading_next/data/datasources/local/app_database.dart';
+import 'package:shuxiang_reading_next/domain/entities/managed_asset.dart';
 import 'package:shuxiang_reading_next/features/reader/application/reader_pagination_cache_service.dart';
 import 'package:shuxiang_reading_next/features/reader/application/reader_pagination_models.dart';
 
@@ -129,6 +131,102 @@ void main() {
         AppCacheBudgetPolicies.coverImages.maxBytes,
       );
     });
+
+    test(
+      'clears rebuildable caches without deleting managed user assets',
+      () async {
+        await database.upsertChapterCache(
+          cacheKey: 'src|chapter',
+          bookId: 'book_1',
+          sourceId: 'src',
+          chapterIndex: 0,
+          chapterUrl: 'chapter',
+          chapterTitle: 'chapter',
+          content: 'payload',
+        );
+        await File(
+          '${paginationDir.path}/layout.json',
+        ).writeAsString('{"payload":"cached"}', flush: true);
+        await File(
+          '${coverDir.path}/cover_a',
+        ).writeAsBytes(const <int>[1, 2, 3], flush: true);
+
+        final documentsDir = await Directory.systemTemp.createTemp(
+          'cache_governance_docs_',
+        );
+        final supportDir = await Directory.systemTemp.createTemp(
+          'cache_governance_support_',
+        );
+        try {
+          final avatar = await ManagedAssetStore(
+            documentsDirectoryProvider: () async => documentsDir,
+            supportDirectoryProvider: () async => supportDir,
+          ).persistBytes(
+            type: ManagedAssetType.profileAvatar,
+            scope: ManagedAssetScope.userProfile,
+            bytes: const <int>[9, 9, 9],
+            fileName: 'avatar.png',
+            collectionId: 'user_1',
+            targetNamePrefix: 'user_1',
+          );
+
+          final service = AppCacheGovernanceService(
+            database: database,
+            paginationCacheStore: paginationCacheService,
+            coverImageDiskCache: coverImageDiskCache,
+          );
+
+          await service.clearRebuildableCaches();
+
+          expect(await database.countChapterCaches(), 0);
+          expect(
+            await paginationCacheService.countPersistedChapterLayouts(),
+            0,
+          );
+          expect(coverImageDiskCache.clearCalls, 1);
+          expect(await File(avatar.resolvedPath!).exists(), isTrue);
+        } finally {
+          if (await documentsDir.exists()) {
+            await documentsDir.delete(recursive: true);
+          }
+          if (await supportDir.exists()) {
+            await supportDir.delete(recursive: true);
+          }
+        }
+      },
+    );
+
+    test('removes stale pagination cache during budget enforcement', () async {
+      final staleFile = File('${paginationDir.path}/stale_layout.json');
+      await staleFile.writeAsString('{"payload":"old"}', flush: true);
+      await staleFile.setLastModified(
+        DateTime.now().subtract(const Duration(days: 31)),
+      );
+
+      final service = AppCacheGovernanceService(
+        database: database,
+        paginationCacheStore: paginationCacheService,
+        coverImageDiskCache: coverImageDiskCache,
+      );
+
+      await service.enforceBudgets();
+
+      expect(await staleFile.exists(), isFalse);
+    });
+
+    test('continues other cache cleanup when one path fails', () async {
+      final failingPaginationStore = _FailingPaginationLayoutCacheStore();
+      final service = AppCacheGovernanceService(
+        database: database,
+        paginationCacheStore: failingPaginationStore,
+        coverImageDiskCache: coverImageDiskCache,
+      );
+
+      await service.enforceBudgets();
+
+      expect(failingPaginationStore.pruneCalls, 1);
+      expect(coverImageDiskCache.compactCalls, 1);
+    });
   });
 }
 
@@ -137,6 +235,7 @@ class _TestCoverImageDiskCache extends CoverImageDiskCache {
 
   final Directory _directory;
   int compactCalls = 0;
+  int clearCalls = 0;
   int? lastCompactMaxEntries;
   int? lastCompactMaxBytes;
 
@@ -179,5 +278,45 @@ class _TestCoverImageDiskCache extends CoverImageDiskCache {
     lastCompactMaxEntries = maxEntries;
     lastCompactMaxBytes = maxBytes;
     return 0;
+  }
+
+  @override
+  Future<int> clearAll() async {
+    clearCalls += 1;
+    final count = await countAll();
+    if (await _directory.exists()) {
+      await for (final entity in _directory.list(followLinks: false)) {
+        if (entity is File) {
+          await entity.delete();
+        }
+      }
+    }
+    return count;
+  }
+}
+
+class _FailingPaginationLayoutCacheStore
+    implements AppPaginationLayoutCacheStore {
+  int pruneCalls = 0;
+
+  @override
+  Future<int> countPersistedChapterLayouts() async => 0;
+
+  @override
+  Future<int> estimatePersistedChapterLayoutBytes() async => 0;
+
+  @override
+  Future<int> prunePersistedChapterLayoutsByBudget({
+    required int maxEntries,
+    required int maxBytes,
+    Duration? stalePeriod,
+  }) async {
+    pruneCalls += 1;
+    throw StateError('pagination cleanup failed');
+  }
+
+  @override
+  Future<int> clearPersistedChapterLayouts() async {
+    throw StateError('pagination clear failed');
   }
 }

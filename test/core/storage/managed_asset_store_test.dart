@@ -41,8 +41,8 @@ void main() {
     expect(ref.resolvedPath, isNotNull);
     expect(await File(ref.resolvedPath!).exists(), isTrue);
     expect(
-      await store.resolvePersistedPath(ref.relativePath),
-      ref.resolvedPath,
+      _normalizePath(await store.resolvePersistedPath(ref.relativePath)),
+      _normalizePath(ref.resolvedPath),
     );
   });
 
@@ -54,6 +54,13 @@ void main() {
     final relative = await store.relativizePersistedPath(file.path);
 
     expect(relative, 'launch_image_galleries/demo/a.png');
-    expect(await store.resolvePersistedPath(relative), file.path);
+    expect(
+      _normalizePath(await store.resolvePersistedPath(relative)),
+      _normalizePath(file.path),
+    );
   });
+}
+
+String? _normalizePath(String? value) {
+  return value?.replaceAll('\\', '/');
 }

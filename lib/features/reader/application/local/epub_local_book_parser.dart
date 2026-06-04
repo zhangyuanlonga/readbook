@@ -17,6 +17,11 @@ import '../../../../domain/entities/reader_document.dart';
 import 'local_text_encoding_detector.dart';
 import 'local_book_parser.dart';
 
+/// EPUB 解析当前保留定制实现，以维持 ReaderDocument、inline image、
+/// fixed-layout 信号和本地资源物化的既有输出。
+///
+/// 退出条件：成熟 EPUB 库可先替换 metadata / OPF / TOC 层；只有当它能保持
+/// fixed-layout、混合图文和章节定位测试全部等价时，才考虑替换完整 parser。
 class EpubLocalBookParser implements LocalBookParser {
   const EpubLocalBookParser({
     LocalTextEncodingDetector textEncodingDetector =

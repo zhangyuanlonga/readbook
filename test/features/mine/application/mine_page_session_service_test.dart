@@ -1,11 +1,16 @@
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shuxiang_reading_next/core/auth/auth_session.dart';
 import 'package:shuxiang_reading_next/core/auth/auth_session_store.dart';
+import 'package:shuxiang_reading_next/core/media/image_selection_service.dart';
 import 'package:shuxiang_reading_next/core/membership/membership_entitlement.dart';
 import 'package:shuxiang_reading_next/core/membership/membership_service.dart';
 import 'package:shuxiang_reading_next/core/mobile_features/mobile_feature_module.dart';
 import 'package:shuxiang_reading_next/core/mobile_features/mobile_feature_service.dart';
+import 'package:shuxiang_reading_next/core/storage/managed_asset_store.dart';
 import 'package:shuxiang_reading_next/core/user/user_profile.dart';
 import 'package:shuxiang_reading_next/core/user/user_profile_service.dart';
 import 'package:shuxiang_reading_next/features/mine/application/mine_page_session_service.dart';
@@ -122,6 +127,79 @@ void main() {
     expect(cached.shouldRefreshRemoteAccess, isFalse);
     expect(featureService.fetchCount, 1);
     expect(membershipService.fetchCount, 1);
+  });
+
+  test('stores and removes local avatar through managed asset store', () async {
+    final prefs = await SharedPreferences.getInstance();
+    final documentsDir = await Directory.systemTemp.createTemp(
+      'mine_avatar_docs_',
+    );
+    final supportDir = await Directory.systemTemp.createTemp(
+      'mine_avatar_support_',
+    );
+    try {
+      final assetStore = ManagedAssetStore(
+        documentsDirectoryProvider: () async => documentsDir,
+        supportDirectoryProvider: () async => supportDir,
+      );
+      final service = MinePageSessionService(
+        authSessionStore: AuthSessionStore(
+          preferences: prefs,
+          secretStore: FakeAuthSessionSecretStore(),
+        ),
+        mobileFeatureService: _FakeMobileFeatureService(),
+        membershipService: _FakeMembershipService(),
+        userProfileService: _FakeUserProfileService(
+          userId: 'user_avatar',
+          username: 'tester',
+          account: 'tester',
+          displayName: 'Tester',
+        ),
+        remoteAccessSnapshotService: RemoteAccessSnapshotService(
+          preferences: prefs,
+        ),
+        assetStore: assetStore,
+      );
+
+      final legacyFile = File('${documentsDir.path}/profile_avatars/old.jpg');
+      await legacyFile.parent.create(recursive: true);
+      await legacyFile.writeAsBytes(const <int>[9, 9, 9], flush: true);
+
+      final savedPath = await service.saveLocalAvatar(
+        userId: 'user_avatar',
+        picked: PickedImageData(
+          bytes: Uint8List.fromList(const <int>[1, 2, 3]),
+          name: 'avatar.png',
+        ),
+        existingPath: legacyFile.path,
+      );
+
+      expect(await legacyFile.exists(), isFalse);
+      expect(await File(savedPath).exists(), isTrue);
+      expect(savedPath, contains('profile_avatars'));
+      final persistedPath = prefs.getString(
+        'mine.profile.avatar.path.user_avatar',
+      );
+      expect(persistedPath, startsWith('profile_avatars/user_avatar/'));
+
+      final loadedPath = await service.loadLocalAvatarPath('user_avatar');
+      expect(
+        loadedPath?.replaceAll('\\', '/'),
+        savedPath.replaceAll('\\', '/'),
+      );
+
+      await service.removeLocalAvatar(userId: 'user_avatar');
+
+      expect(await File(savedPath).exists(), isFalse);
+      expect(prefs.getString('mine.profile.avatar.path.user_avatar'), isNull);
+    } finally {
+      if (await documentsDir.exists()) {
+        await documentsDir.delete(recursive: true);
+      }
+      if (await supportDir.exists()) {
+        await supportDir.delete(recursive: true);
+      }
+    }
   });
 }
 

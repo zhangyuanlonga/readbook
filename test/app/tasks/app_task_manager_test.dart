@@ -53,6 +53,46 @@ void main() {
     expect(manager.taskById('import'), isNull);
   });
 
+  test('keeps failed long tasks retryable with progress context', () {
+    var now = DateTime(2026, 6, 4, 10);
+    final manager = AppTaskManager(now: () => now);
+
+    final started = manager.startTask(
+      id: 'local-book-index',
+      channel: AppTaskChannel.localBookIndex,
+      priority: AppTaskPriority.userInitiated,
+      canCancel: true,
+      recoveryKey: 'book-42',
+      status: const AppTaskStatusData(
+        title: 'Index local book',
+        message: 'Scanning chapters',
+        progress: 0.25,
+        progressLabel: '1/4',
+      ),
+    );
+
+    now = now.add(const Duration(seconds: 2));
+    final failed = manager.updateTask(
+      'local-book-index',
+      started.status.copyWith(
+        message: 'Chapter scan failed',
+        detail: 'chapter-2.xhtml',
+        result: AppTaskStatusResult.failure,
+      ),
+      canCancel: false,
+      canRetry: true,
+    );
+
+    expect(failed?.status.result, AppTaskStatusResult.failure);
+    expect(failed?.status.progress, 0.25);
+    expect(failed?.status.progressLabel, '1/4');
+    expect(failed?.status.detail, 'chapter-2.xhtml');
+    expect(failed?.canCancel, isFalse);
+    expect(failed?.canRetry, isTrue);
+    expect(failed?.recoveryKey, 'book-42');
+    expect(manager.activeTask, isNull);
+  });
+
   test('assigns recovery policies by task channel and allows overrides', () {
     final manager = AppTaskManager(now: () => DateTime(2026, 5, 13, 9));
 

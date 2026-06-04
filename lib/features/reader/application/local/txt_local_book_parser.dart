@@ -16,6 +16,11 @@ import 'txt_auto_chapter_patterns.dart';
 import 'txt_chapter_rule_service.dart';
 import 'local_text_encoding_detector.dart';
 
+/// TXT 解析保留项目内实现，是因为中文网文章节规则、超大文件流式 offset、
+/// 多编码兜底和长章节拆分都绑定本地阅读体验。
+///
+/// 退出条件：如果后续引入的成熟 parser 能同时覆盖章节识别、编码检测、
+/// offset 懒加载和大文件性能基线，再以 adapter 方式替换这里的切分实现。
 class TxtLocalBookParser implements LocalBookParser {
   const TxtLocalBookParser();
 

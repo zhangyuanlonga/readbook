@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/auth/auth_session.dart';
@@ -8,8 +7,10 @@ import '../../../core/auth/auth_session_store.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../core/membership/membership_service.dart';
 import '../../../core/mobile_features/mobile_feature_service.dart';
+import '../../../core/storage/managed_asset_store.dart';
 import '../../../core/user/user_profile_service.dart';
 import '../../../data/datasources/local/app_database.dart';
+import '../../../domain/entities/managed_asset.dart';
 import 'remote_access_snapshot_service.dart';
 
 class MinePageSessionSnapshot {
@@ -64,12 +65,14 @@ class MinePageSessionService {
     required UserProfileService userProfileService,
     required RemoteAccessSnapshotService remoteAccessSnapshotService,
     AppDatabase? database,
+    ManagedAssetStore? assetStore,
   }) : _authSessionStore = authSessionStore,
        _mobileFeatureService = mobileFeatureService,
        _membershipService = membershipService,
        _userProfileService = userProfileService,
        _remoteAccessSnapshotService = remoteAccessSnapshotService,
-       _database = database ?? AppDatabase.instance;
+       _database = database ?? AppDatabase.instance,
+       _assetStore = assetStore ?? ManagedAssetStore();
 
   final AuthSessionStore _authSessionStore;
   final MobileFeatureService _mobileFeatureService;
@@ -77,6 +80,7 @@ class MinePageSessionService {
   final UserProfileService _userProfileService;
   final RemoteAccessSnapshotService _remoteAccessSnapshotService;
   final AppDatabase _database;
+  final ManagedAssetStore _assetStore;
 
   Future<MinePageSessionSnapshot> loadSession({
     bool refreshRemote = true,
@@ -163,9 +167,10 @@ class MinePageSessionService {
     if (rawPath == null || rawPath.isEmpty) {
       return null;
     }
-    final file = File(rawPath);
+    final resolvedPath = await _assetStore.resolvePersistedPath(rawPath);
+    final file = File(resolvedPath ?? rawPath);
     if (await file.exists()) {
-      return rawPath;
+      return file.path;
     }
     await prefs.remove(_profileAvatarStorageKey(normalizedUserId));
     return null;
@@ -176,41 +181,53 @@ class MinePageSessionService {
     required PickedImageData picked,
     String? existingPath,
   }) async {
-    final docsDir = await getApplicationDocumentsDirectory();
-    final avatarDir = Directory('${docsDir.path}/profile_avatars');
-    if (!await avatarDir.exists()) {
-      await avatarDir.create(recursive: true);
-    }
-
+    // 替换头像必须先清理旧 asset，再登记新 managed relative path；prefs 只存
+    // 路径引用，不承载图片字节，避免回滚或缓存清理时误判用户资产位置。
+    final normalizedUserId = userId.trim();
     final normalizedExistingPath = existingPath?.trim() ?? '';
-    if (normalizedExistingPath.isNotEmpty) {
-      final existingFile = File(normalizedExistingPath);
-      if (await existingFile.exists()) {
-        await existingFile.delete();
-      }
-    }
+    final removablePath =
+        normalizedExistingPath.isNotEmpty
+            ? normalizedExistingPath
+            : await loadLocalAvatarPath(normalizedUserId);
+    await _assetStore.deletePath(removablePath);
 
     final extension = avatarExtensionForName(picked.name);
-    final targetPath = '${avatarDir.path}/${userId.trim()}.$extension';
-    final targetFile = File(targetPath);
-    await targetFile.writeAsBytes(picked.bytes, flush: true);
+    final ref = await _assetStore.persistBytes(
+      type: ManagedAssetType.profileAvatar,
+      scope: ManagedAssetScope.userProfile,
+      bytes: picked.bytes,
+      fileName:
+          '${normalizedUserId.isEmpty ? 'avatar' : normalizedUserId}.$extension',
+      collectionId: normalizedUserId,
+      assetId: normalizedUserId,
+      displayName: picked.name,
+      targetNamePrefix: normalizedUserId,
+    );
 
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_profileAvatarStorageKey(userId.trim()), targetPath);
-    return targetPath;
+    await prefs.setString(
+      _profileAvatarStorageKey(normalizedUserId),
+      ref.relativePath,
+    );
+    return ref.resolvedPath ??
+        await _assetStore.resolvePersistedPath(ref.relativePath) ??
+        ref.relativePath;
   }
 
+  /// 用户头像是长期用户资产，保存时只在 prefs 中登记受管相对路径。
+  ///
+  /// 删除和替换必须先通过 `ManagedAssetStore` 解析旧绝对路径 / 相对路径，以便
+  /// 旧版本 Documents/profile_avatars 路径可回收，新版本 policy 路径可迁移。
   Future<void> removeLocalAvatar({
     required String userId,
     String? existingPath,
   }) async {
     final normalizedExistingPath = existingPath?.trim() ?? '';
-    if (normalizedExistingPath.isNotEmpty) {
-      final file = File(normalizedExistingPath);
-      if (await file.exists()) {
-        await file.delete();
-      }
-    }
+    final removablePath =
+        normalizedExistingPath.isNotEmpty
+            ? normalizedExistingPath
+            : await loadLocalAvatarPath(userId);
+    await _assetStore.deletePath(removablePath);
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_profileAvatarStorageKey(userId.trim()));
   }

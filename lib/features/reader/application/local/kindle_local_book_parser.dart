@@ -12,6 +12,11 @@ import 'local_book_parser.dart';
 import 'local_markup_book_parser_support.dart';
 import 'local_text_encoding_detector.dart';
 
+/// MOBI / AZW / AZW3 通过 `dart_mobi` 读取容器，再复用本地 markup 解析链。
+///
+/// 该能力按实验能力维护：仅承诺无 DRM 的基础样例，遇到加密、异常资源或复杂
+/// Kindle 变体时应给出清晰失败提示。若后续有维护更活跃、覆盖更完整的库，
+/// 优先替换 `LocalKindleContainerExtractor`，不要把格式细节继续扩散到 UI。
 class KindleLocalBookParser implements LocalBookParser {
   const KindleLocalBookParser({
     LocalKindleContainerExtractor extractor =

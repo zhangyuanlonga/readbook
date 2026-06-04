@@ -197,6 +197,7 @@ class ReaderPaginationCacheService implements AppPaginationLayoutCacheStore {
     );
   }
 
+  @override
   Future<int> clearPersistedChapterLayouts() async {
     _memoryCache.clear();
     final directory = await _directoryProvider();

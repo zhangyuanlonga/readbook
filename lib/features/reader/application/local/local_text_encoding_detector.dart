@@ -20,6 +20,12 @@ class LocalTextDecodeResult {
   final bool fallbackUsed;
 }
 
+/// 本地文本编码检测统一入口。
+///
+/// 这里保留项目内评分策略，是为了把 BOM、平台 converter、移动端探测器和
+/// 中文常见编码候选收口到一个地方。后续不要在 storage、preview、parser
+/// 中复制新的 charset 评分逻辑；如有成熟跨端检测库能覆盖这些平台差异，
+/// 应先替换本类实现，再回归 TXT / HTML / EPUB 相关测试。
 class LocalTextEncodingDetector {
   const LocalTextEncodingDetector();
 

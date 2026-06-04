@@ -10,6 +10,10 @@ import '../../../../domain/entities/local_chapter.dart';
 import '../../../../domain/entities/reader_document.dart';
 import 'local_book_parser.dart';
 
+/// PDF 文本抽取保留在独立 adapter 后面，避免把移动端插件能力扩散到业务层。
+///
+/// 退出条件：如果 `pdfrx` / PDFium 能稳定提供多端页元数据和文本抽取，
+/// 则替换 `PackagePdfTextExtractor`，同时保留 PDF 阅读的轻索引、按页懒加载语义。
 class PdfLocalBookParser implements LocalBookParser {
   const PdfLocalBookParser({
     LocalPdfTextExtractor extractor = const PackagePdfTextExtractor(),

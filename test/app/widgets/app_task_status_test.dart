@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shuxiang_reading_next/app/widgets/app_task_status.dart';
 import 'package:shuxiang_reading_next/app/widgets/import_export_task_overlay.dart';
@@ -51,5 +52,47 @@ void main() {
     expect(converted.title, importStatus.title);
     expect(converted.progress, importStatus.progress);
     expect(converted.result, ImportExportTaskResult.failure);
+  });
+
+  testWidgets('ImportExportInlineStatus shows progress and terminal feedback', (
+    tester,
+  ) async {
+    Future<void> pumpStatus(ImportExportTaskStatus status) {
+      return tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: ImportExportInlineStatus(status: status)),
+        ),
+      );
+    }
+
+    await pumpStatus(
+      const ImportExportTaskStatus(
+        title: 'Import',
+        message: 'Parsing EPUB',
+        progress: 0.4,
+        progressLabel: '40%',
+        detail: 'chapter-2.xhtml',
+      ),
+    );
+
+    expect(find.text('Parsing EPUB'), findsOneWidget);
+    expect(find.text('40%'), findsOneWidget);
+    expect(find.text('chapter-2.xhtml'), findsOneWidget);
+    final progress = tester.widget<LinearProgressIndicator>(
+      find.byType(LinearProgressIndicator).last,
+    );
+    expect(progress.value, 0.4);
+
+    await pumpStatus(
+      const ImportExportTaskStatus(
+        title: 'Import',
+        message: 'Import failed',
+        detail: 'Tap retry after checking the file',
+        result: ImportExportTaskResult.failure,
+      ),
+    );
+
+    expect(find.text('Import failed'), findsOneWidget);
+    expect(find.text('Tap retry after checking the file'), findsOneWidget);
   });
 }

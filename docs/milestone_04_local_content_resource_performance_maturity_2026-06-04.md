@@ -23,56 +23,56 @@
 - [x] M4-02-02 评估 EPUB 解析是否可替换成熟库或保留定制 parser。
 - [x] M4-02-03 评估 PDF 解析、pdfium override、pdfrx 路径和平台支持。
 - [x] M4-02-04 评估 MOBI 解析是否继续保留、替换或标记为实验能力。
-- [ ] M4-02-05 为暂不替换的解析逻辑写中文维护注释和退出条件。
+- [x] M4-02-05 为暂不替换的解析逻辑写中文维护注释和退出条件。
 - [x] M4-02-06 输出解析库平台支持矩阵。
 
 ## 3. M4-03 长任务与性能
 
 - [x] M4-03-01 盘点导入、解析、分页、索引、缓存清理等长任务。
-- [ ] M4-03-02 选择一个解析任务接入 isolate / compute / task queue，不改变业务结果。
-- [ ] M4-03-03 为任务取消、进度、失败重试和 UI 反馈补测试。
-- [ ] M4-03-04 记录低端移动设备、Web、Desktop 的性能影响。
-- [ ] M4-03-05 建立阅读器启动、章节切换、列表滚动、解析耗时的基线记录。
+- [x] M4-03-02 选择一个解析任务接入 isolate / compute / task queue，不改变业务结果。
+- [x] M4-03-03 为任务取消、进度、失败重试和 UI 反馈补测试。
+- [x] M4-03-04 记录低端移动设备、Web、Desktop 的性能影响。
+- [x] M4-03-05 建立阅读器启动、章节切换、列表滚动、解析耗时的基线记录。
 
 ## 4. M4-04 用户资产与资源管理
 
 - [x] M4-04-01 盘点主题资源、字体、封面、启动图、底栏图标、用户上传文件的存储落点。
-- [ ] M4-04-02 将一个直接 managed dir 使用点迁入 `ManagedAssetStore` 或统一 resource service。
-- [ ] M4-04-03 为用户资产删除、复用、迁移、回滚补中文维护注释。
-- [ ] M4-04-04 补用户资产不会被缓存清理误删的测试。
-- [ ] M4-04-05 更新 storage baseline 矩阵。
+- [x] M4-04-02 将一个直接 managed dir 使用点迁入 `ManagedAssetStore` 或统一 resource service。
+- [x] M4-04-03 为用户资产删除、复用、迁移、回滚补中文维护注释。
+- [x] M4-04-04 补用户资产不会被缓存清理误删的测试。
+- [x] M4-04-05 更新 storage baseline 矩阵。
 
 ## 5. M4-05 缓存与诊断
 
 - [x] M4-05-01 盘点封面缓存、分页缓存、网络缓存、临时目录和诊断导出。
-- [ ] M4-05-02 选择一个缓存清理路径改为统一 cache governance service。
-- [ ] M4-05-03 确认 Web 下载 / 复制、Desktop 保存 / 打开目录、移动端分享路径。
-- [ ] M4-05-04 为缓存预算、过期、失败兜底补测试。
-- [ ] M4-05-05 输出缓存和诊断六平台验收记录。
+- [x] M4-05-02 选择一个缓存清理路径改为统一 cache governance service。
+- [x] M4-05-03 确认 Web 下载 / 复制、Desktop 保存 / 打开目录、移动端分享路径。
+- [x] M4-05-04 为缓存预算、过期、失败兜底补测试。
+- [x] M4-05-05 输出缓存和诊断六平台验收记录。
 
-## 6. M4 验收
-
-- [ ] M4-06-01 每种本地内容格式都有平台支持、成熟库评估和暂不替换原因。
-- [ ] M4-06-02 用户资产不写入 cache/tmp，不被启动清理误删。
-- [ ] M4-06-03 长任务不会明显阻塞 UI，至少一个高风险任务有队列或 isolate 试点。
-- [ ] M4-06-04 storage guard、storage baseline guard、相关 parser / cache tests 通过。
-- [ ] M4-06-05 Web build 和可用桌面构建或未验证原因记录完整。
-
-## 7. M4-07 本地阅读专项稳定化阶段任务
+## 6. M4-06 本地阅读专项稳定化阶段任务
 
 以下任务由 `本地阅读代码审计（2026-06-04）` 和 `本地导入任务队列审计与阶段计划（2026-06-04）` 拆分而来。执行规则仍然保持每次只领取一个最小任务编号。
 
-- [x] M4-07-01 将本地阅读代码审计、成熟库替代判断和任务队列重复反馈整理为 M4 阶段计划。
-- [ ] M4-07-02 做 PDF 路线统一 spike：确认 `pdfrx` / `pdfrx_engine` / PDFium 是否能承担页元数据和文本抽取，给出是否替代 `pdf_text_extract` 的结论。
-- [ ] M4-07-03 将 MOBI / AZW / AZW3 标记为实验能力：补验收说明、失败路径、DRM / 编码 / 图片资源限制和样例测试缺口。
-- [ ] M4-07-04 收敛本地书库页导入 / 重索引任务反馈：`LocalLibraryPage` 不再把前台导入和单本重索引发布到全局任务队列，保留页面状态、bottom sheet、snackbar 和立即阅读入口。
-- [ ] M4-07-05 收敛外部本地图书导入 handoff：`ExternalImportPayloadType.localBook` 只保留 transient overlay 和目标 sheet 进度，不遗留全局任务队列记录；资源类外部导入仍可进入队列。
-- [ ] M4-07-06 收口 TXT 编码入口：让 storage、preview、parser 共用 `LocalTextEncodingDetector` 的导入采样 / charset 决策，避免多处重复评分。
-- [ ] M4-07-07 做 EPUB 成熟库 adapter spike：用 `epubx` 试替 metadata / OPF / TOC 层，不改变现有 `ReaderDocument`、fixed-layout、inline image 输出。
-- [ ] M4-07-08 让至少一个本地 parser 真正落地 `LocalBookParserInputAware`，避免 input adapter 长期空置。
-- [ ] M4-07-09 补本地图书导入体验 smoke：确认导入完成后不遗留全局任务队列按钮，导入 sheet、立即阅读、失败提示仍可用。
-- [ ] M4-07-10 建立 Windows 本地阅读性能基线：记录大 TXT、流式 EPUB、PDF 导入、索引、首次打开和章节切换耗时。
-- [ ] M4-07-11 复查本地书库页 presentation 体量：等 M3 书架链稳定后，再决定是否拆 `LocalLibraryTaskPresenter` / import controller。
+- [x] M4-06-01 将本地阅读代码审计、成熟库替代判断和任务队列重复反馈整理为 M4 阶段计划。
+- [ ] M4-06-02 做 PDF 路线统一 spike：确认 `pdfrx` / `pdfrx_engine` / PDFium 是否能承担页元数据和文本抽取，给出是否替代 `pdf_text_extract` 的结论。
+- [ ] M4-06-03 将 MOBI / AZW / AZW3 标记为实验能力：补验收说明、失败路径、DRM / 编码 / 图片资源限制和样例测试缺口。
+- [ ] M4-06-04 收敛本地书库页导入 / 重索引任务反馈：`LocalLibraryPage` 不再把前台导入和单本重索引发布到全局任务队列，保留页面状态、bottom sheet、snackbar 和立即阅读入口。
+- [ ] M4-06-05 收敛外部本地图书导入 handoff：`ExternalImportPayloadType.localBook` 只保留 transient overlay 和目标 sheet 进度，不遗留全局任务队列记录；资源类外部导入仍可进入队列。
+- [ ] M4-06-06 收口 TXT 编码入口：让 storage、preview、parser 共用 `LocalTextEncodingDetector` 的导入采样 / charset 决策，避免多处重复评分。
+- [ ] M4-06-07 做 EPUB 成熟库 adapter spike：用 `epubx` 试替 metadata / OPF / TOC 层，不改变现有 `ReaderDocument`、fixed-layout、inline image 输出。
+- [ ] M4-06-08 让至少一个本地 parser 真正落地 `LocalBookParserInputAware`，避免 input adapter 长期空置。
+- [ ] M4-06-09 补本地图书导入体验 smoke：确认导入完成后不遗留全局任务队列按钮，导入 sheet、立即阅读、失败提示仍可用。
+- [ ] M4-06-10 建立 Windows 本地阅读性能基线：记录大 TXT、流式 EPUB、PDF 导入、索引、首次打开和章节切换耗时。
+- [ ] M4-06-11 复查本地书库页 presentation 体量：等 M3 书架链稳定后，再决定是否拆 `LocalLibraryTaskPresenter` / import controller。
+
+## 7. M4 验收
+
+- [ ] M4-07-01 每种本地内容格式都有平台支持、成熟库评估和暂不替换原因。
+- [ ] M4-07-02 用户资产不写入 cache/tmp，不被启动清理误删。
+- [ ] M4-07-03 长任务不会明显阻塞 UI，至少一个高风险任务有队列或 isolate 试点。
+- [ ] M4-07-04 storage guard、storage baseline guard、相关 parser / cache tests 通过。
+- [ ] M4-07-05 Web build 和可用桌面构建或未验证原因记录完整。
 
 ## M4 执行记录（2026-06-04，Windows 侧代码阅读）
 
@@ -141,7 +141,13 @@
 | PDF 文本提取 | 取决于 `pdf_text_extract` / pdfium 目标支持 | 取决于插件目标支持 | 不应默认支持 native 提取 | 需构建验证 | 需 Windows 构建 / 样例文件验证 | 需 Linux 构建验证 |
 | MOBI / AZW / AZW3 | 纯 Dart 库理论可用，需大文件性能验收 | 同 Android | 受文件导入限制 | 理论可用 | 理论可用 | 理论可用 |
 
-`M4-02-05` 本轮未执行，因为它需要改 parser 源码注释，属于代码变更；为降低与 M3 阅读链冲突，留到后续单独领取。
+#### M4-02-05 暂不替换 parser 的维护注释
+
+- `txt_local_book_parser.dart`：补充 TXT parser 保留原因，明确中文网文章节规则、超大文件流式 offset、多编码兜底和长章节拆分是当前不可直接替换的业务约束；退出条件是成熟 parser 能覆盖章节识别、编码检测、offset 懒加载和大文件性能基线。
+- `local_text_encoding_detector.dart`：补充编码检测统一入口说明，要求 storage、preview、parser 不再复制新的 charset 评分逻辑；如替换成熟库，应先替换该类并回归 TXT / HTML / EPUB 测试。
+- `epub_local_book_parser.dart`：补充 EPUB 定制 parser 保留原因，明确 `ReaderDocument`、inline image、fixed-layout 信号和资源物化是替换边界；成熟库先从 metadata / OPF / TOC adapter 试点。
+- `pdf_local_book_parser.dart`：补充 PDF 文本抽取 adapter 说明，明确 `PackagePdfTextExtractor` 是替换点；如果 `pdfrx` / PDFium 能承担多端页元数据和文本抽取，再替换 adapter。
+- `kindle_local_book_parser.dart`：补充 MOBI / AZW / AZW3 实验能力说明，明确仅承诺无 DRM 基础样例，复杂 Kindle 变体优先给清晰失败提示，不把格式细节扩散到 UI。
 
 ### M4-03-01 长任务盘点
 
@@ -156,6 +162,41 @@
 | 章节缓存预取 | `ChapterCacheService` | Stream 进度、取消 token、并发度解析。 | 失败重试和 UI 反馈可继续补测。 |
 | 缓存治理 | `AppCacheGovernanceService` | 已能按预算清理章节、分页、封面缓存。 | 用户资产和 cache/tmp 边界需要 M4-04-04 / M4-05-04 补测。 |
 
+#### M4-03-02 EPUB isolate 解析试点确认
+
+本次选择 EPUB 索引作为 M4-03-02 的 isolate / task queue 试点，因为 `EpubLocalBookParser` 已在索引阶段使用 `Isolate.run<Map<String, Object?>>` 执行 `_parseIndexInBackground`，业务输出仍通过原有 `LocalParsedBook`、`LocalParsedChapter`、`ReaderDocument` 和资源物化路径返回。
+
+- 选择原因：EPUB 解包、OPF / spine / nav 解析和章节候选计算属于纯 Dart 重活，比 PDF MethodChannel 抽取更适合 isolate。
+- 行为边界：本次不新增第二个并发模型，不改变 EPUB 章节顺序、fixed-layout 信号、cover 物化、inline image 输出。
+- 当前限制：EPUB 资源物化和章节内容懒加载仍有主 isolate I/O；TXT 目前靠 streaming + cooperative yield；PDF 当前移动端文本插件不适合直接搬入 Dart isolate；MOBI 依赖 `dart_mobi`，需先补实验能力验收。
+
+#### M4-03-03 任务取消、进度、失败重试和 UI 反馈测试
+
+- `test/app/tasks/app_task_manager_test.dart`：补充长任务失败后仍保留 `progress`、`progressLabel`、`detail`、`recoveryKey`，并将 `canCancel` 关闭、`canRetry` 打开的测试，覆盖失败重试所需状态。
+- `test/app/widgets/app_task_status_test.dart`：补充 `ImportExportInlineStatus` widget 测试，确认进度文案、阶段详情、进度条数值和失败反馈能被 UI 展示。
+- 本轮不新增真实 retry 回调，因为当前 `AppTaskManager` 只保存 `canRetry` / `recoveryKey`，队列面板尚未提供统一 retry action；后续如果要做全局重试按钮，应单独领取任务并补交互测试。
+
+#### M4-03-04 性能影响记录
+
+| 平台 / 设备 | 当前影响判断 | 后续补验 |
+| --- | --- | --- |
+| 低端 Android / iOS | TXT 大文件编码评分和章节切分仍可能占用主 isolate；EPUB 索引已有 isolate 试点；PDF 文本抽取走插件，不应强迁 isolate。 | 需要真机导入大 TXT、流式 EPUB、PDF 样例，记录导入、索引、首次打开耗时。 |
+| Web JS | 当前能力层标记 Native 文件系统导入和 managed file storage 不支持；`LocalBookParserInput` 预留了 webUploadedBytes，但 parser 尚未真实落地 input-aware。 | 后续如启用 Web 上传，必须先做 M4-06-08 input-aware，再补 Web bytes parser 测试。 |
+| Windows Desktop | 本机主要风险是大文件 I/O、TXT 编码评分和 PDF 文本抽取平台不支持；EPUB isolate 可降低索引阶段阻塞。 | 先以 Windows 作为 M4-03-05 基线平台，记录大 TXT / EPUB / PDF 导入与打开时间。 |
+| macOS / Linux Desktop | 设计上同桌面路径，但本轮未构建；`dart:io` 与插件支持需要分别验证。 | macOS 正在 M3，Linux 待后续机器补验。 |
+
+#### M4-03-05 Windows 自动化性能基线
+
+本轮建立的是 Windows 侧自动化测试基线，不等价于真机用户导入 / 首开手动验收；真实大样本仍放到 `M4-06-10`。
+
+| 场景 | Windows 命令 | 结果 |
+| --- | --- | --- |
+| 阅读器启动 / 章节切换逻辑基线 | `flutter test test/features/reader/application/reader_experience_baseline_test.dart test/features/reader/application/reader_pagination_engine_test.dart` | 7 tests passed，墙钟约 97.1s。 |
+| 列表滚动 / 视口渲染 smoke | `flutter test test/features/reader/presentation/reader_rendering_memory_smoke_test.dart test/features/reader/presentation/reader_paged_viewport_controller_test.dart test/features/reader/presentation/reader_runtime_controller_test.dart test/features/reader/presentation/reader_content_loading_controller_test.dart` | 29 tests passed，墙钟约 74.2s。 |
+| TXT / EPUB / PDF / MOBI 解析耗时基线 | `flutter test --concurrency=1 --timeout=3x test/features/reader/application/local/txt_local_book_parser_test.dart test/features/reader/application/local/local_text_encoding_detector_test.dart test/features/reader/application/local/epub_local_book_parser_test.dart test/features/reader/application/local/pdf_local_book_parser_test.dart test/features/reader/application/local/kindle_local_book_parser_test.dart` | 46 tests passed，墙钟约 212.3s。 |
+
+缺口：没有真实 Windows 文件选择器导入、真实大 PDF / 大 EPUB / 大 TXT 首开、书库页真实滚动帧耗时；这些需要样本文件和手动 / integration 验收，后续归入 `M4-06-10`。
+
 ### M4-04-01 用户资产与资源落点盘点
 
 | 资产 | 主要落点 | 当前风险 |
@@ -169,6 +210,23 @@
 | 头像 / 资料图片 | `MinePageSessionService` 使用 documents 下 `profile_avatars` | 直接 documents 路径，后续可迁入统一 resource service。 |
 | 本地图书资源 | `LocalBookStorageService` 的 `local_books`，EPUB / MOBI / HTML / MD 资源在图书副本相邻 asset 目录 | 属于本地内容资产，不应被 cache 清理。 |
 
+#### M4-04-02 / M4-04-03 头像资产迁入 ManagedAssetStore
+
+- 新增 `ManagedAssetType.profileAvatar` / `ManagedAssetScope.userProfile`，并在 `ManagedAssetDirectoryPolicies` 中登记 `profile_avatars/`。
+- `MinePageSessionService.saveLocalAvatar` 改为通过 `ManagedAssetStore.persistBytes` 保存头像，prefs 只保存 managed relative path；读取时由 `ManagedAssetStore.resolvePersistedPath` 解析为运行时绝对路径。
+- 删除、替换和清用户作用域缓存时通过 `ManagedAssetStore.deletePath` 处理，兼容旧版本绝对路径和新版本相对路径，避免旧头像遗留。
+- 维护注释已写在保存 / 删除头像路径附近，明确 prefs 不承载图片字节、替换先删旧 asset、旧路径只作为兼容输入。
+
+#### M4-04-04 用户资产不被缓存清理误删测试
+
+- `test/features/mine/application/mine_page_session_service_test.dart`：覆盖头像保存、读取、删除和旧路径清理。
+- `test/core/cache/app_cache_governance_service_test.dart`：新增 `clearRebuildableCaches` 测试，确认章节缓存、分页缓存、封面缓存被清理时，`ManagedAssetStore` 下的 `profileAvatar` 文件仍存在。
+
+#### M4-04-05 Storage baseline 矩阵更新
+
+- `docs/storage_governance_baseline_matrix_2026-06-04.md`：将 `profile_avatars` 从 `MinePageSessionService` 业务层直连目录改为 `ManagedAssetDirectoryPolicy` baseline，状态更新为“已迁入 policy”。
+- `tool/check_storage_governance_guard.dart`：Windows 路径归一化为 `/`，避免 baseline ID 在 Windows 下因反斜杠误报；`profile_avatars` 白名单同步到 policy 文件。
+
 ### M4-05-01 缓存与诊断盘点
 
 | 类型 | 落点 | 当前治理 |
@@ -181,7 +239,40 @@
 | 临时目录 | `AdvancedThemeService` 使用 `getTemporaryDirectory()` 处理主题导入 / 导出工作目录 | 应确保失败时清理，不影响用户资产。 |
 | 诊断导出 | `SearchFailureExportService`、`ExternalImportDiagnostics`、`AppPlatformCapabilities.diagnosticLogExport` | 桌面 / 下载目录 / support exports 路径存在，平台支持需后续验收。 |
 
-后续低风险建议：先单独领取 `M4-02-05` 只补 parser 维护注释；再领取 `M4-04-05` 写 storage baseline 矩阵。代码改造类 `M4-03-02`、`M4-04-02`、`M4-05-02` 建议等 M3 阅读链和书架链稳定后再做。
+#### M4-05-02 统一缓存治理清理入口
+
+- `AppCacheGovernanceService` 新增 `clearRebuildableCaches()`，统一清理章节正文缓存、阅读器分页缓存、封面磁盘缓存。
+- `enforceBudgets()` 改为按 cache kind 逐项容错：某一路径清理失败时记录 `developer.log`，继续执行其他 cache 清理，避免单点失败阻断治理。
+- `AppPaginationLayoutCacheStore` 补 `clearPersistedChapterLayouts()`，让分页缓存清理也进入统一 governance adapter。
+
+#### M4-05-03 下载 / 保存 / 分享路径确认
+
+| 平台 | 诊断 / 导出路径结论 | 本轮状态 |
+| --- | --- | --- |
+| Web JS | `DiagnosticLogExportService` Web 实现返回 `text`，`file == null`，适合复制 / 浏览器下载策略；Native 文件系统导入仍未启用。 | 代码确认，未跑 Web build。 |
+| Android / iOS | 诊断和主题导出以临时文件作为分享中转，页面通过 `share_plus` 分发；长期用户资产不得落 temporary。 | 代码确认，未跑真机。 |
+| Windows | 诊断导出写入 temp/diagnostics 文件，主题导出使用分享 / 剪贴板 fallback；本轮测试在 Windows 跑通 service 侧。 | 已跑 Windows 单测。 |
+| macOS | 设计同桌面路径，M3 仍在 macOS 侧，本轮不占用。 | 未验证。 |
+| Linux | 设计同桌面路径，需后续机器补构建和文件管理器行为。 | 未验证。 |
+
+#### M4-05-04 缓存预算、过期、失败兜底测试
+
+- `test/core/cache/app_cache_governance_service_test.dart` 覆盖：
+  - snapshot 聚合章节缓存、分页缓存、封面缓存预算；
+  - `enforceBudgets` 传递章节、分页、封面预算；
+  - 过期分页缓存按 stale period 删除；
+  - 分页缓存清理失败时封面 compact 仍继续；
+  - `clearRebuildableCaches` 不误删 managed 用户头像资产。
+
+#### M4-05-05 缓存和诊断六平台验收记录
+
+| 能力 | Android | iOS | Web JS | macOS | Windows | Linux |
+| --- | --- | --- | --- | --- | --- | --- |
+| cache governance snapshot / budget | 代码应支持，需真机数据库和文件缓存验收。 | 同 Android。 | Web 不支持原生 managed file storage，需单独 Web storage 策略。 | 代码应支持，未本轮构建。 | 单测通过；Drift 测试需临时加入 `build/windows/x64/plugins/sqlite3_flutter_libs/Release` 到 PATH。 | 代码应支持，未本轮构建。 |
+| 诊断导出 | 临时文件 + 系统分享。 | 临时文件 + 系统分享。 | 返回 text，不生成本地 file，适合复制 / 下载策略。 | 临时文件 / 桌面保存路径待验。 | 临时文件路径代码可用，本轮未打开文件管理器。 | 临时文件 / 桌面保存路径待验。 |
+| 用户资产保护 | managed 头像、封面、字体、主题资产不应进 cache/tmp。 | 同 Android。 | 需 Web 上传策略后补验。 | 需构建验收。 | 头像 managed store 测试通过；cache 清理不误删头像测试通过。 | 需构建验收。 |
+
+后续低风险建议：`M4-02-05`、`M4-03-02` 到 `M4-03-05`、`M4-04-02` 到 `M4-04-05`、`M4-05-02` 到 `M4-05-05` 已在 Windows 侧完成；下一步可从 `M4-06-02` PDF 路线 spike 或 `M4-06-04` 本地导入队列收敛继续。
 
 ### 本地阅读代码审计（2026-06-04）
 
@@ -228,7 +319,7 @@
 | 优先级 | 任务 | 对应 M4 | 改动风险 | 推荐动作 |
 | --- | --- | --- | --- | --- |
 | P0 | PDF 路线统一评估 | `M4-02-03` / `M4-02-06` 后续深化 | 中 | 建一个 spike 文档或小测试，确认 `pdfrx` / `pdfrx_engine` 是否能提供需要的文本抽取和页元数据；不要再扩展 `pdf_text_extract`。 |
-| P0 | MOBI 实验能力标记 | `M4-02-04` / `M4-06-01` | 低 | 在验收记录中明确 MOBI 不是成熟能力，只承诺无 DRM / 基础样例。 |
+| P0 | MOBI 实验能力标记 | `M4-02-04` / `M4-07-01` | 低 | 在验收记录中明确 MOBI 不是成熟能力，只承诺无 DRM / 基础样例。 |
 | P1 | TXT 编码入口收口 | `M4-02-01` / `M4-03-02` | 中 | 先抽 `LocalTextEncodingDetector` 的“导入采样决策”API，让 storage、preview、parser 共用。 |
 | P1 | EPUB 成熟库替代试点 | `M4-02-02` / `M4-03-02` | 中高 | 用 `epubx` 做只读 adapter spike，只替代 metadata / TOC，不碰 ReaderDocument 输出。 |
 | P1 | 本地 parser input-aware 落地 | M2-D012 / `M4-01-03` | 中 | 选择 TXT 或 EPUB 先实现 `parseInput`，避免 adapter 空置。 |

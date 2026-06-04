@@ -14,6 +14,7 @@ enum ManagedAssetScope {
   bottomNav,
   typography,
   localBook,
+  userProfile,
 }
 
 enum ManagedAssetType {
@@ -25,6 +26,7 @@ enum ManagedAssetType {
   readerFont,
   customBookCover,
   localBookArtifact,
+  profileAvatar,
 }
 
 @JsonSerializable()
@@ -57,11 +59,12 @@ class ManagedAssetRef {
   @JsonKey(includeFromJson: false, includeToJson: false)
   final String? resolvedPath;
 
-  String get normalizedRelativePath => relativePath.trim().replaceAll('\\', '/');
-  String? get normalizedResolvedPath => resolvedPath?.trim().replaceAll('\\', '/');
+  String get normalizedRelativePath =>
+      relativePath.trim().replaceAll('\\', '/');
+  String? get normalizedResolvedPath =>
+      resolvedPath?.trim().replaceAll('\\', '/');
 
-  bool get belongsToCollection =>
-      collectionId?.trim().isNotEmpty == true;
+  bool get belongsToCollection => collectionId?.trim().isNotEmpty == true;
 
   String get bindingKey {
     final normalizedCollectionId = collectionId?.trim() ?? '';

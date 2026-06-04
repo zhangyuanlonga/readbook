@@ -73,6 +73,12 @@ abstract final class ManagedAssetDirectoryPolicies {
           root: ManagedAssetRoot.support,
           relativeDirectory: 'local_books/',
         ),
+        ManagedAssetDirectoryPolicy(
+          type: ManagedAssetType.profileAvatar,
+          scope: ManagedAssetScope.userProfile,
+          root: ManagedAssetRoot.documents,
+          relativeDirectory: 'profile_avatars/',
+        ),
       ];
 
   static ManagedAssetDirectoryPolicy? policyFor(ManagedAssetType type) {
