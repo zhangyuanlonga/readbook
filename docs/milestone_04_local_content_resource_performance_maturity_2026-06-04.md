@@ -58,6 +58,22 @@
 - [ ] M4-06-04 storage guard、storage baseline guard、相关 parser / cache tests 通过。
 - [ ] M4-06-05 Web build 和可用桌面构建或未验证原因记录完整。
 
+## 7. M4-07 本地阅读专项稳定化阶段任务
+
+以下任务由 `本地阅读代码审计（2026-06-04）` 和 `本地导入任务队列审计与阶段计划（2026-06-04）` 拆分而来。执行规则仍然保持每次只领取一个最小任务编号。
+
+- [x] M4-07-01 将本地阅读代码审计、成熟库替代判断和任务队列重复反馈整理为 M4 阶段计划。
+- [ ] M4-07-02 做 PDF 路线统一 spike：确认 `pdfrx` / `pdfrx_engine` / PDFium 是否能承担页元数据和文本抽取，给出是否替代 `pdf_text_extract` 的结论。
+- [ ] M4-07-03 将 MOBI / AZW / AZW3 标记为实验能力：补验收说明、失败路径、DRM / 编码 / 图片资源限制和样例测试缺口。
+- [ ] M4-07-04 收敛本地书库页导入 / 重索引任务反馈：`LocalLibraryPage` 不再把前台导入和单本重索引发布到全局任务队列，保留页面状态、bottom sheet、snackbar 和立即阅读入口。
+- [ ] M4-07-05 收敛外部本地图书导入 handoff：`ExternalImportPayloadType.localBook` 只保留 transient overlay 和目标 sheet 进度，不遗留全局任务队列记录；资源类外部导入仍可进入队列。
+- [ ] M4-07-06 收口 TXT 编码入口：让 storage、preview、parser 共用 `LocalTextEncodingDetector` 的导入采样 / charset 决策，避免多处重复评分。
+- [ ] M4-07-07 做 EPUB 成熟库 adapter spike：用 `epubx` 试替 metadata / OPF / TOC 层，不改变现有 `ReaderDocument`、fixed-layout、inline image 输出。
+- [ ] M4-07-08 让至少一个本地 parser 真正落地 `LocalBookParserInputAware`，避免 input adapter 长期空置。
+- [ ] M4-07-09 补本地图书导入体验 smoke：确认导入完成后不遗留全局任务队列按钮，导入 sheet、立即阅读、失败提示仍可用。
+- [ ] M4-07-10 建立 Windows 本地阅读性能基线：记录大 TXT、流式 EPUB、PDF 导入、索引、首次打开和章节切换耗时。
+- [ ] M4-07-11 复查本地书库页 presentation 体量：等 M3 书架链稳定后，再决定是否拆 `LocalLibraryTaskPresenter` / import controller。
+
 ## M4 执行记录（2026-06-04，Windows 侧代码阅读）
 
 本轮只执行低冲突盘点和评估任务，未改 reader / bookshelf / mine 的业务运行逻辑，避免与 macOS 正在执行的 M3 业务链验收冲突。验证范围以 Windows 机器代码阅读、`rg` 盘点和静态分析为主；Web、Android、iOS、macOS、Linux 未在本机真实构建。
@@ -220,3 +236,45 @@
 | P2 | 性能基线 | `M4-03-05` | 低 | Windows 先记录大 TXT、EPUB、PDF 导入 / 打开耗时，作为后续 isolate 改造前基线。 |
 
 当前最有价值的执行顺序：先做 `PDF 路线统一评估` 和 `MOBI 实验能力标记`，再做 `TXT 编码入口收口`。EPUB 替换成熟库要谨慎，因为现有代码虽然手搓，但承载了项目特有的 fixed-layout、inline image、ReaderDocument 结构。
+
+### 本地导入任务队列审计与阶段计划（2026-06-04）
+
+本节补充“导入本地图书会触发任务列表”的排查结论。当前问题不是 `AppTaskManager` 整体多余，而是本地图书导入路径把同一件事同时投递到页面状态、底部导入 sheet 和全局任务队列，造成用户看到额外“任务列表 / 任务队列”入口。
+
+#### 排查结论
+
+| 入口 | 当前反馈 | 是否重复 | 结论 |
+| --- | --- | --- | --- |
+| 本地书库页直接导入 | `LocalLibraryPage` 内部 `_currentStageText` / `_lastErrorText` 页面状态 + `ImportExportTaskSheet` bottom sheet + `AppTaskManager` 全局任务队列 | 是 | 全局队列多余；用户已留在当前页面且有底部 sheet，完成后还有 snackbar / 立即阅读按钮。 |
+| 本地书库页重索引 | 页面内 `_reindexStatusText` / `_reindexErrorText` + `AppTaskManager` 全局任务队列 | 是 | 对单本书手动重索引，页面内状态足够；全局队列会留下已完成任务按钮。 |
+| 书架页“导入本地图书”sheet | `_BookshelfImportLocalBooksSheet` 内部 steps + `ImportExportProgressCard` / `ImportExportTaskSheet` | 否 | 这是当前更合理的模式：前台操作只在当前 sheet 展示进度，不投全局队列。 |
+| 外部文件 handoff | `App._onIncomingExternalImportPayload` 先发全局 handoff task + 顶层 transient overlay + 跳转后 `_BookshelfExternalImportSheet` 再发 localBookImport task | 是 | 对本地图书外部导入重复更明显；handoff 与目标 sheet 都会留下任务队列记录。 |
+| 资源导入 / 字体 / 主题 / 封面 | 多处资源管理页使用 `AppTaskManager` | 不直接判定 | 这些任务可能跨页面、批量导入或需要中断提示，不能因为本地图书导入重复就删除全局队列基础设施。 |
+
+#### 根因
+
+- `AppTaskQueueButton` 位于 `lib/app/shell_scaffold.dart`，只要 `AppTaskManager.tasks` 非空就显示。
+- `AppTaskManager` 的已完成任务不会自动清理，需要用户打开任务队列手动“清除已完成”。
+- 本地图书导入和重索引是前台、同步、强上下文任务，当前页面已经完整承载进度和结果；再进入全局队列会把一次普通导入变成“系统后台任务”的感觉。
+- `ImportExportTaskStatus` 同时被 bottom sheet、overlay、queue panel 转换复用，导致组件抽象看起来统一，但具体入口没有明确“谁有资格进入全局队列”。
+
+#### 稳定化原则
+
+1. 前台、不可取消、用户留在当前页面的任务，不进入全局任务队列。
+2. 会跨页面、可中断、需要恢复提示、可取消或可重试的长任务，才进入 `AppTaskManager`。
+3. 本地图书导入优先使用当前 sheet / 页面内状态 / snackbar；资源批量导入、后台扫描、缓存治理可以继续使用全局队列。
+4. `AppTaskManager` 不删除，只收紧 `localBookImport` 的发布场景。
+
+#### 分阶段计划
+
+| 阶段 | 目标 | 任务 | 风险 | 验证 |
+| --- | --- | --- | --- | --- |
+| Phase A | 文档固化 | 将本次本地阅读代码审计、任务队列重复反馈结论写入 M4。 | 无代码风险 | `git diff` 确认仅文档变更。 |
+| Phase B | 去掉本地书库页重复队列 | `LocalLibraryPage` 直接导入和重索引不再调用 `AppTaskManager.startTask/updateTask`；保留 `_taskStatus`、`ImportExportTaskSheet`、页面状态和 snackbar。 | 低；只影响本地书库页前台反馈。 | `flutter analyze`；补/跑本地书库页面 smoke，确认导入按钮、底部 sheet、立即阅读按钮仍可用。 |
+| Phase C | 收敛外部本地图书导入 | `ExternalImportPayloadType.localBook` 的 app handoff 只保留 transient overlay 和路由跳转，不写全局任务队列；`_BookshelfExternalImportSheet` 使用自身 sheet 状态，不再二次发布 `localBookImport` task。 | 中；外部分享 / 打开方式需要手工验收。 | Windows 上模拟外部 payload 或走可控入口，确认能跳本地导入页并显示 sheet；资源类外部导入仍可进任务队列。 |
+| Phase D | 明确队列准入规则 | 在 M4 或治理文档补一条规则：只有跨页面、后台、可中断 / 可恢复任务进入全局队列。 | 低 | 文档评审；后续资源导入按规则复查。 |
+| Phase E | 后续体验补测 | 补一条针对本地图书导入“不遗留全局任务队列按钮”的 widget / integration smoke；如果测试成本高，先记录 Windows 手工验收。 | 中；文件选择器自动化可能需要 mock。 | `flutter analyze` + 可行的 widget/provider 测试；Windows 手工导入 TXT 样例。 |
+
+#### 建议执行顺序
+
+先做 `Phase B`，因为它只影响 `LocalLibraryPage`，不会碰 M3 在线阅读链；再做 `Phase C`，因为外部导入涉及 app 级 handoff 和书架 sheet，需要单独验收。`AppTaskManager`、`AppTaskQueueButton` 和资源导入任务队列先保留，避免扩大改动。
