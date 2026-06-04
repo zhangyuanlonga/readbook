@@ -426,6 +426,7 @@ $chapter2
     test('loads pdf page content lazily and persists body cache', () async {
       final file = File('${tempDir.path}/sample.pdf');
       await file.writeAsBytes(const <int>[1, 2, 3], flush: true);
+      final fileStat = await file.stat();
       final now = DateTime.parse('2026-03-21T12:00:00.000Z');
 
       await repository.upsertBook(
@@ -434,7 +435,8 @@ $chapter2
           title: 'PDF 按需正文测试',
           format: LocalBookFormat.pdf,
           storagePath: file.path,
-          fileSize: await file.length(),
+          fileSize: fileStat.size,
+          storageFileLastModifiedMs: fileStat.modified.millisecondsSinceEpoch,
           indexStatus: LocalBookIndexStatus.ready,
           chapterCount: 1,
           createdAt: now,
@@ -477,7 +479,8 @@ $chapter2
           title: 'PDF 按需正文测试',
           format: LocalBookFormat.pdf,
           storagePath: file.path,
-          fileSize: await file.length(),
+          fileSize: fileStat.size,
+          storageFileLastModifiedMs: fileStat.modified.millisecondsSinceEpoch,
           indexStatus: LocalBookIndexStatus.ready,
           chapterCount: 1,
           createdAt: now,
@@ -635,7 +638,8 @@ $chapter2
   });
 }
 
-class _LocalChapterContentFakePdfTextExtractor implements LocalPdfTextExtractor {
+class _LocalChapterContentFakePdfTextExtractor
+    implements LocalPdfTextExtractor {
   const _LocalChapterContentFakePdfTextExtractor({
     required this.document,
     required this.pageTexts,

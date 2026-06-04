@@ -55,24 +55,24 @@
 以下任务由 `本地阅读代码审计（2026-06-04）` 和 `本地导入任务队列审计与阶段计划（2026-06-04）` 拆分而来。执行规则仍然保持每次只领取一个最小任务编号。
 
 - [x] M4-06-01 将本地阅读代码审计、成熟库替代判断和任务队列重复反馈整理为 M4 阶段计划。
-- [ ] M4-06-02 做 PDF 路线统一 spike：确认 `pdfrx` / `pdfrx_engine` / PDFium 是否能承担页元数据和文本抽取，给出是否替代 `pdf_text_extract` 的结论。
-- [ ] M4-06-03 将 MOBI / AZW / AZW3 标记为实验能力：补验收说明、失败路径、DRM / 编码 / 图片资源限制和样例测试缺口。
-- [ ] M4-06-04 收敛本地书库页导入 / 重索引任务反馈：`LocalLibraryPage` 不再把前台导入和单本重索引发布到全局任务队列，保留页面状态、bottom sheet、snackbar 和立即阅读入口。
-- [ ] M4-06-05 收敛外部本地图书导入 handoff：`ExternalImportPayloadType.localBook` 只保留 transient overlay 和目标 sheet 进度，不遗留全局任务队列记录；资源类外部导入仍可进入队列。
-- [ ] M4-06-06 收口 TXT 编码入口：让 storage、preview、parser 共用 `LocalTextEncodingDetector` 的导入采样 / charset 决策，避免多处重复评分。
-- [ ] M4-06-07 做 EPUB 成熟库 adapter spike：用 `epubx` 试替 metadata / OPF / TOC 层，不改变现有 `ReaderDocument`、fixed-layout、inline image 输出。
-- [ ] M4-06-08 让至少一个本地 parser 真正落地 `LocalBookParserInputAware`，避免 input adapter 长期空置。
-- [ ] M4-06-09 补本地图书导入体验 smoke：确认导入完成后不遗留全局任务队列按钮，导入 sheet、立即阅读、失败提示仍可用。
-- [ ] M4-06-10 建立 Windows 本地阅读性能基线：记录大 TXT、流式 EPUB、PDF 导入、索引、首次打开和章节切换耗时。
-- [ ] M4-06-11 复查本地书库页 presentation 体量：等 M3 书架链稳定后，再决定是否拆 `LocalLibraryTaskPresenter` / import controller。
+- [x] M4-06-02 做 PDF 路线统一 spike：确认 `pdfrx` / `pdfrx_engine` / PDFium 是否能承担页元数据和文本抽取，给出是否替代 `pdf_text_extract` 的结论。
+- [x] M4-06-03 将 MOBI / AZW / AZW3 标记为实验能力：补验收说明、失败路径、DRM / 编码 / 图片资源限制和样例测试缺口。
+- [x] M4-06-04 收敛本地书库页导入 / 重索引任务反馈：`LocalLibraryPage` 不再把前台导入和单本重索引发布到全局任务队列，保留页面状态、bottom sheet、snackbar 和立即阅读入口。
+- [x] M4-06-05 收敛外部本地图书导入 handoff：`ExternalImportPayloadType.localBook` 只保留 transient overlay 和目标 sheet 进度，不遗留全局任务队列记录；资源类外部导入仍可进入队列。
+- [x] M4-06-06 收口 TXT 编码入口：让 storage、preview、parser 共用 `LocalTextEncodingDetector` 的导入采样 / charset 决策，避免多处重复评分。
+- [x] M4-06-07 做 EPUB 成熟库 adapter spike：用 `epubx` 试替 metadata / OPF / TOC 层，不改变现有 `ReaderDocument`、fixed-layout、inline image 输出。
+- [x] M4-06-08 让至少一个本地 parser 真正落地 `LocalBookParserInputAware`，避免 input adapter 长期空置。
+- [x] M4-06-09 补本地图书导入体验 smoke：确认导入完成后不遗留全局任务队列按钮，导入 sheet、立即阅读、失败提示仍可用。
+- [x] M4-06-10 建立 Windows 本地阅读性能基线：记录大 TXT、流式 EPUB、PDF 导入、索引、首次打开和章节切换耗时。
+- [x] M4-06-11 复查本地书库页 presentation 体量：等 M3 书架链稳定后，再决定是否拆 `LocalLibraryTaskPresenter` / import controller。
 
 ## 7. M4 验收
 
-- [ ] M4-07-01 每种本地内容格式都有平台支持、成熟库评估和暂不替换原因。
-- [ ] M4-07-02 用户资产不写入 cache/tmp，不被启动清理误删。
-- [ ] M4-07-03 长任务不会明显阻塞 UI，至少一个高风险任务有队列或 isolate 试点。
-- [ ] M4-07-04 storage guard、storage baseline guard、相关 parser / cache tests 通过。
-- [ ] M4-07-05 Web build 和可用桌面构建或未验证原因记录完整。
+- [x] M4-07-01 每种本地内容格式都有平台支持、成熟库评估和暂不替换原因。
+- [x] M4-07-02 用户资产不写入 cache/tmp，不被启动清理误删。
+- [x] M4-07-03 长任务不会明显阻塞 UI，至少一个高风险任务有队列或 isolate 试点。
+- [x] M4-07-04 storage guard、storage baseline guard、相关 parser / cache tests 通过。
+- [x] M4-07-05 Web build 和可用桌面构建或未验证原因记录完整。
 
 ## M4 执行记录（2026-06-04，Windows 侧代码阅读）
 
@@ -272,7 +272,148 @@
 | 诊断导出 | 临时文件 + 系统分享。 | 临时文件 + 系统分享。 | 返回 text，不生成本地 file，适合复制 / 下载策略。 | 临时文件 / 桌面保存路径待验。 | 临时文件路径代码可用，本轮未打开文件管理器。 | 临时文件 / 桌面保存路径待验。 |
 | 用户资产保护 | managed 头像、封面、字体、主题资产不应进 cache/tmp。 | 同 Android。 | 需 Web 上传策略后补验。 | 需构建验收。 | 头像 managed store 测试通过；cache 清理不误删头像测试通过。 | 需构建验收。 |
 
-后续低风险建议：`M4-02-05`、`M4-03-02` 到 `M4-03-05`、`M4-04-02` 到 `M4-04-05`、`M4-05-02` 到 `M4-05-05` 已在 Windows 侧完成；下一步可从 `M4-06-02` PDF 路线 spike 或 `M4-06-04` 本地导入队列收敛继续。
+后续低风险建议：`M4-02-05`、`M4-03-02` 到 `M4-03-05`、`M4-04-02` 到 `M4-04-05`、`M4-05-02` 到 `M4-05-05`、`M4-06-02` 到 `M4-06-09` 已在 Windows 侧完成；下一步可从 `M4-06-10` Windows 本地阅读性能基线、`M4-06-11` 本地书库页 presentation 复查或 `M4-07` 总验收继续。
+
+#### M4-06-02 PDF 路线统一 spike
+
+本轮只做路线确认和本地依赖资料核验，未替换生产 parser。结论是：`pdfrx_engine` 具备承接 PDF 页元数据、页数和按页文本抽取的 API 条件，后续替换点应落在 `PdfLocalBookParser` 的 `LocalPdfTextExtractor` adapter，而不是继续扩展移动端限定的 `pdf_text_extract`。
+
+| 依赖 | 本轮核验信息 | 结论 |
+| --- | --- | --- |
+| `pdfrx` | 当前项目已用于 `reader_pdf_view.dart`，包文档说明覆盖 Android、iOS、Windows、macOS、Linux、Web，并基于 PDFium / `pdfrx_engine`。 | 继续作为 PDF 阅读 / 渲染主路线。 |
+| `pdfrx_engine` | 本地 pub cache 文档和源码暴露 `PdfDocument.openFile/openData/openUri/openAsset`、`PdfDocument.pages`、`PdfPage.render`、`PdfPage.loadText`、`PdfPage.loadLinks`，需要 `pdfrxInitialize()`。 | 可作为文本抽取 adapter 的优先 spike 目标，能覆盖页信息和按页文本层。 |
+| `pdfium_dart` | 本地 override 文档定位为 PDFium 低层 FFI binding，并建议 Flutter app 优先使用 `pdfrx` / 上层封装。 | 不建议业务 parser 直接依赖低层 FFI，除非 `pdfrx_engine` 缺必要能力。 |
+| `pdf_text_extract` | 本地 override README 说明主要面向 Android / iOS，提供 `PDFDoc.fromPath`、页数和懒加载 `PDFPage.text`。 | 暂保留为当前 adapter；等 `pdfrx_engine` adapter 有 Windows 样例 PDF 测试后再删除。 |
+
+执行决策：短期不直接删除 `pdf_text_extract`，避免在没有 Windows 样例 PDF、Developer Mode / native asset、加密 PDF、无文本层 PDF 验证前引入回归。下一步如果继续做 PDF，应新增 `PdfrxEnginePdfTextExtractor`，保持当前轻量页索引 + 按页懒解析语义，并用样例 PDF 补 Windows 测试。
+
+#### M4-06-04 本地书库页导入 / 重索引任务队列收敛
+
+`LocalLibraryPage` 的前台“导入本地图书”和单本“重索引”不再调用 `AppTaskManager.startTask/updateTask`，也不再发布 `localBookImport` / `localBookIndex` 全局任务记录。保留的反馈仍包括页面内 `_taskStatus`、导入 bottom sheet、阶段文案、失败提示、完成 snackbar 和“立即阅读”入口。
+
+本轮刻意没有改 `App._onIncomingExternalImportPayload`、`bookshelf_page_flow.dart` 或 `_BookshelfExternalImportSheet`，因为外部文件 handoff 属于 `M4-06-05`，需要单独验证“本地图书不进全局队列、资源类外部导入仍可进队列”的边界。
+
+#### M4-06-03 MOBI / AZW / AZW3 实验能力标记
+
+MOBI / AZW / AZW3 保留导入入口，但验收口径改为“实验支持”，不再按成熟稳定格式承诺。导入说明文案已标记 MOBI、AZW、AZW3 为实验支持；`KindleLocalBookParser` 继续复用 `dart_mobi` + markup 解析链，遇到 DRM / 加密文件保持清晰失败提示。
+
+| 项目 | 当前验收口径 | 后续缺口 |
+| --- | --- | --- |
+| 无 DRM 基础样例 | `kindle_local_book_parser_test.dart` 覆盖 MOBI、AZW、AZW3 基础 payload 和资源提取。 | 仍需真实样本库覆盖不同 Kindle 生成器版本。 |
+| DRM / 加密 | 已有测试确认抛出“仅支持无 DRM 文件”的明确错误。 | 需要 Windows 手工导入真实 DRM 样本，确认 UI 提示不被吞掉。 |
+| 编码 / rawml 变体 | 当前依赖 `dart_mobi` 输出 rawml，再由 markup 支撑层解析。 | 复杂编码、异常 HTML、非标准 metadata 仍属于实验风险。 |
+| 图片资源 | 基础资源物化已有测试。 | 大量图片、损坏图片、嵌套资源命名冲突需要样例补测。 |
+| 超大文件性能 | 代码路径理论可用。 | 尚未建立大 MOBI / AZW3 导入、索引和首次打开耗时基线。 |
+
+#### M4-06-05 外部本地图书导入 handoff 队列收敛
+
+`ExternalImportPayloadType.localBook` 的 app 级 handoff 不再创建 `external-import-handoff:*` 全局任务；仍保留顶部 transient overlay 和路由跳转。`_BookshelfExternalImportSheet` 不再接收 `AppTaskManager`，也不再发布 `external-book-import:*` / `localBookImport` 全局任务，进度只留在目标 sheet 内。
+
+资源类外部导入仍保持原规则：advanced theme / font handoff 继续进入 `AppTaskManager` 的 `resourceImport` channel。本轮未删除 `AppTaskManager` 或资源导入队列基础设施。
+
+#### M4-06-06 TXT 编码入口收口
+
+`LocalTextEncodingDetector` 新增 `decodeBestEffortFromSamples`，统一承接多段采样、候选 charset 解码、样本位置加权、UTF-16 zero-byte 兜底和 fallback 惩罚。`LocalBookStorageService` 的 TXT 导入采样不再维护独立评分函数；`TxtLocalBookParser` 的流式样本解码改为调用统一 detector，并只额外叠加章节规则权重。
+
+非流式 TXT 全量解码也改为直接委托 `LocalTextEncodingDetector.decodeBestEffortAsync`，保留已冻结 charset 的严格解码和错误提示。Preview / chapter content 之前已通过 `LocalTextEncodingDetector` 读取 `book.charset`，本轮不再增加新的 charset 评分入口。
+
+#### M4-06-07 EPUB 成熟库 adapter spike
+
+本轮尝试用 `epubx` 接入 metadata / OPF / TOC 只读 adapter，但 `flutter pub add epubx` 在当前依赖树下解算失败：项目当前使用 `image ^4.3.0` 和 `xml ^6.5.0`，而 `epubx` 全版本要求 `image ^3.0.8` 或旧版 `xml ^5.0.2` 路径，不能在不破坏现有依赖的情况下直接加入。
+
+执行结论：暂不强行添加 dependency override，也不把 EPUB 生产 parser 切到 `epubx`。`EpubLocalBookParser` 继续保留定制实现，维护边界仍是 `ReaderDocument`、fixed-layout、inline image、资源物化和章节懒加载输出不变。后续如果要继续成熟库替换，应优先找支持 `image 4.x` / `xml 6.x` 的 EPUB 包，或单独评估 fork `epubx` 的依赖升级成本。
+
+#### M4-06-08 LocalBookParserInputAware 落地
+
+`TxtLocalBookParser` 已实现 `LocalBookParserInputAware`。路径输入仍走原有文件解析和大文件 streaming index；当 `LocalBookParserInput.bytes` 存在时，TXT parser 可直接从字节输入建立章节索引，复用同一套编码检测、章节规则和长章节拆分逻辑。
+
+新增测试覆盖 Web 上传字节语义：没有真实本地文件时，`LocalBookParserInputSource.webUploadedBytes` + UTF-8 bytes 也能解析出章节并返回 charset。
+
+#### M4-06-09 本地图书导入体验 smoke
+
+新增本地图书导入反馈 smoke guard：确认 `LocalLibraryPage` 仍保留 `ImportExportTaskSheet`、立即阅读入口和失败提示，同时不再引用 `appTaskManagerProvider` / `AppTaskManager` / `local-book-import` / `local-book-reindex`。外部本地图书导入 sheet 也确认只保留 sheet 反馈，不再发布 `toAppTaskStatusData`、`localBookImport` 或 `external-book-import` 全局任务。
+
+限制：文件选择器真实打开和 Windows 手工导入 TXT 样例仍属于后续人工验收；本轮自动化先固定“不遗留全局任务队列按钮”的代码边界。
+
+#### M4-06-10 Windows 本地阅读性能基线
+
+本轮建立 Windows 侧自动化基线，覆盖 TXT 大文件索引、EPUB 解析、PDF 轻量索引 / 懒解析、本地章节内容读取和书架页 smoke。它不是完整手工导入基线：真实文件选择器、大 PDF 首开、真实 EPUB 滚动帧率和章节切换体感仍需要人工样本验收。
+
+| 场景 | 覆盖命令 / 用例 | Windows 自动化耗时 | 结果 |
+| --- | --- | ---: | --- |
+| 大 TXT / 流式 TXT | `txt_local_book_parser_test.dart`，包含大 UTF-8、UTF-16LE、GBK head-ascii streaming path | 归入组合耗时 | 通过 |
+| 流式 EPUB / mixed media EPUB | `epub_local_book_parser_test.dart`，覆盖 metadata、spine、nav fragment、fixed-layout、inline image、SVG 资源 | 归入组合耗时 | 通过 |
+| PDF 导入 / 页索引 / 懒解析 | `pdf_local_book_parser_test.dart` + `local_chapter_content_service_test.dart` | 归入组合耗时 | 通过 |
+| 书架 / 本地书库打开链 smoke | `bookshelf_page_smoke_test.dart` | 归入组合耗时 | 通过 |
+| 自动化基线总耗时 | `Measure-Command { flutter test --concurrency=1 --timeout=3x ... }` | 98.81 秒 | 通过 |
+
+基线命令：
+
+```powershell
+flutter test --concurrency=1 --timeout=3x `
+  test/features/reader/application/local/txt_local_book_parser_test.dart `
+  test/features/reader/application/local/epub_local_book_parser_test.dart `
+  test/features/reader/application/local/pdf_local_book_parser_test.dart `
+  test/features/reader/application/local/local_chapter_content_service_test.dart `
+  test/features/bookshelf/presentation/bookshelf_page_smoke_test.dart
+```
+
+#### M4-06-11 本地书库页 presentation 体量复查
+
+本轮队列收敛后，`local_library_page.dart` 从旧审计时的 1080 行降到 925 行，说明去掉全局任务队列发布后页面复杂度有所回落。当前仍然偏重，但功能边界清晰：文件选择、导入 sheet、单本重索引、立即阅读、错误反馈都仍在同一用户流程内。
+
+| 文件 | 当前体量 | 复查结论 |
+| --- | ---: | --- |
+| `lib/features/bookshelf/presentation/local_library_page.dart` | 925 行 | 暂不拆 `LocalLibraryTaskPresenter` / import controller；如果继续加入批量导入策略、后台扫描或复杂取消重试，再拆。 |
+| `lib/features/bookshelf/presentation/bookshelf_page_flow.dart` | 2560 行 | 体量更大，承担书架页多个 sheet / flow；后续如果要做 UI 拆分，应优先按 sheet / flow 分离，而不是只拆本地书库页。 |
+| `lib/features/reader/application/local/txt_local_book_parser.dart` | 1449 行 | 已落地 input-aware，但章节拆分、offset、streaming 编码仍复杂；后续适合拆内部协作类，不建议立即换库。 |
+| `lib/features/reader/application/local/epub_local_book_parser.dart` | 2082 行 | 仍是最大手搓点；`epubx` 依赖冲突后暂不替换，后续只做 adapter 或 fork 成本评估。 |
+
+执行结论：M4 不继续拆 presentation 文件，避免扩大和 M3 书架 / 在线链冲突。当前更应该把“全局任务队列准入规则”固定下来，防止本地图书前台导入再次进入全局任务列表。
+
+### M4-07 总验收（2026-06-04，Windows 侧）
+
+#### M4-07-01 本地内容格式、平台支持和成熟库评估
+
+| 格式 / 资源 | 当前支持口径 | 成熟库 / 路线结论 | 暂不替换原因 |
+| --- | --- | --- | --- |
+| TXT | Native 桌面 / 移动端代码路径可用，Windows 自动化通过；Web bytes 路径已有 input-aware 起点。 | 继续使用 `charset`、`charset_converter`、`flutter_charset_detector`，项目保留中文网文章节和 streaming 特化。 | 章节规则、offset、长章节拆分是业务特化，不适合整体换库。 |
+| EPUB | Windows parser 自动化通过，覆盖 OPF、spine、nav、fixed-layout、inline image、资源物化。 | `epubx` adapter spike 因 `image` / `xml` 依赖冲突未落地。 | 不使用 dependency override，避免破坏现有依赖树；保留定制 parser。 |
+| PDF | Windows 自动化覆盖轻量页索引和按页懒解析；阅读 / 渲染路线已有 `pdfrx`。 | 后续优先 spike `pdfrx_engine` 文本抽取 adapter。 | `pdf_text_extract` 暂保留，等 Windows 样例 PDF 和 `pdfrx_engine` adapter 测试再删。 |
+| MOBI / AZW / AZW3 | 实验支持；基础 MOBI、AZW、AZW3 payload 和 DRM 错误路径测试通过。 | 继续使用 `dart_mobi`。 | 底层库成熟度不足且 Kindle 格式复杂，暂无更稳替换库。 |
+| Markdown / HTML | 本地 parser 保留，属于本地内容入口补充项。 | 当前自有 parser 足够轻量。 | M4 主风险不在该路径，暂不替换。 |
+| 用户图片 / 字体 / 主题资源 | 继续走 managed asset / resource service 方向。 | `ManagedAssetStore` 和 cache governance 继续收口。 | 用户资产不能放 cache/tmp，优先治理存储边界。 |
+
+#### M4-07-02 用户资产和 cache / tmp 边界
+
+`dart tool/check_storage_governance_guard.dart` 通过：JSON-backed SharedPreferences writes 6 处、temporary/cache directory usages 9 处、startup cleanup call sites 0 处、managed directory direct usages 3 处，未发现新增 storage governance violations。
+
+`dart tool/check_storage_baseline_governance.dart` 通过，已批准 storage baseline 均有文档记录。本地图书存储路径已统一使用 POSIX 相对路径语义，避免 Windows `\` 进入长期存储字段。
+
+#### M4-07-03 长任务和 UI 阻塞风险
+
+TXT 大文件索引仍使用 streaming path 和 cooperative yield；PDF 导入保持轻量页索引，正文按页懒解析；本地图书前台导入不再发布全局队列，避免同一任务重复反馈。高风险任务的后续 isolate / queue 深化仍建议放在 PDF 文本抽取 adapter 或 EPUB 资源物化阶段，M4 本轮不强行扩大。
+
+#### M4-07-04 守卫和测试结果
+
+| 命令 | 结果 |
+| --- | --- |
+| `dart tool/check_storage_governance_guard.dart` | 通过 |
+| `dart tool/check_storage_baseline_governance.dart` | 通过 |
+| `flutter test --concurrency=1 --timeout=3x test/core/cache/app_cache_governance_service_test.dart test/features/reader/application/reader_pagination_cache_service_test.dart test/features/reader/application/local/txt_local_book_parser_test.dart test/features/reader/application/local/epub_local_book_parser_test.dart test/features/reader/application/local/pdf_local_book_parser_test.dart test/features/reader/application/local/kindle_local_book_parser_test.dart` | 通过，51 tests passed |
+| `flutter analyze` | 通过，No issues found |
+
+Windows 下 cache / Drift 相关测试需要当前命令进程 PATH 包含 `build/windows/x64/plugins/sqlite3_flutter_libs/Release`，否则会因找不到 `sqlite3.dll` 失败；这属于本机测试环境依赖，不是本轮业务改动失败。
+
+#### M4-07-05 构建验收
+
+本轮按用户要求只跑 Windows，不跑 Web、macOS、Linux、Android、iOS。
+
+| 平台 | 命令 | 结果 |
+| --- | --- | --- |
+| Windows | `flutter build windows` | 通过，产物 `build\windows\x64\runner\Release\shuxiang_reading_next.exe`，构建耗时 257.7 秒 |
+| Web | 未执行 | 用户要求本机只跑 Windows，Web 留给后续单独验收 |
+| macOS / Linux / Android / iOS | 未执行 | 本轮 Windows 侧收尾，不占用其他平台验收 |
 
 ### 本地阅读代码审计（2026-06-04）
 

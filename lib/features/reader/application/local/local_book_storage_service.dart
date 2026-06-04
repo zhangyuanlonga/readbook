@@ -43,13 +43,6 @@ class _EncodingSampleChunk {
   final List<int> bytes;
 }
 
-class _ScoredEncodingSample {
-  const _ScoredEncodingSample({required this.result, required this.score});
-
-  final LocalTextDecodeResult result;
-  final int score;
-}
-
 class LocalBookStorageService {
   LocalBookStorageService({
     LocalTextEncodingDetector? textEncodingDetector,
@@ -71,7 +64,7 @@ class LocalBookStorageService {
     required String bookId,
     required LocalBookFormat format,
   }) {
-    return p.join('local_books', '$bookId${_extensionForFormat(format)}');
+    return p.posix.join('local_books', '$bookId${_extensionForFormat(format)}');
   }
 
   Future<File> resolveStorageFile(LocalBook book) async {
@@ -181,18 +174,11 @@ class LocalBookStorageService {
         );
       }
 
-      final leadingSample = await _detectEncodingFromLeadingSample(
-        effectiveSourceFile,
-      );
-      final sample =
-          leadingSample?.charsetName == 'utf-8'
-              ? leadingSample
-              : await _detectEncodingFromSamples(effectiveSourceFile);
+      final sample = await _detectEncodingFromSamples(effectiveSourceFile);
       try {
         final detectedCharset = await _resolveStoredTxtCharset(
           file: effectiveSourceFile,
           fileLength: fileLength,
-          leadingSample: leadingSample,
           sampledResult: sample,
         );
         final copiedStat = await _copyTxtRawBytesIntoStorage(
@@ -244,14 +230,8 @@ class LocalBookStorageService {
   Future<String?> _resolveStoredTxtCharset({
     required File file,
     required int fileLength,
-    required LocalTextDecodeResult? leadingSample,
     required LocalTextDecodeResult? sampledResult,
   }) async {
-    final leadingCharset = leadingSample?.charsetName;
-    if (leadingCharset != null && leadingCharset.isNotEmpty) {
-      return leadingCharset;
-    }
-
     final sampledCharset = sampledResult?.charsetName;
     if (sampledCharset != null && sampledCharset.isNotEmpty) {
       return sampledCharset;
@@ -328,231 +308,14 @@ class LocalBookStorageService {
     if (sampleChunks.isEmpty) {
       return null;
     }
-
-    final scoredResults = <_ScoredEncodingSample>[];
     final fileLength = await file.length();
-    for (final chunk in sampleChunks) {
-      final decoded =
-          _textEncodingDetector.decodeSampleBestEffort(
-            chunk.bytes,
-            htmlAware: false,
-          ) ??
-          await _textEncodingDetector.decodeSampleBestEffortAsync(
-            chunk.bytes,
-            htmlAware: false,
-          );
-      if (decoded == null || decoded.text.trim().isEmpty) {
-        continue;
-      }
-      scoredResults.add(
-        _ScoredEncodingSample(
-          result: decoded,
-          score: _scoreEncodingSample(
-            chunk: chunk,
-            fileLength: fileLength,
-            decoded: decoded,
-          ),
-        ),
-      );
-    }
-
-    if (scoredResults.isEmpty) {
-      return null;
-    }
-
-    final aggregated = <String, int>{};
-    final bestByCharset = <String, _ScoredEncodingSample>{};
-    for (final sample in scoredResults) {
-      final charset = sample.result.charsetName;
-      aggregated[charset] = (aggregated[charset] ?? 0) + sample.score;
-      final currentBest = bestByCharset[charset];
-      if (currentBest == null || sample.score > currentBest.score) {
-        bestByCharset[charset] = sample;
-      }
-    }
-
-    String? bestCharset;
-    var bestScore = -0x7fffffff;
-    for (final entry in aggregated.entries) {
-      if (entry.value > bestScore) {
-        bestCharset = entry.key;
-        bestScore = entry.value;
-      }
-    }
-    if (bestCharset == null) {
-      return null;
-    }
-    return bestByCharset[bestCharset]?.result;
-  }
-
-  Future<LocalTextDecodeResult?> _detectEncodingFromLeadingSample(
-    File file,
-  ) async {
-    final fileLength = await file.length();
-    if (fileLength <= 0) {
-      return null;
-    }
-    final sampleLength =
-        fileLength < _encodingSampleBytes ? fileLength : _encodingSampleBytes;
-    final bytes = await file
-        .openRead(0, sampleLength)
-        .fold<List<int>>(
-          <int>[],
-          (buffer, chunk) => <int>[...buffer, ...chunk],
-        );
-    if (bytes.isEmpty) {
-      return null;
-    }
-    final decoded =
-        _textEncodingDetector.decodeSampleBestEffort(bytes, htmlAware: false) ??
-        await _textEncodingDetector.decodeSampleBestEffortAsync(
-          bytes,
-          htmlAware: false,
-        );
-    if (decoded == null || decoded.text.trim().isEmpty) {
-      return null;
-    }
-    if (_isTrustworthyLeadingSample(decoded)) {
-      return decoded;
-    }
-    return null;
-  }
-
-  bool _isTrustworthyLeadingSample(LocalTextDecodeResult decoded) {
-    final charsetName = decoded.charsetName;
-    if (charsetName == 'utf-8') {
-      return !decoded.fallbackUsed &&
-          _looksLikeMeaningfulUtf8LeadSample(decoded.text);
-    }
-    if (charsetName == 'utf-16' ||
-        charsetName == 'utf-16le' ||
-        charsetName == 'utf-16be') {
-      return true;
-    }
-    return _looksLikeMeaningfulMultibyteLeadSample(decoded.text);
-  }
-
-  bool _looksLikeMeaningfulUtf8LeadSample(String text) {
-    final trimmed = text.trim();
-    if (trimmed.isEmpty) {
-      return false;
-    }
-    final hanCount =
-        trimmed.runes.where((rune) => rune >= 0x4E00 && rune <= 0x9FFF).length;
-    final punctuationCount =
-        trimmed.runes
-            .where((rune) => '，。！？；：“”‘’《》、（）【】'.runes.contains(rune))
-            .length;
-    if (hanCount > 0 || punctuationCount > 0) {
-      return true;
-    }
-    return false;
-  }
-
-  bool _looksLikeMeaningfulMultibyteLeadSample(String text) {
-    final trimmed = text.trim();
-    if (trimmed.isEmpty) {
-      return false;
-    }
-    final hanCount =
-        trimmed.runes.where((rune) => rune >= 0x4E00 && rune <= 0x9FFF).length;
-    final punctuationCount =
-        trimmed.runes
-            .where((rune) => '，。！？；：“”‘’《》、（）【】'.runes.contains(rune))
-            .length;
-    return hanCount > 0 || punctuationCount > 0;
-  }
-
-  int _scoreEncodingSample({
-    required _EncodingSampleChunk chunk,
-    required int fileLength,
-    required LocalTextDecodeResult decoded,
-  }) {
-    final text = decoded.text.trim();
-    if (text.isEmpty) {
-      return -1000;
-    }
-
-    var score = 0;
-    final lower = text.toLowerCase();
-    final hanCount =
-        text.runes.where((rune) => rune >= 0x4E00 && rune <= 0x9FFF).length;
-    final asciiCount =
-        text.runes.where((rune) => rune >= 0x20 && rune <= 0x7E).length;
-    final punctuationCount =
-        text.runes
-            .where((rune) => '，。！？；：“”‘’《》、（）【】'.runes.contains(rune))
-            .length;
-    final replacementCount = text.runes.where((rune) => rune == 0xFFFD).length;
-    final suspiciousMojibakeCount =
-        text.runes
-            .where(
-              (rune) =>
-                  rune == 0x00C3 ||
-                  rune == 0x00C2 ||
-                  rune == 0x00E2 ||
-                  rune == 0x00D0 ||
-                  rune == 0x00D1 ||
-                  rune == 0x00FE ||
-                  rune == 0x00FF,
-            )
-            .length;
-
-    score += hanCount * 6;
-    score += punctuationCount * 10;
-    score -= replacementCount * 40;
-    score -= suspiciousMojibakeCount * 25;
-    if (decoded.fallbackUsed) {
-      score -= 140;
-    }
-
-    if (asciiCount > 0 && hanCount == 0 && punctuationCount == 0) {
-      score -= 80;
-    }
-    if (RegExp(r'第.{0,12}[章节回卷部集]').hasMatch(text)) {
-      score += 80;
-    }
-    if (lower.contains('chapter') || lower.contains('part ')) {
-      score += 20;
-    }
-
-    final midpoint = chunk.start + (chunk.bytes.length ~/ 2);
-    final normalizedPosition =
-        fileLength <= 0 ? 0.0 : midpoint / fileLength.toDouble();
-    if (normalizedPosition >= 0.25 && normalizedPosition <= 0.75) {
-      score += 70;
-    } else if (normalizedPosition > 0.75) {
-      score += 50;
-    } else {
-      score += 10;
-    }
-
-    if (decoded.charsetName == 'utf-8' &&
-        hanCount == 0 &&
-        punctuationCount == 0) {
-      score -= 20;
-    }
-
-    if (decoded.charsetName == 'utf-16be' ||
-        decoded.charsetName == 'utf-16le' ||
-        decoded.charsetName == 'utf-16') {
-      final zeroRatio = _zeroByteRatio(chunk.bytes);
-      if (zeroRatio < 0.12) {
-        score -= 240;
-      } else {
-        score += 40;
-      }
-    }
-
-    return score;
-  }
-
-  double _zeroByteRatio(List<int> bytes) {
-    if (bytes.isEmpty) {
-      return 0;
-    }
-    final zeroCount = bytes.where((byte) => byte == 0).length;
-    return zeroCount / bytes.length;
+    return _textEncodingDetector.decodeBestEffortFromSamples(
+      sampleChunks.map(
+        (chunk) =>
+            LocalTextDecodeSample(start: chunk.start, bytes: chunk.bytes),
+      ),
+      totalBytes: fileLength,
+    );
   }
 
   Future<void> _ensureParentDir(File target) async {
@@ -726,12 +489,12 @@ class LocalBookStorageService {
       return null;
     }
     if (normalized.startsWith('local_books/')) {
-      return p.normalize(normalized);
+      return p.posix.normalize(normalized);
     }
     final marker = '/local_books/';
     final markerIndex = normalized.lastIndexOf(marker);
     if (markerIndex >= 0) {
-      return p.normalize(normalized.substring(markerIndex + 1));
+      return p.posix.normalize(normalized.substring(markerIndex + 1));
     }
     return null;
   }

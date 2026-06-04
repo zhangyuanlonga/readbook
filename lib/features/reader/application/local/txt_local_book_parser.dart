@@ -21,7 +21,7 @@ import 'local_text_encoding_detector.dart';
 ///
 /// 退出条件：如果后续引入的成熟 parser 能同时覆盖章节识别、编码检测、
 /// offset 懒加载和大文件性能基线，再以 adapter 方式替换这里的切分实现。
-class TxtLocalBookParser implements LocalBookParser {
+class TxtLocalBookParser implements LocalBookParser, LocalBookParserInputAware {
   const TxtLocalBookParser();
 
   static const int _streamingIndexThresholdBytes = 1024 * 1024;
@@ -80,6 +80,45 @@ class TxtLocalBookParser implements LocalBookParser {
     );
   }
 
+  @override
+  Future<LocalParsedBook> parseInput(LocalBookParserInput input) {
+    final bytes = input.bytes;
+    if (bytes == null) {
+      return parse(input.book);
+    }
+    final timelineTask =
+        developer.TimelineTask()..start(
+          'reader.local.txt.index.input',
+          arguments: <String, Object?>{
+            'bookId': input.book.id,
+            'source': input.source.name,
+            'byteLength': bytes.length,
+            'splitLongChapter': input.book.splitLongChapter,
+          },
+        );
+    return _parseBytesInternal(input.book, bytes).then(
+      (parsed) {
+        timelineTask.finish(
+          arguments: <String, Object?>{
+            'status': 'ready',
+            'chapterCount': parsed.chapters.length,
+            'charset': parsed.charset,
+          },
+        );
+        return parsed;
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        timelineTask.finish(
+          arguments: <String, Object?>{
+            'status': 'failed',
+            'error': error.toString(),
+          },
+        );
+        Error.throwWithStackTrace(error, stackTrace);
+      },
+    );
+  }
+
   Future<LocalParsedBook> _parseInternal(LocalBook book) async {
     final file = File(book.storagePath);
     if (!await file.exists()) {
@@ -110,6 +149,16 @@ class TxtLocalBookParser implements LocalBookParser {
     }
 
     final bytes = await file.readAsBytes();
+    return _parseBytesInternal(book, bytes, enabledRules: enabledRules);
+  }
+
+  Future<LocalParsedBook> _parseBytesInternal(
+    LocalBook book,
+    List<int> bytes, {
+    List<TxtAutoChapterPattern>? enabledRules,
+  }) async {
+    final effectiveRules =
+        enabledRules ?? await TxtChapterRuleService().loadEnabledPatterns();
     if (bytes.isEmpty) {
       throw AppException(
         code: ErrorCode.ruleMatchEmpty,
@@ -121,7 +170,7 @@ class TxtLocalBookParser implements LocalBookParser {
     final decoded = await _decodeBookText(
       book,
       bytes,
-      enabledRules: enabledRules,
+      enabledRules: effectiveRules,
     );
     final text = decoded.text;
     if (text.trim().isEmpty) {
@@ -134,7 +183,7 @@ class TxtLocalBookParser implements LocalBookParser {
 
     final selectedPattern = _detectChapterPattern(
       text,
-      enabledRules: enabledRules,
+      enabledRules: effectiveRules,
     );
     final chapters = _withByteOffsets(
       _splitChapters(
@@ -275,114 +324,34 @@ class TxtLocalBookParser implements LocalBookParser {
     required List<TxtAutoChapterPattern> enabledRules,
     required _CooperativeYieldGate yieldGate,
   }) async {
-    final results = <_ScoredDecodedChunk>[];
     final preferredCharset = _normalizeCharsetName(book.charset);
-    for (final chunk in chunks) {
-      final decoded =
-          preferredCharset != null
-              ? _textEncodingDetector.decodeWithFrozenCharset(
-                chunk.bytes,
-                charsetName: preferredCharset,
-              )
-              : _textEncodingDetector.decodeSampleBestEffort(
-                    chunk.bytes,
-                    hintedCharset: preferredCharset,
-                  ) ??
-                  await _textEncodingDetector.decodeSampleBestEffortAsync(
-                    chunk.bytes,
-                    hintedCharset: preferredCharset,
-                  );
-      if (decoded == null || decoded.text.trim().isEmpty) {
-        continue;
-      }
-      results.add(
-        _ScoredDecodedChunk(
-          decoded: _DecodedBookText(
-            text: decoded.text,
-            charsetName: decoded.charsetName,
-            bomLength: decoded.bomLength,
-          ),
-          score: _scoreStreamingSampleChunk(
-            chunk: chunk,
-            fileLength: fileLength,
-            book: book,
-            decoded: decoded,
+    final decoded = await _textEncodingDetector.decodeBestEffortFromSamples(
+      chunks.map(
+        (chunk) =>
+            LocalTextDecodeSample(start: chunk.start, bytes: chunk.bytes),
+      ),
+      totalBytes: fileLength,
+      preferredCharset: preferredCharset,
+      hintedCharset: preferredCharset,
+      scoreAdjustment:
+          (result, sample) => _scoreDecodedText(
+            result.text,
             enabledRules: enabledRules,
+            charsetName: result.charsetName,
+            hintedCharset: preferredCharset,
           ),
-        ),
-      );
+    );
+    for (final chunk in chunks) {
       await yieldGate.maybeYield(processedBytes: chunk.bytes.length);
     }
-    if (results.isEmpty) {
+    if (decoded == null || decoded.text.trim().isEmpty) {
       return null;
     }
-
-    final aggregated = <String, int>{};
-    final bestByCharset = <String, _ScoredDecodedChunk>{};
-    for (final result in results) {
-      final charset = result.decoded.charsetName;
-      aggregated[charset] = (aggregated[charset] ?? 0) + result.score;
-      final current = bestByCharset[charset];
-      if (current == null || result.score > current.score) {
-        bestByCharset[charset] = result;
-      }
-    }
-
-    String? bestCharset;
-    var bestScore = -0x7fffffff;
-    for (final entry in aggregated.entries) {
-      if (entry.value > bestScore) {
-        bestCharset = entry.key;
-        bestScore = entry.value;
-      }
-    }
-    if (bestCharset == null) {
-      return null;
-    }
-    return bestByCharset[bestCharset]?.decoded;
-  }
-
-  int _scoreStreamingSampleChunk({
-    required _StreamingSampleChunk chunk,
-    required int fileLength,
-    required LocalBook book,
-    required LocalTextDecodeResult decoded,
-    required List<TxtAutoChapterPattern> enabledRules,
-  }) {
-    var score = _scoreDecodedText(
-      decoded.text,
-      enabledRules: enabledRules,
+    return _DecodedBookText(
+      text: decoded.text,
       charsetName: decoded.charsetName,
-      hintedCharset: _normalizeCharsetName(book.charset),
+      bomLength: decoded.bomLength,
     );
-    final midpoint = chunk.start + (chunk.bytes.length ~/ 2);
-    final normalizedPosition =
-        fileLength <= 0 ? 0.0 : midpoint / fileLength.toDouble();
-    if (normalizedPosition >= 0.25 && normalizedPosition <= 0.75) {
-      score += 80;
-    } else if (normalizedPosition > 0.75) {
-      score += 50;
-    } else {
-      score += 10;
-    }
-    if ((decoded.charsetName == 'utf-16' ||
-            decoded.charsetName == 'utf-16le' ||
-            decoded.charsetName == 'utf-16be') &&
-        _zeroByteRatio(chunk.bytes) < 0.12) {
-      score -= 240;
-    }
-    if (decoded.fallbackUsed) {
-      score -= 120;
-    }
-    return score;
-  }
-
-  double _zeroByteRatio(List<int> bytes) {
-    if (bytes.isEmpty) {
-      return 0;
-    }
-    final zeroCount = bytes.where((byte) => byte == 0).length;
-    return zeroCount / bytes.length;
   }
 
   Future<List<LocalParsedChapter>> _splitByFixedLengthStreaming(
@@ -1169,90 +1138,17 @@ class TxtLocalBookParser implements LocalBookParser {
       );
     }
 
-    final bomInfo = _detectBom(bytes);
-    final bomLength = bomInfo.length;
-    final contentBytes =
-        bomLength > 0 ? bytes.sublist(bomLength) : List<int>.from(bytes);
-
-    final preferredCharset = normalizedPreferred;
-    final hintedCharset =
-        preferredCharset ??
-        bomInfo.charsetName ??
-        _detectUtf16ZeroPattern(bytes);
-
-    final candidateCharsets = <String>[
-      if (hintedCharset != null) hintedCharset,
-      'utf-8',
-      'utf-16be',
-      'utf-16le',
-      'gbk',
-      'gb18030',
-      'big5',
-      'shift_jis',
-      'euc-jp',
-      'euc-kr',
-      'windows-1252',
-      'latin1',
-    ];
-
-    _DecodedBookText? best;
-    var bestScore = -0x7fffffff;
-    final seen = <String>{};
-    for (final rawCandidate in candidateCharsets) {
-      final candidate = _normalizeCharsetName(rawCandidate);
-      if (candidate == null || !seen.add(candidate)) {
-        continue;
-      }
-      final text = _tryDecodeByCharset(contentBytes, candidate);
-      if (text == null) {
-        continue;
-      }
-
-      final score = _scoreDecodedText(
-        text,
-        enabledRules: enabledRules,
-        charsetName: candidate,
-        hintedCharset: hintedCharset,
-      );
-      if (best == null || score > bestScore) {
-        best = _DecodedBookText(
-          text: text,
-          charsetName: candidate,
-          bomLength: bomLength,
-        );
-        bestScore = score;
-      }
-    }
-
-    if (best != null) {
-      final mobileDecoded = await _textEncodingDetector.decodeBestEffortAsync(
-        bytes,
-        preferredCharset: book.charset,
-        hintedCharset: hintedCharset,
-        candidateCharsets: candidateCharsets,
-      );
-      final mobileScore = _scoreDecodedText(
-        mobileDecoded.text,
-        enabledRules: enabledRules,
-        charsetName: mobileDecoded.charsetName,
-        hintedCharset: hintedCharset,
-      );
-      if (mobileDecoded.text.trim().isNotEmpty && mobileScore >= bestScore) {
-        return _DecodedBookText(
-          text: mobileDecoded.text,
-          charsetName: mobileDecoded.charsetName,
-          bomLength: mobileDecoded.bomLength,
-        );
-      }
-      return best;
-    }
-
     final decoded = await _textEncodingDetector.decodeBestEffortAsync(
       bytes,
       preferredCharset: book.charset,
-      hintedCharset: hintedCharset,
-      candidateCharsets: candidateCharsets,
     );
+    if (decoded.text.trim().isEmpty) {
+      throw AppException(
+        code: ErrorCode.decode,
+        stage: ErrorStage.content,
+        briefMessage: 'TXT 编码检测失败，请重新设置编码后重试。',
+      );
+    }
     return _DecodedBookText(
       text: decoded.text,
       charsetName: decoded.charsetName,
@@ -1274,39 +1170,6 @@ class TxtLocalBookParser implements LocalBookParser {
       return const _BomInfo(length: 2, charsetName: 'utf-16le');
     }
     return const _BomInfo(length: 0, charsetName: null);
-  }
-
-  String? _detectUtf16ZeroPattern(List<int> bytes) {
-    final sampleLength = bytes.length < 2048 ? bytes.length : 2048;
-    if (sampleLength < 8) {
-      return null;
-    }
-
-    var evenZeroCount = 0;
-    var oddZeroCount = 0;
-    var pairCount = 0;
-    for (var index = 0; index + 1 < sampleLength; index += 2) {
-      pairCount += 1;
-      if (bytes[index] == 0) {
-        evenZeroCount += 1;
-      }
-      if (bytes[index + 1] == 0) {
-        oddZeroCount += 1;
-      }
-    }
-    if (pairCount == 0) {
-      return null;
-    }
-
-    final evenZeroRatio = evenZeroCount / pairCount;
-    final oddZeroRatio = oddZeroCount / pairCount;
-    if (evenZeroRatio >= 0.2 && oddZeroRatio <= 0.05) {
-      return 'utf-16be';
-    }
-    if (oddZeroRatio >= 0.2 && evenZeroRatio <= 0.05) {
-      return 'utf-16le';
-    }
-    return null;
   }
 
   int _scoreDecodedText(
@@ -1549,13 +1412,6 @@ class _StreamingSampleChunk {
 
   final int start;
   final List<int> bytes;
-}
-
-class _ScoredDecodedChunk {
-  const _ScoredDecodedChunk({required this.decoded, required this.score});
-
-  final _DecodedBookText decoded;
-  final int score;
 }
 
 class _ResolvedTxtChapterPattern {

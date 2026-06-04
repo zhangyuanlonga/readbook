@@ -97,6 +97,23 @@ void main() {
         expect(decoded!.text, contains('正文内容'));
       },
     );
+
+    test('decodeBestEffortFromSamples prefers readable body sample', () async {
+      final gbk = Charset.getByName('gbk');
+      expect(gbk, isNotNull);
+
+      final head = ascii.encode('plain ascii header without chapter text');
+      final body = gbk!.encode('第1章 开始\n正文内容。');
+      final decoded = await detector
+          .decodeBestEffortFromSamples(<LocalTextDecodeSample>[
+            LocalTextDecodeSample(start: 0, bytes: head),
+            LocalTextDecodeSample(start: 4096, bytes: body),
+          ], totalBytes: 8192);
+
+      expect(decoded, isNotNull);
+      expect(decoded!.charsetName, anyOf('gbk', 'gb18030'));
+      expect(decoded.text, contains('正文内容'));
+    });
   });
 }
 

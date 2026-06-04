@@ -20,6 +20,13 @@ class LocalTextDecodeResult {
   final bool fallbackUsed;
 }
 
+class LocalTextDecodeSample {
+  const LocalTextDecodeSample({required this.start, required this.bytes});
+
+  final int start;
+  final List<int> bytes;
+}
+
 /// 本地文本编码检测统一入口。
 ///
 /// 这里保留项目内评分策略，是为了把 BOM、平台 converter、移动端探测器和
@@ -34,8 +41,8 @@ class LocalTextEncodingDetector {
     'utf-8',
     'utf-16be',
     'utf-16le',
-    'gb18030',
     'gbk',
+    'gb18030',
     'big5',
     'shift_jis',
     'euc-jp',
@@ -173,12 +180,14 @@ class LocalTextEncodingDetector {
       if (decoded == null) {
         continue;
       }
-      final score = _scoreDecodedText(
-        decoded,
-        charsetName: candidate,
-        hintedCharset: normalizedHinted,
-        htmlAware: htmlAware,
-      );
+      final score =
+          _scoreDecodedText(
+            decoded,
+            charsetName: candidate,
+            hintedCharset: normalizedHinted,
+            htmlAware: htmlAware,
+          ) +
+          _scoreCharsetByteFit(candidate, contentBytes);
       if (best == null || score > bestScore) {
         best = LocalTextDecodeResult(
           text: decoded,
@@ -494,6 +503,87 @@ class LocalTextEncodingDetector {
       hintedCharset: normalizedHinted,
       htmlAware: htmlAware,
     )?.result;
+  }
+
+  Future<LocalTextDecodeResult?> decodeBestEffortFromSamples(
+    Iterable<LocalTextDecodeSample> samples, {
+    required int totalBytes,
+    String? preferredCharset,
+    String? hintedCharset,
+    Iterable<String>? candidateCharsets,
+    bool htmlAware = false,
+    int Function(LocalTextDecodeResult result, LocalTextDecodeSample sample)?
+    scoreAdjustment,
+  }) async {
+    final normalizedPreferred = normalizeCharsetName(preferredCharset);
+    final normalizedHinted =
+        normalizeCharsetName(hintedCharset) ?? normalizedPreferred;
+    final scoredResults = <_ScoredDecodeSample>[];
+    for (final sample in samples) {
+      if (sample.bytes.isEmpty) {
+        continue;
+      }
+      final decoded =
+          normalizedPreferred != null
+              ? decodeWithFrozenCharset(
+                sample.bytes,
+                charsetName: normalizedPreferred,
+              )
+              : decodeSampleBestEffort(
+                    sample.bytes,
+                    hintedCharset: normalizedHinted,
+                    candidateCharsets: candidateCharsets,
+                    htmlAware: htmlAware,
+                  ) ??
+                  await decodeSampleBestEffortAsync(
+                    sample.bytes,
+                    hintedCharset: normalizedHinted,
+                    candidateCharsets: candidateCharsets,
+                    htmlAware: htmlAware,
+                  );
+      if (decoded == null || decoded.text.trim().isEmpty) {
+        continue;
+      }
+      scoredResults.add(
+        _ScoredDecodeSample(
+          result: decoded,
+          score:
+              _scoreDecodedSample(
+                result: decoded,
+                sample: sample,
+                totalBytes: totalBytes,
+                hintedCharset: normalizedHinted,
+                htmlAware: htmlAware,
+              ) +
+              (scoreAdjustment?.call(decoded, sample) ?? 0),
+        ),
+      );
+    }
+
+    if (scoredResults.isEmpty) {
+      return null;
+    }
+
+    final aggregated = <String, int>{};
+    final bestByCharset = <String, _ScoredDecodeSample>{};
+    for (final sample in scoredResults) {
+      final charset = sample.result.charsetName;
+      aggregated[charset] = (aggregated[charset] ?? 0) + sample.score;
+      final currentBest = bestByCharset[charset];
+      if (currentBest == null || sample.score > currentBest.score) {
+        bestByCharset[charset] = sample;
+      }
+    }
+
+    String? bestCharset;
+    var bestScore = -0x7fffffff;
+    for (final entry in aggregated.entries) {
+      if (entry.value > bestScore) {
+        bestCharset = entry.key;
+        bestScore = entry.value;
+      }
+    }
+    return bestCharset == null ? null : bestByCharset[bestCharset]?.result;
   }
 
   _BomInfo _detectBom(List<int> bytes) {
@@ -876,6 +966,64 @@ class LocalTextEncodingDetector {
     }
     return best;
   }
+
+  int _scoreDecodedSample({
+    required LocalTextDecodeResult result,
+    required LocalTextDecodeSample sample,
+    required int totalBytes,
+    required String? hintedCharset,
+    required bool htmlAware,
+  }) {
+    var score = _scoreDecodedText(
+      result.text,
+      charsetName: result.charsetName,
+      hintedCharset: hintedCharset,
+      htmlAware: htmlAware,
+    );
+
+    final midpoint = sample.start + (sample.bytes.length ~/ 2);
+    final normalizedPosition =
+        totalBytes <= 0 ? 0.0 : midpoint / totalBytes.toDouble();
+    if (normalizedPosition >= 0.25 && normalizedPosition <= 0.75) {
+      score += 70;
+    } else if (normalizedPosition > 0.75) {
+      score += 50;
+    } else {
+      score += 10;
+    }
+
+    if (result.fallbackUsed) {
+      score -= 120;
+    }
+    if (result.charsetName == 'utf-16' ||
+        result.charsetName == 'utf-16le' ||
+        result.charsetName == 'utf-16be') {
+      final zeroRatio = _zeroByteRatio(sample.bytes);
+      if (zeroRatio < 0.12) {
+        score -= 100000;
+      } else {
+        score += 40;
+      }
+    }
+    return score;
+  }
+
+  double _zeroByteRatio(List<int> bytes) {
+    if (bytes.isEmpty) {
+      return 0;
+    }
+    final zeroCount = bytes.where((byte) => byte == 0).length;
+    return zeroCount / bytes.length;
+  }
+
+  int _scoreCharsetByteFit(String charsetName, List<int> bytes) {
+    if (charsetName != 'utf-16' &&
+        charsetName != 'utf-16le' &&
+        charsetName != 'utf-16be') {
+      return 0;
+    }
+    return _zeroByteRatio(bytes) < 0.12 ? -100000 : 40;
+  }
 }
 
 class _BomInfo {
@@ -899,4 +1047,11 @@ class _AsyncDecodeCandidate {
 
   final LocalTextDecodeResult result;
   final _AsyncDecodeSource source;
+}
+
+class _ScoredDecodeSample {
+  const _ScoredDecodeSample({required this.result, required this.score});
+
+  final LocalTextDecodeResult result;
+  final int score;
 }

@@ -1,7 +1,9 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:charset/charset.dart';
 import 'package:shuxiang_reading_next/domain/entities/local_book.dart';
+import 'package:shuxiang_reading_next/features/reader/application/local/local_book_parser.dart';
 import 'package:shuxiang_reading_next/features/reader/application/local/txt_chapter_rule_service.dart';
 import 'package:shuxiang_reading_next/features/reader/application/local/txt_local_book_parser.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -22,6 +24,31 @@ void main() {
       if (await tempDir.exists()) {
         await tempDir.delete(recursive: true);
       }
+    });
+
+    test('parses txt from LocalBookParserInput bytes', () async {
+      final now = DateTime.parse('2026-02-23T12:00:00.000Z');
+      final result = await parser.parseInput(
+        LocalBookParserInput(
+          book: LocalBook(
+            id: 'local_txt_input_bytes',
+            title: 'bytes txt',
+            format: LocalBookFormat.txt,
+            storagePath: 'web-upload.txt',
+            fileSize: 0,
+            createdAt: now,
+            updatedAt: now,
+          ),
+          source: LocalBookParserInputSource.webUploadedBytes,
+          bytes: utf8.encode('第1章 开始\n第一章内容。\n第2章 继续\n第二章内容。'),
+          displayPath: 'web-upload.txt',
+        ),
+      );
+
+      expect(result.charset, 'utf-8');
+      expect(result.chapters, hasLength(2));
+      expect(result.chapters.first.title, '第1章 开始');
+      expect(result.chapters.first.content, contains('第一章内容'));
     });
 
     test('splits chapters by title pattern', () async {

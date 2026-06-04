@@ -484,24 +484,31 @@ class _SystemUiOverlayWrapperState
       return;
     }
 
+    final publishGlobalTask =
+        payload.type != ExternalImportPayloadType.localBook;
     final taskId =
-        'external-import-handoff:${DateTime.now().microsecondsSinceEpoch}';
-    final taskManager = ref.read(appTaskManagerProvider);
+        publishGlobalTask
+            ? 'external-import-handoff:${DateTime.now().microsecondsSinceEpoch}'
+            : null;
+    final taskManager =
+        publishGlobalTask ? ref.read(appTaskManagerProvider) : null;
     final handoffStatus = ImportExportCopy.running(
       title: '已接收外部文件',
       message:
           '正在接管${ExternalImportDiagnostics.payloadLabel(payload.type)}并跳转到对应页面…',
       detail: payload.label,
     );
-    taskManager.startTask(
-      id: taskId,
-      status: handoffStatus.toAppTaskStatusData(
-        kind: _externalImportTaskKind(payload.type),
-      ),
-      channel: _externalImportTaskChannel(payload.type),
-      priority: AppTaskPriority.userInitiated,
-      recoveryKey: 'external-import:${payload.uri}',
-    );
+    if (publishGlobalTask && taskId != null && taskManager != null) {
+      taskManager.startTask(
+        id: taskId,
+        status: handoffStatus.toAppTaskStatusData(
+          kind: _externalImportTaskKind(payload.type),
+        ),
+        channel: _externalImportTaskChannel(payload.type),
+        priority: AppTaskPriority.userInitiated,
+        recoveryKey: 'external-import:${payload.uri}',
+      );
+    }
     if (mounted) {
       setState(() {
         _externalImportStatus = handoffStatus;
@@ -513,16 +520,20 @@ class _SystemUiOverlayWrapperState
         setState(() {
           _externalImportStatus = null;
         });
-        taskManager.updateTask(
-          taskId,
-          handoffStatus
-              .toAppTaskStatusData(kind: _externalImportTaskKind(payload.type))
-              .copyWith(
-                title: '外部文件已转交',
-                message: '已跳转到对应页面继续处理。',
-                result: AppTaskStatusResult.success,
-              ),
-        );
+        if (publishGlobalTask && taskId != null && taskManager != null) {
+          taskManager.updateTask(
+            taskId,
+            handoffStatus
+                .toAppTaskStatusData(
+                  kind: _externalImportTaskKind(payload.type),
+                )
+                .copyWith(
+                  title: '外部文件已转交',
+                  message: '已跳转到对应页面继续处理。',
+                  result: AppTaskStatusResult.success,
+                ),
+          );
+        }
       });
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -545,9 +556,9 @@ class _SystemUiOverlayWrapperState
 
   AppTaskChannel _externalImportTaskChannel(ExternalImportPayloadType type) {
     return switch (type) {
-      ExternalImportPayloadType.localBook => AppTaskChannel.localBookImport,
       ExternalImportPayloadType.advancedTheme ||
       ExternalImportPayloadType.font => AppTaskChannel.resourceImport,
+      ExternalImportPayloadType.localBook => AppTaskChannel.localBookImport,
     };
   }
 

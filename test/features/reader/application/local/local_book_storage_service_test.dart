@@ -25,6 +25,16 @@ void main() {
       }
     });
 
+    test('builds stable managed relative storage paths', () {
+      expect(
+        storageService.buildStoredStoragePath(
+          bookId: 'local_storage_path',
+          format: LocalBookFormat.txt,
+        ),
+        'local_books/local_storage_path.txt',
+      );
+    });
+
     test(
       'keeps raw bytes when preferred charset is explicitly provided',
       () async {
