@@ -1,6 +1,6 @@
 # 代码与架构编写规则
 
-更新时间：2026-06-02
+更新时间：2026-06-04
 
 本文定义后续代码如何写。目标是减少手写、减少散点判断、减少超大文件，让项目保持可维护。
 
@@ -106,7 +106,49 @@ domain -> 纯 Dart，不依赖 Flutter UI、data、features
 
 拆分必须等价迁移，不趁机改业务语义。
 
-## 7. 成熟库优先规则
+## 7. 注释与维护说明规则
+
+后续新增或维护的业务代码、平台适配代码和复杂公共代码，默认必须配备标准中文维护注释。注释的目标是解释“为什么这样写”“业务边界是什么”“维护时不能破坏什么”，不是复述代码正在做什么。
+
+中文注释标准：
+
+- 默认使用简体中文；Flutter、Riverpod、provider、adapter、capability、token 等通用技术名词可以保留英文。
+- public class、public method、public enum、public provider、跨 feature service / facade / resolver 必须优先使用中文 Dartdoc。
+- 复杂私有方法、平台分支、降级策略、兼容旧数据、状态转换和异常兜底必须补中文行注释或块注释。
+- 注释要写清业务语义、平台范围、降级方式、兼容原因、关键不变量和修改风险。
+- 详细不等于堆长文；如果说明超过一个代码块能承受的范围，应沉淀到 docs，并在注释里链接文档。
+
+必须写注释的场景：
+
+- 平台能力 adapter、bridge、conditional import：说明支持平台、降级方式和失败边界。
+- capability 字段或判断：说明业务语义，不说明具体插件实现。
+- 数据迁移、存储 key、用户资产路径、缓存清理：说明兼容要求和不能删除的内容。
+- 阅读器分页、进度、章节定位、编码检测、PDF / EPUB / MOBI 解析等复杂算法：说明关键不变量和边界条件。
+- 等价抽取旧逻辑时：说明保留了哪些旧行为，避免后续误以为可以顺手改语义。
+- 临时技术债、TODO、FIXME：必须写清原因、触发条件、退出条件或关联文档，不能只写“待优化”。
+
+优先使用 Dartdoc 的场景：
+
+- public class、public method、public enum、public provider。
+- 跨 feature 使用的 model、service、facade、resolver。
+- 平台 capability、storage resolver、route helper、task coordinator。
+
+禁止的注释：
+
+- 复述代码字面行为，例如“设置变量”“返回结果”。
+- 与代码不一致的历史解释。
+- 大段业务流程复制粘贴到代码里，应该放到 docs。
+- 在注释里写 token、cookie、密码、本机绝对路径、完整用户正文、设备指纹或带 query / fragment 的敏感 URL。
+- 为了绕过 lint 增加 `ignore`，但不说明原因和移除条件。
+
+注释维护规则：
+
+- 改代码时必须同步检查相邻注释是否仍然准确。
+- 移动端保护、Web / Desktop 降级、用户资产和缓存边界相关注释如果过期，视为回归风险。
+- 生成文件不手工补注释。
+- 新增复杂文件时，文件顶部不写流水账背景；若确实需要上下文，写一段短 Dartdoc 或链接到已登记文档。
+
+## 8. 成熟库优先规则
 
 优先使用：
 
@@ -125,7 +167,7 @@ domain -> 纯 Dart，不依赖 Flutter UI、data、features
 
 本地 override 包必须有说明：为什么 override、改了什么、何时回主线或替换。
 
-## 8. 验证命令
+## 9. 验证命令
 
 常规改动至少执行：
 

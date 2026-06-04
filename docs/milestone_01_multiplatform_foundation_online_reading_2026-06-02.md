@@ -1,23 +1,42 @@
 # 里程碑 01：多端底座绿线与在线阅读闭环
 
 创建日期：2026-06-02
+复拆日期：2026-06-04
 
-状态：Phase 1.1-1.6 已完成，第 6 节桌面 UI 最低要求已完成。
+状态：旧 Phase 1.1-1.6 已完成；按 2026-06-04 多端规则进入 M1-R 复验与补验。
 
-适用平台：Android、iOS、Web JS、macOS，Windows / Linux 进入构建验证准备。
+适用平台：Android、iOS、Web JS、macOS、Windows、Linux。Web WASM 仍为独立专项。
 
-核心目标：在保护 Android / iOS 稳定体验的前提下，让 Web / Desktop 开发有统一底座，并跑通第一条真实业务链：搜索 / 发现 -> 书籍详情 -> 在线阅读 -> 进度保存。
+核心目标：把在线阅读链和最小登录会话链从“Web / Desktop 可走通”升级为“Android / iOS / Web / Desktop 影响面清楚、能力边界清楚、每段可重新执行”。
 
 ## 1. 阶段定位
 
-第一里程碑不追求所有平台全功能完成，而是先把方向扶正：
+第一里程碑不追求所有平台全功能完成，而是先把底座和第一条业务链扶正：
 
 - 有规则：开发、UI、业务、平台、存储、路由都能找到统一文档。
 - 有绿线：分析、Web JS 构建、macOS 构建、docs guard、route inventory 能稳定通过。
-- 有闭环：至少一条 Web / Desktop 真实阅读链路能从入口走到进度保存。
-- 有边界：不支持能力要有禁用、隐藏或替代，不让用户点了才失败。
+- 有闭环：搜索 / 发现 -> 书籍详情 -> 在线阅读 -> 进度保存可以被真实操作验证。
+- 有会话：登录入口 -> 登录 / 会话恢复 -> 受限入口展示 -> 退出登录 -> 会话过期跳转具备最小多端闭环。
+- 有平台记录：Android、iOS、Web、macOS、Windows、Linux 都必须写明已验证、未验证原因或非交付目标。
+- 有边界：不支持能力要有禁用、隐藏、只读或替代入口，不让用户点了才失败。
 
-## 2. 不做项
+旧完成项不撤销；本次复拆是为了按新的多端口径重新执行、补验证据和拆出后续可维护段落。
+
+## 2. 执行方式
+
+每个复拆段都必须记录：
+
+- 本段目标。
+- 修改范围。
+- 是否修改共享层。
+- Android / iOS 影响面和回归方式。
+- Web / Desktop 验证方式。
+- 不支持能力的降级结论。
+- 已验证平台与未验证原因。
+
+任一复拆段如果涉及共享 model、provider、repository、service、route、storage、theme token、adaptive 组件或平台 capability，不能只写“移动端未涉及”。
+
+## 3. 不做项
 
 - [x] 不做 Web WASM 交付。
 - [x] 不做本地图书完整多端导入。
@@ -26,88 +45,43 @@
 - [x] 不一次性升级所有 major 依赖。
 - [x] 不大规模重写移动端成熟页面。
 
-## 3. 移动端保护红线
+## 4. 移动端复验红线
 
-- [x] 共享层改动必须说明 Android / iOS 影响面。
-- [x] 不修改移动端主导航交互。
-- [x] 不修改移动端阅读器默认手势和阅读体验。
-- [x] 不修改移动端存储 key、数据库迁移和用户资产路径，除非有兼容迁移。
-- [x] 不因桌面 UI 需求改小屏断点行为。
+- [ ] Android / iOS 主导航、系统返回、iOS 返回手势、Android 返回键不回退。
+- [ ] Android / iOS 阅读器默认手势、目录、设置、进度保存不回退。
+- [ ] Android / iOS 存储 key、数据库迁移、用户资产路径不被本阶段改动。
+- [ ] 移动端小屏断点不因桌面 UI 需求改变。
+- [ ] 如有共享层等价抽取，记录旧行为与新 capability 结果的一致性。
 
-## 4. 构建与工程绿线
+## 5. M1-R 复拆执行段
 
-### Phase 1.1：基础验证
+| 段 | 名称 | 目标 | Android / iOS 检查 | Web / Desktop 检查 | 状态 |
+| --- | --- | --- | --- | --- | --- |
+| M1-R0 | 文档入口与规则同步 | README、平台规则、业务规则、UI 规则、代码规则指向多端口径 | 确认移动端不再只是“不可触碰边界” | 确认 Web / Desktop 仍保留宽屏与降级规则 | [ ] |
+| M1-R1 | 工程绿线复验 | 分析、docs guard、route inventory、Web build、macOS build | 记录 Android / iOS 构建是否执行，未执行写原因 | Web JS 与 macOS 至少保持绿色 | [ ] |
+| M1-R2 | Capability 矩阵复验 | 复核 `AppPlatformCapabilities` 覆盖在线阅读链能力 | 亮度、音量键、WebView、图片选择、文件能力结果不回退 | WebView、文件、数据库、窗口、诊断能力不散落页面 | [ ] |
+| M1-R3 | 搜索 / 发现入口链 | 搜索 / 发现入口、加载、失败、空态、重试可用 | 移动端入口与触控路径不变 | Web / Desktop 入口、刷新、宽屏状态可用 | [ ] |
+| M1-R4 | 书籍详情链 | 详情、目录、加入书架、换源、开始阅读可用 | 移动端详情页主操作层级不回退 | 宽屏不无限拉宽，受限能力按 capability 显示 | [ ] |
+| M1-R5 | 在线阅读核心链 | 在线章节渲染、目录跳转、设置、进度保存、恢复进度 | 触控翻页 / 滚动、目录、设置、进度保存不回退 | 方向键、空格、滚轮、宽屏正文不遮挡 | [ ] |
+| M1-R6 | 最小登录与会话链 | 登录入口、会话恢复、退出登录、会话过期跳转可解释 | 移动端登录、会话恢复、退出登录和受限入口不回退 | Web / Desktop 登录入口、凭证持久化、外部浏览器或降级策略清楚 | [ ] |
+| M1-R7 | 降级与异常链 | WebView 登录、本地书入口、网络失败、空态禁用清晰 | 移动端可用能力不被桌面降级覆盖 | Web / Desktop 不支持能力不出现点击后失败 | [ ] |
+| M1-R8 | 复验记录落表 | 收尾记录按 6 平台填写 | Android / iOS 真实验证、模拟器验证或发布前补验明确 | Web、macOS、Windows、Linux 分别写明状态 | [ ] |
+
+## 6. 旧完成基线
+
+旧 Phase 1.1-1.6 的结果作为复验起点：
 
 - [x] `flutter analyze` 通过。
 - [x] `flutter build web --no-pub` 通过。
 - [x] `flutter build macos --debug --no-pub` 或 release build 通过。
 - [x] `dart tool/check_architecture_guardrails.dart --check=docs` 通过。
 - [x] `dart run tool/check_route_inventory.dart` 通过。
-- [x] Markdown 相对链接无缺失。
+- [x] `AppPlatformCapabilities` 已扩展为平台能力矩阵。
+- [x] WebView 登录页改用 capability。
+- [x] 搜索、发现、详情、在线阅读 smoke 链路已建立。
+- [x] 书架桌面空态和阅读器桌面输入解析已有测试基础。
 
-### Phase 1.2：架构 guard 收口
-
-- [x] 修复 `core -> features` 反向依赖。
-- [x] 对超过硬阈值的文件建立拆分任务，不继续加重。
-- [x] `reader_page.dart` 不再新增无关功能代码。
-- [x] `advanced_theme_service.dart` 不再新增无关存储 / UI 编排代码。
-- [x] 架构 guard 中 docs 和 routes 必须保持绿色。
-
-### Phase 1.3：平台能力矩阵
-
-- [x] 扩展并复核 `AppPlatformCapabilities`。
-- [x] 明确 Web JS、Web WASM、macOS、Windows、Linux 的不同状态。
-- [x] 文件导入能力区分 Web 上传与 Native 文件系统。
-- [x] 数据库存储能力区分 Native SQLite 与 Web storage。
-- [x] WebView、图片选择、诊断导出、亮度桥、音量键桥接进入能力表。
-- [x] 页面层新增平台判断必须改为 capability 或 adaptive metrics。
-
-## 5. 第一条业务链：在线阅读闭环
-
-目标链路：
-
-```text
-搜索 / 发现 -> 书籍详情 -> 在线章节阅读 -> 目录 / 翻页 / 设置 -> 进度保存 -> 再次进入恢复进度
-```
-
-### Phase 1.4：入口与搜索 / 发现
-
-- [x] Web / Desktop 可以进入搜索页。
-- [x] Web / Desktop 可以进入发现页。
-- [x] 搜索加载、失败、空态、取消、重试状态完整。
-- [x] 发现页加载、失败、空态、刷新入口完整。
-- [x] 不支持 WebView 登录的能力有明确说明。
-
-### Phase 1.5：书籍详情
-
-- [x] 搜索结果或发现入口可以进入详情页。
-- [x] 详情页在 Web / Desktop 宽度下不无限拉宽。
-- [x] 目录加载、失败、空态有统一状态。
-- [x] 加入书架、开始阅读、换源等入口按 capability 显示。
-- [x] 本地图书相关入口不干扰在线阅读链。
-
-### Phase 1.6：阅读器最小闭环
-
-- [x] 在线章节可以打开阅读器。
-- [x] 文本阅读模式可正常渲染。
-- [x] 键盘方向键 / 空格至少有基础翻页或滚动策略。
-- [x] 滚轮行为不破坏阅读器主体验。
-- [x] 目录可以打开并跳转。
-- [x] 阅读设置可以打开并关闭。
-- [x] 进度可以保存。
-- [x] 再次从详情、书架或记录进入时能恢复合理位置。
-
-## 6. 桌面 UI 最低要求
-
-本阶段只做最低可接受标准：
-
-- [x] 桌面 shell 不白屏、不遮挡。
-- [x] 首页、书架、我的页在 1024 / 1440 宽度下没有明显手机页面拉宽感。
-- [x] 页面空态、加载态、禁用态清楚。
-- [x] 书架桌面空态保留本地图书入口或明确禁用原因。
-- [x] 任务队列、搜索入口、公告入口位置清晰。
-
-## 7. 测试与验收
+## 7. 复验命令
 
 最低验收命令：
 
@@ -128,29 +102,48 @@ flutter test test/features/reader/application/reader_entry_route_resolver_test.d
 flutter test test/features/search/application/search_provider_smoke_test.dart
 flutter test test/features/reader/application/online_reading_chain_smoke_test.dart
 flutter test test/features/bookshelf/presentation/bookshelf_desktop_layout_test.dart
+flutter test test/core/auth/auth_session_store_test.dart test/features/auth/application/auth_form_validation_service_test.dart test/features/auth/application/auth_provider_smoke_test.dart
 ```
 
-通过标准：
+移动端补验按可用环境选择：
 
-- [x] Web JS 可构建。
-- [x] macOS 可构建。
-- [x] 在线阅读链路可走通。
-- [x] 不支持能力有可理解降级。
-- [x] 移动端风险记录完整。
-- [x] 关键文档和路由清单同步。
+```bash
+flutter build apk --no-pub
+flutter build ios --no-pub --no-codesign
+```
 
-## 8. 风险
+## 8. 复验通过标准
 
-- [x] Web JS 可用但 Web WASM 不可用，需避免混淆交付目标。
-- [x] 阅读器复杂度高，第一阶段只保证在线文本阅读闭环。
-- [x] 详情页、书架页、阅读器页文件过大，继续加功能会加重治理成本。
-- [x] Web / Desktop 平台能力不一致，必须用 capability 收口。
+- [ ] M1-R0 到 M1-R8 均有执行记录。
+- [ ] Web JS 可构建。
+- [ ] macOS 可构建。
+- [ ] 在线阅读链路可走通。
+- [ ] 最小登录与会话链路可走通。
+- [ ] Android / iOS 影响面和未验证原因清楚。
+- [ ] 不支持能力有可理解降级。
+- [ ] 关键文档和路由清单同步。
+- [ ] Windows / Linux 未验证原因或 CI 补验计划明确。
 
-## 9. 执行记录
+## 9. 风险
 
-- [x] 开始日期：2026-06-02
-- [x] 完成日期：Phase 1.1-1.3 于 2026-06-02 完成；Phase 1.4-1.6 与第 6 节桌面 UI 最低要求于 2026-06-02 完成。
-- [x] 已验证平台：Web JS 构建通过；macOS debug 构建通过；Android / iOS 未改动主导航、默认阅读手势、存储 key、数据库迁移或用户资产路径。
-- [x] 未验证平台和原因：Windows / Linux 需要对应平台机器或 CI；Web WASM 不作为本里程碑默认交付目标，当前 Web 构建中仅记录 dry-run warning。
-- [x] 关键改动：`AppPlatformCapabilities` 扩展为平台能力矩阵；WebView 登录页改用 capability；缓存治理移除 `core -> features` 反向依赖；超硬阈值文件纳入拆分债务基线，禁止继续增重；发现页补齐失败、空态、刷新入口；搜索取消会清理进度态；服务器在线书源 capability 开启换源，详情页按 capability 显示换源入口；新增“斗破苍穹”在线阅读链路 smoke test。
-- [x] 遗留问题：`reader_page.dart`、`advanced_theme_service.dart` 仍需后续等价拆分；Windows / Linux 仍待对应平台或 CI 验证。
+- [ ] Web JS 可用但 Web WASM 不可用，需避免混淆交付目标。
+- [ ] 阅读器复杂度高，本阶段只保证在线文本阅读闭环。
+- [ ] 详情页、书架页、阅读器页文件过大，继续加功能会加重治理成本。
+- [ ] Web / Desktop 平台能力不一致，必须用 capability 收口。
+- [ ] 新的多端复验会暴露 Android / iOS 真机验证缺口，需要在发布前补齐。
+
+## 10. 执行记录
+
+- [x] 原开始日期：2026-06-02
+- [x] 原完成日期：Phase 1.1-1.3 于 2026-06-02 完成；Phase 1.4-1.6 与桌面 UI 最低要求于 2026-06-02 完成。
+- [ ] M1-R 复验开始日期：
+- [ ] M1-R 复验完成日期：
+- [ ] Android 验证：
+- [ ] iOS 验证：
+- [ ] Web 验证：
+- [ ] macOS 验证：
+- [ ] Windows 验证：
+- [ ] Linux 验证：
+- [ ] 未验证平台和原因：
+- [ ] 关键改动：
+- [ ] 遗留问题：

@@ -22,7 +22,7 @@
 - `core -> features` 反向依赖清理。
 - 页面层平台判断收敛。
 - 手写模型和 JSON 样板减少。
-- Web / Desktop 业务链验收矩阵补齐。
+- Android / iOS / Web / Desktop 业务链验收矩阵补齐。
 - 依赖升级和本地 override 治理。
 
 ## 2. 目标架构
