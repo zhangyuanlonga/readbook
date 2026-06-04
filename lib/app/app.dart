@@ -367,6 +367,8 @@ class _SystemUiOverlayWrapperState
                 if (!mounted) {
                   return;
                 }
+                // 过期跳转由全局 auth event 统一触发，避免各页面各自 push 登录页。
+                // 使用 push 保留当前业务栈，重新登录后用户可按原路径返回。
                 appRouter.push('/auth');
               },
             )

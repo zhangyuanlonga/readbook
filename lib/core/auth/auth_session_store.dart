@@ -189,6 +189,8 @@ class AuthSessionStore {
     if (!enableLegacyCredentialFallback) {
       return secureSecrets;
     }
+    // 旧版本曾把 token 直接放在 SharedPreferences。读取时只迁移缺失的字段：
+    // 已在新 secret store 中存在的 access token 必须保持优先，避免回退覆盖新会话。
     final legacySecrets = _readLegacySecrets(prefs);
     if (!legacySecrets.hasAnyValue) {
       return secureSecrets;
@@ -196,6 +198,7 @@ class AuthSessionStore {
 
     final mergedSecrets = secureSecrets.mergeMissing(legacySecrets);
     if (mergedSecrets.hasAccessToken) {
+      // 迁移成功后清理 legacy key，避免下一次启动把过期旧凭证再次合并回来。
       await _secretStore.writeSecrets(mergedSecrets);
       await _clearLegacyCredentialKeys(prefs);
       return mergedSecrets;

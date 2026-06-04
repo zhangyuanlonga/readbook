@@ -62,6 +62,8 @@ String resolveAppRootStartupLocation(BuildContext context) {
     isWeb: kIsWeb,
     platform: Theme.of(context).platform,
   )) {
+    // 桌面端冷启动不能等待异步 session store，否则首帧路由会抖动。
+    // 这里只用启动前预热的 display cache / fallback secret 做同步分流。
     final hasDisplaySession =
         AuthSessionSnapshotBootstrap.hasDisplaySessionSync();
     final hasFallbackSecrets =

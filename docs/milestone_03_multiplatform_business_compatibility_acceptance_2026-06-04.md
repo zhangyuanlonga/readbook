@@ -27,7 +27,7 @@
 - [x] M3-02-04 为 Windows 登录路径写代码级影响判断和 CI / 手工补验要求。
 - [ ] M3-02-05 为 Linux 登录路径写代码级影响判断和 CI / 手工补验要求。
 - [x] M3-02-06 补 auth form validation / session store 相关测试。
-- [ ] M3-02-07 为会话存储、凭证 fallback、过期跳转补中文维护注释。
+- [x] M3-02-07 为会话存储、凭证 fallback、过期跳转补中文维护注释。
 - [ ] M3-02-08 输出登录链六平台验收记录。
 
 ### M3-02 执行记录（2026-06-04）
@@ -47,6 +47,13 @@
 - `auth_form_validation_service_test.dart` 增加 required trim、可选新密码长度、空格密码当前行为、确认密码边界覆盖。
 - `auth_session_store_test.dart` 增加安全存储 access token 优先、legacy refresh / 过期时间补缺迁移、禁用 legacy fallback 时不读取也不清理旧凭证的覆盖。
 - 执行结果：`flutter test test/features/auth/application/auth_form_validation_service_test.dart test/core/auth/auth_session_store_test.dart test/core/auth/auth_service_test.dart` 通过。
+
+#### M3-02-07 中文维护注释
+
+- `auth_session_secret_store.dart` 补充桌面 / Web fallback secret store 的维护说明，明确 Windows / Linux / macOS 不假设 secure storage 与移动端等价。
+- `auth_session_store.dart` 补充 legacy prefs token 迁移说明，明确新 secret store 的 access token 优先，迁移成功后清理旧 key。
+- `auth_token_refresher_impl.dart` 补充刷新失败清理条件说明，明确只有服务端拒绝凭证才广播 session expired。
+- `router.dart` 和 `app.dart` 补充桌面冷启动同步分流、过期后全局跳登录的维护说明。
 
 #### M3-02-08 登录链六平台验收记录（本次仅 Windows）
 
