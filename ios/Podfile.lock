@@ -3,7 +3,7 @@ PODS:
     - Flutter
   - battery_plus (1.0.0):
     - Flutter
-  - charset_converter (0.0.1):
+  - charset_converter (2.4.0):
     - Flutter
   - device_info_plus (0.0.1):
     - Flutter
@@ -29,9 +29,17 @@ PODS:
   - pdfium_flutter (0.1.5):
     - Flutter
     - FlutterMacOS
+  - Sentry/HybridSDK (8.46.0)
+  - sentry_flutter (8.14.2):
+    - Flutter
+    - FlutterMacOS
+    - Sentry/HybridSDK (= 8.46.0)
   - share_plus (0.0.1):
     - Flutter
   - shared_preferences_foundation (0.0.1):
+    - Flutter
+    - FlutterMacOS
+  - sqflite_darwin (0.0.4):
     - Flutter
     - FlutterMacOS
   - sqlite3_flutter_libs (0.0.1):
@@ -59,14 +67,17 @@ DEPENDENCIES:
   - package_info_plus (from `.symlinks/plugins/package_info_plus/ios`)
   - pdf_text_extract (from `.symlinks/plugins/pdf_text_extract/ios`)
   - pdfium_flutter (from `.symlinks/plugins/pdfium_flutter/darwin`)
+  - sentry_flutter (from `.symlinks/plugins/sentry_flutter/ios`)
   - share_plus (from `.symlinks/plugins/share_plus/ios`)
   - shared_preferences_foundation (from `.symlinks/plugins/shared_preferences_foundation/darwin`)
+  - sqflite_darwin (from `.symlinks/plugins/sqflite_darwin/darwin`)
   - sqlite3_flutter_libs (from `.symlinks/plugins/sqlite3_flutter_libs/darwin`)
   - url_launcher_ios (from `.symlinks/plugins/url_launcher_ios/ios`)
   - webview_flutter_wkwebview (from `.symlinks/plugins/webview_flutter_wkwebview/darwin`)
 
 SPEC REPOS:
   trunk:
+    - Sentry
     - UniversalDetector2
 
 EXTERNAL SOURCES:
@@ -98,10 +109,14 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/pdf_text_extract/ios"
   pdfium_flutter:
     :path: ".symlinks/plugins/pdfium_flutter/darwin"
+  sentry_flutter:
+    :path: ".symlinks/plugins/sentry_flutter/ios"
   share_plus:
     :path: ".symlinks/plugins/share_plus/ios"
   shared_preferences_foundation:
     :path: ".symlinks/plugins/shared_preferences_foundation/darwin"
+  sqflite_darwin:
+    :path: ".symlinks/plugins/sqflite_darwin/darwin"
   sqlite3_flutter_libs:
     :path: ".symlinks/plugins/sqlite3_flutter_libs/darwin"
   url_launcher_ios:
@@ -112,7 +127,7 @@ EXTERNAL SOURCES:
 SPEC CHECKSUMS:
   audio_session: 9bb7f6c970f21241b19f5a3658097ae459681ba0
   battery_plus: b42253f6d2dde71712f8c36fef456d99121c5977
-  charset_converter: 82bc1d2e3c70dcb51bf769e9772e3ae5b2571695
+  charset_converter: 07eea6e9f0ba0782bec381e25b2026d7bb061f6e
   device_info_plus: 71ffc6ab7634ade6267c7a93088ed7e4f74e5896
   file_selector_ios: ec57ec07954363dd730b642e765e58f199bb621a
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
@@ -124,8 +139,11 @@ SPEC CHECKSUMS:
   package_info_plus: af8e2ca6888548050f16fa2f1938db7b5a5df499
   pdf_text_extract: c36cdf801571aa0f72e5332f3fb5f6ce5340bf45
   pdfium_flutter: e5a6e881af0b182d5b0465ebad23a8a20caa28d4
+  Sentry: da60d980b197a46db0b35ea12cb8f39af48d8854
+  sentry_flutter: 27892878729f42701297c628eb90e7c6529f3684
   share_plus: 50da8cb520a8f0f65671c6c6a99b3617ed10a58a
   shared_preferences_foundation: 7036424c3d8ec98dfe75ff1667cb0cd531ec82bb
+  sqflite_darwin: 20b2a3a3b70e43edae938624ce550a3cbf66a3d0
   sqlite3_flutter_libs: dee77ac8f88a0f0f762ac16e58ded77a82866993
   UniversalDetector2: 7c9ffd935cf050eeb19edf7e90f6febe3743a1af
   url_launcher_ios: 7a95fa5b60cc718a708b8f2966718e93db0cef1b
