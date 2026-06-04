@@ -77,5 +77,46 @@ void main() {
 
       expect(route, contains('/reader/book_1/chapter_1'));
     });
+
+    test(
+      'builds bootstrap fallback route only when source and detail exist',
+      () {
+        final route = service.buildFallbackRoute(
+          bookId: 'book_1',
+          sourceId: 'source_1',
+          detailUrl: 'https://detail.test/book-1',
+          fallbackTitle: '测试书籍',
+          heroTag: 'hero:book_1',
+        );
+
+        expect(route, isNotNull);
+        final resolved = ReaderEntryRouteResolver().buildChapterRoute(
+          bookId: 'book_1',
+          chapterId: 'bootstrap',
+          sourceId: 'source_1',
+          detailUrl: 'https://detail.test/book-1',
+          chapterTitle: '测试书籍',
+          heroTag: 'hero:book_1',
+        );
+        expect(route, resolved);
+
+        expect(
+          service.buildFallbackRoute(
+            bookId: 'book_1',
+            sourceId: '',
+            detailUrl: 'https://detail.test/book-1',
+          ),
+          isNull,
+        );
+        expect(
+          service.buildFallbackRoute(
+            bookId: 'book_1',
+            sourceId: 'source_1',
+            detailUrl: ' ',
+          ),
+          isNull,
+        );
+      },
+    );
   });
 }

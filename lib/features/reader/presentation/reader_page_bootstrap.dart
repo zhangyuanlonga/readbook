@@ -283,6 +283,7 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
       progressHit = progress != null;
 
       if (progress != null) {
+        // 这里先把持久化进度补进路由缺失字段，Web 刷新、桌面重启和书架继续阅读都依赖这一步拿回 source/detail/chapter 身份。
         _applyProgressFallback(progress);
       }
 

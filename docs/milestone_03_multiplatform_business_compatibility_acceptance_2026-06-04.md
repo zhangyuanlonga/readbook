@@ -2,7 +2,7 @@
 
 创建日期：2026-06-04
 
-状态：待执行。
+状态：执行中；M3-02、M3-03、M3-04 的代码级检查、目标测试、维护注释和 guard 已推进，真实多端 UI 验收等待用户手测补齐。
 
 适用平台：Android、iOS、Web JS、macOS、Windows、Linux。
 
@@ -163,20 +163,100 @@
 - [ ] M3-03-01 检查移动端搜索输入、历史、筛选、空态、失败重试。
 - [ ] M3-03-02 检查 Web 搜索刷新恢复、路由参数、浏览器返回和网络失败展示。
 - [ ] M3-03-03 检查 Desktop 搜索键盘提交、宽屏列表、详情打开和返回栈。
-- [ ] M3-03-04 检查书籍详情元数据、目录、加入书架、换源、开始阅读的 service 边界。
-- [ ] M3-03-05 补搜索 / 详情 provider 或 service 测试。
-- [ ] M3-03-06 运行 route inventory 和 route string guard。
+- [x] M3-03-04 检查书籍详情元数据、目录、加入书架、换源、开始阅读的 service 边界。
+- [x] M3-03-05 补搜索 / 详情 provider 或 service 测试。
+- [x] M3-03-06 运行 route inventory 和 route string guard。
 - [ ] M3-03-07 输出搜索详情链六平台验收记录。
+
+### M3-03 执行记录（2026-06-04）
+
+#### M3-03-04 详情 service 边界
+
+- 搜索 / 发现进入详情依赖 `buildBookDetailRoute(...)`，query 已覆盖 `sourceId`、`detailUrl`、书名、作者、封面和动效 tag；本次补充“无 route extra 的刷新恢复”和空 `bookId` 稳定 fallback 测试。
+- 详情开始阅读边界由 `BookDetailReadRouteService` 管理：卷标题、空 `chapterUrl`、空 `sourceId`、空 `detailUrl` 均不生成阅读 route；`buildFallbackRoute(...)` 只在 source/detail 可用时生成 `/reader/:bookId/bootstrap`。
+- 目录可读章节筛选、最近可读章节、章节 route、fallback bootstrap route 已有目标测试覆盖；加入书架、换源和目录弹层仍需要真实 UI 端到端手测。
+
+#### M3-03-05 测试补充
+
+- 新增 / 确认覆盖：`book_detail_route_test.dart`、`book_detail_read_route_service_test.dart`、`search_provider_smoke_test.dart`、`search_page_state_test.dart`、`search_history_service_test.dart`。
+- 本次执行的详情相关目标测试：`flutter test test/features/book/presentation/book_detail_route_test.dart test/features/book/application/book_detail_read_route_service_test.dart ...` 通过。
+
+#### M3-03-06 路由 guard
+
+- `dart tool/check_route_inventory.dart` 通过，当前 route inventory 覆盖 11 个 route 文件、38 条 route path。
+- `dart tool/check_route_string_guard.dart` 通过，未发现裸写 reader / book detail 复杂 route 字符串。
+- 本次未执行 macOS / Windows / Linux 桌面构建，因此不触发同任务同步 Android / iOS 构建记录要求。
+
+#### M3-03 手动验收留存项
+
+| 任务 | 平台 | 手动验证步骤 | 通过标准 |
+| --- | --- | --- | --- |
+| M3-03-01 | Android / iOS | 1. 分别从 `/search`、dock、书架顶部进入搜索；2. 输入关键词并回车 / 点击搜索；3. 测历史记录、源筛选、取消搜索、空态、失败重试；4. 从结果进入详情再返回。 | 软键盘不遮挡；搜索状态和历史正确；失败可重试；详情返回后列表和输入状态合理。 |
+| M3-03-02 | Web JS | 1. 打开搜索页并搜索；2. 从结果进入详情；3. 刷新详情页；4. 新标签打开详情 URL；5. 浏览器后退 / 前进；6. 模拟网络失败。 | 无 `extra` 时详情仍可由 query 恢复；中文和 URL 参数编码正确；浏览器返回不白屏；失败态可理解。 |
+| M3-03-03 | macOS / Windows / Linux | 1. 桌面端打开搜索；2. 调整宽窄窗口；3. 物理键盘回车搜索；4. 鼠标滚轮浏览结果；5. 打开详情、目录、返回；6. 验证弹层位置。 | 宽屏布局不溢出；键盘和鼠标路径正常；详情返回栈合理；弹层不偏移、不遮挡核心按钮。 |
+| M3-03-07 | Android / iOS / Web JS / macOS / Windows / Linux | 汇总搜索、发现、详情、目录、开始阅读、失败态结果；不能真实验证的平台写明机器、命令、阻塞原因和发布前补验方式。 | 六平台都有“通过 / 未测 / 阻塞”明确记录后才能最终打勾。 |
+
+#### M3-03-07 搜索详情链六平台验收记录（待手测汇总）
+
+| 平台 | 当前状态 | 已完成的代码级记录 | 等待用户手动确认 |
+| --- | --- | --- | --- |
+| Android | 待手测 | route helper、详情 service、搜索 / 详情 provider 测试已覆盖核心边界。 | 搜索输入、软键盘、历史、筛选、详情、目录、加入书架、开始阅读。 |
+| iOS | 待手测 | route helper、详情 service、搜索 / 详情 provider 测试已覆盖核心边界。 | 搜索输入、软键盘、安全区、详情刷新式恢复、目录 sheet、开始阅读。 |
+| Web JS | 待手测 | 详情 route query 刷新恢复测试已补；route guard 已通过。 | 浏览器刷新、新标签、后退 / 前进、网络失败、详情无 extra 恢复。 |
+| macOS | 待手测 | 桌面 route / service 代码路径与 Web / Windows / Linux 共用；本次未跑桌面构建。 | 键盘提交、窗口缩放、宽屏详情、目录弹层、返回栈。 |
+| Windows | 待手测 | Windows 与 macOS / Linux 共用桌面布局和 route helper；需要 Windows 机器同步代码后补验。 | 搜索、详情、目录、加入书架、开始阅读、窗口缩放。 |
+| Linux | 待手测 | Linux 与其他桌面端共用桌面布局和 route helper；需要 Linux 环境补验。 | 搜索、详情、目录、加入书架、开始阅读、窗口缩放。 |
 
 ## 4. M3-04 在线阅读链
 
 - [ ] M3-04-01 检查移动端触控翻页、滚动、目录、设置、进度保存不回退。
 - [ ] M3-04-02 检查 Web 键盘、滚轮、刷新恢复、章节加载和不支持能力降级。
 - [ ] M3-04-03 检查 macOS 键盘、鼠标、窗口宽度、目录和设置弹层。
-- [ ] M3-04-04 为 Windows / Linux 阅读链写补验要求，不能用 macOS 代替。
-- [ ] M3-04-05 补阅读器 session / progress / route helper 相关测试。
-- [ ] M3-04-06 为阅读进度、章节定位、刷新恢复关键逻辑补中文维护注释。
+- [x] M3-04-04 为 Windows / Linux 阅读链写补验要求，不能用 macOS 代替。
+- [x] M3-04-05 补阅读器 session / progress / route helper 相关测试。
+- [x] M3-04-06 为阅读进度、章节定位、刷新恢复关键逻辑补中文维护注释。
 - [ ] M3-04-07 输出在线阅读链六平台验收记录。
+
+### M3-04 执行记录（2026-06-04）
+
+#### M3-04-04 Windows / Linux 阅读链补验要求
+
+- Windows / Linux 不能用 macOS 结果替代：阅读器涉及窗口管理、键盘事件、鼠标滚轮、字体渲染、文件路径和平台插件差异，必须在目标机器真实打开 reader。
+- Windows 需要补验：从详情开始阅读、从书架继续阅读、刷新 / 重启后恢复进度、键盘翻页、鼠标滚轮、窗口缩放、目录弹层、设置弹层、退出前最后进度保存。
+- Linux 需要补验：同 Windows，并额外记录发行版、桌面环境、字体渲染和 Flutter Linux 依赖状态；如果无法构建，记录具体命令和依赖阻塞。
+
+#### M3-04-05 测试补充
+
+- `reader_route_test.dart` 补充完整 reader query 往返测试，覆盖 `sourceId`、`detailUrl`、`chapterUrl`、`chapterTitle`、`chapterIndex`、`bookmarkId`、`openRequestedAtMs`、`openRouteKind`、`heroTag`，并补空 book/chapter fallback。
+- `reader_content_loading_controller_test.dart` 补充 bootstrap progress 不匹配时保留进度、章节 URL 匹配时恢复进度的测试。
+- `book_detail_read_route_service_test.dart` 补充 bootstrap fallback route 生成和 source/detail 缺失返回 null 的测试。
+- 目标测试还覆盖 `reader_entry_route_resolver_test.dart`、`reader_session_state_resolver_test.dart`、`online_reading_chain_smoke_test.dart`，本次执行通过。
+
+#### M3-04-06 中文维护注释
+
+- `reader_page_bootstrap.dart` 补充进度 fallback 注释，明确 Web 刷新、桌面重启、书架继续阅读依赖持久化 `ReadingProgress` 补齐 route 身份。
+- `reader_page_runtime.dart` 补充进度保存防抖注释，明确频繁滚动 / 翻页 / 目录跳转的写入合并策略。
+- `reader_page_runtime.dart` 补充本地图书 scheme 归一化注释，明确六端继续阅读都通过同一套 route helper 恢复章节位置。
+
+#### M3-04 手动验收留存项
+
+| 任务 | 平台 | 手动验证步骤 | 通过标准 |
+| --- | --- | --- | --- |
+| M3-04-01 | Android / iOS | 1. 从详情进入阅读；2. 触控翻页和滚动；3. 打开目录和设置；4. 跳转章节；5. 返回书架再继续阅读；6. 关闭重开。 | 翻页 / 滚动顺滑；目录和设置不遮挡安全区；继续阅读位置不回退；系统返回合理。 |
+| M3-04-02 | Web JS | 1. 打开 reader URL；2. 键盘和滚轮翻页；3. 刷新当前 reader URL；4. 新标签打开；5. 网络失败 / 章节为空；6. 返回详情或书架。 | 刷新后由 query / progress 恢复；键盘和滚轮正常；失败态清晰；浏览器返回不白屏。 |
+| M3-04-03 | macOS | 1. 从详情和书架分别进入阅读；2. 调整窗口宽度；3. 键盘、鼠标、目录、设置弹层；4. 读几页后退出再进入。 | 窗口缩放不溢出；桌面输入路径正常；进度保存不回退；弹层位置合理。 |
+| M3-04-07 | Android / iOS / Web JS / macOS / Windows / Linux | 汇总阅读入口、章节加载、翻页 / 滚动、目录、设置、进度保存、返回栈结果；不能真实验证的平台写明机器、命令、阻塞原因和发布前补验方式。 | 六平台都有“通过 / 未测 / 阻塞”明确记录后才能最终打勾。 |
+
+#### M3-04-07 在线阅读链六平台验收记录（待手测汇总）
+
+| 平台 | 当前状态 | 已完成的代码级记录 | 等待用户手动确认 |
+| --- | --- | --- | --- |
+| Android | 待手测 | reader route、progress、session、online smoke 已有目标测试；移动端构建本任务未触发。 | 触控翻页、滚动、目录、设置、继续阅读、重启恢复。 |
+| iOS | 待手测 | reader route、progress、session、online smoke 已有目标测试；iOS 构建本任务未触发。 | 触控翻页、安全区、目录、设置、继续阅读、重启恢复。 |
+| Web JS | 待手测 | reader URL query 往返和 progress fallback 测试已补。 | 刷新 reader URL、新标签、键盘 / 滚轮、失败降级、浏览器返回。 |
+| macOS | 待手测 | 桌面 route / progress 代码路径已覆盖；本任务未跑 macOS 构建。 | 键盘、鼠标、窗口缩放、目录、设置、继续阅读。 |
+| Windows | 待手测 | M3-04-04 已写明 Windows 不可由 macOS 替代；需要 Windows 机器同步代码后补验。 | 从详情 / 书架进入阅读、键盘 / 鼠标、窗口缩放、进度保存、弹层。 |
+| Linux | 待手测 | M3-04-04 已写明 Linux 不可由 macOS 替代；需要 Linux 环境补验。 | 从详情 / 书架进入阅读、键盘 / 鼠标、窗口缩放、进度保存、弹层和发行版差异。 |
 
 ## 5. M3-05 书架与继续阅读链
 

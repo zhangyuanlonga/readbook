@@ -69,6 +69,54 @@ void main() {
       },
     );
 
+    test('keeps mismatched bootstrap progress for later chapter restore', () {
+      final progress = ReadingProgress(
+        bookId: 'book-1',
+        sourceId: 'source-1',
+        detailUrl: 'detail://1',
+        chapterId: 'chapter-2',
+        chapterUrl: 'chapter://2',
+        chapterTitle: '第二章',
+        chapterIndex: 2,
+        updatedAt: DateTime(2026, 4, 26, 12),
+        chapterPositionRatio: 0.4,
+      );
+
+      final resolution = controller.resolveBootstrapProgressForCurrentChapter(
+        bootstrapProgress: progress,
+        currentChapterId: 'chapter-1',
+        currentChapterUrl: 'chapter://1',
+        consume: true,
+      );
+
+      expect(resolution.matchedProgress, isNull);
+      expect(resolution.remainingProgress, same(progress));
+    });
+
+    test('matches bootstrap progress by chapter url when route id changed', () {
+      final progress = ReadingProgress(
+        bookId: 'book-1',
+        sourceId: 'source-1',
+        detailUrl: 'detail://1',
+        chapterId: 'old-chapter-id',
+        chapterUrl: 'chapter://2',
+        chapterTitle: '第二章',
+        chapterIndex: 2,
+        updatedAt: DateTime(2026, 4, 26, 12),
+        chapterPositionRatio: 0.4,
+      );
+
+      final resolution = controller.resolveBootstrapProgressForCurrentChapter(
+        bootstrapProgress: progress,
+        currentChapterId: 'new-chapter-id',
+        currentChapterUrl: 'chapter://2',
+        consume: false,
+      );
+
+      expect(resolution.matchedProgress, same(progress));
+      expect(resolution.remainingProgress, same(progress));
+    });
+
     test('restores ratio from logical position before fallback ratio', () {
       final document = ReaderDocument.fromContent(content: '第一段\n\n第二段\n\n第三段');
       final logicalPosition = ReaderLogicalPosition.fromDocument(

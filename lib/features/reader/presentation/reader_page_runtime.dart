@@ -1207,6 +1207,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
 
   void _scheduleProgressSave() {
     _progressDebounceTimer?.cancel();
+    // 阅读器会被滚动、翻页、目录跳转和窗口恢复频繁触发保存；统一防抖可以减少存储写入，同时保留退出前 flush 的即时恢复能力。
     final delay = _runtimeWakePolicy.progressSaveDelay(
       lastSavedAt: _lastProgressSavedAt,
       now: DateTime.now(),
@@ -1481,6 +1482,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       return;
     }
 
+    // 保存前统一转换本地图书 scheme，保证 Android/iOS/Web/Desktop 继续阅读都能通过同一套 route helper 恢复章节位置。
     final normalizedDetailUrl = _normalizeLocalDetailUrlForProgress(detailUrl);
     final normalizedChapterUrl = _normalizeLocalChapterUrlForProgress(
       chapterUrl,
