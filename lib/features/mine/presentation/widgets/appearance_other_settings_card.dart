@@ -15,15 +15,10 @@ class AppearanceOtherSettingsCard extends ConsumerStatefulWidget {
 
 class _AppearanceOtherSettingsCardState
     extends ConsumerState<AppearanceOtherSettingsCard> {
-  final GlobalKey<PopupMenuButtonState<MinePageStartupDestination>>
-  _startupMenuKey =
-      GlobalKey<PopupMenuButtonState<MinePageStartupDestination>>();
-
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final startupDestination = ref.watch(minePageStartupDestinationProvider);
     final visibilityState = ref.watch(minePageVisibilityProvider);
     final visibleCount =
         configurableMinePageItemDefinitions
@@ -70,7 +65,7 @@ class _AppearanceOtherSettingsCardState
                       ),
                     ),
                     Text(
-                      '补充我的页面显示项和应用启动入口配置。',
+                      '补充我的页面显示项配置。',
                       style: textTheme.labelSmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                         height: 1.3,
@@ -89,42 +84,6 @@ class _AppearanceOtherSettingsCardState
             subtitle: '自定义我的页面中显示的功能入口',
             trailingText: '$visibleCount 项显示中',
             onTap: _openMinePageDisplaySheet,
-          ),
-          Divider(
-            height: 17,
-            color: colorScheme.outlineVariant.withValues(alpha: 0.32),
-          ),
-          _buildActionTile(
-            context,
-            icon: Icons.rocket_launch_outlined,
-            title: '启动项',
-            subtitle: '选择应用启动时的默认页面',
-            onTap: _openStartupDestinationMenu,
-            trailing: PopupMenuButton<MinePageStartupDestination>(
-              key: _startupMenuKey,
-              tooltip: '选择启动项',
-              onSelected: _setStartupDestination,
-              itemBuilder: (context) {
-                return [
-                  for (final destination in MinePageStartupDestination.values)
-                    PopupMenuItem<MinePageStartupDestination>(
-                      value: destination,
-                      child: Row(
-                        children: [
-                          Expanded(child: Text(destination.label)),
-                          if (startupDestination == destination)
-                            Icon(
-                              Icons.check_rounded,
-                              size: 18,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                        ],
-                      ),
-                    ),
-                ];
-              },
-              child: _buildStartupSelector(context, startupDestination),
-            ),
           ),
         ],
       ),
@@ -276,59 +235,6 @@ class _AppearanceOtherSettingsCardState
         );
       },
     );
-  }
-
-  Future<void> _openStartupDestinationMenu() async {
-    _startupMenuKey.currentState?.showButtonMenu();
-  }
-
-  Widget _buildStartupSelector(
-    BuildContext context,
-    MinePageStartupDestination destination,
-  ) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colorScheme.secondaryContainer.withValues(alpha: 0.72),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.34),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(10, 6, 8, 6),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              destination.label,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: colorScheme.onSecondaryContainer,
-              ),
-            ),
-            const SizedBox(width: 2),
-            Icon(
-              Icons.arrow_drop_down_rounded,
-              size: 20,
-              color: colorScheme.onSecondaryContainer,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _setStartupDestination(
-    MinePageStartupDestination destination,
-  ) async {
-    try {
-      await ref
-          .read(minePageStartupDestinationProvider.notifier)
-          .setDestination(destination);
-    } catch (_) {
-      _showMessage('启动项保存失败，请稍后重试。');
-    }
   }
 
   Widget _buildGroupCard(

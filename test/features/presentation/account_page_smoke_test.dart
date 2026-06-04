@@ -133,62 +133,63 @@ void main() {
     },
   );
 
-  testWidgets('desktop auth login persists session and navigates to home', (
-    tester,
-  ) async {
-    await registerAdaptiveViewportTearDown(tester);
-    tester.view.devicePixelRatio = 1;
-    await tester.binding.setSurfaceSize(const Size(1280, 800));
+  testWidgets(
+    'desktop auth login persists session and navigates to bookshelf',
+    (tester) async {
+      await registerAdaptiveViewportTearDown(tester);
+      tester.view.devicePixelRatio = 1;
+      await tester.binding.setSurfaceSize(const Size(1280, 800));
 
-    final prefs = await SharedPreferences.getInstance();
-    final secretStore = FakeAuthSessionSecretStore();
-    final sessionStore = AuthSessionStore(
-      preferences: prefs,
-      secretStore: secretStore,
-    );
-    final authService = _FakeSuccessfulAuthService(sessionStore);
-    final router = GoRouter(
-      initialLocation: '/auth',
-      routes: [
-        GoRoute(path: '/auth', builder: (context, state) => const AuthPage()),
-        GoRoute(
-          path: '/home',
-          builder: (context, state) => const _AuthTestLandingPage(),
-        ),
-      ],
-    );
-
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: <Override>[
-          authSessionStoreProvider.overrideWithValue(sessionStore),
-          authSessionSecretStoreProvider.overrideWithValue(secretStore),
-          authServiceProvider.overrideWithValue(authService),
+      final prefs = await SharedPreferences.getInstance();
+      final secretStore = FakeAuthSessionSecretStore();
+      final sessionStore = AuthSessionStore(
+        preferences: prefs,
+        secretStore: secretStore,
+      );
+      final authService = _FakeSuccessfulAuthService(sessionStore);
+      final router = GoRouter(
+        initialLocation: '/auth',
+        routes: [
+          GoRoute(path: '/auth', builder: (context, state) => const AuthPage()),
+          GoRoute(
+            path: '/bookshelf',
+            builder: (context, state) => const _AuthTestLandingPage(),
+          ),
         ],
-        child: MaterialApp.router(
-          theme: ThemeData(platform: TargetPlatform.macOS),
-          routerConfig: router,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: <Override>[
+            authSessionStoreProvider.overrideWithValue(sessionStore),
+            authSessionSecretStoreProvider.overrideWithValue(secretStore),
+            authServiceProvider.overrideWithValue(authService),
+          ],
+          child: MaterialApp.router(
+            theme: ThemeData(platform: TargetPlatform.macOS),
+            routerConfig: router,
+          ),
         ),
-      ),
-    );
-    await tester.pump(const Duration(milliseconds: 300));
+      );
+      await tester.pump(const Duration(milliseconds: 300));
 
-    await tester.enterText(
-      find.byType(TextFormField).at(0),
-      'reader@example.com',
-    );
-    await tester.enterText(find.byType(TextFormField).at(1), 'password123');
-    await tester.tap(find.widgetWithText(FilledButton, '立即登录'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
+      await tester.enterText(
+        find.byType(TextFormField).at(0),
+        'reader@example.com',
+      );
+      await tester.enterText(find.byType(TextFormField).at(1), 'password123');
+      await tester.tap(find.widgetWithText(FilledButton, '立即登录'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('已登录落点'), findsOneWidget);
-    expect(await sessionStore.getAccessToken(), 'desktop_access_token');
-    final session = await sessionStore.getSession();
-    expect(session, isNotNull);
-    expect(session?.userId, 'desktop_user');
-    expect(session?.displayName, 'Desktop Reader');
-  });
+      expect(find.text('已登录落点'), findsOneWidget);
+      expect(await sessionStore.getAccessToken(), 'desktop_access_token');
+      final session = await sessionStore.getSession();
+      expect(session, isNotNull);
+      expect(session?.userId, 'desktop_user');
+      expect(session?.displayName, 'Desktop Reader');
+    },
+  );
 
   testWidgets(
     'desktop root startup opens app destination when auth snapshot exists',
@@ -218,7 +219,7 @@ void main() {
         ),
       );
 
-      expect(startupLocation, '/home');
+      expect(startupLocation, '/bookshelf');
     },
   );
 

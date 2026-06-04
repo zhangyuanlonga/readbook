@@ -111,9 +111,9 @@ void main() {
           type: ManagedAssetType.bottomNavIcon,
           scope: ManagedAssetScope.bottomNav,
           bytes: const <int>[1, 2, 3],
-          fileName: 'home.png',
+          fileName: 'bookshelf.png',
           collectionId: 'gallery_preview',
-          targetNamePrefix: 'home',
+          targetNamePrefix: 'bookshelf',
         );
         final gallery = BottomNavIconGallery(
           id: 'gallery_preview',
@@ -124,7 +124,7 @@ void main() {
           isEditable: true,
           isDeletable: true,
           items: {
-            BottomNavIconGalleryTab.home: BottomNavIconSet(
+            BottomNavIconGalleryTab.bookshelf: BottomNavIconSet(
               lightUnselected: BottomNavIconAssetRef(
                 path: managedFile.resolvedPath!,
                 format: BottomNavIconAssetFormat.png,
@@ -142,7 +142,7 @@ void main() {
         );
         final previewAsset =
             customItem
-                .previewItems[BottomNavIconGalleryTab.home]
+                .previewItems[BottomNavIconGalleryTab.bookshelf]
                 ?.lightUnselected;
 
         expect(previewAsset, isNotNull);
@@ -161,7 +161,7 @@ void main() {
         appShellTabForBottomNavIconGalleryTab(BottomNavIconGalleryTab.stats),
         AppShellTab.stats,
       );
-      expect(bottomNavIconGalleryTabs, hasLength(5));
+      expect(bottomNavIconGalleryTabs, hasLength(4));
     });
   });
 }

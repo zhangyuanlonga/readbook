@@ -1336,7 +1336,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
       if (context.canPop()) {
         context.pop(true);
       } else {
-        context.go('/home');
+        context.go('/bookshelf');
       }
     } on ApiException catch (error) {
       _showError(

@@ -770,8 +770,8 @@ void main() {
         .map((item) => (item as NavigationDestination).label)
         .toList(growable: false);
 
-    expect(labels, <String>['首页', '书架', '发现', '统计', '我的']);
-    expect(bar.selectedIndex, 2);
+    expect(labels, <String>['书架', '发现', '统计', '我的']);
+    expect(bar.selectedIndex, 1);
   });
 
   testWidgets('ShellScaffold 标准底部导航为选中态提供独立图标', (tester) async {
@@ -796,42 +796,34 @@ void main() {
 
     expect(
       (destinations[0].icon as BottomNavIconView).icon.fallbackIcon,
-      Icons.home_outlined,
-    );
-    expect(
-      (destinations[0].selectedIcon as BottomNavIconView).icon.fallbackIcon,
-      Icons.home_rounded,
-    );
-    expect(
-      (destinations[1].icon as BottomNavIconView).icon.fallbackIcon,
       Icons.library_books_outlined,
     );
     expect(
-      (destinations[1].selectedIcon as BottomNavIconView).icon.fallbackIcon,
+      (destinations[0].selectedIcon as BottomNavIconView).icon.fallbackIcon,
       Icons.library_books_rounded,
     );
     expect(
-      (destinations[2].icon as BottomNavIconView).icon.fallbackIcon,
+      (destinations[1].icon as BottomNavIconView).icon.fallbackIcon,
       Icons.explore_outlined,
     );
     expect(
-      (destinations[2].selectedIcon as BottomNavIconView).icon.fallbackIcon,
+      (destinations[1].selectedIcon as BottomNavIconView).icon.fallbackIcon,
       Icons.explore,
     );
     expect(
-      (destinations[3].icon as BottomNavIconView).icon.fallbackIcon,
+      (destinations[2].icon as BottomNavIconView).icon.fallbackIcon,
       Icons.insert_chart_outlined_rounded,
     );
     expect(
-      (destinations[3].selectedIcon as BottomNavIconView).icon.fallbackIcon,
+      (destinations[2].selectedIcon as BottomNavIconView).icon.fallbackIcon,
       Icons.insert_chart_rounded,
     );
     expect(
-      (destinations[4].icon as BottomNavIconView).icon.fallbackIcon,
+      (destinations[3].icon as BottomNavIconView).icon.fallbackIcon,
       Icons.person_outline,
     );
     expect(
-      (destinations[4].selectedIcon as BottomNavIconView).icon.fallbackIcon,
+      (destinations[3].selectedIcon as BottomNavIconView).icon.fallbackIcon,
       Icons.person,
     );
   });
@@ -875,8 +867,8 @@ void main() {
         .map((item) => (item as NavigationDestination).label)
         .toList(growable: false);
 
-    expect(labels, <String>['首页', '书架', '我的']);
-    expect(bar.selectedIndex, 1);
+    expect(labels, <String>['书架', '我的']);
+    expect(bar.selectedIndex, 0);
   });
 
   testWidgets('ShellScaffold 在 iOS 跟随系统时默认使用标准底栏', (tester) async {

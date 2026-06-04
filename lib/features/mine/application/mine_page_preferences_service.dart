@@ -3,21 +3,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../app/preferences/preference_key.dart';
 
-enum MinePageStartupDestination { home, bookshelf }
+enum MinePageStartupDestination { bookshelf }
 
 enum MinePageLayoutMode { grid, list }
 
 extension MinePageStartupDestinationX on MinePageStartupDestination {
   String get label {
     return switch (this) {
-      MinePageStartupDestination.home => '首页',
       MinePageStartupDestination.bookshelf => '书架',
     };
   }
 
   String get location {
     return switch (this) {
-      MinePageStartupDestination.home => '/home',
       MinePageStartupDestination.bookshelf => '/bookshelf',
     };
   }
@@ -259,7 +257,7 @@ class MinePagePreferencesService {
   static const PreferenceKey<String> startupDestinationPreference =
       PreferenceKey<String>(
         startupDestinationPreferenceKey,
-        defaultValue: 'home',
+        defaultValue: 'bookshelf',
       );
   static const PreferenceKey<String> layoutModePreference =
       PreferenceKey<String>(layoutModePreferenceKey);
@@ -342,7 +340,8 @@ class MinePagePreferencesService {
   static MinePageStartupDestination _startupDestinationFromRaw(String? raw) {
     return switch (raw) {
       'bookshelf' => MinePageStartupDestination.bookshelf,
-      _ => MinePageStartupDestination.home,
+      // 首页入口已从主导航和路由中移除，旧配置统一落到当前第一个主入口：书架。
+      _ => MinePageStartupDestination.bookshelf,
     };
   }
 

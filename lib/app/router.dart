@@ -11,7 +11,6 @@ import '../features/auth/routes.dart';
 import '../features/book/routes.dart';
 import '../features/bookshelf/routes.dart';
 import '../features/discover/routes.dart';
-import '../features/home/routes.dart';
 import '../features/mine/routes.dart';
 import '../features/mine/providers.dart';
 import '../features/reader/routes.dart';
@@ -38,7 +37,6 @@ final GoRouter appRouter = GoRouter(
         );
       },
       branches: [
-        homeShellBranch,
         bookshelfShellBranch,
         discoverShellBranch,
         readerStatsShellBranch,

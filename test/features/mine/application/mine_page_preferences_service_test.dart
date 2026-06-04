@@ -82,21 +82,37 @@ void main() {
     },
   );
 
-  test('startup destination defaults to home and persists bookshelf', () async {
-    final service = MinePagePreferencesService();
+  test(
+    'startup destination defaults to bookshelf and normalizes old home',
+    () async {
+      final service = MinePagePreferencesService();
 
-    expect(
-      await service.loadStartupDestination(),
-      MinePageStartupDestination.home,
-    );
+      expect(
+        await service.loadStartupDestination(),
+        MinePageStartupDestination.bookshelf,
+      );
 
-    await service.saveStartupDestination(MinePageStartupDestination.bookshelf);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        MinePagePreferencesService.startupDestinationPreferenceKey,
+        'home',
+      );
 
-    expect(
-      await service.loadStartupDestination(),
-      MinePageStartupDestination.bookshelf,
-    );
-  });
+      expect(
+        await service.loadStartupDestination(),
+        MinePageStartupDestination.bookshelf,
+      );
+
+      await service.saveStartupDestination(
+        MinePageStartupDestination.bookshelf,
+      );
+
+      expect(
+        await service.loadStartupDestination(),
+        MinePageStartupDestination.bookshelf,
+      );
+    },
+  );
 
   test('layout mode defaults to null and persists grid mode', () async {
     final service = MinePagePreferencesService();

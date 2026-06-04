@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 import '../images/file_image_cache.dart';
 import '../../core/storage/managed_asset_store.dart';
 import 'bottom_nav_icon_gallery_defaults.dart';
+import 'bottom_nav_icon_gallery_tab_mapper.dart';
 import '../../domain/entities/bottom_nav_icon_gallery.dart';
 import '../../domain/entities/managed_asset.dart';
 
@@ -421,7 +422,7 @@ class BottomNavIconGalleryIndexItem {
     BottomNavIconGallery gallery,
   ) {
     final previewItems = <BottomNavIconGalleryTab, BottomNavIconSet>{};
-    for (final tab in BottomNavIconGalleryTab.values) {
+    for (final tab in bottomNavIconGalleryTabs) {
       previewItems[tab] = gallery.items[tab] ?? const BottomNavIconSet();
     }
     return BottomNavIconGalleryIndexItem(

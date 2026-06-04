@@ -7,6 +7,7 @@ import '../../../app/layout/app_layout.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/navigation/bottom_nav_icon_gallery_provider.dart';
 import '../../../app/navigation/bottom_nav_icon_gallery_service.dart';
+import '../../../app/navigation/bottom_nav_icon_gallery_tab_mapper.dart';
 import '../../../app/navigation/bottom_nav_icon_resolver.dart';
 import '../../../app/shell_navigation_provider.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
@@ -432,7 +433,7 @@ class _BottomNavIconGalleryPageState
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    for (final tab in BottomNavIconGalleryTab.values) ...[
+                    for (final tab in bottomNavIconGalleryTabs) ...[
                       Expanded(
                         child: _buildLightPreviewSlot(
                           context,
@@ -441,7 +442,7 @@ class _BottomNavIconGalleryPageState
                           active: active,
                         ),
                       ),
-                      if (tab != BottomNavIconGalleryTab.values.last)
+                      if (tab != bottomNavIconGalleryTabs.last)
                         const SizedBox(width: 6),
                     ],
                   ],

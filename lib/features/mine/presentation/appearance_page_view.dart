@@ -1623,13 +1623,6 @@ class _AppearanceNavigationVisibilityPanelState
       ({AppShellTab tab, String label, IconData icon, bool active, bool locked})
     >[
       (
-        tab: AppShellTab.home,
-        label: '首页',
-        icon: Icons.home_outlined,
-        active: navigationState.showHome,
-        locked: false,
-      ),
-      (
         tab: AppShellTab.bookshelf,
         label: '书架',
         icon: Icons.auto_stories_outlined,

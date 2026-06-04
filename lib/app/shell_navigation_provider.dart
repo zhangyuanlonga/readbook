@@ -27,13 +27,6 @@ class AppShellDestination {
 
 const List<AppShellDestination> appShellDestinations = [
   AppShellDestination(
-    tab: AppShellTab.home,
-    location: '/home',
-    label: '首页',
-    icon: Icons.home_outlined,
-    selectedIcon: Icons.home_rounded,
-  ),
-  AppShellDestination(
     tab: AppShellTab.bookshelf,
     location: '/bookshelf',
     label: '书架',
@@ -76,9 +69,6 @@ abstract class AppShellNavigationState with _$AppShellNavigationState {
 
   int get configurableVisibleCount {
     var count = 0;
-    if (showHome) {
-      count += 1;
-    }
     if (showBookshelf) {
       count += 1;
     }
@@ -93,7 +83,7 @@ abstract class AppShellNavigationState with _$AppShellNavigationState {
 
   bool isTabVisible(AppShellTab tab) {
     return switch (tab) {
-      AppShellTab.home => showHome,
+      AppShellTab.home => false,
       AppShellTab.bookshelf => showBookshelf,
       AppShellTab.discover => showDiscover,
       AppShellTab.stats => showStats,
@@ -122,9 +112,13 @@ final appShellNavigationProvider =
 class AppShellNavigationNotifier extends Notifier<AppShellNavigationState> {
   bool _loadTriggered = false;
   bool _hasExplicitSet = false;
+  bool _disposed = false;
 
   @override
   AppShellNavigationState build() {
+    ref.onDispose(() {
+      _disposed = true;
+    });
     if (!_loadTriggered) {
       _loadTriggered = true;
       _load();
@@ -138,6 +132,9 @@ class AppShellNavigationNotifier extends Notifier<AppShellNavigationState> {
         await ref
             .read(appShellNavigationPreferencesServiceProvider)
             .loadShellNavigation();
+    if (_disposed) {
+      return;
+    }
     final loaded = AppShellNavigationState(
       showHome: snapshot.showHome,
       showBookshelf: snapshot.showBookshelf,
@@ -160,7 +157,8 @@ class AppShellNavigationNotifier extends Notifier<AppShellNavigationState> {
   }
 
   Future<void> setTabVisible(AppShellTab tab, bool visible) async {
-    if (tab == AppShellTab.mine ||
+    if (tab == AppShellTab.home ||
+        tab == AppShellTab.mine ||
         (tab == AppShellTab.discover && !_isDiscoverEnabled)) {
       return;
     }
@@ -194,14 +192,16 @@ class AppShellNavigationNotifier extends Notifier<AppShellNavigationState> {
   }
 
   AppShellNavigationState _normalizeState(AppShellNavigationState input) {
-    var normalized = input;
+    // 首页已经从主导航和路由中移除。这里统一压掉旧偏好里的 showHome，
+    // 防止历史配置在后续保存时又把首页入口带回外观设置或导航状态里。
+    var normalized = input.copyWith(showHome: false);
     if (!_isDiscoverEnabled && normalized.showDiscover) {
       normalized = normalized.copyWith(showDiscover: false);
     }
     if (normalized.configurableVisibleCount > 0) {
       return normalized;
     }
-    return normalized.copyWith(showHome: true);
+    return normalized.copyWith(showBookshelf: true);
   }
 
   bool get _isDiscoverEnabled {
@@ -209,11 +209,14 @@ class AppShellNavigationNotifier extends Notifier<AppShellNavigationState> {
   }
 
   Future<void> _persistState(AppShellNavigationState state) async {
+    if (_disposed) {
+      return;
+    }
     await ref
         .read(appShellNavigationPreferencesServiceProvider)
         .saveShellNavigation(
           AppShellNavigationSnapshot(
-            showHome: state.showHome,
+            showHome: false,
             showBookshelf: state.showBookshelf,
             showDiscover: state.showDiscover,
             showStats: state.showStats,

@@ -1262,18 +1262,15 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
 
   int _tabOrderIndex(AppShellTab tab) {
     return switch (tab) {
+      AppShellTab.bookshelf => 0,
+      AppShellTab.discover => 1,
+      AppShellTab.stats => 2,
+      AppShellTab.mine => 3,
       AppShellTab.home => 0,
-      AppShellTab.bookshelf => 1,
-      AppShellTab.discover => 2,
-      AppShellTab.stats => 3,
-      AppShellTab.mine => 4,
     };
   }
 
   AppShellTab _locationTab(String currentLocation) {
-    if (currentLocation.startsWith('/home')) {
-      return AppShellTab.home;
-    }
     if (currentLocation.startsWith('/discover')) {
       return AppShellTab.discover;
     }

@@ -256,7 +256,7 @@ class MinePageStartupDestinationNotifier
   }
 
   static MinePageStartupDestination get primedOrDefault {
-    return _primedDestination ?? MinePageStartupDestination.home;
+    return _primedDestination ?? MinePageStartupDestination.bookshelf;
   }
 
   @override
@@ -269,7 +269,7 @@ class MinePageStartupDestinationNotifier
       _loadTriggered = true;
       _load();
     }
-    return MinePageStartupDestination.home;
+    return MinePageStartupDestination.bookshelf;
   }
 
   Future<void> _load() async {

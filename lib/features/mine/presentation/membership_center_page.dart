@@ -98,7 +98,7 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
     _MembershipFeatureItem(
       icon: Icons.wallpaper_outlined,
       title: '背景图集',
-      description: '为应用设置自定义背景图片，让首页、发现页和我的页拥有统一的视觉氛围。',
+      description: '为应用设置自定义背景图片，让书架、发现页和我的页拥有统一的视觉氛围。',
     ),
     _MembershipFeatureItem(
       icon: Icons.menu_book_outlined,

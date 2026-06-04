@@ -7,6 +7,7 @@ import '../../../app/layout/app_layout.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/navigation/bottom_nav_icon_gallery_provider.dart';
 import '../../../app/navigation/bottom_nav_icon_gallery_service.dart';
+import '../../../app/navigation/bottom_nav_icon_gallery_tab_mapper.dart';
 import '../../../app/platform/app_input_focus_behavior.dart';
 import '../../../app/shell_navigation_provider.dart';
 import '../../../app/tasks/app_task_manager.dart';
@@ -339,13 +340,13 @@ class _BottomNavIconGalleryEditorPageState
                                 SizedBox(height: metrics.contentGap * 0.8),
                                 for (
                                   var index = 0;
-                                  index < BottomNavIconGalleryTab.values.length;
+                                  index < bottomNavIconGalleryTabs.length;
                                   index++
                                 ) ...[
                                   if (index > 0)
                                     SizedBox(height: metrics.contentGap * 0.8),
                                   _buildTabSection(
-                                    BottomNavIconGalleryTab.values[index],
+                                    bottomNavIconGalleryTabs[index],
                                   ),
                                 ],
                               ],
@@ -489,7 +490,7 @@ class _BottomNavIconGalleryEditorPageState
 
   Widget _buildBatchToolbar() {
     final colorScheme = Theme.of(context).colorScheme;
-    final allLightConfigured = BottomNavIconGalleryTab.values.every((tab) {
+    final allLightConfigured = bottomNavIconGalleryTabs.every((tab) {
       final set = _gallery?.items[tab] ?? const BottomNavIconSet();
       return set.lightUnselected != null && set.lightSelected != null;
     });
@@ -741,7 +742,7 @@ class _BottomNavIconGalleryEditorPageState
   }
 
   Future<void> _copyAllLightToDark() async {
-    for (final tab in BottomNavIconGalleryTab.values) {
+    for (final tab in bottomNavIconGalleryTabs) {
       await _copyLightToDark(tab);
     }
   }

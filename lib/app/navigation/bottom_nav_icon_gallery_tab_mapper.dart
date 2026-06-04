@@ -22,7 +22,6 @@ AppShellTab appShellTabForBottomNavIconGalleryTab(BottomNavIconGalleryTab tab) {
 }
 
 const List<BottomNavIconGalleryTab> bottomNavIconGalleryTabs = [
-  BottomNavIconGalleryTab.home,
   BottomNavIconGalleryTab.bookshelf,
   BottomNavIconGalleryTab.discover,
   BottomNavIconGalleryTab.stats,
