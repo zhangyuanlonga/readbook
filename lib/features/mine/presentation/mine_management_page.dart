@@ -382,7 +382,8 @@ class _BookshelfTaxonomyManagementPageState
     final isNew = item == null;
     final initialName = item?.name ?? '';
     final initialColorValue =
-        item?.colorValue ?? BookshelfTaxonomyItem.defaultColorForName('新$_entityName');
+        item?.colorValue ??
+        BookshelfTaxonomyItem.defaultColorForName('新$_entityName');
     final existingNames = _items.map((entry) => entry.name).toSet();
     final result = await showModalBottomSheet<_TaxonomyEditResult>(
       context: context,
@@ -428,7 +429,10 @@ class _BookshelfTaxonomyManagementPageState
       }
       if (item != null && nextName != item.name) {
         if (_isTag) {
-          await _bookshelfService.renameTag(fromTag: item.name, toTag: nextName);
+          await _bookshelfService.renameTag(
+            fromTag: item.name,
+            toTag: nextName,
+          );
         } else {
           await _bookshelfService.renameCategory(
             fromCategory: item.name,
@@ -496,7 +500,8 @@ class _BookshelfTaxonomyManagementPageState
             // 新增按钮
             IconButton(
               tooltip: '新增$_entityName',
-              onPressed: _isSaving ? null : () => unawaited(_openTaxonomyEditor()),
+              onPressed:
+                  _isSaving ? null : () => unawaited(_openTaxonomyEditor()),
               icon: const Icon(Icons.add_rounded),
             ),
           ],
@@ -687,7 +692,7 @@ class _BookshelfTaxonomyManagementPageState
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           buildDefaultDragHandles: false,
-          onReorder:
+          onReorderItem:
               _isSaving
                   ? (_, __) {}
                   : (oldIndex, newIndex) => unawaited(
@@ -741,9 +746,6 @@ class _BookshelfTaxonomyManagementPageState
     required int oldIndex,
     required int newIndex,
   }) async {
-    if (oldIndex < newIndex) {
-      newIndex -= 1;
-    }
     if (oldIndex == newIndex ||
         oldIndex < 0 ||
         oldIndex >= displayItems.length ||
@@ -859,7 +861,8 @@ class _BookshelfTaxonomyManagementPageState
                   size: 18,
                   color: colorScheme.onSurfaceVariant,
                 ),
-                onPressed: _isSaving ? null : () => unawaited(_renameItem(item)),
+                onPressed:
+                    _isSaving ? null : () => unawaited(_renameItem(item)),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 32),
               ),
@@ -870,7 +873,8 @@ class _BookshelfTaxonomyManagementPageState
                   size: 18,
                   color: colorScheme.error,
                 ),
-                onPressed: _isSaving ? null : () => unawaited(_deleteItem(item)),
+                onPressed:
+                    _isSaving ? null : () => unawaited(_deleteItem(item)),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 32),
               ),
@@ -935,10 +939,7 @@ class _FourDotReorderHandle extends StatelessWidget {
 class _TaxonomyEditResult {
   const _TaxonomyEditResult.save({required this.name, required this.colorValue})
     : delete = false;
-  const _TaxonomyEditResult.delete()
-    : name = '',
-      colorValue = 0,
-      delete = true;
+  const _TaxonomyEditResult.delete() : name = '', colorValue = 0, delete = true;
 
   final String name;
   final int colorValue;
@@ -1008,10 +1009,7 @@ class _TaxonomyEditorPanelState extends State<_TaxonomyEditorPanel> {
       return;
     }
     Navigator.of(context).pop(
-      _TaxonomyEditResult.save(
-        name: value,
-        colorValue: _draftColor.toARGB32(),
-      ),
+      _TaxonomyEditResult.save(name: value, colorValue: _draftColor.toARGB32()),
     );
   }
 
@@ -1019,7 +1017,8 @@ class _TaxonomyEditorPanelState extends State<_TaxonomyEditorPanel> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final title = widget.isNew ? '新增${widget.entityName}' : '编辑${widget.entityName}';
+    final title =
+        widget.isNew ? '新增${widget.entityName}' : '编辑${widget.entityName}';
     final insetBottom = MediaQuery.viewInsetsOf(context).bottom;
     return Padding(
       padding: EdgeInsets.fromLTRB(18, 14, 18, 16 + insetBottom),
@@ -1053,7 +1052,9 @@ class _TaxonomyEditorPanelState extends State<_TaxonomyEditorPanel> {
                   IconButton(
                     tooltip: '删除',
                     onPressed: () {
-                      Navigator.of(context).pop(const _TaxonomyEditResult.delete());
+                      Navigator.of(
+                        context,
+                      ).pop(const _TaxonomyEditResult.delete());
                     },
                     icon: const Icon(Icons.delete_outline_rounded),
                   ),
@@ -1125,7 +1126,9 @@ class _TaxonomyEditorPanelState extends State<_TaxonomyEditorPanel> {
               paletteType: PaletteType.hsvWithHue,
               colorPickerWidth: 340,
               pickerAreaHeightPercent: 0.58,
-              pickerAreaBorderRadius: const BorderRadius.all(Radius.circular(12)),
+              pickerAreaBorderRadius: const BorderRadius.all(
+                Radius.circular(12),
+              ),
               labelTypes: const [],
               hexInputController: _hexController,
             ),

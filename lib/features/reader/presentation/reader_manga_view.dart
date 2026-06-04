@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 import '../../../domain/entities/reader_settings.dart';
 import '../application/reader_content_session.dart';
@@ -323,7 +324,7 @@ class _ReaderMangaViewState extends State<ReaderMangaView> {
         key: viewport.listKey,
         controller: viewport.controller,
         physics: viewport.physics,
-        cacheExtent: viewport.cacheExtent,
+        scrollCacheExtent: ScrollCacheExtent.pixels(viewport.cacheExtent),
         padding: viewport.padding,
         itemCount: viewport.itemCount,
         separatorBuilder:

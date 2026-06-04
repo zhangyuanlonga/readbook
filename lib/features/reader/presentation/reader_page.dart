@@ -2034,7 +2034,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       onNotification: _onReaderScrollNotification,
       child: ListView.separated(
         controller: _scrollController,
-        cacheExtent: _document.hasImageBlocks ? 640 : 1800,
+        scrollCacheExtent: ScrollCacheExtent.pixels(
+          _document.hasImageBlocks ? 640 : 1800,
+        ),
         padding: bodyPadding,
         itemCount: _continuousTextChapters.length,
         separatorBuilder:
