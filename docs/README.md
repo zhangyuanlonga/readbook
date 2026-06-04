@@ -47,7 +47,7 @@
 | macOS | 构建、启动、窗口、键鼠、文件路径、外部打开、凭证能力 |
 | Windows | 已验证 / CI 补验 / 未验证原因，不能用 macOS 结果代替 |
 | Linux | 已验证 / CI 补验 / 未验证原因，不能用 macOS 结果代替 |
-| 测试与构建 | flutter analyze、目标单测、Web build、桌面构建、移动端构建或 smoke |
+| 测试与构建 | flutter analyze、目标单测、Web build、桌面构建、移动端构建或 smoke；如果本次跑了任一桌面 build，必须同步记录 Android / iOS build 结果或真实阻塞原因 |
 | 注释与文档 | 新增或修改的复杂代码是否有标准中文维护注释，相关 docs 是否同步 |
 
 ## 必读规则

@@ -1,6 +1,6 @@
 # Web / Desktop / Mobile 平台规则
 
-更新时间：2026-06-03
+更新时间：2026-06-04
 
 本文定义 Android、iOS、Web、macOS、Windows、Linux 的平台差异处理规则。
 
@@ -63,6 +63,8 @@ Desktop 默认包含 macOS、Windows、Linux。
 
 macOS 通过不代表 Windows / Linux 通过。文档和执行记录必须明确写清楚已验证平台。
 
+macOS / Windows / Linux 任一桌面构建通过，也不代表 Android / iOS 通过。只要任务把桌面构建作为验收项，且当前机器已经具备移动端构建环境，就必须在同一任务内同步补 Android 和 iOS 构建；确实无法构建时，必须写明阻塞原因、对应命令和发布前补验入口。
+
 ## 5. Capability 规则
 
 页面只能消费语义能力，例如：
@@ -123,6 +125,23 @@ dart tool/check_storage_governance_guard.dart
 dart tool/check_route_inventory.dart
 flutter build web --no-pub
 ```
+
+推荐本机可用构建矩阵：
+
+```bash
+flutter build web --no-pub
+flutter build apk --debug --no-pub
+flutter build ios --no-codesign --no-pub
+flutter build macos --debug --no-pub
+```
+
+执行规则：
+
+- 只跑 Web build 时，仍需按任务影响面判断 Android / iOS 是否需要补构建或 smoke。
+- 只要跑了 macOS、Windows、Linux 任一桌面 build，就必须同步跑 Android / iOS build，或在收尾记录中写清无法构建的真实原因。
+- macOS build 不能替代 Android / iOS build；Windows / Linux build 也不能替代 Android / iOS build。
+- Android 默认使用 `flutter build apk --debug --no-pub` 做开发验收；发布验收再跑 release 或 flavor 对应包。
+- iOS 默认使用 `flutter build ios --no-codesign --no-pub` 做开发验收；如签名、Pods、Xcode 或模拟器环境阻塞，必须记录阻塞点和后续补验方式。
 
 推荐发布前矩阵：
 

@@ -185,12 +185,12 @@
 | 任务编号 | M2-10 |
 | P0 结论 | 本轮没有未登记的 P0 候选；storage P0 风险已进入 storage baseline 矩阵，不再作为隐藏风险留在代码里。 |
 | P1 结论 | M2-D007 / M2-D008 / M2-D010 已完成首轮隔离、拆分或 typed key 替换；M2-D012 / M2-D013 登记为后续候选，原因、影响平台、验证入口和退出方向已写入候选看板。 |
-| Dependency 结论 | M2-D011 不在 M2 内强删本地 override / stub，继续由 dependency override 矩阵治理；本轮 macOS build 暴露 `charset_converter` 必须保持带 macOS plugin 声明的版本，已补依赖治理备注。 |
+| Dependency 结论 | M2-D011 不在 M2 内强删本地 override / stub，继续由 dependency override 矩阵治理；本轮 macOS build 暴露 `charset_converter` 必须保持带 macOS plugin 声明的版本，已补依赖治理备注；Android 补构建暴露 `sentry_flutter 8.14.2` 写死 Kotlin languageVersion 1.6，已在根 Gradle 配置统一覆盖到 Kotlin 1.8。 |
 | 大文件结论 | `reader_page.dart` 当前登记债务 6013 行，`advanced_theme_service.dart` 当前登记债务 4090 行；`bookshelf_page.dart`、`epub_local_book_parser.dart` 保留 warning，退出条件是后续按职责拆分而不是只追求行数下降。 |
 | 多端影响 | Android、iOS、Web JS、macOS、Windows、Linux 均为架构、存储、解析、书架和偏好治理收口；登录 / session 文件未在本阶段改动，避免和 M3 Windows 并行工作冲突。 |
-| 已验证 | `flutter analyze` 通过；目标单测通过；storage / dependency / model / architecture guards 通过；`dart tool/run_architecture_green_suite.dart --dry-run` 通过；`flutter build web --no-pub` 通过；`flutter build macos --debug --no-pub` 通过。 |
-| 验证备注 | reader 相关测试仍有既有 Drift 多数据库 warning；Web build 有 Flutter wasm dry-run warning；macOS build 有 Sentry `@_implementationOnly` 和 duplicate `-lsqlite3` warning，但命令均成功。 |
-| 未验证平台 | Android、iOS、Windows、Linux 未在本机做真构建；发布前仍需对应机器或 CI 补验。Windows 可由当前 M3 并行环境顺手验证构建和核心 smoke。 |
+| 已验证 | `flutter analyze` 通过；目标单测通过；storage / dependency / model / architecture guards 通过；`dart tool/run_architecture_green_suite.dart --dry-run` 通过；`flutter build web --no-pub` 通过；`flutter build macos --debug --no-pub` 通过；`flutter build apk --debug --no-pub` 通过，生成 `build/app/outputs/flutter-apk/app-debug.apk`。 |
+| 验证备注 | reader 相关测试仍有既有 Drift 多数据库 warning；Web build 有 Flutter wasm dry-run warning；macOS build 有 Sentry `@_implementationOnly` 和 duplicate `-lsqlite3` warning，但命令均成功。桌面构建不能代表移动端构建，后续凡跑任一 Desktop build，必须同步记录 Android / iOS build 结果或真实阻塞原因。 |
+| 未验证平台 | iOS 已执行 `flutter build ios --no-codesign --no-pub`，但 CocoaPods 安装 `pdfium_flutter` 时需要从 GitHub 下载 `PDFium.xcframework`，本机 75 秒无法连接 `github.com:443`，因此 iOS no-codesign 构建阻塞；Windows、Linux 未在本机做真构建。Windows 可由当前 M3 并行环境顺手验证构建和核心 smoke，iOS 需在 GitHub 可达或预置 PDFium xcframework 后补构建。 |
 | 中文注释 | 本轮新增 parser input、bookshelf migration / taxonomy / event bus、search history typed key 的中文维护注释；后续新增或维护代码继续遵守标准中文详细注释规则。 |
 | 下一步 | M2 已关闭。当前执行入口切到 M3：核心业务链多端兼容与验收；M2-D012 / M2-D013 / M2-D011 作为后续治理候选接入 M4-M5 或专项任务。 |
 

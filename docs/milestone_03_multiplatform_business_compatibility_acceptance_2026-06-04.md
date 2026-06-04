@@ -105,3 +105,4 @@
 - [ ] M3-07-03 业务链相关代码遵守 provider、route helper、storage、capability、中文注释规则。
 - [ ] M3-07-04 `flutter analyze` 通过或记录阻塞原因。
 - [ ] M3-07-05 Web build、目标单测、guard、可用桌面构建或未验证原因记录完整。
+- [ ] M3-07-06 如果任一任务跑了 macOS / Windows / Linux 桌面构建，同一任务必须同步记录 Android / iOS 构建结果；无法构建时写明阻塞命令、原因和补验机器。
