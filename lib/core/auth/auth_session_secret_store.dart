@@ -68,6 +68,8 @@ abstract class AuthSessionSecretStore {
 AuthSessionSecretStore createDefaultAuthSessionSecretStore({
   SharedPreferences? preferences,
 }) {
+  // 桌面和 Web 端不能假设 flutter_secure_storage 一定具备同等能力：
+  // Windows / Linux / macOS 先走 SharedPreferences fallback，移动端继续使用系统安全存储。
   if (kIsWeb || _isDesktopPlatform(defaultTargetPlatform)) {
     return SharedPreferencesAuthSessionSecretStore(preferences: preferences);
   }
@@ -75,6 +77,8 @@ AuthSessionSecretStore createDefaultAuthSessionSecretStore({
 }
 
 bool hasPersistedFallbackAuthSecretsSync(SharedPreferences prefs) {
+  // 启动路由只能同步判断是否“可能有会话”，不能在这里触发异步迁移。
+  // 真正读取和迁移仍由 AuthSessionStore 统一处理，避免启动期多端状态分叉。
   return _readNormalizedPrefsValue(
             prefs,
             authSecretFallbackAccessTokenStorageKey,

@@ -24,11 +24,35 @@
 - [ ] M3-02-01 检查移动端登录、注册、退出登录、会话恢复是否仍按旧体验工作。
 - [ ] M3-02-02 检查 Web 登录后刷新恢复、根路径跳转、未登录拦截和退出登录。
 - [ ] M3-02-03 检查 macOS 登录、键盘提交、窗口尺寸、外部浏览器 / fallback 凭证策略。
-- [ ] M3-02-04 为 Windows 登录路径写代码级影响判断和 CI / 手工补验要求。
+- [x] M3-02-04 为 Windows 登录路径写代码级影响判断和 CI / 手工补验要求。
 - [ ] M3-02-05 为 Linux 登录路径写代码级影响判断和 CI / 手工补验要求。
-- [ ] M3-02-06 补 auth form validation / session store 相关测试。
+- [x] M3-02-06 补 auth form validation / session store 相关测试。
 - [ ] M3-02-07 为会话存储、凭证 fallback、过期跳转补中文维护注释。
 - [ ] M3-02-08 输出登录链六平台验收记录。
+
+### M3-02 执行记录（2026-06-04）
+
+#### M3-02-04 Windows 登录路径代码级影响判断
+
+- 登录入口：`/auth` 路由进入 `AuthPage`；个人资料页未登录状态通过 `context.push('/auth')` 进入登录页。
+- 表单路径：Windows 被 `AppLayout.isDesktopLike` 归入桌面布局；宽屏使用桌面双栏 / 单栏 surface，窄窗回落为滚动表单，不依赖移动端键盘 inset 行为。登录密码框和注册确认密码框保留 `TextInputAction.done` 与 `onFieldSubmitted => _submit()`，Windows 物理键盘回车提交路径可用。
+- 服务路径：`AuthPage` 通过 `authServiceProvider` 调用 `AuthService.loginAndStore` / `registerAndStore`；成功后写入 `AuthSessionStore` 并触发登录事件，失败时保留 inline error。
+- Windows 会话存储：`createDefaultAuthSessionSecretStore` 在 Windows 走 `SharedPreferencesAuthSessionSecretStore` fallback，不依赖移动端 secure storage 插件；`AuthSessionStore` 仍保留旧 prefs token 迁移逻辑，便于历史版本升级。
+- 代码级风险：Windows fallback token 存在 SharedPreferences，不等价于 OS 凭据库；发布前需要确认后端 token 时效和退出登录清理策略足够保守。当前登录链没有外部浏览器 OAuth 分支，Windows 不需要额外 browser callback 验证。
+- CI 要求：至少运行 `flutter test test/features/auth/application/auth_form_validation_service_test.dart test/core/auth/auth_session_store_test.dart test/core/auth/auth_service_test.dart`；Windows 构建机需开启 Developer Mode 或具备 symlink 权限。
+- 手工补验要求：Windows Release 或 Debug 启动后，依次补验登录页打开、账号/密码空值校验、回车提交、登录失败 inline error、登录成功会话恢复、退出登录后会话清理、重启应用后未过期 session 仍可恢复。
+
+#### M3-02-06 测试补充
+
+- `auth_form_validation_service_test.dart` 增加 required trim、可选新密码长度、空格密码当前行为、确认密码边界覆盖。
+- `auth_session_store_test.dart` 增加安全存储 access token 优先、legacy refresh / 过期时间补缺迁移、禁用 legacy fallback 时不读取也不清理旧凭证的覆盖。
+- 执行结果：`flutter test test/features/auth/application/auth_form_validation_service_test.dart test/core/auth/auth_session_store_test.dart test/core/auth/auth_service_test.dart` 通过。
+
+#### M3-02-08 登录链六平台验收记录（本次仅 Windows）
+
+| 平台 | 状态 | 验收记录 | 未覆盖 / 后续补验 |
+| --- | --- | --- | --- |
+| Windows | 部分通过 | 代码路径完成影响判断；`AuthPage` 桌面布局、键盘提交、`AuthService`、`AuthSessionStore`、Windows fallback secret store 均有可追踪路径；本次补充 auth form validation 和 session store 单测；`flutter build windows` 通过，生成 `build/windows/x64/runner/Release/shuxiang_reading_next.exe`。 | 需要连接真实后端或可控 mock 后端，在 Windows UI 上手工补验登录成功、失败、退出、重启恢复。 |
 
 ## 3. M3-03 搜索、发现与详情链
 

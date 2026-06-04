@@ -7,12 +7,20 @@ void main() {
   group('AuthFormValidationService', () {
     test('validates account and required password', () {
       expect(service.validateAccount(' '), '请输入账号');
+      expect(service.validateAccount('  reader  '), isNull);
       expect(service.validateAccount('reader'), isNull);
       expect(service.validateRequiredPassword(''), '请输入密码');
+      expect(service.validateRequiredPassword(' '), isNull);
       expect(service.validateRequiredPassword('secret'), isNull);
     });
 
     test('validates required and optional confirm password', () {
+      expect(service.validateRequired('  ', '昵称'), '请输入昵称');
+      expect(service.validateRequired('  书香  ', '昵称'), isNull);
+      expect(service.validateOptionalNewPassword(''), isNull);
+      expect(service.validateOptionalNewPassword('12345'), '新密码至少需要 6 位');
+      expect(service.validateOptionalNewPassword('123456'), isNull);
+
       expect(
         service.validateConfirmPassword('', password: 'secret'),
         '请再次输入密码',

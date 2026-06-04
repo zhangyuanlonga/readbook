@@ -53,6 +53,66 @@ void main() {
   );
 
   test(
+    'keeps secure access token primary while migrating missing legacy fields',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth.access_token': 'legacy_access',
+        'auth.refresh_token': ' legacy_refresh ',
+        'auth.access_expires_at': '2026-05-21T08:00:00Z',
+        'auth.refresh_expires_at': '2026-05-22T08:00:00Z',
+        'auth.account': 'reader@example.com',
+      });
+      final prefs = await SharedPreferences.getInstance();
+      final secretStore = FakeAuthSessionSecretStore(
+        initialSecrets: const AuthSessionSecrets(accessToken: 'secure_access'),
+      );
+      final store = AuthSessionStore(
+        preferences: prefs,
+        secretStore: secretStore,
+      );
+
+      final session = await store.getSession();
+      final secrets = await secretStore.readSecrets();
+
+      expect(session, isNotNull);
+      expect(session?.accessToken, 'secure_access');
+      expect(session?.refreshToken, 'legacy_refresh');
+      expect(session?.account, 'reader@example.com');
+      expect(secrets.accessToken, 'secure_access');
+      expect(secrets.refreshToken, 'legacy_refresh');
+      expect(secrets.accessExpiresAt, DateTime.parse('2026-05-21T08:00:00Z'));
+      expect(secrets.refreshExpiresAt, DateTime.parse('2026-05-22T08:00:00Z'));
+      expect(prefs.getString('auth.access_token'), isNull);
+      expect(prefs.getString('auth.refresh_token'), isNull);
+    },
+  );
+
+  test(
+    'ignores legacy credentials when fallback migration is disabled',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth.access_token': 'legacy_access',
+        'auth.refresh_token': 'legacy_refresh',
+        'auth.user_id': 'legacy_user',
+      });
+      final prefs = await SharedPreferences.getInstance();
+      final secretStore = FakeAuthSessionSecretStore();
+      final store = AuthSessionStore(
+        preferences: prefs,
+        secretStore: secretStore,
+        enableLegacyCredentialFallback: false,
+      );
+
+      expect(await store.getSession(), isNull);
+      expect(await store.getAccessToken(), isNull);
+      expect(await store.getRefreshToken(), isNull);
+      expect(prefs.getString('auth.access_token'), 'legacy_access');
+      expect(prefs.getString('auth.refresh_token'), 'legacy_refresh');
+      expect(prefs.getString('auth.user_id'), 'legacy_user');
+    },
+  );
+
+  test(
     'saveSession writes secrets to secure storage and keeps display cache',
     () async {
       final prefs = await SharedPreferences.getInstance();
