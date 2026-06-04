@@ -5,9 +5,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/auth/auth_session.dart';
 import '../../../core/auth/auth_session_store.dart';
 import '../../../core/media/image_selection_service.dart';
+import '../../../core/membership/membership_features.dart';
 import '../../../core/membership/membership_service.dart';
 import '../../../core/mobile_features/mobile_feature_service.dart';
 import '../../../core/storage/managed_asset_store.dart';
+import '../../../core/user/user_profile.dart';
 import '../../../core/user/user_profile_service.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../domain/entities/managed_asset.dart';
@@ -86,8 +88,8 @@ class MinePageSessionService {
     bool refreshRemote = true,
   }) async {
     final persistedSession = await _authSessionStore.getSession();
-    final session = await _syncSessionIdentity(persistedSession);
-    if (session == null) {
+    final syncedIdentity = await _syncSessionIdentity(persistedSession);
+    if (syncedIdentity == null) {
       return const MinePageSessionSnapshot(
         session: null,
         localAvatarPath: null,
@@ -103,6 +105,8 @@ class MinePageSessionService {
         readingStreakDays: 0,
       );
     }
+    final session = syncedIdentity.session;
+    final profile = syncedIdentity.profile;
 
     final localAvatarPath = await loadLocalAvatarPath(session.userId);
     final readingSummary = await _loadReadingSummary();
@@ -112,12 +116,16 @@ class MinePageSessionService {
             ? null
             : await _remoteAccessSnapshotService.load(normalizedUserId);
     if (!refreshRemote) {
+      final mergedSnapshot = _mergeProfileMembershipAccess(
+        cachedRemoteSnapshot,
+        profile,
+      );
       return _buildSnapshot(
         session: session,
         localAvatarPath: localAvatarPath,
-        remoteSnapshot: cachedRemoteSnapshot,
-        vipExpireAt: cachedRemoteSnapshot?.vipExpireAt?.toLocal(),
-        membershipPlanType: cachedRemoteSnapshot?.membershipPlanType,
+        remoteSnapshot: mergedSnapshot,
+        vipExpireAt: mergedSnapshot?.vipExpireAt?.toLocal(),
+        membershipPlanType: mergedSnapshot?.membershipPlanType,
         readingSummary: readingSummary,
       );
     }
@@ -130,27 +138,37 @@ class MinePageSessionService {
             modules: modules,
             entitlement: entitlement,
           );
+      final mergedSnapshot = _mergeProfileMembershipAccess(
+        remoteSnapshot,
+        profile,
+      ) ?? remoteSnapshot;
       if (normalizedUserId.isNotEmpty) {
         await _remoteAccessSnapshotService.save(
           normalizedUserId,
-          remoteSnapshot,
+          mergedSnapshot,
         );
       }
       return _buildSnapshot(
         session: session,
         localAvatarPath: localAvatarPath,
-        remoteSnapshot: remoteSnapshot,
-        vipExpireAt: entitlement.expireAt?.toLocal(),
-        membershipPlanType: entitlement.planType,
+        remoteSnapshot: mergedSnapshot,
+        vipExpireAt:
+            mergedSnapshot.vipExpireAt?.toLocal() ??
+            entitlement.expireAt?.toLocal(),
+        membershipPlanType: mergedSnapshot.membershipPlanType,
         readingSummary: readingSummary,
       );
     } catch (_) {
+      final mergedSnapshot = _mergeProfileMembershipAccess(
+        cachedRemoteSnapshot,
+        profile,
+      );
       return _buildSnapshot(
         session: session,
         localAvatarPath: localAvatarPath,
-        remoteSnapshot: cachedRemoteSnapshot,
-        vipExpireAt: cachedRemoteSnapshot?.vipExpireAt?.toLocal(),
-        membershipPlanType: cachedRemoteSnapshot?.membershipPlanType,
+        remoteSnapshot: mergedSnapshot,
+        vipExpireAt: mergedSnapshot?.vipExpireAt?.toLocal(),
+        membershipPlanType: mergedSnapshot?.membershipPlanType,
         readingSummary: readingSummary,
       );
     }
@@ -288,7 +306,48 @@ class MinePageSessionService {
     );
   }
 
-  Future<AuthSession?> _syncSessionIdentity(AuthSession? session) async {
+  RemoteAccessSnapshot? _mergeProfileMembershipAccess(
+    RemoteAccessSnapshot? snapshot,
+    UserProfile? profile,
+  ) {
+    if (!MembershipFeatures.hasActiveProfileMembership(profile)) {
+      return snapshot;
+    }
+    final shouldUseProfileMembership = snapshot?.hasMembership != true;
+    final merged = (snapshot ?? _defaultProfileMembershipSnapshot()).copyWith(
+      hasMembership: true,
+      hasThemeCustom:
+          snapshot?.hasThemeCustom == true ||
+          MembershipFeatures.hasProfileFeature(
+            profile,
+            MembershipFeatures.themeCustom,
+          ),
+      vipExpireAt:
+          shouldUseProfileMembership
+              ? profile?.vipExpireAt
+              : snapshot?.vipExpireAt ?? profile?.vipExpireAt,
+      membershipPlanType:
+          shouldUseProfileMembership
+              ? profile?.planType
+              : snapshot?.membershipPlanType ?? profile?.planType,
+      cachedAt: DateTime.now().toUtc(),
+    );
+    return merged.normalizedMembershipAccess();
+  }
+
+  RemoteAccessSnapshot _defaultProfileMembershipSnapshot() {
+    return RemoteAccessSnapshot(
+      serverSourceGatewayEnabled: false,
+      hasMembership: false,
+      hasThemeCustom: false,
+      serverSourceGatewayLimit: 10,
+      cachedAt: DateTime.now().toUtc(),
+    );
+  }
+
+  Future<({AuthSession session, UserProfile? profile})?> _syncSessionIdentity(
+    AuthSession? session,
+  ) async {
     if (session == null) {
       return null;
     }
@@ -308,12 +367,12 @@ class MinePageSessionService {
                 : profile.username,
       );
       if (_isSameIdentity(session, nextSession)) {
-        return session;
+        return (session: session, profile: profile);
       }
       await _authSessionStore.saveSession(nextSession);
-      return nextSession;
+      return (session: nextSession, profile: profile);
     } catch (_) {
-      return session;
+      return (session: session, profile: null);
     }
   }
 

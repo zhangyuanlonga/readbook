@@ -43,6 +43,7 @@ import '../../../core/media/image_selection_service.dart';
 import '../../../core/auth/auth_session_store.dart';
 import '../../../core/membership/membership_features.dart';
 import '../../../core/membership/membership_service.dart';
+import '../../../core/user/user_profile_service.dart';
 import '../../../core/storage/local_file_stat.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
 import '../../../domain/entities/bookmark.dart';

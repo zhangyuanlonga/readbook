@@ -161,6 +161,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   late final AuthSessionStore _sessionStore;
   late final MinePageSessionService _sessionService;
   late final AdvancedThemePageFlowCoordinator _pageFlowCoordinator;
+  bool _hasRequestedRemoteAccessRefresh = false;
   final TextEditingController _searchController = TextEditingController();
   final Map<String, ImageProvider<Object>> _previewWallpaperImageProviders =
       <String, ImageProvider<Object>>{};
@@ -299,6 +300,21 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     if (!mounted) {
       return;
     }
+    final shouldRefreshRemote =
+        !refreshRemote &&
+        !_hasRequestedRemoteAccessRefresh &&
+        (!snapshot.hasThemeCustom || snapshot.shouldRefreshRemoteAccess);
+    if (shouldRefreshRemote) {
+      _hasRequestedRemoteAccessRefresh = true;
+      setState(() {
+        _isAccessLoading = true;
+      });
+      unawaited(_loadAccess(refreshRemote: true));
+      return;
+    }
+    if (refreshRemote) {
+      _hasRequestedRemoteAccessRefresh = false;
+    }
     setState(() {
       _canUseAdvancedThemes = snapshot.hasThemeCustom;
       _isAccessLoading = false;
@@ -315,10 +331,12 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   void _handleAuthEvent(AuthEvent event) {
     switch (event.type) {
       case AuthEventType.loggedIn:
+        _hasRequestedRemoteAccessRefresh = false;
         unawaited(_loadAccess(refreshRemote: true));
         break;
       case AuthEventType.loggedOut:
       case AuthEventType.sessionExpired:
+        _hasRequestedRemoteAccessRefresh = false;
         unawaited(_loadAccess(refreshRemote: false));
         break;
     }

@@ -14,6 +14,7 @@ import '../core/auth/auth_service.dart';
 import '../core/auth/auth_session_store.dart';
 import '../domain/entities/bottom_nav_icon_gallery.dart';
 import '../features/auth/providers.dart';
+import '../features/bookshelf/providers.dart';
 import '../features/mine/application/advanced_theme_provider.dart';
 import 'layout/app_adaptive.dart';
 import 'theme/app_advanced_theme_tokens.dart';
@@ -27,6 +28,7 @@ import 'shell_navigation_provider.dart';
 import 'widgets/bottom_nav_icon_view.dart';
 import 'widgets/cupertino_dock_navigation_bar.dart';
 import 'widgets/app_task_queue_surface.dart';
+import 'widgets/adaptive_search_bar.dart';
 
 class ShellScaffold extends ConsumerStatefulWidget {
   const ShellScaffold({
@@ -61,6 +63,8 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
   late final Animation<double> _tabFadeCurve;
   late final Animation<double> _tabScaleCurve;
   late final AuthService _authService;
+  late final TextEditingController _desktopBookshelfSearchController;
+  late final FocusNode _desktopBookshelfSearchFocusNode;
   StreamSubscription<AuthEvent>? _authEventSubscription;
   AuthSession? _topBarSession;
   bool _isShellLoggingOut = false;
@@ -89,6 +93,8 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
   @override
   void initState() {
     super.initState();
+    _desktopBookshelfSearchController = TextEditingController();
+    _desktopBookshelfSearchFocusNode = FocusNode();
     _authService = ref.read(authServiceProvider);
     _authEventSubscription = AuthEventBus.instance.stream.listen(
       _handleAuthEvent,
@@ -134,6 +140,8 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
   void dispose() {
     unawaited(_authEventSubscription?.cancel());
     _tabSwitchController.dispose();
+    _desktopBookshelfSearchFocusNode.dispose();
+    _desktopBookshelfSearchController.dispose();
     super.dispose();
   }
 
@@ -409,6 +417,21 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     final colorScheme = Theme.of(context).colorScheme;
     final metrics = AppAdaptiveMetrics.of(context);
     final currentTab = _locationTab(widget.location);
+    final bookshelfSearchKeyword = ref.watch(
+      desktopBookshelfSearchKeywordProvider,
+    );
+    final bookshelfToolbarActions =
+        currentTab == AppShellTab.bookshelf
+            ? ref.watch(desktopBookshelfToolbarActionsProvider)
+            : null;
+    if (_desktopBookshelfSearchController.text != bookshelfSearchKeyword) {
+      _desktopBookshelfSearchController.value = TextEditingValue(
+        text: bookshelfSearchKeyword,
+        selection: TextSelection.collapsed(
+          offset: bookshelfSearchKeyword.length,
+        ),
+      );
+    }
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -437,10 +460,17 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
                 Expanded(
                   child:
                       currentTab == AppShellTab.bookshelf
-                          ? _buildDesktopTopBarSearchTrigger(context)
+                          ? _buildDesktopTopBarBookshelfSearch(context)
                           : const SizedBox.shrink(),
                 ),
                 const SizedBox(width: 18),
+                if (currentTab == AppShellTab.bookshelf) ...[
+                  _buildDesktopBookshelfViewOptionsButton(
+                    context,
+                    actions: bookshelfToolbarActions,
+                  ),
+                  const SizedBox(width: 10),
+                ],
                 _buildDesktopTopBarNotificationButton(context),
                 const SizedBox(width: 10),
                 _buildDesktopTopBarSettingsButton(context),
@@ -456,57 +486,150 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     );
   }
 
-  Widget _buildDesktopTopBarSearchTrigger(BuildContext context) {
+  Widget _buildDesktopBookshelfViewOptionsButton(
+    BuildContext context, {
+    required DesktopBookshelfToolbarActions? actions,
+  }) {
     final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
+    return MenuAnchor(
+      menuChildren:
+          actions == null
+              ? const <Widget>[]
+              : [
+                SubmenuButton(
+                  leadingIcon: const Icon(Icons.sort_rounded),
+                  menuChildren: [
+                    if (actions.hasBooks)
+                      for (final option in actions.sortOptions)
+                        MenuItemButton(
+                          leadingIcon:
+                              option.selected
+                                  ? const Icon(Icons.check_rounded)
+                                  : const SizedBox(width: 24),
+                          onPressed:
+                              option.selected
+                                  ? null
+                                  : () =>
+                                      actions.onSortModeSelected(option.mode),
+                          child: Text(option.label),
+                        )
+                    else
+                      const MenuItemButton(
+                        onPressed: null,
+                        child: Text('暂无书籍'),
+                      ),
+                  ],
+                  child: const Text('排序方式'),
+                ),
+                SubmenuButton(
+                  leadingIcon: const Icon(Icons.view_comfy_alt_rounded),
+                  menuChildren: [
+                    MenuItemButton(
+                      leadingIcon:
+                          actions.useGridView
+                              ? const Icon(Icons.check_rounded)
+                              : const SizedBox(width: 24),
+                      onPressed:
+                          actions.useGridView
+                              ? null
+                              : () => actions.onViewModeSelected(true),
+                      child: const Text('网格'),
+                    ),
+                    MenuItemButton(
+                      leadingIcon:
+                          !actions.useGridView
+                              ? const Icon(Icons.check_rounded)
+                              : const SizedBox(width: 24),
+                      onPressed:
+                          !actions.useGridView
+                              ? null
+                              : () => actions.onViewModeSelected(false),
+                      child: const Text('列表'),
+                    ),
+                  ],
+                  child: const Text('显示模式'),
+                ),
+                const Divider(height: 1),
+                MenuItemButton(
+                  leadingIcon: const Icon(Icons.checklist_rounded),
+                  onPressed:
+                      actions.hasFilteredBooks ? actions.onSelectBooks : null,
+                  child: const Text('选择书籍'),
+                ),
+                MenuItemButton(
+                  leadingIcon: const Icon(Icons.library_add_rounded),
+                  onPressed: actions.onImportLocal,
+                  child: const Text('导入图书'),
+                ),
+                MenuItemButton(
+                  leadingIcon: const Icon(Icons.tune_rounded),
+                  onPressed: actions.onOpenSettings,
+                  child: const Text('书架设置'),
+                ),
+              ],
+      builder: (menuContext, controller, child) {
+        return Tooltip(
+          message: '视图选项',
+          child: Material(
+            key: const ValueKey<String>(
+              'desktop_bookshelf_view_options_button',
+            ),
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap:
+                  actions == null
+                      ? null
+                      : () {
+                        if (controller.isOpen) {
+                          controller.close();
+                        } else {
+                          controller.open();
+                        }
+                      },
+              child: SizedBox(
+                width: 38,
+                height: 38,
+                child: Icon(
+                  Icons.tune_rounded,
+                  size: 21,
+                  color:
+                      actions == null
+                          ? colorScheme.onSurfaceVariant.withValues(alpha: 0.38)
+                          : colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDesktopTopBarBookshelfSearch(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Align(
       alignment: Alignment.centerLeft,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 460),
-        child: Material(
-          color: colorScheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(999),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(999),
-            onTap:
-                () => unawaited(
-                  _openSearchWithReveal(
-                    context,
-                    route: '/search?entry=bookshelf_top',
-                  ),
-                ),
-            child: Container(
-              height: 44,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(
-                  color: colorScheme.outlineVariant.withValues(alpha: 0.72),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.search_rounded,
-                    size: 20,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      '搜索书架中的书名、作者或备注...',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: textTheme.bodyMedium?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+        child: AdaptiveSearchBar(
+          key: const ValueKey<String>('desktop_bookshelf_local_search'),
+          controller: _desktopBookshelfSearchController,
+          focusNode: _desktopBookshelfSearchFocusNode,
+          hintText: '搜索当前书架',
+          backgroundColor: colorScheme.surfaceContainerLow,
+          outlineColor: colorScheme.outlineVariant,
+          borderRadius: 999,
+          onChanged:
+              (value) =>
+                  ref
+                      .read(desktopBookshelfSearchKeywordProvider.notifier)
+                      .state = value,
+          onClear: () {
+            _desktopBookshelfSearchController.clear();
+            ref.read(desktopBookshelfSearchKeywordProvider.notifier).state = '';
+          },
         ),
       ),
     );
@@ -542,10 +665,14 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     required Key key,
     required IconData icon,
     required String tooltip,
-    required VoidCallback onTap,
+    required VoidCallback? onTap,
     bool showBadge = false,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
+    final iconColor =
+        onTap == null
+            ? colorScheme.onSurfaceVariant.withValues(alpha: 0.38)
+            : colorScheme.onSurfaceVariant;
     return Tooltip(
       message: tooltip,
       child: Material(
@@ -562,7 +689,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
               clipBehavior: Clip.none,
               alignment: Alignment.center,
               children: [
-                Icon(icon, size: 21, color: colorScheme.onSurfaceVariant),
+                Icon(icon, size: 21, color: iconColor),
                 if (showBadge)
                   Positioned(
                     top: 8,

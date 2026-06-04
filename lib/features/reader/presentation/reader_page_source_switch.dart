@@ -119,7 +119,8 @@ extension _ReaderPageSourceSwitchExtension on _ReaderPageState {
 
   Future<bool> _ensureSwitchSourceMembership() async {
     try {
-      final session = await AuthSessionStore().getSession();
+      final sessionStore = AuthSessionStore();
+      final session = await sessionStore.getSession();
       if (session == null) {
         _showMessage('切换书源为会员服务，请先登录并开通会员。');
         if (mounted) {
@@ -128,11 +129,7 @@ extension _ReaderPageSourceSwitchExtension on _ReaderPageState {
         return false;
       }
 
-      final entitlement = await MembershipService().fetchEntitlement();
-      final hasAccess = MembershipFeatures.hasFeature(
-        entitlement,
-        MembershipFeatures.onlineService,
-      );
+      final hasAccess = await _loadSwitchSourceMembershipAccess(sessionStore);
       if (!hasAccess) {
         _showMessage('切换书源为会员服务，开通会员后可使用。');
         if (mounted) {
@@ -147,6 +144,24 @@ extension _ReaderPageSourceSwitchExtension on _ReaderPageState {
       );
       return false;
     }
+  }
+
+  Future<bool> _loadSwitchSourceMembershipAccess(
+    AuthSessionStore sessionStore,
+  ) async {
+    try {
+      final entitlement = await MembershipService().fetchEntitlement();
+      if (MembershipFeatures.hasOnlineServiceAccess(entitlement)) {
+        return true;
+      }
+    } catch (_) {
+      // 账号信息页使用 /v1/users/me 展示会员状态；切换书源需与该来源保持一致。
+    }
+
+    final profile = await UserProfileService(
+      sessionStore: sessionStore,
+    ).fetchMe();
+    return MembershipFeatures.hasProfileOnlineServiceAccess(profile);
   }
 
   Future<ReaderSwitchSourceScopePlan> _buildSwitchSourceScope({

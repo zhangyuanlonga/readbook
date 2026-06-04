@@ -24,6 +24,8 @@ Android / iOS 是稳定基线，也是多端改动的验收对象：
 - 不改变移动端路由、交互、数据路径和用户习惯。
 - 如果必须修改共享层，需要说明移动端影响面并补回归。
 - 移动端已有平台桥保持稳定，只做等价抽取。
+- 桌面端任务不得顺手改动移动端 AppBar、bottom nav、bottom sheet、触控手势、更多菜单、选择模式、排序弹层和移动端搜索入口。
+- 桌面端需要修改移动 / 桌面共用页面文件时，必须把新行为限制在桌面断点、desktop capability、adapter 或明确平台语义分支内；移动端原有分支必须保持等价。
 - 涉及阅读器、导入、资源、缓存、登录、支付、分享、WebView、亮度、音量键、触感的改动，必须记录 Android / iOS 验证方式。
 - 涉及 AndroidManifest、Info.plist、权限、原生插件或平台通道的改动，必须补移动端构建或真机 / 模拟器 smoke。
 
@@ -60,6 +62,12 @@ Desktop 默认包含 macOS、Windows、Linux。
 - 键盘、滚轮、hover、focus、右键或更多菜单。
 - 文件选择、路径、缓存目录、诊断导出等能力通过 adapter。
 - 不支持能力给出清晰禁用态。
+
+桌面端开发保护移动端基线：
+
+- 桌面端 UI / 交互任务优先改 `ShellScaffold`、desktop/adaptive wrapper、桌面专属 provider、capability 或 adapter，不反向改造已稳定的 Android / iOS 页面路径。
+- 桌面端需要从共用页面调用业务动作时，优先用“桌面壳层注册动作 / facade / adapter”连接，不把移动端已有弹层、菜单或 AppBar 重写成新的共享实现。
+- 桌面端任务完成前必须二次检查 diff，确认 Android / iOS 专属交互没有被重命名、抽取、替换或改变触发条件。
 
 macOS 通过不代表 Windows / Linux 通过。文档和执行记录必须明确写清楚已验证平台。
 

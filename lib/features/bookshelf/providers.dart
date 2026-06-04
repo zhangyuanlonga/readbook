@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/composition/app_providers.dart' as app_providers;
@@ -20,6 +21,7 @@ import '../source/application/remote_content_task_conflict_service.dart';
 import 'application/bookshelf_external_import_coordinator.dart';
 import 'application/bookshelf_flow_coordinator.dart';
 import 'application/bookshelf_page_route_service.dart';
+import 'application/bookshelf_page_state.dart';
 import 'application/bookshelf_presentation_query_service.dart';
 import 'application/bookshelf_reader_open_service.dart';
 import 'application/bookshelf_service.dart';
@@ -60,9 +62,64 @@ class BookshelfPageDependencies {
   final BookshelfFlowCoordinator flowCoordinator;
 }
 
+class DesktopBookshelfSortOption {
+  const DesktopBookshelfSortOption({
+    required this.mode,
+    required this.label,
+    required this.description,
+    required this.selected,
+  });
+
+  final BookshelfSortMode mode;
+  final String label;
+  final String description;
+  final bool selected;
+}
+
+class DesktopBookshelfToolbarActions {
+  const DesktopBookshelfToolbarActions({
+    required this.hasBooks,
+    required this.hasFilteredBooks,
+    required this.useGridView,
+    required this.sortOptions,
+    required this.onSortModeSelected,
+    required this.onViewModeSelected,
+    required this.onSelectBooks,
+    required this.onOpenSettings,
+    required this.onImportLocal,
+  });
+
+  final bool hasBooks;
+  final bool hasFilteredBooks;
+  final bool useGridView;
+  final List<DesktopBookshelfSortOption> sortOptions;
+  final ValueChanged<BookshelfSortMode> onSortModeSelected;
+  final ValueChanged<bool> onViewModeSelected;
+  final VoidCallback onSelectBooks;
+  final VoidCallback onOpenSettings;
+  final VoidCallback onImportLocal;
+}
+
 final bookshelfServiceProvider = Provider<BookshelfService>((ref) {
   return BookshelfService();
 });
+
+/// 桌面端顶部栏的书架本地搜索关键词。
+///
+/// 该状态只负责过滤当前书架内容，不进入在线搜书流程，避免壳层搜索框和书架页
+/// 各自维护关键词导致桌面端筛选结果不同步。
+final desktopBookshelfSearchKeywordProvider = StateProvider<String>((ref) {
+  return '';
+});
+
+/// 桌面端书架顶栏动作注册器。
+///
+/// ShellScaffold 只负责展示顶栏图标和菜单，具体业务仍由 BookshelfPage 注册回调处理，
+/// 避免壳层直接依赖书架页面的内部状态。
+final desktopBookshelfToolbarActionsProvider =
+    StateProvider<DesktopBookshelfToolbarActions?>((ref) {
+      return null;
+    });
 
 final bookshelfSystemSettingsServiceProvider =
     Provider<BookshelfSystemSettingsService>((ref) {

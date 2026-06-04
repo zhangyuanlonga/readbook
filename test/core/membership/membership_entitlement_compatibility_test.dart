@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:shuxiang_reading_next/core/membership/membership_entitlement.dart';
+import 'package:shuxiang_reading_next/core/membership/membership_features.dart';
+import 'package:shuxiang_reading_next/core/user/user_profile.dart';
 
 void main() {
   test('MembershipEntitlement keeps legacy fields as source of truth', () {
@@ -51,5 +53,58 @@ void main() {
     expect(entitlement.isCampaignTrial, isTrue);
     expect(entitlement.isTrialLike, isTrue);
     expect(entitlement.displayBenefitKind, '活动体验权益');
+  });
+
+  test('active membership keeps default member features without payload', () {
+    final entitlement = MembershipEntitlement.fromJson(<String, dynamic>{
+      'vip_level': 'pro',
+      'membership_level': 'pro',
+      'vip_status': 'active',
+      'features': const <String>[],
+    });
+
+    expect(entitlement.isActive, isTrue);
+    expect(
+      MembershipFeatures.hasFeature(
+        entitlement,
+        MembershipFeatures.themeCustom,
+      ),
+      isTrue,
+    );
+    expect(
+      MembershipFeatures.hasOnlineServiceAccess(entitlement),
+      isTrue,
+    );
+  });
+
+  test('profile membership matches account page vip fields', () {
+    const profile = UserProfile(
+      userId: 'user_profile_member',
+      username: 'reader',
+      account: 'reader',
+      displayName: 'Reader',
+      phone: null,
+      email: null,
+      role: 'user',
+      createdAt: null,
+      vipLevel: 'pro',
+      planType: 'lifetime',
+      vipStatus: 'active',
+      vipExpireAt: null,
+      features: <String>[],
+    );
+
+    expect(MembershipFeatures.hasActiveProfileMembership(profile), isTrue);
+    expect(
+      MembershipFeatures.hasProfileFeature(
+        profile,
+        MembershipFeatures.themeCustom,
+      ),
+      isTrue,
+    );
+    expect(
+      MembershipFeatures.hasProfileOnlineServiceAccess(profile),
+      isTrue,
+    );
   });
 }

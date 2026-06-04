@@ -38,6 +38,31 @@ void main() {
       final stored = await database.getRemoteAccessSnapshot('user_1');
       expect(stored, isNotNull);
       expect(stored!.hasMembership, isTrue);
+      expect(stored.hasThemeCustom, isTrue);
+    });
+
+    test('normalizes stale membership snapshot theme access', () async {
+      await database.upsertRemoteAccessSnapshot(
+        userId: 'user_1',
+        serverSourceGatewayEnabled: true,
+        hasMembership: true,
+        hasThemeCustom: false,
+        serverSourceGatewayLimit: 10,
+        cachedAt: DateTime.utc(2026, 6, 2),
+      );
+      final prefs = await SharedPreferences.getInstance();
+      final service = RemoteAccessSnapshotService(
+        preferences: prefs,
+        database: database,
+      );
+
+      final snapshot = await service.load('user_1');
+
+      expect(snapshot, isNotNull);
+      expect(snapshot!.hasMembership, isTrue);
+      expect(snapshot.hasThemeCustom, isTrue);
+      final stored = await database.getRemoteAccessSnapshot('user_1');
+      expect(stored!.hasThemeCustom, isTrue);
     });
 
     test(

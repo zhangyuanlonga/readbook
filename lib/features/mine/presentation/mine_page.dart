@@ -524,7 +524,7 @@ class _MinePageState extends ConsumerState<MinePage> {
       await _pushMineRoute('/appearance/advanced-themes');
       return;
     }
-    if (!_isRemoteAccessResolved) {
+    if (!_isRemoteAccessResolved || _userId != null) {
       await _refreshMine();
       if (!mounted) {
         return;

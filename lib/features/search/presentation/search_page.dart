@@ -25,6 +25,7 @@ import '../../../core/auth/auth_session_store.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/membership/membership_features.dart';
 import '../../../core/membership/membership_service.dart';
+import '../../../core/user/user_profile_service.dart';
 import '../../../domain/entities/book.dart';
 import '../../../domain/entities/book_metadata_override.dart';
 import '../../book/application/book_display_state.dart';
@@ -69,6 +70,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   late final SearchSystemSettingsService _searchSystemSettingsService;
   late final AuthSessionStore _sessionStore;
   late final MembershipService _membershipService;
+  late final UserProfileService _userProfileService;
 
   static const Duration _progressUiThrottleWindow = Duration(
     milliseconds: 1500,
@@ -282,6 +284,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     );
     _sessionStore = AuthSessionStore();
     _membershipService = MembershipService();
+    _userProfileService = UserProfileService(sessionStore: _sessionStore);
     _authEventSubscription = AuthEventBus.instance.stream.listen(
       _handleAuthEvent,
     );
@@ -296,9 +299,11 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   @override
   void dispose() {
     _activeSearchToken?.cancel();
-    _clearProgressUiThrottle();
-    _clearDeferredProgressUiUpdate();
-    _clearPendingSearchCompletion();
+    // ConsumerState 进入 dispose 后不能再通过 ref 读写 provider。
+    // 这里仅释放本地计时器/控制器，autoDispose provider 会自行回收页面状态。
+    _clearProgressUiThrottle(updatePageState: false);
+    _clearDeferredProgressUiUpdate(updatePageState: false);
+    _clearPendingSearchCompletion(updatePageState: false);
     final authEventSubscription = _authEventSubscription;
     _authEventSubscription = null;
     unawaited(authEventSubscription?.cancel() ?? Future<void>.value());
@@ -840,14 +845,10 @@ class _SearchPageState extends ConsumerState<SearchPage> {
         return false;
       }
 
-      final entitlement = await _membershipService.fetchEntitlement();
+      final hasAccess = await _loadOnlineServiceAccessFromRemoteProfile();
       if (!_isLatestOnlineSearchAccessRequest(requestId)) {
         return false;
       }
-      final hasAccess = MembershipFeatures.hasFeature(
-        entitlement,
-        MembershipFeatures.onlineService,
-      );
       if (!mounted) {
         return false;
       }
@@ -886,6 +887,21 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     }
   }
 
+  Future<bool> _loadOnlineServiceAccessFromRemoteProfile() async {
+    try {
+      final entitlement = await _membershipService.fetchEntitlement();
+      if (MembershipFeatures.hasOnlineServiceAccess(entitlement)) {
+        return true;
+      }
+    } catch (_) {
+      // 账号信息页使用 /v1/users/me 的会员字段；entitlement 接口异常时继续
+      // 用同源资料兜底，避免会员卡显示有效而功能入口误判无权。
+    }
+
+    final profile = await _userProfileService.fetchMe();
+    return MembershipFeatures.hasProfileOnlineServiceAccess(profile);
+  }
+
   bool _isLatestOnlineSearchAccessRequest(int requestId) {
     return mounted && requestId == _onlineSearchAccessRequestId;
   }
@@ -922,6 +938,9 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     required bool checking,
     required bool cancelActiveSearch,
   }) {
+    if (!mounted) {
+      return;
+    }
     _onlineSearchAccessRequestId++;
     if (cancelActiveSearch) {
       _activeSearchToken?.cancel();
@@ -1386,9 +1405,12 @@ class _SearchPageState extends ConsumerState<SearchPage> {
 
   // ── Progress throttling ──
 
-  void _clearProgressUiThrottle() {
+  void _clearProgressUiThrottle({bool updatePageState = true}) {
     _progressUiTimer?.cancel();
     _progressUiTimer = null;
+    if (!updatePageState) {
+      return;
+    }
     _pendingProgressReport = null;
     _lastProgressUiUpdateAt = null;
   }
@@ -1420,6 +1442,9 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     final delay = _progressUiThrottleWindow - now.difference(lastUpdateAt);
     _progressUiTimer = Timer(delay, () {
       _progressUiTimer = null;
+      if (!mounted) {
+        return;
+      }
       final pending = _pendingProgressReport;
       _pendingProgressReport = null;
       if (pending == null ||
@@ -1535,6 +1560,9 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     }
     _scrollUiForceFlushTimer = Timer(_scrollUiMaxDeferredWindow, () {
       _scrollUiForceFlushTimer = null;
+      if (!mounted) {
+        return;
+      }
       _isListScrollActive = false;
       unawaited(_flushDeferredProgressUiUpdate());
     });
@@ -1652,7 +1680,9 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       debugPrint('Search failed: $error');
       _showMessage('搜索失败，请稍后重试。');
     } finally {
-      _clearProgressUiThrottle();
+      _clearProgressUiThrottle(
+        updatePageState: mounted && sessionId == _searchSessionId,
+      );
       if (mounted && sessionId == _searchSessionId) {
         final shouldDelayCompletion =
             pendingFinalUiCompletion &&
@@ -1717,12 +1747,18 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     _scrollUiResumeTimer?.cancel();
     _scrollUiResumeTimer = Timer(_scrollUiResumeDelay, () {
       _scrollUiResumeTimer = null;
+      if (!mounted) {
+        return;
+      }
       _isListScrollActive = false;
       unawaited(_flushDeferredProgressUiUpdate());
     });
   }
 
   Future<void> _flushDeferredProgressUiUpdate() async {
+    if (!mounted) {
+      return;
+    }
     _scrollUiResumeTimer?.cancel();
     _scrollUiResumeTimer = null;
     _scrollUiForceFlushTimer?.cancel();
@@ -1774,16 +1810,22 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     _clearPendingSearchCompletion();
   }
 
-  void _clearPendingSearchCompletion() {
+  void _clearPendingSearchCompletion({bool updatePageState = true}) {
+    if (!updatePageState) {
+      return;
+    }
     _pendingSearchCompletionSessionId = null;
     _pendingSearchCompletionToken = null;
   }
 
-  void _clearDeferredProgressUiUpdate() {
+  void _clearDeferredProgressUiUpdate({bool updatePageState = true}) {
     _scrollUiResumeTimer?.cancel();
     _scrollUiResumeTimer = null;
     _scrollUiForceFlushTimer?.cancel();
     _scrollUiForceFlushTimer = null;
+    if (!updatePageState) {
+      return;
+    }
     _deferredProgressUiUpdate = null;
     _isListScrollActive = false;
   }

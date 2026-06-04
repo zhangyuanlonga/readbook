@@ -129,6 +129,49 @@ void main() {
     expect(membershipService.fetchCount, 1);
   });
 
+  test(
+    'uses account profile membership when entitlement payload is incomplete',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      final store = AuthSessionStore(
+        preferences: prefs,
+        secretStore: FakeAuthSessionSecretStore(),
+      );
+      await store.saveSession(
+        const AuthSession(
+          accessToken: 'token',
+          userId: 'user_profile_member',
+          username: 'tester',
+        ),
+      );
+
+      final service = MinePageSessionService(
+        authSessionStore: store,
+        mobileFeatureService: _FakeMobileFeatureService(),
+        membershipService: _InactiveMembershipService(),
+        userProfileService: _FakeUserProfileService(
+          userId: 'user_profile_member',
+          username: 'tester',
+          account: 'tester',
+          displayName: 'Tester',
+          vipLevel: 'pro',
+          planType: 'lifetime',
+          vipStatus: 'active',
+        ),
+        remoteAccessSnapshotService: RemoteAccessSnapshotService(
+          preferences: prefs,
+        ),
+      );
+
+      final snapshot = await service.loadSession(refreshRemote: true);
+
+      expect(snapshot.hasMembership, isTrue);
+      expect(snapshot.hasThemeCustom, isTrue);
+      expect(snapshot.membershipPlanType, 'lifetime');
+      expect(snapshot.vipExpireAt, isNull);
+    },
+  );
+
   test('stores and removes local avatar through managed asset store', () async {
     final prefs = await SharedPreferences.getInstance();
     final documentsDir = await Directory.systemTemp.createTemp(
@@ -268,18 +311,47 @@ class _FakeMembershipService extends MembershipService {
   }
 }
 
+class _InactiveMembershipService extends MembershipService {
+  _InactiveMembershipService() : super(baseUrl: 'https://example.com');
+
+  @override
+  Future<MembershipEntitlement> fetchEntitlement() async {
+    return const MembershipEntitlement(
+      vipLevel: 'none',
+      vipStatus: 'expired',
+      planType: 'month',
+      membershipLevel: 'none',
+      grantType: null,
+      grantSubtype: null,
+      grantLabel: null,
+      isCustomExpire: false,
+      expireAt: null,
+      source: null,
+      isTrial: false,
+      maxDevices: 1,
+      features: <String>[],
+    );
+  }
+}
+
 class _FakeUserProfileService extends UserProfileService {
   _FakeUserProfileService({
     required this.userId,
     required this.username,
     required this.account,
     required this.displayName,
+    this.vipLevel,
+    this.planType,
+    this.vipStatus,
   }) : super(baseUrl: 'https://example.com');
 
   final String userId;
   final String username;
   final String account;
   final String displayName;
+  final String? vipLevel;
+  final String? planType;
+  final String? vipStatus;
 
   @override
   Future<UserProfile> fetchMe() async {
@@ -292,9 +364,9 @@ class _FakeUserProfileService extends UserProfileService {
       email: null,
       role: null,
       createdAt: null,
-      vipLevel: null,
-      planType: null,
-      vipStatus: null,
+      vipLevel: vipLevel,
+      planType: planType,
+      vipStatus: vipStatus,
       vipExpireAt: null,
       features: <String>[],
     );

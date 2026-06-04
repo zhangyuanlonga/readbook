@@ -55,6 +55,16 @@ class RemoteAccessSnapshot {
     );
   }
 
+  RemoteAccessSnapshot normalizedMembershipAccess() {
+    if (!hasMembership || hasThemeCustom) {
+      return this;
+    }
+
+    // 高级主题是会员基础能力。旧桌面缓存可能只记录会员身份，却把主题权益
+    // 留在 false；读取和保存时统一纠正，避免会员页与功能入口判断不一致。
+    return copyWith(hasThemeCustom: true);
+  }
+
   factory RemoteAccessSnapshot.fromJson(Map<String, dynamic> json) {
     final rawLimit =
         json['serverSourceGatewayLimit'] ?? json['sourceImportLimit'];
@@ -126,7 +136,17 @@ class RemoteAccessSnapshotService {
         vipExpireAt: stored.vipExpireAt,
         membershipPlanType: stored.membershipPlanType,
       );
-      return _hydrateLegacyMembershipSidecar(normalizedUserId, snapshot);
+      final hydrated = await _hydrateLegacyMembershipSidecar(
+        normalizedUserId,
+        snapshot,
+      );
+      final normalized = hydrated.normalizedMembershipAccess();
+      if (normalized.hasThemeCustom != stored.hasThemeCustom ||
+          normalized.vipExpireAt != stored.vipExpireAt ||
+          normalized.membershipPlanType != stored.membershipPlanType) {
+        await save(normalizedUserId, normalized);
+      }
+      return normalized;
     }
 
     final prefs = await _preferencesFuture;
@@ -139,7 +159,8 @@ class RemoteAccessSnapshotService {
       if (decoded is! Map<String, dynamic>) {
         return null;
       }
-      final snapshot = RemoteAccessSnapshot.fromJson(decoded);
+      final snapshot =
+          RemoteAccessSnapshot.fromJson(decoded).normalizedMembershipAccess();
       await _database.upsertRemoteAccessSnapshot(
         userId: normalizedUserId,
         serverSourceGatewayEnabled: snapshot.serverSourceGatewayEnabled,
@@ -164,15 +185,16 @@ class RemoteAccessSnapshotService {
     if (normalizedUserId.isEmpty) {
       return;
     }
+    final normalizedSnapshot = snapshot.normalizedMembershipAccess();
     await _database.upsertRemoteAccessSnapshot(
       userId: normalizedUserId,
-      serverSourceGatewayEnabled: snapshot.serverSourceGatewayEnabled,
-      hasMembership: snapshot.hasMembership,
-      hasThemeCustom: snapshot.hasThemeCustom,
-      serverSourceGatewayLimit: snapshot.serverSourceGatewayLimit,
-      cachedAt: snapshot.cachedAt,
-      vipExpireAt: snapshot.vipExpireAt,
-      membershipPlanType: snapshot.membershipPlanType,
+      serverSourceGatewayEnabled: normalizedSnapshot.serverSourceGatewayEnabled,
+      hasMembership: normalizedSnapshot.hasMembership,
+      hasThemeCustom: normalizedSnapshot.hasThemeCustom,
+      serverSourceGatewayLimit: normalizedSnapshot.serverSourceGatewayLimit,
+      cachedAt: normalizedSnapshot.cachedAt,
+      vipExpireAt: normalizedSnapshot.vipExpireAt,
+      membershipPlanType: normalizedSnapshot.membershipPlanType,
     );
     final prefs = await _preferencesFuture;
     await prefs.remove(_storageKey(normalizedUserId));

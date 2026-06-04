@@ -585,6 +585,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   Future<void>? _activeBookshelfLoad;
   bool _reloadAfterActiveLoad = false;
   bool? _lastKnownAutoRefreshOnTabActiveEnabled;
+  Object? _lastDesktopToolbarActionsFingerprint;
   final Stopwatch _bookshelfOpenStopwatch = Stopwatch()..start();
   bool _hasLoggedBookshelfFirstVisible = false;
   bool _hasShownContinueReadingPrompt = false;
@@ -613,6 +614,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   static const double _kContinueReadingDockGap = 12;
   static const double _kContinueReadingStandardGap = 16;
   static const double _kContinueReadingIosExtraGap = 10;
+  static const double _kDesktopOnlineSearchButtonSize = 48;
   static const Duration _kDeferredBookshelfWarmupDelay = Duration(
     milliseconds: 16,
   );
@@ -751,6 +753,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     _bookshelfScrollController.dispose();
     _bookshelfSearchFocusNode.dispose();
     _bookshelfSearchController.dispose();
+    ref.read(desktopBookshelfToolbarActionsProvider.notifier).state = null;
     super.dispose();
   }
 
@@ -794,11 +797,30 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final navigationComfortInset = mobileBottomNavigationComfortInset(
       style: effectiveNavigationStyle,
     );
+    final metrics = AppAdaptiveMetrics.of(context);
+    final useDesktopLayout = metrics.isMediumUpWindow;
+    final desktopSearchKeyword =
+        useDesktopLayout
+            ? ref.watch(desktopBookshelfSearchKeywordProvider)
+            : _bookshelfSearchKeyword;
+    if (useDesktopLayout && _bookshelfSearchKeyword != desktopSearchKeyword) {
+      _bookshelfSearchKeyword = desktopSearchKeyword;
+      _derivedBookshelfFingerprint = null;
+      if (_bookshelfSearchController.text != desktopSearchKeyword) {
+        _bookshelfSearchController.value = TextEditingValue(
+          text: desktopSearchKeyword,
+          selection: TextSelection.collapsed(
+            offset: desktopSearchKeyword.length,
+          ),
+        );
+      }
+    }
     final showTopSearchAction =
         effectiveNavigationStyle != AppNavigationStyle.cupertinoDock;
     final filteredBooks = _filteredBooks;
     final continueReadingVisible =
         _continueReadingRecord != null && !_isSelectionMode;
+    final showDesktopOnlineSearchAction = useDesktopLayout && !_isSelectionMode;
     final continueReadingBottomInset =
         _continueReadingBottomInset(
           effectiveNavigationStyle,
@@ -806,7 +828,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
           platform: platform,
         ) +
         navigationComfortInset;
-    final metrics = AppAdaptiveMetrics.of(context);
+    final desktopOnlineSearchBottomInset =
+        continueReadingBottomInset +
+        (continueReadingVisible ? _kContinueReadingCardHeight + 16 : 0);
     final topInset =
         metrics.isMediumUpWindow
             ? 0.0
@@ -825,7 +849,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       horizontal,
       (AppLayout.screenWidth(context) - contentMaxWidth) / 2,
     );
-    final useDesktopToolbar = metrics.isMediumUpWindow && !_isSelectionMode;
+    _scheduleDesktopToolbarActionsRegistration(
+      filteredBooks: filteredBooks,
+      enabled: useDesktopLayout && !_isSelectionMode,
+    );
 
     return ImportExportTaskOverlay(
       status: _taskStatus,
@@ -952,21 +979,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                       ScrollViewKeyboardDismissBehavior.onDrag,
                   physics: const AlwaysScrollableScrollPhysics(),
                   slivers: [
-                    if (useDesktopToolbar)
-                      SliverPadding(
-                        padding: EdgeInsets.fromLTRB(
-                          contentHorizontal,
-                          topInset + metrics.contentGap,
-                          contentHorizontal,
-                          metrics.contentGap,
-                        ),
-                        sliver: SliverToBoxAdapter(
-                          child: _buildBookshelfDesktopToolbar(
-                            filteredBooks: filteredBooks,
-                          ),
-                        ),
-                      )
-                    else if (_shouldShowBookshelfSearchSliver)
+                    if (!useDesktopLayout && _shouldShowBookshelfSearchSliver)
                       _buildBookshelfSearchSliver(
                         horizontal: contentHorizontal,
                         topInset: topInset + 12,
@@ -974,7 +987,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                     SliverPadding(
                       padding: EdgeInsets.fromLTRB(
                         contentHorizontal,
-                        useDesktopToolbar
+                        useDesktopLayout
                             ? metrics.contentGap
                             : contentTopPadding,
                         contentHorizontal,
@@ -992,6 +1005,16 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
               bottom: continueReadingBottomInset,
               child: _buildContinueReadingPromptCard(),
             ),
+            if (showDesktopOnlineSearchAction)
+              Positioned(
+                right: contentHorizontal,
+                bottom: desktopOnlineSearchBottomInset,
+                child: Builder(
+                  builder:
+                      (buttonContext) =>
+                          _buildDesktopOnlineSearchButton(buttonContext),
+                ),
+              ),
           ],
         ),
       ),
@@ -1024,116 +1047,75 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   @override
   bool get wantKeepAlive => true;
 
-  Widget _buildBookshelfDesktopToolbar({
+  void _scheduleDesktopToolbarActionsRegistration({
     required List<BookshelfBook> filteredBooks,
+    required bool enabled,
   }) {
-    final metrics = AppAdaptiveMetrics.of(context);
-    final colorScheme = Theme.of(context).colorScheme;
-    return Material(
-      color: colorScheme.surfaceContainerLow.withValues(alpha: 0.92),
-      borderRadius: BorderRadius.circular(metrics.cardRadius),
-      clipBehavior: Clip.antiAlias,
-      child: Padding(
-        padding: EdgeInsets.all(metrics.cardPadding),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final hasBooks = _books.isNotEmpty;
-            final hasFilteredBooks = filteredBooks.isNotEmpty;
-            final actions = <Widget>[
-              if (hasBooks)
-                Tooltip(
-                  message: '书籍排序：${_sortModeLabel(_sortMode)}',
-                  child: OutlinedButton.icon(
-                    onPressed: _showSortModeSheet,
-                    icon: const Icon(Icons.sort_rounded),
-                    label: Text(_sortModeLabel(_sortMode)),
-                  ),
-                ),
-              IconButton.filledTonal(
-                tooltip: _useGridView ? '切换列表' : '切换网格',
-                onPressed:
-                    () => unawaited(_setBookshelfViewMode(!_useGridView)),
-                icon: Icon(
-                  _useGridView
-                      ? Icons.view_list_rounded
-                      : Icons.grid_view_rounded,
-                ),
-              ),
-              if (hasFilteredBooks)
-                IconButton.filledTonal(
-                  tooltip: '选择书籍',
-                  onPressed: _isLoading ? null : _startSelectionMode,
-                  icon: const Icon(Icons.checklist_rounded),
-                ),
-            ];
-            final showToolbarImport = hasBooks;
-
-            Widget actionWrap() {
-              return Wrap(
-                spacing: metrics.contentGap * 0.6,
-                runSpacing: metrics.contentGap * 0.6,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: actions,
-              );
-            }
-
-            final filterOrSummary =
-                _shouldShowBookshelfQuickFilters
-                    ? _buildBookshelfQuickFilterBar()
-                    : Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        _bookshelfSearchSummaryText,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    );
-
-            if (constraints.maxWidth < 1100) {
-              return Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(child: filterOrSummary),
-                      SizedBox(width: metrics.contentGap),
-                      actionWrap(),
-                    ],
-                  ),
-                  if (showToolbarImport) ...[
-                    SizedBox(height: metrics.contentGap),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: FilledButton.icon(
-                        onPressed: _showImportLocalBooksSheet,
-                        icon: const Icon(Icons.library_add_rounded),
-                        label: const Text('导入'),
-                      ),
-                    ),
-                  ],
-                ],
-              );
-            }
-
-            return Row(
-              children: [
-                Expanded(child: filterOrSummary),
-                SizedBox(width: metrics.contentGap),
-                actionWrap(),
-                if (showToolbarImport) ...[
-                  SizedBox(width: metrics.contentGap),
-                  FilledButton.icon(
-                    onPressed: _showImportLocalBooksSheet,
-                    icon: const Icon(Icons.library_add_rounded),
-                    label: const Text('导入'),
-                  ),
-                ],
-              ],
-            );
-          },
-        ),
-      ),
+    final fingerprint = Object.hash(
+      enabled,
+      _books.length,
+      filteredBooks.length,
+      _useGridView,
+      _sortMode,
     );
+    if (_lastDesktopToolbarActionsFingerprint == fingerprint) {
+      return;
+    }
+    _lastDesktopToolbarActionsFingerprint = fingerprint;
+
+    final notifier = ref.read(desktopBookshelfToolbarActionsProvider.notifier);
+    final actions =
+        enabled
+            ? DesktopBookshelfToolbarActions(
+              hasBooks: _books.isNotEmpty,
+              hasFilteredBooks: filteredBooks.isNotEmpty,
+              useGridView: _useGridView,
+              sortOptions: [
+                for (final mode in _BookshelfSortMode.values)
+                  DesktopBookshelfSortOption(
+                    mode: mode,
+                    label: _sortModeLabel(mode),
+                    description: _sortModeDescription(mode),
+                    selected: mode == _sortMode,
+                  ),
+              ],
+              onSortModeSelected:
+                  (mode) => unawaited(_applyDesktopBookshelfSortMode(mode)),
+              onViewModeSelected:
+                  (useGridView) =>
+                      unawaited(_setBookshelfViewMode(useGridView)),
+              onSelectBooks: _startSelectionMode,
+              onOpenSettings: () => unawaited(_showBookshelfSettingsSheet()),
+              onImportLocal: () => unawaited(_showImportLocalBooksSheet()),
+            )
+            : null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      notifier.state = actions;
+    });
+  }
+
+  Future<void> _applyDesktopBookshelfSortMode(
+    _BookshelfSortMode selected,
+  ) async {
+    if (selected == _sortMode || !mounted) {
+      return;
+    }
+    _updateBookshelfState(() {
+      _sortMode = selected;
+      _derivedBookshelfFingerprint = null;
+      _lastDesktopToolbarActionsFingerprint = null;
+    });
+    try {
+      await _bookshelfService.saveSortMode(_sortModeStorageValue(selected));
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage('书籍排序保存失败，请重试。');
+    }
   }
 
   void _updateBookshelfState(VoidCallback mutation) {
@@ -1159,6 +1141,31 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       onThemeChange: () {
         context.push(route);
       },
+    );
+  }
+
+  Widget _buildDesktopOnlineSearchButton(BuildContext buttonContext) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: '在线搜书',
+      child: Material(
+        key: const ValueKey<String>('desktop_bookshelf_online_search_fab'),
+        color: colorScheme.primaryContainer,
+        elevation: 4,
+        shadowColor: colorScheme.shadow.withValues(alpha: 0.24),
+        borderRadius: BorderRadius.circular(999),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(999),
+          onTap: () => unawaited(_openOnlineSearchWithReveal(buttonContext)),
+          child: SizedBox.square(
+            dimension: _kDesktopOnlineSearchButtonSize,
+            child: Icon(
+              Icons.travel_explore_rounded,
+              color: colorScheme.onPrimaryContainer,
+            ),
+          ),
+        ),
+      ),
     );
   }
 

@@ -74,14 +74,19 @@ extension on _BookshelfPageState {
     }
 
     if (_books.isEmpty) {
-      return SliverToBoxAdapter(
-        child: AppAnimatedSwitcher(
-          child: KeyedSubtree(
-            key: const ValueKey<String>('bookshelf_empty'),
-            child: _buildEmptyCard(),
-          ),
+      final emptyChild = AppAnimatedSwitcher(
+        child: KeyedSubtree(
+          key: const ValueKey<String>('bookshelf_empty'),
+          child: _buildEmptyCard(),
         ),
       );
+      if (AppAdaptiveMetrics.of(context).isMediumUpWindow) {
+        return SliverFillRemaining(
+          hasScrollBody: false,
+          child: Center(child: emptyChild),
+        );
+      }
+      return SliverToBoxAdapter(child: emptyChild);
     }
 
     if (books.isEmpty) {
@@ -123,12 +128,9 @@ extension on _BookshelfPageState {
     if (!metrics.isMediumUpWindow) {
       return card;
     }
-    return Align(
-      alignment: Alignment.topCenter,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 560),
-        child: card,
-      ),
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 560),
+      child: card,
     );
   }
 
