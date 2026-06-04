@@ -166,3 +166,57 @@
 | 诊断导出 | `SearchFailureExportService`、`ExternalImportDiagnostics`、`AppPlatformCapabilities.diagnosticLogExport` | 桌面 / 下载目录 / support exports 路径存在，平台支持需后续验收。 |
 
 后续低风险建议：先单独领取 `M4-02-05` 只补 parser 维护注释；再领取 `M4-04-05` 写 storage baseline 矩阵。代码改造类 `M4-03-02`、`M4-04-02`、`M4-05-02` 建议等 M3 阅读链和书架链稳定后再做。
+
+### 本地阅读代码审计（2026-06-04）
+
+本节按“本地化阅读链”补充代码审计，目标是识别过度设计、手搓实现和可替换成熟库的方向。本轮只读代码和公开包资料，未改业务逻辑。
+
+#### 代码落点和体量
+
+| 模块 | 文件 | 体量 | 角色 | 审计结论 |
+| --- | --- | ---: | --- | --- |
+| EPUB parser | `lib/features/reader/application/local/epub_local_book_parser.dart` | 2077 行 | 解包、OPF / spine / nav、章节 HTML、图片资源、fixed-layout 信号、archive cache | 最大手搓点，功能覆盖多但维护成本最高。 |
+| TXT parser | `lib/features/reader/application/local/txt_local_book_parser.dart` | 1588 行 | 编码识别、流式采样、章节规则、offset、长章节拆分、协作 yield | 手搓复杂度高，但很多逻辑是中文网文 / 大文件特化，不适合直接整体替换。 |
+| 编码检测 | `lib/features/reader/application/local/local_text_encoding_detector.dart` | 896 行 | charset 候选评分、BOM、平台 converter / detector 调度 | 已接成熟包，但评分策略手搓，适合收口 adapter 而非继续扩散。 |
+| 本地存储 | `lib/features/reader/application/local/local_book_storage_service.dart` | 759 行 | 应用副本、TXT 转码、asset 目录、路径恢复 | 属于必要复杂度，但路径语义需要继续统一到 managed file / storage baseline。 |
+| 本地索引 | `lib/features/reader/application/local/local_book_index_service.dart` | 677 行 | parser 分发、索引状态、stale 判断、书架 / 阅读记录同步 | 责任偏多，但有必要的任务去重和状态保护。 |
+| 本地导入 | `lib/features/bookshelf/application/local_book_import_service.dart` | 551 行 | 文件导入、去重、持久化、预热索引、书架同步 | 当前可接受，后续应避免继续加 UI 状态。 |
+| 本地书库页 | `lib/features/bookshelf/presentation/local_library_page.dart` | 1080 行 | 文件选择、导入任务 UI、重索引、打开本地书 | presentation 偏重，后续若继续加功能应拆 controller / presenter。 |
+| MOBI parser | `lib/features/reader/application/local/kindle_local_book_parser.dart` | 300 行 | `dart_mobi` 读取 rawml / 资源 / metadata 后转本地章节 | 代码量可控，但底层库成熟度不足。 |
+| PDF parser | `lib/features/reader/application/local/pdf_local_book_parser.dart` | 279 行 | 页索引、移动端文本抽取、按页懒解析 | 抽象层设计合理，但与 `pdfrx` / `pdfium_dart` 多库并存，需要统一路线。 |
+
+#### 过度设计 / 手搓风险
+
+| 风险 | 证据 | 判断 | 建议 |
+| --- | --- | --- | --- |
+| EPUB 解析手搓过深 | 单文件 2077 行，自行处理 package document、spine、nav、NCX、HTML、资源、fixed-layout、archive cache。 | 高风险但不是无意义过度设计，因为项目有 fixed-layout / mixed-media / ReaderDocument 特化。 | 不建议整包删除；先引入 `EpubMetadataAdapter` / `EpubNavigationAdapter` spike，用成熟库替代 OPF / nav 层，保留项目特有 ReaderDocument 转换。 |
+| TXT parser 聚合太多职责 | 单文件同时负责编码、采样、章节识别、offset 对齐、长章节拆分、yield。 | 这是“复杂度集中”，不是纯过度设计。 | 拆内部协作类：`TxtEncodingPlan`、`TxtChapterSplitter`、`TxtOffsetMapper`，先不改行为。 |
+| 编码检测策略重复 | `TxtLocalBookParser` 和 `LocalBookStorageService` 都有采样 / charset 评分相关逻辑。 | 有重复风险，长期会出现导入时 charset 和阅读时 charset 判断不一致。 | 收口到 `LocalTextEncodingDetector` 的公开 API，导入、预览、章节读取共用同一决策结果。 |
+| `LocalBookParserInputAware` 预留但未落地 | `parseLocalBookInput` 支持 input-aware，但现有 parser 仍以 `LocalBook.storagePath` 为主。 | 轻度过度设计，属于 M2-D007 后续未完成。 | 要么在 M4 内选 EPUB 或 TXT 真正实现 input-aware，要么把 Web bytes 入口继续明确登记为延期，避免空 adapter 长期漂着。 |
+| PDF 多库并存 | `pubspec.yaml` 同时有 `pdf_text_extract`、`pdfrx`、本地 `pdfium_dart` override；`PdfLocalBookParser` 仍限制 Android / iOS。 | 这是当前最明显的路线不一致。 | PDF 阅读优先统一到 `pdfrx`；PDF 文本抽取单独 spike `pdfrx_engine` / PDFium API 能否替代 `pdf_text_extract`。 |
+| 本地书库页面偏重 | `local_library_page.dart` 1080 行，包含文件选择、任务状态、重索引、打开逻辑。 | 后续继续加导入策略会过载。 | 暂不拆；等 M4-03 / M4-05 任务态改造时抽 `LocalLibraryTaskPresenter`。 |
+| MOBI 能力标记过乐观 | `dart_mobi` 官方页说明是 libmobi 的 Dart port，且注明“not thoroughly tested”。 | 不能把 MOBI 视为成熟稳定能力。 | M4 验收中把 MOBI / AZW / AZW3 标为实验能力，保留导入但加强失败提示和样例测试。 |
+
+#### 成熟库替代候选
+
+| 方向 | 当前依赖 / 候选 | 公开包信息 | 替代结论 |
+| --- | --- | --- | --- |
+| EPUB | 当前手搓 `archive` + `html`；候选 `epubx` | `epubx` 是 Dart EPUB parser，支持 Android / iOS / Linux / macOS / Web / Windows，不依赖 `dart:io`，能读 title、author、cover、chapters、content、OPF / NCX schema。来源：https://pub.dev/packages/epubx | 可作为 OPF / metadata / navigation 层替代候选；不建议一次性替换项目 ReaderDocument / fixed-layout / inline image 转换。 |
+| PDF 阅读 / 渲染 | 当前已有 `pdfrx`、`pdfium_dart`，PDF 文本抽取用 `pdf_text_extract` | `pdfrx` 官方页标记支持 Android、iOS、Windows、macOS、Linux、Web，并基于 PDFium，提供 viewer 和底层 engine。来源：https://pub.dev/packages/pdfrx | 阅读 / 渲染应优先向 `pdfrx` 统一；文本抽取是否能替代 `pdf_text_extract` 需要 spike，不应凭假设删除。 |
+| PDF 文本抽取 | 当前 `pdf_text_extract` 本地 override；外部类似 `flutter_pdf_text` / `read_pdf_text` 主要 Android / iOS | `flutter_pdf_text`、`read_pdf_text` 均主要覆盖 Android / iOS；不能解决桌面 / Web 多端闭环。来源：https://pub.dev/packages/flutter_pdf_text、https://pub.dev/packages/read_pdf_text | 不建议换另一个移动端 PDF 文本插件；应优先评估 `pdfrx_engine` / PDFium 文本能力，或保持“PDF 阅读可用、文本抽取移动端能力”。 |
+| TXT 编码转换 | 当前 `charset`、`charset_converter`、`flutter_charset_detector` | `charset_converter` 使用平台内置 converter，支持 Android / iOS / Linux / Windows；官方页说明平台 charset 名称可能不同。来源：https://pub.dev/packages/charset_converter | 继续使用成熟包，手搓部分只保留评分和兜底；需要统一入口减少重复判断。 |
+| MOBI / AZW / AZW3 | 当前 `dart_mobi` | `dart_mobi` 支持多平台、读取 mobi/azw/azw3/azw4，但官方 README 明确“not thoroughly tested”。来源：https://pub.dev/packages/dart_mobi | 不存在明显更成熟替代可以直接换；应标为实验能力并加强验收。 |
+
+#### 本地化阅读优先任务建议
+
+| 优先级 | 任务 | 对应 M4 | 改动风险 | 推荐动作 |
+| --- | --- | --- | --- | --- |
+| P0 | PDF 路线统一评估 | `M4-02-03` / `M4-02-06` 后续深化 | 中 | 建一个 spike 文档或小测试，确认 `pdfrx` / `pdfrx_engine` 是否能提供需要的文本抽取和页元数据；不要再扩展 `pdf_text_extract`。 |
+| P0 | MOBI 实验能力标记 | `M4-02-04` / `M4-06-01` | 低 | 在验收记录中明确 MOBI 不是成熟能力，只承诺无 DRM / 基础样例。 |
+| P1 | TXT 编码入口收口 | `M4-02-01` / `M4-03-02` | 中 | 先抽 `LocalTextEncodingDetector` 的“导入采样决策”API，让 storage、preview、parser 共用。 |
+| P1 | EPUB 成熟库替代试点 | `M4-02-02` / `M4-03-02` | 中高 | 用 `epubx` 做只读 adapter spike，只替代 metadata / TOC，不碰 ReaderDocument 输出。 |
+| P1 | 本地 parser input-aware 落地 | M2-D012 / `M4-01-03` | 中 | 选择 TXT 或 EPUB 先实现 `parseInput`，避免 adapter 空置。 |
+| P2 | 本地书库页拆 presenter | M4 后续 UI 稳定性 | 中 | 等 M3 书架链结束后再拆，避免和 macOS 页面改动冲突。 |
+| P2 | 性能基线 | `M4-03-05` | 低 | Windows 先记录大 TXT、EPUB、PDF 导入 / 打开耗时，作为后续 isolate 改造前基线。 |
+
+当前最有价值的执行顺序：先做 `PDF 路线统一评估` 和 `MOBI 实验能力标记`，再做 `TXT 编码入口收口`。EPUB 替换成熟库要谨慎，因为现有代码虽然手搓，但承载了项目特有的 fixed-layout、inline image、ReaderDocument 结构。
