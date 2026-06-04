@@ -6,8 +6,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/auth/auth_event_bus.dart';
+import '../core/auth/auth_session.dart';
+import '../core/auth/auth_service.dart';
+import '../core/auth/auth_session_store.dart';
 import '../domain/entities/bottom_nav_icon_gallery.dart';
+import '../features/auth/providers.dart';
 import '../features/mine/application/advanced_theme_provider.dart';
 import 'layout/app_adaptive.dart';
 import 'theme/app_advanced_theme_tokens.dart';
@@ -54,6 +60,10 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
   late final Animation<double> _tabSlideCurve;
   late final Animation<double> _tabFadeCurve;
   late final Animation<double> _tabScaleCurve;
+  late final AuthService _authService;
+  StreamSubscription<AuthEvent>? _authEventSubscription;
+  AuthSession? _topBarSession;
+  bool _isShellLoggingOut = false;
 
   Future<void> _openSearchWithReveal(
     BuildContext sourceContext, {
@@ -79,6 +89,11 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
   @override
   void initState() {
     super.initState();
+    _authService = ref.read(authServiceProvider);
+    _authEventSubscription = AuthEventBus.instance.stream.listen(
+      _handleAuthEvent,
+    );
+    unawaited(_loadTopBarSession());
     _currentOrderIndex = _locationOrderIndex(widget.location);
     _tabSwitchController = AnimationController(
       vsync: this,
@@ -117,8 +132,93 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
 
   @override
   void dispose() {
+    unawaited(_authEventSubscription?.cancel());
     _tabSwitchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadTopBarSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    final session = AuthSessionStore.readDisplaySession(prefs);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _topBarSession = session;
+    });
+  }
+
+  void _handleAuthEvent(AuthEvent event) {
+    switch (event.type) {
+      case AuthEventType.loggedIn:
+        unawaited(_loadTopBarSession());
+        break;
+      case AuthEventType.loggedOut:
+      case AuthEventType.sessionExpired:
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _topBarSession = null;
+        });
+        break;
+    }
+  }
+
+  Future<void> _handleShellLogout(BuildContext context) async {
+    if (_isShellLoggingOut || _topBarSession == null) {
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('退出登录'),
+          content: const Text('确定要退出当前账号吗？'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('退出'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true || !mounted || !context.mounted) {
+      return;
+    }
+    setState(() {
+      _isShellLoggingOut = true;
+    });
+    try {
+      await _authService.logout();
+      if (!mounted || !context.mounted) {
+        return;
+      }
+      setState(() {
+        _topBarSession = null;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已退出登录。')));
+    } catch (_) {
+      if (!mounted || !context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('退出失败，请稍后再试。')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isShellLoggingOut = false;
+        });
+      }
+    }
   }
 
   @override
@@ -269,7 +369,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     final colorScheme = Theme.of(context).colorScheme;
     final width = AppLayout.screenWidth(context);
     final sidebarWidth =
-        width >= AppLayout.expandedBreakpointWidth ? 280.0 : 240.0;
+        width >= AppLayout.expandedBreakpointWidth ? 244.0 : 216.0;
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
@@ -309,7 +409,6 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     final colorScheme = Theme.of(context).colorScheme;
     final metrics = AppAdaptiveMetrics.of(context);
     final currentTab = _locationTab(widget.location);
-    final contentMaxWidth = _desktopTopBarContentMaxWidthForTab(currentTab);
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -326,69 +425,31 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
         right: false,
         child: SizedBox(
           height: 74,
-          child: Center(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: contentMaxWidth),
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  metrics.pagePadding,
-                  12,
-                  metrics.pagePadding,
-                  12,
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child:
-                          currentTab == AppShellTab.bookshelf
-                              ? _buildDesktopTopBarSearchTrigger(context)
-                              : const SizedBox.shrink(),
-                    ),
-                    const SizedBox(width: 18),
-                    _buildDesktopTopBarNotificationButton(context),
-                  ],
-                ),
-              ),
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              metrics.pagePadding,
+              12,
+              metrics.pagePadding,
+              12,
             ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  double _desktopTopBarContentMaxWidthForTab(AppShellTab tab) {
-    return switch (tab) {
-      AppShellTab.home => 980,
-      AppShellTab.bookshelf => AppLayout.bookshelfContentMaxWidth,
-      AppShellTab.discover => AppLayout.discoverExpandedContentMaxWidth,
-      AppShellTab.stats => 1120,
-      AppShellTab.mine => AppLayout.mineContentMaxWidth,
-    };
-  }
-
-  Widget _buildDesktopTopBarNotificationButton(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Material(
-      color: colorScheme.surface,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: () {
-          unawaited(context.push('/announcements'));
-        },
-        child: Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: colorScheme.outlineVariant.withValues(alpha: 0.78),
+            child: Row(
+              children: [
+                Expanded(
+                  child:
+                      currentTab == AppShellTab.bookshelf
+                          ? _buildDesktopTopBarSearchTrigger(context)
+                          : const SizedBox.shrink(),
+                ),
+                const SizedBox(width: 18),
+                _buildDesktopTopBarNotificationButton(context),
+                const SizedBox(width: 10),
+                _buildDesktopTopBarSettingsButton(context),
+                const SizedBox(width: 14),
+                _buildDesktopTopBarDivider(context),
+                const SizedBox(width: 14),
+                _buildDesktopTopBarAccountEntry(context),
+              ],
             ),
-          ),
-          child: Icon(
-            Icons.notifications_none_outlined,
-            size: 20,
-            color: colorScheme.onSurfaceVariant,
           ),
         ),
       ),
@@ -451,6 +512,160 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     );
   }
 
+  Widget _buildDesktopTopBarNotificationButton(BuildContext context) {
+    return _buildDesktopTopBarIconButton(
+      context,
+      key: const ValueKey<String>('desktop_top_bar_notification_button'),
+      icon: Icons.notifications_none_outlined,
+      tooltip: '通知',
+      onTap: () {
+        unawaited(context.push('/announcements'));
+      },
+      showBadge: true,
+    );
+  }
+
+  Widget _buildDesktopTopBarSettingsButton(BuildContext context) {
+    return _buildDesktopTopBarIconButton(
+      context,
+      key: const ValueKey<String>('desktop_top_bar_settings_button'),
+      icon: Icons.settings_outlined,
+      tooltip: '设置',
+      onTap: () {
+        unawaited(context.push('/system-settings'));
+      },
+    );
+  }
+
+  Widget _buildDesktopTopBarIconButton(
+    BuildContext context, {
+    required Key key,
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onTap,
+    bool showBadge = false,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        key: key,
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: SizedBox(
+            width: 38,
+            height: 38,
+            child: Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.center,
+              children: [
+                Icon(icon, size: 21, color: colorScheme.onSurfaceVariant),
+                if (showBadge)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: colorScheme.error,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: colorScheme.surfaceContainerLowest,
+                          width: 1.5,
+                        ),
+                      ),
+                      child: const SizedBox(width: 7, height: 7),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopTopBarDivider(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return SizedBox(
+      height: 32,
+      child: VerticalDivider(
+        width: 1,
+        thickness: 1,
+        color: colorScheme.outlineVariant.withValues(alpha: 0.86),
+      ),
+    );
+  }
+
+  Widget _buildDesktopTopBarAccountEntry(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final session = _topBarSession;
+    final displayName = session?.displayIdentity ?? '登录';
+    final avatarLabel = _topBarAvatarLabel(displayName);
+
+    return Material(
+      key: const ValueKey<String>('desktop_top_bar_account_entry'),
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: () {
+          unawaited(context.push(session == null ? '/auth' : '/profile'));
+        },
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(4, 3, 10, 3),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: colorScheme.surfaceContainerHigh,
+                child:
+                    avatarLabel == null
+                        ? Icon(
+                          Icons.person_outline,
+                          size: 19,
+                          color: colorScheme.onSurfaceVariant,
+                        )
+                        : Text(
+                          avatarLabel,
+                          style: textTheme.labelMedium?.copyWith(
+                            color: colorScheme.onSurface,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+              ),
+              const SizedBox(width: 10),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 112),
+                child: Text(
+                  displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.labelLarge?.copyWith(
+                    color: colorScheme.onSurface,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String? _topBarAvatarLabel(String displayName) {
+    final normalized = displayName.trim();
+    if (normalized.isEmpty || normalized == '登录') {
+      return null;
+    }
+    return normalized.characters.first.toUpperCase();
+  }
+
   Widget _buildDesktopSidebar(
     BuildContext context, {
     required double width,
@@ -473,7 +688,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
         child: SafeArea(
           right: false,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 24, 14, 22),
+            padding: const EdgeInsets.fromLTRB(12, 24, 12, 20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -509,7 +724,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     return Padding(
-      padding: const EdgeInsets.only(left: 16),
+      padding: const EdgeInsets.only(left: 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -559,20 +774,6 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     return Color.alphaBlend(
       colorScheme.onSurface.withValues(alpha: 0.04),
       colorScheme.surfaceContainerLow,
-    );
-  }
-
-  Color _desktopUserCardBackground(ColorScheme colorScheme) {
-    return Color.alphaBlend(
-      colorScheme.onSurface.withValues(alpha: 0.04),
-      colorScheme.surfaceContainerLow,
-    );
-  }
-
-  Color _desktopAvatarBackground(ColorScheme colorScheme) {
-    return Color.alphaBlend(
-      colorScheme.onSurface.withValues(alpha: 0.02),
-      colorScheme.surfaceContainerLowest,
     );
   }
 
@@ -645,13 +846,13 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    const SizedBox(width: 18),
+                    const SizedBox(width: 16),
                     Icon(
                       icon,
                       color: foreground,
                       size: _desktopShellIconSizeFor(destination),
                     ),
-                    const SizedBox(width: 18),
+                    const SizedBox(width: 14),
                     Expanded(
                       child: Text(
                         destination.label,
@@ -677,130 +878,76 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
 
   Widget _buildDesktopSidebarFooter(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
     final dividerColor = _desktopDividerColor(colorScheme);
-    final userCardColor = _desktopUserCardBackground(colorScheme);
-    final avatarColor = _desktopAvatarBackground(colorScheme);
+    final session = _topBarSession;
+
+    // 桌面端账号资料和设置统一放在顶部右侧，侧边栏底部只保留登录态退出入口，
+    // 避免同一个账号信息在顶部栏和侧边栏重复出现，后续维护也更容易判断入口职责。
+    if (session == null) {
+      return const SizedBox.shrink();
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Divider(color: dividerColor),
-        const SizedBox(height: 28),
-        _buildDesktopFooterAction(
-          context,
-          icon: Icons.settings_outlined,
-          label: '设置',
-          onTap: () {
-            unawaited(context.push('/system-settings'));
-          },
-        ),
         const SizedBox(height: 14),
-        Material(
-          color: Colors.transparent,
-          child: _desktopInkWell(
-            borderRadius: BorderRadius.circular(16),
-            onTap: () {
-              unawaited(context.push('/profile'));
-            },
-            child: Container(
-              constraints: const BoxConstraints(minHeight: 68),
-              padding: const EdgeInsets.fromLTRB(18, 14, 16, 14),
-              decoration: BoxDecoration(
-                color: userCardColor,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 24,
-                    backgroundColor: avatarColor,
-                    child: Icon(
-                      Icons.more_horiz_rounded,
-                      size: 22,
-                      color: colorScheme.onSurfaceVariant.withValues(
-                        alpha: 0.52,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '林静深',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: textTheme.labelLarge?.copyWith(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '已读 124 本',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: textTheme.labelSmall?.copyWith(
-                            fontSize: 13,
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Icon(
-                    Icons.logout_rounded,
-                    color: colorScheme.onSurfaceVariant,
-                    size: 24,
-                  ),
-                ],
-              ),
-            ),
+        Tooltip(
+          message: '退出登录',
+          child: _buildDesktopFooterLogoutButton(
+            context,
+            colorScheme: colorScheme,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildDesktopFooterAction(
+  Widget _buildDesktopFooterLogoutButton(
     BuildContext context, {
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
+    required ColorScheme colorScheme,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
     return Material(
+      key: const ValueKey<String>('desktop_shell_logout_entry'),
       color: Colors.transparent,
-      child: Column(
-        children: [
-          _desktopInkWell(
-            borderRadius: BorderRadius.circular(14),
-            onTap: onTap,
-            child: SizedBox(
-              height: 44,
-              child: Row(
-                children: [
-                  const SizedBox(width: 18),
-                  Icon(icon, color: colorScheme.onSurfaceVariant, size: 22),
-                  const SizedBox(width: 18),
-                  Expanded(
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+      child: _desktopInkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap:
+            _isShellLoggingOut
+                ? () {}
+                : () => unawaited(_handleShellLogout(context)),
+        child: SizedBox(
+          height: 44,
+          child: Row(
+            children: [
+              const SizedBox(width: 16),
+              if (_isShellLoggingOut)
+                const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                Icon(
+                  Icons.logout_rounded,
+                  color: colorScheme.onSurfaceVariant,
+                  size: 22,
+                ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  '退出登录',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
                   ),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

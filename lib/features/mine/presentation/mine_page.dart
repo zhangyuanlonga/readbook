@@ -22,6 +22,7 @@ import '../../../app/theme/app_theme_seed_provider.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../core/auth/auth_event_bus.dart';
+import '../../../core/auth/auth_service.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
 import '../application/advanced_theme_provider.dart';
@@ -29,6 +30,7 @@ import '../application/launch_image_gallery_provider.dart';
 import '../application/mine_page_flow_coordinator.dart';
 import '../application/mine_page_preferences_service.dart';
 import '../application/mine_page_session_service.dart';
+import '../../auth/providers.dart';
 import '../providers.dart';
 
 part 'mine_page_view.dart';
@@ -46,6 +48,7 @@ class _MinePageState extends ConsumerState<MinePage> {
   late final ImageSelectionService _imageSelectionService;
   late final MinePageFlowCoordinator _pageFlowCoordinator;
   late final MinePageSessionService _sessionService;
+  late final AuthService _authService;
   String? _userId;
   String? _username;
   String? _localAvatarPath;
@@ -56,9 +59,11 @@ class _MinePageState extends ConsumerState<MinePage> {
   bool _hasMembership = false;
   bool _hasThemeCustom = false;
   bool _isRemoteAccessResolved = false;
+  bool _isLoggingOut = false;
   MinePageLayoutMode _layoutMode = MinePageLayoutMode.list;
   bool _didRestoreLayoutMode = false;
   String? _openingRoute;
+  int _sessionReloadVersion = 0;
 
   bool get _isListMode => _layoutMode == MinePageLayoutMode.list;
 
@@ -142,6 +147,7 @@ class _MinePageState extends ConsumerState<MinePage> {
     _imageSelectionService = ref.read(mineImageSelectionServiceProvider);
     _pageFlowCoordinator = ref.read(minePageFlowCoordinatorProvider)();
     _sessionService = ref.read(minePageSessionServiceProvider);
+    _authService = ref.read(authServiceProvider);
     _pageFlowCoordinator.initialize(onAuthEvent: _handleAuthEvent);
     _applyPrimedSession();
     _loadSession();
@@ -213,10 +219,12 @@ class _MinePageState extends ConsumerState<MinePage> {
     required bool showLoading,
     required bool refreshRemote,
   }) async {
+    // 登录、注册、退出和远端权益刷新都可能同时触发 Mine 页重载；只允许最后一次请求回写，避免旧账号资料覆盖新账号卡片。
+    final reloadVersion = ++_sessionReloadVersion;
     final snapshot = await _sessionService.loadSession(
       refreshRemote: refreshRemote,
     );
-    if (!mounted) {
+    if (!mounted || reloadVersion != _sessionReloadVersion) {
       return;
     }
     setState(() {
@@ -241,6 +249,121 @@ class _MinePageState extends ConsumerState<MinePage> {
             (snapshot.hasMembership && snapshot.vipExpireAt == null));
     if (shouldRefreshRemote) {
       unawaited(_reloadSession(showLoading: false, refreshRemote: true));
+    }
+  }
+
+  Future<void> _handleProfileCardTap() async {
+    if (_userId == null) {
+      await context.push('/auth');
+      await _loadSession();
+      return;
+    }
+    await context.push('/profile');
+    await _loadSession();
+  }
+
+  Future<void> _handleProfileActionButtonTap() async {
+    if (_userId == null) {
+      await _handleProfileCardTap();
+      return;
+    }
+    final confirmed = await showAdaptiveActionSurface<bool>(
+      context: context,
+      useRootNavigator: true,
+      maxWidth: 420,
+      builder: (surfaceContext) {
+        final colorScheme = Theme.of(surfaceContext).colorScheme;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.logout_rounded, color: colorScheme.error),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    '退出登录',
+                    style: Theme.of(surfaceContext).textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '确定要退出当前账号吗？',
+              style: Theme.of(surfaceContext).textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(surfaceContext).pop(false),
+                  child: const Text('取消'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: () => Navigator.of(surfaceContext).pop(true),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: colorScheme.error,
+                    foregroundColor: colorScheme.onError,
+                  ),
+                  child: const Text('退出'),
+                ),
+              ],
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true) {
+      return;
+    }
+    await _logoutFromMineCard();
+  }
+
+  Future<void> _logoutFromMineCard() async {
+    if (_isLoggingOut) {
+      return;
+    }
+    final userId = _userId;
+    setState(() {
+      _isLoggingOut = true;
+    });
+    try {
+      await _authService.logout();
+      await _sessionService.clearUserScopedCache(userId);
+      if (!mounted) {
+        return;
+      }
+      ++_sessionReloadVersion;
+      setState(() {
+        _userId = null;
+        _username = null;
+        _localAvatarPath = null;
+        _vipExpireAt = null;
+        _membershipPlanType = null;
+        _totalReadingHours = 0;
+        _readingStreakDays = 0;
+        _hasMembership = false;
+        _hasThemeCustom = false;
+        _isRemoteAccessResolved = true;
+      });
+      _showMessage('已退出登录。');
+    } catch (_) {
+      if (mounted) {
+        _showMessage('退出失败，请稍后再试。');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoggingOut = false;
+        });
+      }
     }
   }
 

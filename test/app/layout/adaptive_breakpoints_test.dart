@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:shuxiang_reading_next/app/layout/app_adaptive.dart';
 import 'package:shuxiang_reading_next/app/layout/app_layout.dart';
@@ -12,6 +13,10 @@ import 'package:shuxiang_reading_next/app/widgets/cupertino_dock_navigation_bar.
 import '../../test_utils/adaptive_test_harness.dart';
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
+
   testWidgets('AppAdaptiveMetrics 按 Material 风格窗口分级划分结构断点', (tester) async {
     final compact = await _readFromContext<AppAdaptiveMetrics>(
       tester,
@@ -685,8 +690,64 @@ void main() {
 
     expect(find.byType(NavigationBar), findsNothing);
     expect(find.byKey(const ValueKey('desktop_shell_sidebar')), findsOneWidget);
+    expect(
+      tester.getSize(find.byKey(const ValueKey('desktop_shell_sidebar'))).width,
+      216,
+    );
     expect(find.text('Selune'), findsOneWidget);
     expect(find.text('书架'), findsOneWidget);
+  });
+
+  testWidgets('ShellScaffold 桌面顶部栏显示轻量账号入口', (tester) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth.user_id': 'desktop_user',
+      'auth.username': 'desktop_reader',
+      'auth.display_name': 'Desktop Reader',
+    });
+
+    await _pumpShellScaffold(tester, width: 1280);
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey<String>('desktop_top_bar_notification_button')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('desktop_top_bar_settings_button')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('desktop_top_bar_account_entry')),
+      findsOneWidget,
+    );
+    expect(
+      tester.getSize(find.byKey(const ValueKey('desktop_shell_sidebar'))).width,
+      244,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('desktop_shell_logout_entry')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('desktop_shell_user_card')),
+      findsNothing,
+    );
+    expect(find.text('Desktop Reader'), findsWidgets);
+  });
+
+  testWidgets('ShellScaffold 桌面顶部栏未登录时显示登录入口', (tester) async {
+    await _pumpShellScaffold(tester, width: 1280);
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey<String>('desktop_top_bar_account_entry')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('desktop_shell_logout_entry')),
+      findsNothing,
+    );
+    expect(find.text('登录'), findsOneWidget);
   });
 
   testWidgets('ShellScaffold 底部导航保持统计页位于我的之前', (tester) async {

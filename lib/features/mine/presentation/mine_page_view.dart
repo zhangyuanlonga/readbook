@@ -870,10 +870,7 @@ extension on _MinePageState {
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
-        onTap: () {
-          final target = _userId == null ? '/auth' : '/profile';
-          context.push(target).then((_) => _loadSession());
-        },
+        onTap: _isLoggingOut ? null : _handleProfileCardTap,
         child: Ink(
           decoration:
               _hasMembership
@@ -1121,17 +1118,16 @@ extension on _MinePageState {
         _userId == null
             ? palette.noticeAccentColor
             : (_hasMembership ? membershipAccent : palette.primaryColor);
-    final actionLabel = _userId == null ? '登录 / 注册' : '查看资料';
+    final actionLabel =
+        _userId == null ? '登录 / 注册' : (_isLoggingOut ? '退出中...' : '退出登录');
 
     return Material(
       key: const ValueKey<String>('mine_desktop_profile_card'),
       color: Colors.transparent,
       child: InkWell(
+        key: const ValueKey<String>('mine_desktop_profile_card_tap_area'),
         borderRadius: BorderRadius.circular(24),
-        onTap: () {
-          final target = _userId == null ? '/auth' : '/profile';
-          context.push(target).then((_) => _loadSession());
-        },
+        onTap: _isLoggingOut ? null : _handleProfileCardTap,
         child: Ink(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(24),
@@ -1453,11 +1449,16 @@ extension on _MinePageState {
     required _MineResolvedPalette palette,
   }) {
     return OutlinedButton.icon(
-      onPressed: () {
-        final target = _userId == null ? '/auth' : '/profile';
-        context.push(target).then((_) => _loadSession());
-      },
-      icon: Icon(_userId == null ? Icons.login_rounded : Icons.person_outline),
+      key: const ValueKey<String>('mine_desktop_profile_action_button'),
+      onPressed: _isLoggingOut ? null : _handleProfileActionButtonTap,
+      icon:
+          _isLoggingOut
+              ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+              : Icon(_userId == null ? Icons.login_rounded : Icons.logout),
       label: Text(label),
       style: OutlinedButton.styleFrom(
         foregroundColor: palette.primaryColor,

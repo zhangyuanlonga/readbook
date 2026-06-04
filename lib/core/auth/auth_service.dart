@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../analytics/analytics_service.dart';
 import '../device/device_heartbeat_service.dart';
 import '../errors/app_exception.dart';
@@ -172,8 +174,9 @@ class AuthService {
 
   Future<void> _persistAuthenticatedSession(AuthSession session) async {
     await _sessionStore.saveSession(session);
-    await _runPostAuthBootstrap();
     AuthEventBus.instance.emitLoggedIn();
+    // 登录 / 注册成功后的 UI 必须先拿到新 session，设备席位、访问统计等后置任务失败不能拖慢或覆盖账号卡片刷新。
+    unawaited(_runPostAuthBootstrap());
   }
 
   Future<void> _runPostAuthBootstrap() async {
