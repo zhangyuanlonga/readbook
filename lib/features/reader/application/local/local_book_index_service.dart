@@ -175,7 +175,11 @@ class LocalBookIndexService {
         );
     try {
       final bookForParsing = await _hydrateReadableBook(preparedBook);
-      final parsedBook = await parser.parse(bookForParsing);
+      final parserInput = LocalBookParserInput.fromBook(bookForParsing);
+      final parsedBook = await parseLocalBookInput(
+        parser: parser,
+        input: parserInput,
+      );
       if (parsedBook.chapters.isEmpty) {
         throw AppException(
           code: ErrorCode.ruleMatchEmpty,

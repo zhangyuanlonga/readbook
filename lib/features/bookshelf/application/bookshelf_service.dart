@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:isolate';
 import 'dart:convert';
 
@@ -6,116 +5,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../data/datasources/local/app_database.dart';
 import '../../../domain/entities/bookshelf_book.dart';
+import 'bookshelf_event_bus.dart';
+import 'bookshelf_events.dart';
+import 'bookshelf_legacy_migration_service.dart';
+import 'bookshelf_taxonomy_service.dart';
 
-enum BookshelfTaxonomyKind { tag, category }
-
-enum BookshelfCollectionAction { upsert, replace, remove }
-
-enum BookshelfTaxonomyAction {
-  create,
-  rename,
-  delete,
-  metadataChanged,
-  orderChanged,
-  assignmentChanged,
-}
-
-class BookshelfTaxonomyItem {
-  const BookshelfTaxonomyItem({required this.name, required this.colorValue});
-
-  final String name;
-  final int colorValue;
-
-  BookshelfTaxonomyItem copyWith({String? name, int? colorValue}) {
-    return BookshelfTaxonomyItem(
-      name: name ?? this.name,
-      colorValue: colorValue ?? this.colorValue,
-    );
-  }
-
-  Map<String, Object?> toJson() => <String, Object?>{
-    'name': name,
-    'colorValue': colorValue,
-  };
-
-  static BookshelfTaxonomyItem? fromJson(Object? value) {
-    if (value is String) {
-      final name = value.trim();
-      return name.isEmpty
-          ? null
-          : BookshelfTaxonomyItem(
-            name: name,
-            colorValue: defaultColorForName(name),
-          );
-    }
-    if (value is! Map) {
-      return null;
-    }
-    final name = value['name']?.toString().trim() ?? '';
-    if (name.isEmpty) {
-      return null;
-    }
-    final rawColor = value['colorValue'];
-    final colorValue =
-        rawColor is int
-            ? rawColor
-            : int.tryParse(rawColor?.toString() ?? '') ??
-                defaultColorForName(name);
-    return BookshelfTaxonomyItem(name: name, colorValue: colorValue);
-  }
-
-  static int defaultColorForName(String name) {
-    const palette = <int>[
-      0xFF6750A4,
-      0xFF386A20,
-      0xFF006A6A,
-      0xFF006D3B,
-      0xFF984061,
-      0xFF8C5000,
-      0xFF6D5E00,
-      0xFF00658F,
-      0xFF7D5260,
-      0xFF5B5D72,
-    ];
-    final normalized = name.trim();
-    if (normalized.isEmpty) {
-      return palette.first;
-    }
-    var hash = 0;
-    for (final codeUnit in normalized.codeUnits) {
-      hash = (hash * 31 + codeUnit) & 0x7fffffff;
-    }
-    return palette[hash % palette.length];
-  }
-}
-
-class BookshelfTaxonomyChange {
-  const BookshelfTaxonomyChange({
-    required this.kind,
-    required this.action,
-    this.previousName,
-    this.currentName,
-  });
-
-  final BookshelfTaxonomyKind kind;
-  final BookshelfTaxonomyAction action;
-  final String? previousName;
-  final String? currentName;
-}
-
-class BookshelfCollectionChange {
-  const BookshelfCollectionChange({
-    required this.action,
-    required this.sourceId,
-    required this.detailUrl,
-    this.bookId,
-  });
-
-  final BookshelfCollectionAction action;
-  final String sourceId;
-  final String detailUrl;
-  final String? bookId;
-}
+export 'bookshelf_events.dart';
+export 'bookshelf_taxonomy_service.dart' show BookshelfTaxonomyItem;
 
 class BookshelfService {
   BookshelfService({SharedPreferences? preferences, AppDatabase? database})
@@ -223,17 +119,14 @@ class BookshelfService {
   static const String defaultListQuickFilterContent = 'none';
   static const bool defaultListCompactMode = false;
   static const bool defaultListShowRecentReadTime = false;
-  static final StreamController<BookshelfTaxonomyChange>
-  _taxonomyChangeController =
-      StreamController<BookshelfTaxonomyChange>.broadcast();
-  static final StreamController<BookshelfCollectionChange>
-  _collectionChangeController =
-      StreamController<BookshelfCollectionChange>.broadcast();
+  static const BookshelfTaxonomyService _taxonomyService =
+      BookshelfTaxonomyService();
+  static final BookshelfEventBus _eventBus = BookshelfEventBus();
 
   static Stream<BookshelfTaxonomyChange> get watchTaxonomyChanges =>
-      _taxonomyChangeController.stream;
+      _eventBus.watchTaxonomyChanges;
   static Stream<BookshelfCollectionChange> get watchCollectionChanges =>
-      _collectionChangeController.stream;
+      _eventBus.watchCollectionChanges;
 
   Future<List<BookshelfBook>> getAll() async {
     final storedBooks = await _database.listBookshelfBooks();
@@ -853,11 +746,7 @@ class BookshelfService {
     }
 
     try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! List) {
-        return const <String>[];
-      }
-      return _normalizeTags(decoded.map((value) => '$value'));
+      return _taxonomyService.decodeStringList(raw);
     } catch (_) {
       return const <String>[];
     }
@@ -956,11 +845,7 @@ class BookshelfService {
     }
 
     try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! List) {
-        return const <String>[];
-      }
-      return _normalizeTags(decoded.map((value) => '$value'));
+      return _taxonomyService.decodeStringList(raw);
     } catch (_) {
       return const <String>[];
     }
@@ -993,11 +878,7 @@ class BookshelfService {
     }
 
     try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! List) {
-        return const <String>[];
-      }
-      return _normalizeTags(decoded.map((value) => '$value'));
+      return _taxonomyService.decodeStringList(raw);
     } catch (_) {
       return const <String>[];
     }
@@ -1480,46 +1361,10 @@ class BookshelfService {
     required String orderKey,
   }) async {
     final prefs = await _preferencesFuture;
-    final raw = prefs.getString(metadataKey);
-    final byName = <String, BookshelfTaxonomyItem>{};
-    if (raw != null && raw.trim().isNotEmpty) {
-      try {
-        final decoded = jsonDecode(raw);
-        if (decoded is List) {
-          for (final item in decoded) {
-            final parsed = BookshelfTaxonomyItem.fromJson(item);
-            if (parsed == null) {
-              continue;
-            }
-            byName[parsed.name] = parsed;
-          }
-        }
-      } catch (_) {
-        // Fall back to legacy order below.
-      }
-    }
-
-    final legacyOrderRaw = prefs.getString(orderKey);
-    if (legacyOrderRaw != null && legacyOrderRaw.trim().isNotEmpty) {
-      try {
-        final decoded = jsonDecode(legacyOrderRaw);
-        if (decoded is List) {
-          for (final name in _normalizeTags(decoded.map((value) => '$value'))) {
-            byName.putIfAbsent(
-              name,
-              () => BookshelfTaxonomyItem(
-                name: name,
-                colorValue: BookshelfTaxonomyItem.defaultColorForName(name),
-              ),
-            );
-          }
-        }
-      } catch (_) {
-        // Ignore malformed legacy order.
-      }
-    }
-
-    return List<BookshelfTaxonomyItem>.unmodifiable(byName.values);
+    return _taxonomyService.loadItems(
+      metadataRaw: prefs.getString(metadataKey),
+      orderRaw: prefs.getString(orderKey),
+    );
   }
 
   Future<void> _saveTaxonomyItems({
@@ -1702,17 +1547,11 @@ class BookshelfService {
   }
 
   void _emitTaxonomyChange(BookshelfTaxonomyChange change) {
-    if (_taxonomyChangeController.isClosed) {
-      return;
-    }
-    _taxonomyChangeController.add(change);
+    _eventBus.emitTaxonomyChange(change);
   }
 
   void _emitCollectionChange(BookshelfCollectionChange change) {
-    if (_collectionChangeController.isClosed) {
-      return;
-    }
-    _collectionChangeController.add(change);
+    _eventBus.emitCollectionChange(change);
   }
 
   static String _bookKey({
@@ -1728,17 +1567,7 @@ class BookshelfService {
   }
 
   static List<String> _normalizeTags(Iterable<String> values) {
-    final result = <String>[];
-    for (final raw in values) {
-      final value = raw.trim();
-      if (value.isEmpty) {
-        continue;
-      }
-      if (!result.contains(value)) {
-        result.add(value);
-      }
-    }
-    return result;
+    return BookshelfTaxonomyService.normalizeNames(values);
   }
 
   static String _normalizeSortMode(String? value) {
@@ -1789,165 +1618,20 @@ class BookshelfService {
   }
 
   Future<void> migrateLegacySnapshotToDatabase() async {
-    final existingBooks = await _database.listBookshelfBooks();
-    final existingTags = await _database.listBookshelfTagAssignments();
-    final existingTagMetadata = await _database.listBookshelfTagMetadata();
-    final existingCategoryMetadata =
-        await _database.listBookshelfCategoryMetadata();
-    final existingBaseFilters = await _database.listBookshelfBaseFilterOrders();
-    if (existingBooks.isNotEmpty ||
-        existingTags.isNotEmpty ||
-        existingTagMetadata.isNotEmpty ||
-        existingCategoryMetadata.isNotEmpty ||
-        existingBaseFilters.isNotEmpty) {
-      return;
-    }
-
     final prefs = await _preferencesFuture;
-    final legacyBooks = await _loadLegacyBooks(prefs);
-    final legacyTagMap = await _loadLegacyTagMap(prefs);
-    final legacyTagItems = await _loadLegacyTaxonomyItems(
-      prefs,
-      metadataKey: _tagMetadataStorageKey,
-      orderKey: _tagOrderStorageKey,
-    );
-    final legacyCategoryItems = await _loadLegacyTaxonomyItems(
-      prefs,
-      metadataKey: _categoryMetadataStorageKey,
-      orderKey: _categoryOrderStorageKey,
-    );
-    final legacyBaseFilterOrder = _loadLegacyStringList(
-      prefs,
-      _baseFilterOrderStorageKey,
-    );
-    if (legacyBooks.isEmpty &&
-        legacyTagMap.isEmpty &&
-        legacyTagItems.isEmpty &&
-        legacyCategoryItems.isEmpty &&
-        legacyBaseFilterOrder.isEmpty) {
-      return;
-    }
-
-    await _database.replaceBookshelfSnapshot(
-      books: legacyBooks,
-      tagMap: legacyTagMap,
-      tagItems: legacyTagItems
-          .map(
-            (item) => BookshelfTaxonomySnapshotItem(
-              name: item.name,
-              colorValue: item.colorValue,
-            ),
-          )
-          .toList(growable: false),
-      categoryItems: legacyCategoryItems
-          .map(
-            (item) => BookshelfTaxonomySnapshotItem(
-              name: item.name,
-              colorValue: item.colorValue,
-            ),
-          )
-          .toList(growable: false),
-      baseFilterOrder: legacyBaseFilterOrder,
-    );
-    await prefs.remove(_storageKey);
-    await prefs.remove(_tagStorageKey);
-    await prefs.remove(_tagOrderStorageKey);
-    await prefs.remove(_tagMetadataStorageKey);
-    await prefs.remove(_categoryOrderStorageKey);
-    await prefs.remove(_categoryMetadataStorageKey);
-    await prefs.remove(_baseFilterOrderStorageKey);
-  }
-
-  Future<List<BookshelfBook>> _loadLegacyBooks(SharedPreferences prefs) async {
-    final raw = prefs.getString(_storageKey);
-    if (raw == null || raw.trim().isEmpty) {
-      return const <BookshelfBook>[];
-    }
-
-    try {
-      final decoded = await Isolate.run<List<Map<String, Object?>>?>(
-        () => _decodeBookshelfBookJsonMaps(raw),
-      );
-      if (decoded == null) {
-        return const <BookshelfBook>[];
-      }
-
-      final items = decoded
-          .map((item) => BookshelfBook.fromJson(item))
-          .toList(growable: false);
-      return items.reversed.toList(growable: false);
-    } on FormatException {
-      return const <BookshelfBook>[];
-    }
-  }
-
-  Future<Map<String, List<String>>> _loadLegacyTagMap(
-    SharedPreferences prefs,
-  ) async {
-    final raw = prefs.getString(_tagStorageKey);
-    if (raw == null || raw.trim().isEmpty) {
-      return const <String, List<String>>{};
-    }
-
-    try {
-      return await Isolate.run<Map<String, List<String>>>(
-        () => _decodeBookshelfTagMap(raw),
-      );
-    } catch (_) {
-      return const <String, List<String>>{};
-    }
-  }
-
-  Future<List<BookshelfTaxonomyItem>> _loadLegacyTaxonomyItems(
-    SharedPreferences prefs, {
-    required String metadataKey,
-    required String orderKey,
-  }) async {
-    final raw = prefs.getString(metadataKey);
-    final byName = <String, BookshelfTaxonomyItem>{};
-    if (raw != null && raw.trim().isNotEmpty) {
-      try {
-        final decoded = jsonDecode(raw);
-        if (decoded is List) {
-          for (final item in decoded) {
-            final parsed = BookshelfTaxonomyItem.fromJson(item);
-            if (parsed == null) {
-              continue;
-            }
-            byName[parsed.name] = parsed;
-          }
-        }
-      } catch (_) {
-        // Fall back to order payload below.
-      }
-    }
-    for (final name in _loadLegacyStringList(prefs, orderKey)) {
-      byName.putIfAbsent(
-        name,
-        () => BookshelfTaxonomyItem(
-          name: name,
-          colorValue: BookshelfTaxonomyItem.defaultColorForName(name),
-        ),
-      );
-    }
-    return List<BookshelfTaxonomyItem>.unmodifiable(byName.values);
-  }
-
-  List<String> _loadLegacyStringList(SharedPreferences prefs, String key) {
-    final raw = prefs.getString(key);
-    if (raw == null || raw.trim().isEmpty) {
-      return const <String>[];
-    }
-
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! List) {
-        return const <String>[];
-      }
-      return _normalizeTags(decoded.map((value) => '$value'));
-    } catch (_) {
-      return const <String>[];
-    }
+    await BookshelfLegacyMigrationService(
+      preferences: prefs,
+      database: _database,
+      keys: const BookshelfLegacyMigrationKeys(
+        books: _storageKey,
+        tagMap: _tagStorageKey,
+        tagOrder: _tagOrderStorageKey,
+        tagMetadata: _tagMetadataStorageKey,
+        categoryOrder: _categoryOrderStorageKey,
+        categoryMetadata: _categoryMetadataStorageKey,
+        baseFilterOrder: _baseFilterOrderStorageKey,
+      ),
+    ).migrateIfNeeded();
   }
 }
 
@@ -1967,24 +1651,5 @@ List<Map<String, Object?>>? _decodeBookshelfBookJsonMaps(String raw) {
 }
 
 Map<String, List<String>> _decodeBookshelfTagMap(String raw) {
-  final decoded = jsonDecode(raw);
-  if (decoded is! Map) {
-    return const <String, List<String>>{};
-  }
-
-  final result = <String, List<String>>{};
-  for (final entry in decoded.entries) {
-    final key = entry.key.toString().trim();
-    if (key.isEmpty || entry.value is! List) {
-      continue;
-    }
-    final tags = BookshelfService._normalizeTags(
-      (entry.value as List).map((value) => '$value'),
-    );
-    if (tags.isEmpty) {
-      continue;
-    }
-    result[key] = tags;
-  }
-  return result;
+  return BookshelfTaxonomyService.decodeTagMapPayload(raw);
 }

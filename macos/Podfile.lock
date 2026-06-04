@@ -3,6 +3,8 @@ PODS:
     - FlutterMacOS
   - battery_plus (0.0.1):
     - FlutterMacOS
+  - charset_converter (2.4.0):
+    - FlutterMacOS
   - device_info_plus (0.0.1):
     - FlutterMacOS
   - file_selector_macos (0.0.1):
@@ -47,6 +49,7 @@ PODS:
 DEPENDENCIES:
   - audio_session (from `Flutter/ephemeral/.symlinks/plugins/audio_session/macos`)
   - battery_plus (from `Flutter/ephemeral/.symlinks/plugins/battery_plus/macos`)
+  - charset_converter (from `Flutter/ephemeral/.symlinks/plugins/charset_converter/macos`)
   - device_info_plus (from `Flutter/ephemeral/.symlinks/plugins/device_info_plus/macos`)
   - file_selector_macos (from `Flutter/ephemeral/.symlinks/plugins/file_selector_macos/macos`)
   - flutter_secure_storage_macos (from `Flutter/ephemeral/.symlinks/plugins/flutter_secure_storage_macos/macos`)
@@ -73,6 +76,8 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/audio_session/macos
   battery_plus:
     :path: Flutter/ephemeral/.symlinks/plugins/battery_plus/macos
+  charset_converter:
+    :path: Flutter/ephemeral/.symlinks/plugins/charset_converter/macos
   device_info_plus:
     :path: Flutter/ephemeral/.symlinks/plugins/device_info_plus/macos
   file_selector_macos:
@@ -109,6 +114,7 @@ EXTERNAL SOURCES:
 SPEC CHECKSUMS:
   audio_session: eaca2512cf2b39212d724f35d11f46180ad3a33e
   battery_plus: f51ad29136e025b714b96f7d096f44f604615da7
+  charset_converter: 1181fdf66cb99c88eeaea212f3fcbc734546cb15
   device_info_plus: a56e6e74dbbd2bb92f2da12c64ddd4f67a749041
   file_selector_macos: 9e9e068e90ebee155097d00e89ae91edb2374db7
   flutter_secure_storage_macos: 7f45e30f838cf2659862a4e4e3ee1c347c2b3b54

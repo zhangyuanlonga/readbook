@@ -2,7 +2,9 @@
 
 创建日期：2026-06-04
 
-状态：进行中。由原 M5 调整为新的第二里程碑。
+状态：已完成。由原 M5 调整为新的第二里程碑。
+
+完成日期：2026-06-04。
 
 适用平台：Android、iOS、Web JS、macOS、Windows、Linux。
 
@@ -24,9 +26,9 @@
 - [x] M2-03-02 新增 `tool/check_dependency_override_governance.dart`。
 - [x] M2-03-03 将 dependency override guard 接入 green suite。
 
-## 2. 当前优先任务
+## 2. 阶段任务
 
-优先从下面任务继续。每个任务做完后必须更新候选看板和本里程碑状态。
+本里程碑已完成首轮治理闭环。后续如果继续深入，应从 M3-M5 或 M2 候选看板里的后续候选重新拆最小 checkbox 任务。
 
 ### M2-04 高级主题页面文件策略下沉
 
@@ -100,40 +102,97 @@
 
 ### M2-07 本地解析与平台 IO 隔离
 
-- [ ] M2-07-01 盘点 TXT / EPUB / PDF / MOBI 解析入口的 `dart:io`、插件、override 和 Web 策略。
-- [ ] M2-07-02 为本地文件读取定义 parser input adapter，先不改变具体解析算法。
-- [ ] M2-07-03 把 Web 上传策略和 Native 文件路径策略拆开。
-- [ ] M2-07-04 评估 EPUB / TXT 编码检测是否可换成熟库或保留业务定制。
-- [ ] M2-07-05 为暂不替换的解析逻辑补中文注释和退出条件。
-- [ ] M2-07-06 运行 local parser tests 和 Web build。
+- [x] M2-07-01 盘点 TXT / EPUB / PDF / MOBI 解析入口的 `dart:io`、插件、override 和 Web 策略。
+- [x] M2-07-02 为本地文件读取定义 parser input adapter，先不改变具体解析算法。
+- [x] M2-07-03 把 Web 上传策略和 Native 文件路径策略拆开。
+- [x] M2-07-04 评估 EPUB / TXT 编码检测是否可换成熟库或保留业务定制。
+- [x] M2-07-05 为暂不替换的解析逻辑补中文注释和退出条件。
+- [x] M2-07-06 运行 local parser tests 和 Web build。
+
+执行记录：
+
+| 项目 | 内容 |
+| --- | --- |
+| 任务编号 | M2-07 |
+| 手搓点 | 本地书籍解析直接把 `LocalBook.storagePath` 当作唯一输入语义，Web 上传字节、Native 原始路径和受管文件恢复容易在 parser 内继续混杂。 |
+| 替换方式 | 新增 `LocalBookParserInput`、`LocalBookParserInputSource`、`LocalBookParserInputAware` 和 `parseLocalBookInput` adapter；当前解析算法不重写，先把输入来源边界集中到 application 层。 |
+| 行为等价 | TXT / EPUB / PDF / MOBI 仍走原 parser；旧 `parse(LocalBook)` 继续可用，支持 input-aware 的 parser 可逐步改用 `parseInput`。 |
+| 多端影响 | Android、iOS、macOS、Windows、Linux 继续使用路径 / 受管文件；Web JS 后续可走 uploaded bytes 分支，不需要污染 Native 路径语义。 |
+| 成熟库评估 | TXT 编码检测当前已使用 `charset` 等成熟能力并保留业务兜底；EPUB / PDF / MOBI 暂不在本阶段替换算法，退出条件是 parser input adapter 稳定后再逐一评估解析库升级。 |
+| 验证 | `dart analyze lib/features/reader/application/local/local_book_parser.dart lib/features/reader/application/local/local_book_index_service.dart test/features/reader/application/local/local_book_index_service_test.dart`；`flutter test test/features/reader/application/local/local_book_index_service_test.dart`；`flutter build web --no-pub`。Web build 出现 Flutter wasm dry run warning，但命令最终成功生成 `build/web`。 |
+| 中文注释 | `LocalBookParserInput.fromBook` 补充 Native / Web / managed file 边界说明。 |
+| 下一步 | M2 后续可把具体 EPUB / PDF / MOBI parser 逐个迁入 input-aware 实现。 |
 
 ### M2-08 BookshelfService 拆分
 
-- [ ] M2-08-01 只抽 `BookshelfService` legacy migration 逻辑，不改业务结果。
-- [ ] M2-08-02 为 legacy migration service 补兼容旧 key / Drift 写入测试。
-- [ ] M2-08-03 抽 taxonomy JSON / 分类标签逻辑到独立 service。
-- [ ] M2-08-04 抽 collection event bus 或改为注入式 provider / event bus。
-- [ ] M2-08-05 运行 `bookshelf_service_test.dart` 和 `bookshelf_page_state_test.dart`。
-- [ ] M2-08-06 更新 storage baseline 和候选看板。
+- [x] M2-08-01 只抽 `BookshelfService` legacy migration 逻辑，不改业务结果。
+- [x] M2-08-02 为 legacy migration service 补兼容旧 key / Drift 写入测试。
+- [x] M2-08-03 抽 taxonomy JSON / 分类标签逻辑到独立 service。
+- [x] M2-08-04 抽 collection event bus 或改为注入式 provider / event bus。
+- [x] M2-08-05 运行 `bookshelf_service_test.dart` 和 `bookshelf_page_state_test.dart`。
+- [x] M2-08-06 更新 storage baseline 和候选看板。
+
+执行记录：
+
+| 项目 | 内容 |
+| --- | --- |
+| 任务编号 | M2-08 |
+| 手搓点 | `BookshelfService` 同时承担旧 JSON 快照迁移、taxonomy payload 解析、事件广播和 Drift 快照编排，后续维护入口过多。 |
+| 替换方式 | 新增 `BookshelfLegacyMigrationService` 承接旧 `bookshelf.*` JSON 到 Drift 的迁移；新增 `BookshelfTaxonomyService` 承接标签 / 分类 JSON 解析、去重和默认颜色；新增 `BookshelfEventBus` 与 `bookshelf_events.dart` 承接集合 / taxonomy 广播协议。 |
+| 行为等价 | 旧 key 迁移到 Drift 后仍清理 legacy prefs；`BookshelfService.watchTaxonomyChanges` 和 `watchCollectionChanges` 对外 API 保持不变；标签、分类、基础筛选顺序的旧 JSON 读取规则保持等价。 |
+| 多端影响 | Android、iOS、Web JS、macOS、Windows、Linux 均为 application 层职责拆分；不改变 SharedPreferences key、Drift 表结构、页面监听或同步调用。 |
+| 验证 | `dart analyze` 覆盖 bookshelf service / migration / taxonomy / event bus；`flutter test test/features/bookshelf/application/bookshelf_service_test.dart test/features/bookshelf/application/bookshelf_page_state_test.dart`。 |
+| 中文注释 | migration、taxonomy、event bus 新文件均补中文 Dartdoc，说明旧 key、Drift、广播和后续深拆边界。 |
+| 下一步 | 若继续瘦身 `BookshelfService`，下一轮再把 taxonomy 的数据库写入、重命名、删除编排从主服务拆出。 |
 
 ### M2-09 手写模型与偏好 key 收口
 
-- [ ] M2-09-01 从 model codegen guard debt list 中选择一个低风险值对象。
-- [ ] M2-09-02 先补旧 JSON / 默认值兼容测试。
-- [ ] M2-09-03 迁移到 `freezed` 或 `json_serializable`。
-- [ ] M2-09-04 从 guard debt list 删除已迁移项。
-- [ ] M2-09-05 选择一个 SharedPreferences key，迁入 `PreferenceKey<T>` 或 typed service。
-- [ ] M2-09-06 保留旧 key 兼容读取测试。
+- [x] M2-09-01 从 model codegen guard debt list 中选择一个低风险值对象。
+- [x] M2-09-02 先补旧 JSON / 默认值兼容测试。
+- [x] M2-09-03 迁移到 `freezed` 或 `json_serializable`。
+- [x] M2-09-04 从 guard debt list 删除已迁移项。
+- [x] M2-09-05 选择一个 SharedPreferences key，迁入 `PreferenceKey<T>` 或 typed service。
+- [x] M2-09-06 保留旧 key 兼容读取测试。
+
+执行记录：
+
+| 项目 | 内容 |
+| --- | --- |
+| 任务编号 | M2-09 |
+| 手搓点 | 搜索历史使用 `jsonEncode` / `jsonDecode` 写入 SharedPreferences，属于低价值手写 JSON；模型 codegen guard 当前没有存量 debt 候选。 |
+| 替换方式 | `SearchHistoryService` 新增 `PreferenceKey<List<String>> historyPreference`，新写入改为 `setStringList`；读取时兼容旧 `search.history` JSON 字符串，并归一化 trim、去空、去重和限制 15 条。 |
+| 行为等价 | 搜索历史 key 保持 `search.history`；旧 JSON payload 可读，新写入为 StringList；添加、删除、清空语义保持。 |
+| 多端影响 | Android、iOS、Web JS、macOS、Windows、Linux 均走 SharedPreferences typed StringList；旧 JSON 兼容分支避免升级丢历史。 |
+| 模型结论 | `dart tool/check_model_codegen_guard.dart --verbose` 显示 tracked legacy debt 为 0，因此本阶段不硬造模型迁移；M2-09-01 到 M2-09-04 以 guard 确认为完成。 |
+| 验证 | `dart analyze lib/features/search/application/search_history_service.dart test/features/search/application/search_history_service_test.dart`；`flutter test test/features/search/application/search_history_service_test.dart`；model guard。 |
+| 中文注释 | `SearchHistoryService` 补中文 Dartdoc，说明 typed StringList 与旧 JSON 兼容原因。 |
+| 下一步 | 继续从 storage baseline 中选择最近正文颜色或阅读器背景图索引，做下一批 typed preference / managed asset 迁移。 |
 
 ## 3. M2 验收任务
 
-- [ ] M2-10-01 P0 候选全部关闭或登记延期原因。
-- [ ] M2-10-02 P1 候选至少完成一轮替换、隔离或降级。
-- [ ] M2-10-03 每个暂不替换点都有原因、平台影响、测试入口、退出条件。
-- [ ] M2-10-04 `dart tool/run_architecture_green_suite.dart --dry-run` 通过。
-- [ ] M2-10-05 `flutter analyze` 通过，或明确记录失败原因和下一步。
-- [ ] M2-10-06 目标单测、guard、Web build、桌面 / 移动补验要求记录完整。
-- [ ] M2-10-07 README、M2 候选看板、storage / dependency 矩阵完成同步。
+- [x] M2-10-01 P0 候选全部关闭或登记延期原因。
+- [x] M2-10-02 P1 候选至少完成一轮替换、隔离或降级。
+- [x] M2-10-03 每个暂不替换点都有原因、平台影响、测试入口、退出条件。
+- [x] M2-10-04 `dart tool/run_architecture_green_suite.dart --dry-run` 通过。
+- [x] M2-10-05 `flutter analyze` 通过，或明确记录失败原因和下一步。
+- [x] M2-10-06 目标单测、guard、Web build、桌面 / 移动补验要求记录完整。
+- [x] M2-10-07 README、M2 候选看板、storage / dependency 矩阵完成同步。
+
+执行记录：
+
+| 项目 | 内容 |
+| --- | --- |
+| 任务编号 | M2-10 |
+| P0 结论 | 本轮没有未登记的 P0 候选；storage P0 风险已进入 storage baseline 矩阵，不再作为隐藏风险留在代码里。 |
+| P1 结论 | M2-D007 / M2-D008 / M2-D010 已完成首轮隔离、拆分或 typed key 替换；M2-D012 / M2-D013 登记为后续候选，原因、影响平台、验证入口和退出方向已写入候选看板。 |
+| Dependency 结论 | M2-D011 不在 M2 内强删本地 override / stub，继续由 dependency override 矩阵治理；本轮 macOS build 暴露 `charset_converter` 必须保持带 macOS plugin 声明的版本，已补依赖治理备注。 |
+| 大文件结论 | `reader_page.dart` 当前登记债务 6013 行，`advanced_theme_service.dart` 当前登记债务 4090 行；`bookshelf_page.dart`、`epub_local_book_parser.dart` 保留 warning，退出条件是后续按职责拆分而不是只追求行数下降。 |
+| 多端影响 | Android、iOS、Web JS、macOS、Windows、Linux 均为架构、存储、解析、书架和偏好治理收口；登录 / session 文件未在本阶段改动，避免和 M3 Windows 并行工作冲突。 |
+| 已验证 | `flutter analyze` 通过；目标单测通过；storage / dependency / model / architecture guards 通过；`dart tool/run_architecture_green_suite.dart --dry-run` 通过；`flutter build web --no-pub` 通过；`flutter build macos --debug --no-pub` 通过。 |
+| 验证备注 | reader 相关测试仍有既有 Drift 多数据库 warning；Web build 有 Flutter wasm dry-run warning；macOS build 有 Sentry `@_implementationOnly` 和 duplicate `-lsqlite3` warning，但命令均成功。 |
+| 未验证平台 | Android、iOS、Windows、Linux 未在本机做真构建；发布前仍需对应机器或 CI 补验。Windows 可由当前 M3 并行环境顺手验证构建和核心 smoke。 |
+| 中文注释 | 本轮新增 parser input、bookshelf migration / taxonomy / event bus、search history typed key 的中文维护注释；后续新增或维护代码继续遵守标准中文详细注释规则。 |
+| 下一步 | M2 已关闭。当前执行入口切到 M3：核心业务链多端兼容与验收；M2-D012 / M2-D013 / M2-D011 作为后续治理候选接入 M4-M5 或专项任务。 |
 
 ## 4. 收尾模板
 

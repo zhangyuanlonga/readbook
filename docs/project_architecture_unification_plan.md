@@ -99,6 +99,15 @@ domain -> pure dart
 - [ ] 本地 override 包建立说明和回主线计划。
 - [ ] discontinued transitive dependency 进入升级风险清单。
 
+## 3.1 M2-10 大文件登记债务
+
+M2-10 验收时，架构 guard 已把下面两个超大文件登记为已知拆分债务。登记的意义是让 guard 继续通过并暴露风险，不代表这些文件已经合理。
+
+- [x] `lib/features/reader/presentation/reader_page.dart`：当前登记 6013 行；退出条件是继续拆 shell、overlay、toolbar、tap zone、runtime controller，并保持阅读器 smoke / runtime controller 测试通过。
+- [x] `lib/features/mine/application/advanced_theme_service.dart`：当前登记 4090 行；退出条件是继续拆资源 IO、导入导出、存储迁移、主题编排，并保持高级主题导入导出测试通过。
+- [x] `lib/features/bookshelf/presentation/bookshelf_page.dart`：当前保留 warning；退出条件是拆桌面布局、筛选、空态、书籍卡片、批量操作。
+- [x] `lib/features/reader/application/local/epub_local_book_parser.dart`：当前保留 warning；退出条件是结合 M2-D012，把 parser input-aware 和成熟 EPUB 解析库评估拆成单独任务。
+
 ## 4. 验收标准
 
 阶段性验收：

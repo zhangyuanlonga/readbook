@@ -22,7 +22,6 @@
 | prefs-json | `lib/features/reader/application/reader_preferences_service.dart|_customBackgroundImagesKey` | 阅读器自定义背景图路径列表，图片本体不在 prefs。 | 路径列表与用户资产绑定，若继续扩展可能变成资源索引。 | 迁到 managed asset collection / 文件索引，prefs 只留当前选择。 | 背景图列表迁出 prefs，旧 key 兼容读取并清理。 | 暂留 |
 | prefs-json | `lib/features/reader/application/reader_preferences_service.dart|_recentBodyTextColorsKey` | 最近使用正文颜色列表，属于小型 UI 偏好。 | 风险低，但仍是 JSON prefs。 | 可改为 StringList / typed preference，或继续限制数量。 | 使用非 JSON typed key 或明确长期小型保留。 | 暂留 |
 | prefs-json | `lib/features/reader/application/reader_visual_overrides_service.dart|_visualOverridesKey` | 阅读器视觉 override，包含资源相对路径引用，当前通过 `ManagedAssetStore` 解析。 | 视觉配置字段可能膨胀；资源路径和旧 payload 兼容需要持续保护。 | 拆成 typed preference + managed asset ref，或迁入 reader settings 统一模型。 | override 迁入统一 reader settings / Drift / typed key，并补旧 payload 兼容测试。 | 暂留 |
-| prefs-json | `lib/features/search/application/search_history_service.dart|_storageKey` | 搜索历史，限制 15 条，小型短字符串列表。 | 风险低；如果接入同步、按源维度或更复杂排序，会增长。 | 可改为 StringList / typed preference；复杂化后迁 Drift。 | 使用非 JSON StringList 或 Drift，并补旧 key 兼容读取。 | 暂留 |
 | temp-dir | `lib/core/logging/diagnostic_log_export_service_io.dart|getTemporaryDirectory` | 诊断导出临时文件，用户可通过分享 / 保存拿到结果。 | 临时文件可被系统清理，不应承载长期诊断资产。 | 保持临时导出；如需长期保存，让用户选择目标或走 Documents。 | 诊断导出明确只作为临时中转，或改为用户选择保存路径。 | 暂留 |
 | temp-dir | `lib/data/datasources/local/app_database_connection_native.dart|Directory.systemTemp` | Flutter test 环境数据库落入系统临时目录，避免污染真实 support 目录。 | 只应在测试环境使用。 | 保持 `FLUTTER_TEST` 分支，并确保生产使用 application support。 | 测试数据库路径有更明确 test harness；生产分支不使用系统临时目录。 | 暂留 |
 | temp-dir | `lib/features/mine/application/advanced_theme_service.dart|Directory.systemTemp.createTemp` | 高级主题导入 / 导出工作目录，属于可删除临时中转。 | 不能把主题资源最终落在临时目录。 | 保持临时工作目录，最终资源写入托管目录 / index。 | 导入导出任务队列化后，由统一 temp workspace service 管理。 | 暂留 |
@@ -34,7 +33,7 @@
 
 - 当前 baseline 没有新增 violation，但不是最终理想状态。
 - P0 风险集中在用户资产和资源目录：`advanced_themes`、`profile_avatars`、阅读器背景图路径。
-- 低风险项是小型 UI 偏好：最近正文颜色、搜索历史，但仍应优先改为 typed preference / StringList。
+- 低风险项是小型 UI 偏好：最近正文颜色仍应优先改为 typed preference / StringList；搜索历史已迁入 `PreferenceKey<List<String>>` 和 `StringList`，并保留旧 JSON 兼容读取。
 - 高级主题 presentation 层直接 `getTemporaryDirectory` 已迁入 application service；后续重点是把 service 内多个临时工作区收敛到统一 temp workspace service。
 
 ## 4. 维护命令

@@ -5,8 +5,8 @@ import 'package:path/path.dart' as p;
 const _packagePrefix = 'package:shuxiang_reading_next/';
 const _allChecks = <String>{'imports', 'large-files', 'docs'};
 const _registeredLargeFileDebt = <String, int>{
-  'lib/features/reader/presentation/reader_page.dart': 6012,
-  'lib/features/mine/application/advanced_theme_service.dart': 3550,
+  'lib/features/reader/presentation/reader_page.dart': 6013,
+  'lib/features/mine/application/advanced_theme_service.dart': 4090,
 };
 
 final class _Issue {

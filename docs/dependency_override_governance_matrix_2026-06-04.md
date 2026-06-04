@@ -28,6 +28,7 @@
 - `pdfium_dart` 和 `turnable_page` 的本地包 SDK 约束高于项目 SDK，是后续依赖治理和 SDK 升级窗口的重点。
 - `flutter_charset_detector_web` 是明确 Web 降级 stub，不应被误判为成熟编码检测能力。
 - `pdf_text_extract` 只覆盖 Android / iOS，不能作为 PDF 多端闭环的最终方案。
+- M2-10 macOS build 已确认 `charset_converter` 需要保持带 macOS plugin 声明的 `2.4.0` 解析结果；`2.3.0` 缺少 macOS 插件声明时，生成的 macOS registrant 会导入不存在的模块，导致构建失败。它不是 override，但属于依赖治理风险点。
 - 下一步如果继续 M2-D003 的后续深化，应先补每个本地包与上游差异清单，再决定是否回主线或替换。
 
 ## 4. 维护命令

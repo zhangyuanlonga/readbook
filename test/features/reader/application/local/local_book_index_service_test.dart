@@ -29,6 +29,7 @@ void main() {
 
     setUp(() async {
       SharedPreferences.setMockInitialValues({});
+      _FakeSuccessParser.seenInputs.clear();
       database = AppDatabase(executor: NativeDatabase.memory());
       repository = LocalBookRepositoryImpl(database);
       tempDir = await Directory.systemTemp.createTemp('local_book_index_test');
@@ -87,6 +88,9 @@ void main() {
       expect(updated.chapterCount, 2);
       expect(chapters.first.content, '内容1');
       expect(chapters.last.content, '内容2');
+      expect(_FakeSuccessParser.seenInputs, hasLength(1));
+      expect(_FakeSuccessParser.seenInputs.single.book.id, 'local_index_1');
+      expect(_FakeSuccessParser.seenInputs.single.usesPathBackedFile, isTrue);
     });
 
     test('marks book failed when parser throws', () async {
@@ -413,8 +417,10 @@ List<int> _encodeUtf16(
   return bytes;
 }
 
-class _FakeSuccessParser implements LocalBookParser {
+class _FakeSuccessParser implements LocalBookParser, LocalBookParserInputAware {
   const _FakeSuccessParser();
+
+  static final List<LocalBookParserInput> seenInputs = <LocalBookParserInput>[];
 
   @override
   Future<LocalParsedBook> parse(LocalBook book) async {
@@ -424,6 +430,12 @@ class _FakeSuccessParser implements LocalBookParser {
         LocalParsedChapter(title: '第二章', content: '内容2'),
       ],
     );
+  }
+
+  @override
+  Future<LocalParsedBook> parseInput(LocalBookParserInput input) {
+    seenInputs.add(input);
+    return parse(input.book);
   }
 
   @override

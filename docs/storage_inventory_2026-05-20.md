@@ -68,7 +68,7 @@
 | 阅读器 | 自定义背景图列表 | `reader.settings.customBackgroundImages` | JSON 列表 | 托管文件索引 | 中 |
 | 阅读器 | 最近文字颜色 | `reader.settings.recentBodyTextColors` | JSON 列表 | 可保留或拆 `StringList` | 低 |
 | 阅读器 | 视觉覆盖 | `reader.visualOverrides` | JSON 对象 | 可保留或拆轻量结构 | 中 |
-| 搜索 | 搜索历史 | `search.history` | JSON 列表 | 改 `StringList` 或数据库 | 低 |
+| 搜索 | 搜索历史 | `search.history` | StringList，兼容旧 JSON 列表读取 | 已迁 typed preference；复杂化后再进数据库 | 低 |
 | 书源健康 | 健康快照集合 | `source.health.snapshots.v1` | JSON Map | 数据库 | 中 |
 
 说明：
