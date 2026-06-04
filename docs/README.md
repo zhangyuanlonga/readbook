@@ -6,6 +6,8 @@
 
 ## 当前执行口径
 
+当前里程碑已经重排为 5 个阶段：M1 是已完成的成熟库与架构治理基线，M2 是正在执行的手搓实现替换与稳定性治理，M3-M5 是后续规划。旧 M1-M3 已删除，不再作为执行入口；旧 M4 已升为新 M1，旧 M5 已升为新 M2。
+
 后续里程碑任务不再只按“做完某个功能”拆分，默认按 **业务链兼容 + 测试验收** 拆分。也就是说，一个任务写成“兼容 Web / Desktop 登录”时，完成标准不是 Web / Desktop 页面能点通，而是要同时回答：
 
 - 移动端、Web、Desktop 的业务设计是否合理。
@@ -20,6 +22,16 @@
 - **业务合理线**：入口、状态、错误、降级、会话、数据落点和用户路径合理。
 - **多端兼容线**：Android、iOS、Web JS、macOS、Windows、Linux 的能力边界和影响面清楚。
 - **代码正确线**：架构分层、平台隔离、测试、构建、中文维护注释和文档同步到位。
+
+## 任务拆分规则
+
+后续开发或 AI 接力时，只领取带编号的最小 checkbox 任务，例如 `M2-04-03`。不要领取“完成 M2-04”或“完成整个 M3”这种大任务。
+
+- [x] 每个里程碑必须把阶段任务拆成可单独完成的小任务。
+- [x] 每个小任务前必须有 `- [ ]` 或 `- [x]`，方便后续继续执行。
+- [x] 一个小任务应该能在一次开发回合内完成、验证并记录收尾。
+- [x] 如果执行时发现小任务仍然过大，先拆分文档，再继续做代码。
+- [x] 文档可以写得粗糙，但任务边界必须清楚，不能把很多隐藏小任务塞进一个 checkbox。
 
 ## 任务收尾矩阵
 
@@ -51,10 +63,17 @@
 
 ## 当前里程碑
 
-- [里程碑 01：多端底座绿线与在线阅读闭环](milestone_01_multiplatform_foundation_online_reading_2026-06-02.md)
-- [里程碑 02：多端 UI 与桌面交互体验成型](milestone_02_desktop_ui_interaction_2026-06-02.md)
-- [里程碑 03：本地内容与资源能力多端化](milestone_03_local_content_resource_multiplatform_2026-06-02.md)
-- [里程碑 04：成熟库替代与架构样板治理](milestone_04_mature_library_architecture_governance_2026-06-03.md)
+里程碑按“已完成治理基线 -> 手搓替换 -> 业务兼容 -> 本地内容资源 -> 长期门禁”推进。当前优先执行 M2，后续每次只领取一个最小 checkbox 任务。
+
+- [里程碑 01：已完成的成熟库与架构治理基线](milestone_01_completed_mature_library_architecture_governance_2026-06-04.md)
+- [里程碑 02：手搓实现替换与稳定性治理](milestone_02_handrolled_replacement_stability_2026-06-04.md)
+- [M2 手搓与不稳定实现候选看板](m2_handrolled_stability_candidate_backlog_2026-06-04.md)
+- [依赖 Override 治理矩阵](dependency_override_governance_matrix_2026-06-04.md)
+- [Storage Guard Baseline 治理矩阵](storage_governance_baseline_matrix_2026-06-04.md)
+- [里程碑 03：核心业务链多端兼容与验收](milestone_03_multiplatform_business_compatibility_acceptance_2026-06-04.md)
+- [里程碑 04：本地内容、资源与性能成熟化](milestone_04_local_content_resource_performance_maturity_2026-06-04.md)
+- [里程碑 05：长期门禁、发布验收与 AI 接力](milestone_05_long_term_guard_ai_handoff_2026-06-04.md)
+- [AI 后续执行序列与维护优先级](ai_maintenance_execution_sequence_2026-06-04.md)
 - [缓存治理优化计划](cache_governance_optimization_plan_2026-06-02.md)
 - [代码库工程治理专项 Backlog](codebase_engineering_governance_backlog_2026-06-02.md)
 - [桌面端工程提效与底座优化里程碑](desktop_engineering_productivity_milestone_2026-06-01.md)

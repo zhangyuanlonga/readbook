@@ -130,7 +130,7 @@ Android / iOS 默认保持成熟移动端体验：
 推荐测试：
 
 ```bash
-dart run tool/check_adaptive_layout_guard.dart --fail
-dart run tool/check_ui_component_governance.dart
+dart tool/check_adaptive_layout_guard.dart --fail
+dart tool/check_ui_component_governance.dart
 flutter test test/app/layout/adaptive_breakpoints_test.dart test/app/widgets/adaptive_components_test.dart
 ```

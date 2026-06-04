@@ -43,7 +43,7 @@ domain -> 纯 Dart，不依赖 Flutter UI、data、features
 - 需要 value equality、copyWith、默认值的状态对象优先使用 `freezed`。
 - 需要 JSON 序列化的 DTO 优先使用成熟生成工具；迁移旧模型时必须保留旧字段兼容。
 - 不再为新增复杂模型手写大段 `copyWith/toJson/fromJson/operator ==/hashCode`。
-- 新增或改名为模型职责的文件如果仍手写上述样板，必须先登记为明确技术债，否则 `dart run tool/check_model_codegen_guard.dart` 应保持通过。
+- 新增或改名为模型职责的文件如果仍手写上述样板，必须先登记为明确技术债，否则 `dart tool/check_model_codegen_guard.dart` 应保持通过。
 
 旧模型迁移规则：
 
@@ -178,18 +178,18 @@ flutter analyze
 架构或平台相关改动优先执行：
 
 ```bash
-dart run tool/check_architecture_guardrails.dart
-dart run tool/check_model_codegen_guard.dart
-dart run tool/check_storage_governance_guard.dart
-dart run tool/check_ui_component_governance.dart
-dart run tool/check_route_inventory.dart
-dart run tool/check_route_string_guard.dart
+dart tool/check_architecture_guardrails.dart
+dart tool/check_model_codegen_guard.dart
+dart tool/check_storage_governance_guard.dart
+dart tool/check_ui_component_governance.dart
+dart tool/check_route_inventory.dart
+dart tool/check_route_string_guard.dart
 flutter build web --no-pub
 ```
 
 复杂参数路由补充规则：
 
 - 阅读器、书籍详情等带 path 参数和多 query 参数的路由，必须通过 route helper 或 route data 构造，不得在页面里手写拼接。
-- 新增复杂路由时，必须补对应单测，并保持 `dart run tool/check_route_string_guard.dart` 通过。
+- 新增复杂路由时，必须补对应单测，并保持 `dart tool/check_route_string_guard.dart` 通过。
 
 桌面相关改动至少在可用宿主机执行一个桌面构建。

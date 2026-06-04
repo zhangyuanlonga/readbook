@@ -394,9 +394,9 @@ Android / iOS 相关改动必须额外检查：
 
 ```bash
 flutter analyze
-dart run tool/check_architecture_guardrails.dart
-dart run tool/check_storage_governance_guard.dart
-dart run tool/check_route_inventory.dart
+dart tool/check_architecture_guardrails.dart
+dart tool/check_storage_governance_guard.dart
+dart tool/check_route_inventory.dart
 flutter build web --no-pub
 ```
 

@@ -487,7 +487,7 @@ UI 改动必须以“同一套业务语义，多端不同呈现”为原则：
 
 - 新增 `GoRoute` 必须同步更新 `docs/global_page_route_inventory_2026-05-12.md`，并标记加载等级。
 - 阅读器、书籍详情等复杂参数路由必须集中到 route helper / route data，不得在页面内自行拼接 query string。
-- `dart run tool/check_route_inventory.dart` 与 `dart run tool/check_route_string_guard.dart` 必须保持绿色，作为路由治理的最小回归约束。
+- `dart tool/check_route_inventory.dart` 与 `dart tool/check_route_string_guard.dart` 必须保持绿色，作为路由治理的最小回归约束。
 - 新增或调整页面阶段任务必须同步更新 `docs/global_page_lazy_loading_execution_plan_2026-05-12.md`。
 - 主导航页面不得在 `initState` / 首帧路径里初始化低频管理页服务、服务器书源网关任务、同步服务、图库扫描、缓存统计、反馈列表。
 - 页面首屏只允许读取“当前页面可见内容”需要的最小数据；标签、分类、封面补齐、远端状态、缓存统计、编辑器资源都必须延后。
@@ -672,7 +672,7 @@ UI 改动必须以“同一套业务语义，多端不同呈现”为原则：
 - 平台能力：`flutter analyze` + 至少一个支持端和一个不支持端的能力验证。
 - Web 编译边界：`flutter analyze` + `flutter build web --debug --no-web-resources-cdn --no-wasm-dry-run`。
 - 数据库/条件导入：`flutter analyze` + 当前端测试 + Web 或 native build 基线。
-- 模型 / DTO / 状态对象：`flutter analyze` + `dart run tool/check_model_codegen_guard.dart` + 对应兼容测试。
+- 模型 / DTO / 状态对象：`flutter analyze` + `dart tool/check_model_codegen_guard.dart` + 对应兼容测试。
 - 日志 / 错误监控：`flutter analyze` + logging tests；新增远端上报字段必须证明经过 `AppErrorMonitoringService` 脱敏。
 - Web 首屏验证必须使用本地 Flutter Web 资源；`flutter run -d chrome` 和 Web 产物构建默认带 `--no-web-resources-cdn`，避免 CanvasKit / Roboto 依赖外网导致白屏。
 - Web 首屏还必须检查插件注册日志；native/mobile 优先插件如编码检测、PDF 不得在 Web 注册阶段抛错，必要时用 Web stub 或条件依赖把能力降级到 application 层。本地 WebView / JS runtime 已移除，不得作为 Web 首屏依赖重新引入。

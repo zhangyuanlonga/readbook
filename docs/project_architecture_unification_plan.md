@@ -60,7 +60,7 @@ domain -> pure dart
 - [x] 补齐路由清单。
 - [x] 将架构统一计划纳入 docs。
 - [x] 处理超过硬阈值的超大文件。
-- [x] `dart run tool/check_architecture_guardrails.dart` 通过。
+- [x] `dart tool/check_architecture_guardrails.dart` 通过。
 
 ### Phase B：多端能力收敛
 
