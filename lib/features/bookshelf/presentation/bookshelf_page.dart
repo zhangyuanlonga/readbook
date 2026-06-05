@@ -1677,29 +1677,31 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final bookKey = _bookKey(book);
     var selectedTags = _normalizeTags(_tagsOfBook(book));
     var createdItems = const <BookshelfTaxonomyItem>[];
-    final result = await _showBookshelfBottomSheet<_BookTagEditorResult>(
-      isScrollControlled: true,
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (sheetContext, setSheetState) {
-            final availableItems = _availableBookTagItems(
-              selectedTags: selectedTags,
-              createdItems: createdItems,
-            );
-
-            return _buildBookTaxonomyEditSurface(
-              context: sheetContext,
-              icon: Icons.sell_rounded,
-              title: '编辑标签',
-              subtitle: _displayBookTitle(book),
-              createLabel: '新建标签',
-              onCreate: () async {
-                final created = await _createBookTaxonomyItem(
-                  kind: BookshelfTaxonomyKind.tag,
-                );
-                if (created == null) {
+    final createNameController = TextEditingController();
+    var isCreating = false;
+    var createColor = Color(BookshelfTaxonomyItem.defaultColorForName('新标签'));
+    String? createErrorText;
+    _BookTagEditorResult? result;
+    try {
+      result = await _showBookshelfBottomSheet<_BookTagEditorResult>(
+        isScrollControlled: true,
+        builder: (sheetContext) {
+          return StatefulBuilder(
+            builder: (sheetContext, setSheetState) {
+              void submitCreate() {
+                final normalizedName = _firstNormalizedTaxonomyName([
+                  createNameController.text,
+                ]);
+                if (normalizedName == null) {
+                  setSheetState(() {
+                    createErrorText = '请输入标签名称';
+                  });
                   return;
                 }
+                final created = BookshelfTaxonomyItem(
+                  name: normalizedName,
+                  colorValue: createColor.toARGB32(),
+                );
                 setSheetState(() {
                   createdItems = _upsertDraftTaxonomyItem(
                     createdItems,
@@ -1709,35 +1711,87 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                     ...selectedTags,
                     created.name,
                   ]);
+                  createNameController.clear();
+                  createColor = Color(
+                    BookshelfTaxonomyItem.defaultColorForName('新标签'),
+                  );
+                  createErrorText = null;
+                  isCreating = false;
                 });
-              },
-              onCancel: () => _dismissBookshelfBottomSheet(sheetContext),
-              onSave: () {
-                _dismissBookshelfBottomSheet(
-                  sheetContext,
-                  _BookTagEditorResult(
-                    tags: List<String>.unmodifiable(selectedTags),
-                    createdItems: List<BookshelfTaxonomyItem>.unmodifiable(
-                      createdItems,
-                    ),
-                  ),
-                );
-              },
-              child: _buildBookTagPicker(
-                context: sheetContext,
-                items: availableItems,
+              }
+
+              final availableItems = _availableBookTagItems(
                 selectedTags: selectedTags,
-                onChanged: (tags) {
+                createdItems: createdItems,
+              );
+
+              return _buildBookTaxonomyEditSurface(
+                context: sheetContext,
+                icon: Icons.sell_rounded,
+                title: '编辑标签',
+                subtitle: _displayBookTitle(book),
+                createLabel: '新增',
+                onCreate: () {
                   setSheetState(() {
-                    selectedTags = _normalizeTags(tags);
+                    isCreating = !isCreating;
+                    createErrorText = null;
                   });
                 },
-              ),
-            );
-          },
-        );
-      },
-    );
+                onCancel: () => _dismissBookshelfBottomSheet(sheetContext),
+                onSave: () {
+                  _dismissBookshelfBottomSheet(
+                    sheetContext,
+                    _BookTagEditorResult(
+                      tags: List<String>.unmodifiable(selectedTags),
+                      createdItems: List<BookshelfTaxonomyItem>.unmodifiable(
+                        createdItems,
+                      ),
+                    ),
+                  );
+                },
+                createPanel:
+                    isCreating
+                        ? _buildInlineTaxonomyCreatePanel(
+                          context: sheetContext,
+                          kind: BookshelfTaxonomyKind.tag,
+                          nameController: createNameController,
+                          color: createColor,
+                          errorText: createErrorText,
+                          onColorChanged:
+                              (color) => setSheetState(() {
+                                createColor = color;
+                              }),
+                          onNameChanged:
+                              (_) => setSheetState(() {
+                                createErrorText = null;
+                              }),
+                          onSubmit: submitCreate,
+                          onCancel:
+                              () => setSheetState(() {
+                                createNameController.clear();
+                                createErrorText = null;
+                                isCreating = false;
+                              }),
+                        )
+                        : null,
+                child: _buildBookTagPicker(
+                  context: sheetContext,
+                  items: availableItems,
+                  selectedTags: selectedTags,
+                  onChanged: (tags) {
+                    setSheetState(() {
+                      selectedTags = _normalizeTags(tags);
+                    });
+                  },
+                ),
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      createNameController.dispose();
+    }
 
     if (result == null) {
       return;
@@ -1760,68 +1814,122 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final bookKey = _bookKey(book);
     var selectedCategory = _categoryOfBook(book);
     var createdItems = const <BookshelfTaxonomyItem>[];
-    final result = await _showBookshelfBottomSheet<_BookCategoryEditorResult>(
-      isScrollControlled: true,
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (sheetContext, setSheetState) {
-            final availableItems = _availableBookCategoryItems(
-              selectedCategory: selectedCategory,
-              createdItems: createdItems,
-            );
-
-            return _buildBookTaxonomyEditSurface(
-              context: sheetContext,
-              icon: Icons.folder_rounded,
-              title: '编辑分类',
-              subtitle: _displayBookTitle(book),
-              createLabel: '新建分类',
-              onCreate: () async {
-                final created = await _createBookTaxonomyItem(
-                  kind: BookshelfTaxonomyKind.category,
-                );
-                if (created == null) {
+    final createNameController = TextEditingController();
+    var isCreating = false;
+    var createColor = Color(BookshelfTaxonomyItem.defaultColorForName('新分类'));
+    String? createErrorText;
+    _BookCategoryEditorResult? result;
+    try {
+      result = await _showBookshelfBottomSheet<_BookCategoryEditorResult>(
+        isScrollControlled: true,
+        builder: (sheetContext) {
+          return StatefulBuilder(
+            builder: (sheetContext, setSheetState) {
+              void submitCreate() {
+                final normalizedName = _firstNormalizedTaxonomyName([
+                  createNameController.text,
+                ]);
+                if (normalizedName == null) {
+                  setSheetState(() {
+                    createErrorText = '请输入分类名称';
+                  });
                   return;
                 }
+                final created = BookshelfTaxonomyItem(
+                  name: normalizedName,
+                  colorValue: createColor.toARGB32(),
+                );
                 setSheetState(() {
                   createdItems = _upsertDraftTaxonomyItem(
                     createdItems,
                     created,
                   );
                   selectedCategory = created.name;
+                  createNameController.clear();
+                  createColor = Color(
+                    BookshelfTaxonomyItem.defaultColorForName('新分类'),
+                  );
+                  createErrorText = null;
+                  isCreating = false;
                 });
-              },
-              onCancel: () => _dismissBookshelfBottomSheet(sheetContext),
-              onSave: () {
-                _dismissBookshelfBottomSheet(
-                  sheetContext,
-                  _BookCategoryEditorResult(
-                    category: _firstNormalizedTaxonomyName([
-                      selectedCategory ?? '',
-                    ]),
-                    createdItems: List<BookshelfTaxonomyItem>.unmodifiable(
-                      createdItems,
-                    ),
-                  ),
-                );
-              },
-              child: _buildBookCategoryPicker(
-                context: sheetContext,
-                items: availableItems,
+              }
+
+              final availableItems = _availableBookCategoryItems(
                 selectedCategory: selectedCategory,
-                onChanged: (category) {
+                createdItems: createdItems,
+              );
+
+              return _buildBookTaxonomyEditSurface(
+                context: sheetContext,
+                icon: Icons.folder_rounded,
+                title: '编辑分类',
+                subtitle: _displayBookTitle(book),
+                createLabel: '新增',
+                onCreate: () {
                   setSheetState(() {
-                    selectedCategory = _firstNormalizedTaxonomyName([
-                      category ?? '',
-                    ]);
+                    isCreating = !isCreating;
+                    createErrorText = null;
                   });
                 },
-              ),
-            );
-          },
-        );
-      },
-    );
+                onCancel: () => _dismissBookshelfBottomSheet(sheetContext),
+                onSave: () {
+                  _dismissBookshelfBottomSheet(
+                    sheetContext,
+                    _BookCategoryEditorResult(
+                      category: _firstNormalizedTaxonomyName([
+                        selectedCategory ?? '',
+                      ]),
+                      createdItems: List<BookshelfTaxonomyItem>.unmodifiable(
+                        createdItems,
+                      ),
+                    ),
+                  );
+                },
+                createPanel:
+                    isCreating
+                        ? _buildInlineTaxonomyCreatePanel(
+                          context: sheetContext,
+                          kind: BookshelfTaxonomyKind.category,
+                          nameController: createNameController,
+                          color: createColor,
+                          errorText: createErrorText,
+                          onColorChanged:
+                              (color) => setSheetState(() {
+                                createColor = color;
+                              }),
+                          onNameChanged:
+                              (_) => setSheetState(() {
+                                createErrorText = null;
+                              }),
+                          onSubmit: submitCreate,
+                          onCancel:
+                              () => setSheetState(() {
+                                createNameController.clear();
+                                createErrorText = null;
+                                isCreating = false;
+                              }),
+                        )
+                        : null,
+                child: _buildBookCategoryPicker(
+                  context: sheetContext,
+                  items: availableItems,
+                  selectedCategory: selectedCategory,
+                  onChanged: (category) {
+                    setSheetState(() {
+                      selectedCategory = _firstNormalizedTaxonomyName([
+                        category ?? '',
+                      ]);
+                    });
+                  },
+                ),
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      createNameController.dispose();
+    }
 
     if (result == null) {
       return;
@@ -1840,39 +1948,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     return normalized.isEmpty ? null : normalized.first;
   }
 
-  Future<BookshelfTaxonomyItem?> _createBookTaxonomyItem({
-    required BookshelfTaxonomyKind kind,
-  }) async {
-    final isTag = kind == BookshelfTaxonomyKind.tag;
-    final fallbackName = isTag ? '新标签' : '新分类';
-    final result =
-        await _showBookshelfBottomSheet<_BookshelfTaxonomyEditorResult>(
-          isScrollControlled: true,
-          builder:
-              (_) => _BookshelfTaxonomyEditorDialog(
-                kind: kind,
-                isNew: true,
-                initialName: '',
-                initialColorValue: BookshelfTaxonomyItem.defaultColorForName(
-                  fallbackName,
-                ),
-              ),
-        );
-    if (result == null || result.delete) {
-      return null;
-    }
-
-    final normalizedName = _firstNormalizedTaxonomyName([result.name]);
-    if (normalizedName == null) {
-      _showMessage(isTag ? '请输入标签名称。' : '请输入分类名称。');
-      return null;
-    }
-    return BookshelfTaxonomyItem(
-      name: normalizedName,
-      colorValue: result.colorValue,
-    );
-  }
-
   Widget _buildBookTaxonomyEditSurface({
     required BuildContext context,
     required IconData icon,
@@ -1882,6 +1957,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     required VoidCallback onCancel,
     required VoidCallback onSave,
     required VoidCallback onCreate,
+    Widget? createPanel,
     required Widget child,
   }) {
     final theme = Theme.of(context);
@@ -1911,10 +1987,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                 ),
               ),
             ),
-            IconButton(
-              tooltip: '关闭',
-              onPressed: onCancel,
-              icon: const Icon(Icons.close_rounded),
+            FilledButton.tonalIcon(
+              onPressed: onCreate,
+              icon: const Icon(Icons.add_rounded, size: 18),
+              label: Text(createLabel),
             ),
           ],
         ),
@@ -1926,15 +2002,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
             color: colorScheme.onSurfaceVariant,
           ),
         ),
-        const SizedBox(height: 14),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: OutlinedButton.icon(
-            onPressed: onCreate,
-            icon: const Icon(Icons.add_rounded, size: 18),
-            label: Text(createLabel),
-          ),
-        ),
+        if (createPanel != null) ...[const SizedBox(height: 14), createPanel],
         const SizedBox(height: 12),
         ConstrainedBox(
           constraints: BoxConstraints(maxHeight: contentMaxHeight),
@@ -1954,6 +2022,148 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
           ],
         ),
       ],
+    );
+  }
+
+  Widget _buildInlineTaxonomyCreatePanel({
+    required BuildContext context,
+    required BookshelfTaxonomyKind kind,
+    required TextEditingController nameController,
+    required Color color,
+    required String? errorText,
+    required ValueChanged<Color> onColorChanged,
+    required ValueChanged<String> onNameChanged,
+    required VoidCallback onSubmit,
+    required VoidCallback onCancel,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isTag = kind == BookshelfTaxonomyKind.tag;
+    final swatches = _taxonomyCreateColorSwatches(
+      fallbackColor: color,
+      fallbackName: isTag ? '新标签' : '新分类',
+    );
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.72),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: nameController,
+              autofocus: true,
+              decoration: InputDecoration(
+                labelText: isTag ? '标签名称' : '分类名称',
+                errorText: errorText,
+                isDense: true,
+                filled: true,
+                fillColor: colorScheme.surface,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              textInputAction: TextInputAction.done,
+              onChanged: onNameChanged,
+              onSubmitted: (_) => onSubmit(),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              '选择颜色',
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final swatch in swatches)
+                  _buildTaxonomyCreateColorButton(
+                    color: swatch,
+                    selected: swatch.toARGB32() == color.toARGB32(),
+                    onTap: () => onColorChanged(swatch),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(onPressed: onCancel, child: const Text('取消')),
+                const SizedBox(width: 8),
+                FilledButton(onPressed: onSubmit, child: const Text('添加')),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<Color> _taxonomyCreateColorSwatches({
+    required Color fallbackColor,
+    required String fallbackName,
+  }) {
+    final colors = <Color>[
+      fallbackColor,
+      Color(BookshelfTaxonomyItem.defaultColorForName(fallbackName)),
+      const Color(0xFF2563EB),
+      const Color(0xFF059669),
+      const Color(0xFFDC2626),
+      const Color(0xFF7C3AED),
+      const Color(0xFFEA580C),
+      const Color(0xFF0891B2),
+    ];
+    final seen = <int>{};
+    return <Color>[
+      for (final color in colors)
+        if (seen.add(color.toARGB32())) color,
+    ];
+  }
+
+  Widget _buildTaxonomyCreateColorButton({
+    required Color color,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final foregroundColor =
+        ThemeData.estimateBrightnessForColor(color) == Brightness.dark
+            ? Colors.white
+            : Colors.black;
+    return Tooltip(
+      message: _formatTaxonomyHex(color.toARGB32()),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: selected ? colorScheme.onSurface : colorScheme.outline,
+              width: selected ? 2 : 1,
+            ),
+          ),
+          child:
+              selected
+                  ? Icon(Icons.check_rounded, size: 16, color: foregroundColor)
+                  : null,
+        ),
+      ),
     );
   }
 
@@ -3613,25 +3823,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
               : palette.textSecondaryColor,
       fontWeight: FontWeight.w700,
     );
-    return Container(
-      constraints: const BoxConstraints(minHeight: 20),
-      padding: EdgeInsets.symmetric(
-        horizontal: compact ? 7 : 9,
-        vertical: compact ? 2 : 3,
-      ),
-      decoration: BoxDecoration(
-        color:
-            progressDisplay.hasUnreadChapters
-                ? palette.primaryColor.withValues(alpha: 0.08)
-                : palette.elevatedSurfaceColor,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color:
-              progressDisplay.hasUnreadChapters
-                  ? palette.primaryColor.withValues(alpha: 0.18)
-                  : palette.cardBorderColor.withValues(alpha: 0.7),
-        ),
-      ),
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: compact ? 1 : 2),
       child: Text(
         progressDisplay.unreadLabel,
         maxLines: 1,
@@ -6108,16 +6301,16 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
           progressValue: 0,
           summaryText: '已读 0 / $normalizedTotal 章 · 剩余 $normalizedTotal 章',
           trailingLabel: '0%',
-          unreadLabel: '未读 $normalizedTotal 章',
+          unreadLabel: '未读',
           hasProgress: false,
-          hasUnreadChapters: normalizedTotal > 0,
+          hasUnreadChapters: false,
         );
       }
       return const _BookshelfProgressDisplay(
         progressValue: 0,
         summaryText: '阅读进度: 未开始',
         trailingLabel: '0%',
-        unreadLabel: '未开始',
+        unreadLabel: '未读',
         hasProgress: false,
         hasUnreadChapters: false,
       );

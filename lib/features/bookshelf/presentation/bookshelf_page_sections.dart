@@ -106,6 +106,29 @@ extension on _BookshelfPageState {
       return _buildBookGridSliver(books);
     }
 
+    if (AppLayout.isDesktopLike(
+      context,
+      platform: Theme.of(context).platform,
+    )) {
+      return SliverGrid(
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          mainAxisSpacing: _listCompactMode ? 8 : 10,
+          crossAxisSpacing: 12,
+          mainAxisExtent: _desktopListCardMainAxisExtent(),
+        ),
+        delegate: SliverChildBuilderDelegate((context, index) {
+          final book = books[index];
+          return _buildModeSwitchAnimatedBookItem(
+            book: book,
+            index: index,
+            totalCount: books.length,
+            child: _buildReactiveBookCard(book),
+          );
+        }, childCount: books.length),
+      );
+    }
+
     return SliverList(
       delegate: SliverChildBuilderDelegate((context, index) {
         final book = books[index];
@@ -117,6 +140,21 @@ extension on _BookshelfPageState {
         );
       }, childCount: books.length),
     );
+  }
+
+  double _desktopListCardMainAxisExtent() {
+    final visibleDetailCount =
+        <bool>[
+          _listShowAuthor,
+          _listShowLatestChapter,
+          _listShowTaxonomyBadges,
+          _listShowProgressBar,
+          _listShowRecentReadTime,
+        ].where((visible) => visible).length;
+    if (_listCompactMode) {
+      return visibleDetailCount >= 4 ? 138 : 124;
+    }
+    return visibleDetailCount >= 4 ? 176 : 160;
   }
 
   Widget _buildEmptyCard() {
