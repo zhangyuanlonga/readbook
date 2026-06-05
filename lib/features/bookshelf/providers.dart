@@ -82,10 +82,11 @@ class DesktopBookshelfToolbarActions {
     required this.hasFilteredBooks,
     required this.useGridView,
     required this.sortOptions,
+    required this.gridSettingOptions,
+    required this.listSettingOptions,
     required this.onSortModeSelected,
     required this.onViewModeSelected,
     required this.onSelectBooks,
-    required this.onOpenSettings,
     required this.onImportLocal,
   });
 
@@ -93,11 +94,27 @@ class DesktopBookshelfToolbarActions {
   final bool hasFilteredBooks;
   final bool useGridView;
   final List<DesktopBookshelfSortOption> sortOptions;
+  final List<DesktopBookshelfDisplaySettingOption> gridSettingOptions;
+  final List<DesktopBookshelfDisplaySettingOption> listSettingOptions;
   final ValueChanged<BookshelfSortMode> onSortModeSelected;
   final ValueChanged<bool> onViewModeSelected;
   final VoidCallback onSelectBooks;
-  final VoidCallback onOpenSettings;
   final VoidCallback onImportLocal;
+}
+
+class DesktopBookshelfDisplaySettingOption {
+  const DesktopBookshelfDisplaySettingOption({
+    required this.label,
+    required this.selected,
+    required this.onChanged,
+    this.modeGroup,
+  });
+
+  /// 桌面端菜单展示的设置名称，仅用于当前显示模式的轻量快捷配置。
+  final String label;
+  final bool selected;
+  final ValueChanged<bool> onChanged;
+  final String? modeGroup;
 }
 
 final bookshelfServiceProvider = Provider<BookshelfService>((ref) {

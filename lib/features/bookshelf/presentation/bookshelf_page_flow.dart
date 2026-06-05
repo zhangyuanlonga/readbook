@@ -195,6 +195,7 @@ extension on _BookshelfPageState {
     var draftShowAuthor = _gridShowAuthor;
     var draftShowLatestChapter = _gridShowLatestChapter;
     var draftShowProgressBar = _gridShowProgressBar;
+    var draftGridProgressInfoMode = _gridProgressInfoMode;
     var draftShowSourceBadge = _gridShowSourceBadge;
     var draftShowTaxonomyBadges = _gridShowTaxonomyBadges;
     var draftGridAlwaysShowSearchBar = _gridAlwaysShowSearchBar;
@@ -204,6 +205,7 @@ extension on _BookshelfPageState {
     var draftListShowAuthor = _listShowAuthor;
     var draftListShowLatestChapter = _listShowLatestChapter;
     var draftListShowProgressBar = _listShowProgressBar;
+    var draftListProgressInfoMode = _listProgressInfoMode;
     var draftListShowSourceBadge = _listShowSourceBadge;
     var draftListShowTaxonomyBadges = _listShowTaxonomyBadges;
     var draftListShowCover = _listShowCover;
@@ -247,6 +249,9 @@ extension on _BookshelfPageState {
                 await _bookshelfService.saveGridShowProgressBar(
                   draftShowProgressBar,
                 );
+                await _bookshelfService.saveGridProgressInfoMode(
+                  _progressInfoModeStorageValue(draftGridProgressInfoMode),
+                );
                 await _bookshelfService.saveGridShowSourceBadge(
                   draftShowSourceBadge,
                 );
@@ -281,6 +286,9 @@ extension on _BookshelfPageState {
                 );
                 await _bookshelfService.saveListShowProgressBar(
                   draftListShowProgressBar,
+                );
+                await _bookshelfService.saveListProgressInfoMode(
+                  _progressInfoModeStorageValue(draftListProgressInfoMode),
                 );
                 await _bookshelfService.saveListShowSourceBadge(
                   draftListShowSourceBadge,
@@ -387,6 +395,9 @@ extension on _BookshelfPageState {
                     BookshelfService.defaultGridShowLatestChapter;
                 draftShowProgressBar =
                     BookshelfService.defaultGridShowProgressBar;
+                draftGridProgressInfoMode = _progressInfoModeFromStorageValue(
+                  BookshelfService.defaultGridProgressInfoMode,
+                );
                 draftShowSourceBadge =
                     BookshelfService.defaultGridShowSourceBadge;
                 draftShowTaxonomyBadges =
@@ -414,6 +425,7 @@ extension on _BookshelfPageState {
                   _gridShowAuthor = draftShowAuthor;
                   _gridShowLatestChapter = draftShowLatestChapter;
                   _gridShowProgressBar = draftShowProgressBar;
+                  _gridProgressInfoMode = draftGridProgressInfoMode;
                   _gridShowSourceBadge = draftShowSourceBadge;
                   _gridShowTaxonomyBadges = draftShowTaxonomyBadges;
                   _gridAlwaysShowSearchBar = draftGridAlwaysShowSearchBar;
@@ -432,6 +444,9 @@ extension on _BookshelfPageState {
                     BookshelfService.defaultListShowLatestChapter;
                 draftListShowProgressBar =
                     BookshelfService.defaultListShowProgressBar;
+                draftListProgressInfoMode = _progressInfoModeFromStorageValue(
+                  BookshelfService.defaultListProgressInfoMode,
+                );
                 draftListShowSourceBadge =
                     BookshelfService.defaultListShowSourceBadge;
                 draftListShowTaxonomyBadges =
@@ -455,6 +470,7 @@ extension on _BookshelfPageState {
                   _listShowAuthor = draftListShowAuthor;
                   _listShowLatestChapter = draftListShowLatestChapter;
                   _listShowProgressBar = draftListShowProgressBar;
+                  _listProgressInfoMode = draftListProgressInfoMode;
                   _listShowSourceBadge = draftListShowSourceBadge;
                   _listShowTaxonomyBadges = draftListShowTaxonomyBadges;
                   _listShowCover = draftListShowCover;
@@ -899,7 +915,7 @@ extension on _BookshelfPageState {
                   ),
                   buildCompactSwitchTile(
                     value: draftShowProgressBar,
-                    title: '显示进度条',
+                    title: '显示阅读信息',
                     onChanged: (value) {
                       setSheetState(() {
                         draftShowProgressBar = value;
@@ -909,6 +925,30 @@ extension on _BookshelfPageState {
                       });
                       unawaited(persistGridSettings());
                     },
+                  ),
+                  buildDropdownSettingRow<_BookshelfProgressInfoMode>(
+                    title: '阅读信息',
+                    subtitle: '控制书籍卡片显示进度条或未读章节数。',
+                    value: draftGridProgressInfoMode,
+                    values: _BookshelfProgressInfoMode.values,
+                    labelBuilder: _progressInfoModeLabel,
+                    onChanged:
+                        !draftShowProgressBar
+                            ? null
+                            : (value) {
+                              if (value == null) {
+                                return;
+                              }
+                              setSheetState(() {
+                                draftGridProgressInfoMode = value;
+                              });
+                              _updateBookshelfLayoutPreservingScroll(() {
+                                _updateBookshelfState(() {
+                                  _gridProgressInfoMode = value;
+                                });
+                              });
+                              unawaited(persistGridSettings());
+                            },
                   ),
                   buildResetDefaultsButton(
                     onPressed: () => unawaited(resetGridSettings()),
@@ -1086,7 +1126,7 @@ extension on _BookshelfPageState {
                   ),
                   buildCompactSwitchTile(
                     value: draftListShowProgressBar,
-                    title: '显示进度条',
+                    title: '显示阅读信息',
                     onChanged: (value) {
                       setSheetState(() {
                         draftListShowProgressBar = value;
@@ -1096,6 +1136,30 @@ extension on _BookshelfPageState {
                       });
                       unawaited(persistListSettings());
                     },
+                  ),
+                  buildDropdownSettingRow<_BookshelfProgressInfoMode>(
+                    title: '阅读信息',
+                    subtitle: '控制书籍卡片显示进度条或未读章节数。',
+                    value: draftListProgressInfoMode,
+                    values: _BookshelfProgressInfoMode.values,
+                    labelBuilder: _progressInfoModeLabel,
+                    onChanged:
+                        !draftListShowProgressBar
+                            ? null
+                            : (value) {
+                              if (value == null) {
+                                return;
+                              }
+                              setSheetState(() {
+                                draftListProgressInfoMode = value;
+                              });
+                              _updateBookshelfLayoutPreservingScroll(() {
+                                _updateBookshelfState(() {
+                                  _listProgressInfoMode = value;
+                                });
+                              });
+                              unawaited(persistListSettings());
+                            },
                   ),
                   buildResetDefaultsButton(
                     onPressed: () => unawaited(resetListSettings()),

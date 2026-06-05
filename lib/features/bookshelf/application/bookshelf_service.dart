@@ -52,6 +52,8 @@ class BookshelfService {
       'bookshelf.grid.showLatestChapter';
   static const String _gridShowProgressBarKey =
       'bookshelf.grid.showProgressBar';
+  static const String _gridProgressInfoModeKey =
+      'bookshelf.grid.progressInfoMode';
   static const String _gridShowSourceBadgeKey =
       'bookshelf.grid.showSourceBadge';
   static const String _gridShowTaxonomyBadgesKey =
@@ -67,6 +69,8 @@ class BookshelfService {
       'bookshelf.list.showLatestChapter';
   static const String _listShowProgressBarKey =
       'bookshelf.list.showProgressBar';
+  static const String _listProgressInfoModeKey =
+      'bookshelf.list.progressInfoMode';
   static const String _listShowSourceBadgeKey =
       'bookshelf.list.showSourceBadge';
   static const String _listShowTaxonomyBadgesKey =
@@ -90,6 +94,8 @@ class BookshelfService {
   static const String createdAtSortMode = 'createdAt';
   static const String authorSortMode = 'author';
   static const String titleSortMode = 'title';
+  static const String progressInfoModeProgressBar = 'progressBar';
+  static const String progressInfoModeUnreadChapters = 'unreadChapters';
   static const bool defaultGridAdaptiveColumns = true;
   static const int defaultGridColumnCount = 3;
   static const double defaultGridCrossSpacing = 8;
@@ -102,6 +108,7 @@ class BookshelfService {
   static const bool defaultGridShowAuthor = true;
   static const bool defaultGridShowLatestChapter = true;
   static const bool defaultGridShowProgressBar = true;
+  static const String defaultGridProgressInfoMode = progressInfoModeProgressBar;
   static const bool defaultGridShowSourceBadge = false;
   static const bool defaultGridShowTaxonomyBadges = false;
   static const bool defaultGridAlwaysShowSearchBar = true;
@@ -111,6 +118,7 @@ class BookshelfService {
   static const bool defaultListShowAuthor = true;
   static const bool defaultListShowLatestChapter = true;
   static const bool defaultListShowProgressBar = true;
+  static const String defaultListProgressInfoMode = progressInfoModeProgressBar;
   static const bool defaultListShowSourceBadge = false;
   static const bool defaultListShowTaxonomyBadges = true;
   static const bool defaultListShowCover = true;
@@ -499,6 +507,22 @@ class BookshelfService {
     await prefs.setBool(_gridShowProgressBarKey, visible);
   }
 
+  Future<String> loadGridProgressInfoMode() async {
+    final prefs = await _preferencesFuture;
+    return _normalizeProgressInfoMode(
+      prefs.getString(_gridProgressInfoModeKey),
+      fallback: defaultGridProgressInfoMode,
+    );
+  }
+
+  Future<void> saveGridProgressInfoMode(String mode) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setString(
+      _gridProgressInfoModeKey,
+      _normalizeProgressInfoMode(mode, fallback: defaultGridProgressInfoMode),
+    );
+  }
+
   Future<bool> loadGridShowSourceBadge() async {
     final prefs = await _preferencesFuture;
     return prefs.getBool(_gridShowSourceBadgeKey) ?? defaultGridShowSourceBadge;
@@ -599,6 +623,22 @@ class BookshelfService {
   Future<void> saveListShowProgressBar(bool visible) async {
     final prefs = await _preferencesFuture;
     await prefs.setBool(_listShowProgressBarKey, visible);
+  }
+
+  Future<String> loadListProgressInfoMode() async {
+    final prefs = await _preferencesFuture;
+    return _normalizeProgressInfoMode(
+      prefs.getString(_listProgressInfoModeKey),
+      fallback: defaultListProgressInfoMode,
+    );
+  }
+
+  Future<void> saveListProgressInfoMode(String mode) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setString(
+      _listProgressInfoModeKey,
+      _normalizeProgressInfoMode(mode, fallback: defaultListProgressInfoMode),
+    );
   }
 
   Future<bool> loadListShowSourceBadge() async {
@@ -1587,6 +1627,17 @@ class BookshelfService {
       gridCoverOnlyVisualStyle => gridCoverOnlyVisualStyle,
       gridStandardVisualStyle => gridStandardVisualStyle,
       _ => defaultGridVisualStyle,
+    };
+  }
+
+  static String _normalizeProgressInfoMode(
+    String? value, {
+    required String fallback,
+  }) {
+    return switch (value?.trim()) {
+      progressInfoModeUnreadChapters => progressInfoModeUnreadChapters,
+      progressInfoModeProgressBar => progressInfoModeProgressBar,
+      _ => fallback,
     };
   }
 

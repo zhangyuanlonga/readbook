@@ -78,6 +78,10 @@ typedef _BookshelfViewKind = BookshelfViewKind;
 
 enum _BookshelfGridVisualStyle { standard, overlayTitle, coverOnly }
 
+enum _BookshelfProgressInfoMode { progressBar, unreadChapters }
+
+enum _BookshelfBookMoreAction { detail, select }
+
 enum _BookshelfSearchQuickFilterContent { none, tags, categories }
 
 typedef _BookshelfBatchAction = BookshelfBatchAction;
@@ -118,13 +122,17 @@ class _BookshelfProgressDisplay {
     required this.progressValue,
     required this.summaryText,
     required this.trailingLabel,
+    required this.unreadLabel,
     required this.hasProgress,
+    required this.hasUnreadChapters,
   });
 
   final double progressValue;
   final String summaryText;
   final String trailingLabel;
+  final String unreadLabel;
   final bool hasProgress;
+  final bool hasUnreadChapters;
 
   @override
   bool operator ==(Object other) {
@@ -132,12 +140,20 @@ class _BookshelfProgressDisplay {
         other.progressValue == progressValue &&
         other.summaryText == summaryText &&
         other.trailingLabel == trailingLabel &&
-        other.hasProgress == hasProgress;
+        other.unreadLabel == unreadLabel &&
+        other.hasProgress == hasProgress &&
+        other.hasUnreadChapters == hasUnreadChapters;
   }
 
   @override
-  int get hashCode =>
-      Object.hash(progressValue, summaryText, trailingLabel, hasProgress);
+  int get hashCode => Object.hash(
+    progressValue,
+    summaryText,
+    trailingLabel,
+    unreadLabel,
+    hasProgress,
+    hasUnreadChapters,
+  );
 }
 
 class _BookshelfAnimatedProgressSection extends StatefulWidget {
@@ -548,6 +564,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   bool _gridShowAuthor = BookshelfService.defaultGridShowAuthor;
   bool _gridShowLatestChapter = BookshelfService.defaultGridShowLatestChapter;
   bool _gridShowProgressBar = BookshelfService.defaultGridShowProgressBar;
+  _BookshelfProgressInfoMode _gridProgressInfoMode =
+      _BookshelfProgressInfoMode.progressBar;
   bool _gridShowSourceBadge = BookshelfService.defaultGridShowSourceBadge;
   bool _gridShowTaxonomyBadges = BookshelfService.defaultGridShowTaxonomyBadges;
   bool _gridAlwaysShowSearchBar =
@@ -559,6 +577,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   bool _listShowAuthor = BookshelfService.defaultListShowAuthor;
   bool _listShowLatestChapter = BookshelfService.defaultListShowLatestChapter;
   bool _listShowProgressBar = BookshelfService.defaultListShowProgressBar;
+  _BookshelfProgressInfoMode _listProgressInfoMode =
+      _BookshelfProgressInfoMode.progressBar;
   bool _listShowSourceBadge = BookshelfService.defaultListShowSourceBadge;
   bool _listShowTaxonomyBadges = BookshelfService.defaultListShowTaxonomyBadges;
   bool _listShowCover = BookshelfService.defaultListShowCover;
@@ -586,6 +606,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   bool _reloadAfterActiveLoad = false;
   bool? _lastKnownAutoRefreshOnTabActiveEnabled;
   Object? _lastDesktopToolbarActionsFingerprint;
+  late final StateController<DesktopBookshelfToolbarActions?>
+  _desktopToolbarActionsNotifier;
   final Stopwatch _bookshelfOpenStopwatch = Stopwatch()..start();
   bool _hasLoggedBookshelfFirstVisible = false;
   bool _hasShownContinueReadingPrompt = false;
@@ -662,6 +684,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   @override
   void initState() {
     super.initState();
+    _desktopToolbarActionsNotifier = ref.read(
+      desktopBookshelfToolbarActionsProvider.notifier,
+    );
     final dependencies = ref.read(bookshelfPageDependenciesProvider);
     _bookshelfService = dependencies.bookshelfService;
     _bookshelfSystemSettingsService = dependencies.systemSettingsService;
@@ -753,7 +778,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     _bookshelfScrollController.dispose();
     _bookshelfSearchFocusNode.dispose();
     _bookshelfSearchController.dispose();
-    ref.read(desktopBookshelfToolbarActionsProvider.notifier).state = null;
+    _desktopToolbarActionsNotifier.state = null;
     super.dispose();
   }
 
@@ -1051,19 +1076,34 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     required List<BookshelfBook> filteredBooks,
     required bool enabled,
   }) {
-    final fingerprint = Object.hash(
+    final fingerprint = Object.hashAll([
       enabled,
       _books.length,
       filteredBooks.length,
       _useGridView,
       _sortMode,
-    );
+      _gridShowTitle,
+      _gridShowAuthor,
+      _gridShowLatestChapter,
+      _gridShowProgressBar,
+      _gridProgressInfoMode,
+      _gridShowSourceBadge,
+      _gridCoverShadow,
+      _listShowCover,
+      _listCompactMode,
+      _listShowTitle,
+      _listShowAuthor,
+      _listShowLatestChapter,
+      _listShowProgressBar,
+      _listProgressInfoMode,
+      _listShowSourceBadge,
+      _listShowRecentReadTime,
+    ]);
     if (_lastDesktopToolbarActionsFingerprint == fingerprint) {
       return;
     }
     _lastDesktopToolbarActionsFingerprint = fingerprint;
 
-    final notifier = ref.read(desktopBookshelfToolbarActionsProvider.notifier);
     final actions =
         enabled
             ? DesktopBookshelfToolbarActions(
@@ -1079,13 +1119,159 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                     selected: mode == _sortMode,
                   ),
               ],
+              gridSettingOptions: [
+                DesktopBookshelfDisplaySettingOption(
+                  label: '显示书名',
+                  selected: _gridShowTitle,
+                  onChanged:
+                      (value) => unawaited(_setDesktopGridShowTitle(value)),
+                ),
+                DesktopBookshelfDisplaySettingOption(
+                  label: '显示作者',
+                  selected: _gridShowAuthor,
+                  onChanged:
+                      (value) => unawaited(_setDesktopGridShowAuthor(value)),
+                ),
+                DesktopBookshelfDisplaySettingOption(
+                  label: '显示最新章节',
+                  selected: _gridShowLatestChapter,
+                  onChanged:
+                      (value) =>
+                          unawaited(_setDesktopGridShowLatestChapter(value)),
+                ),
+                DesktopBookshelfDisplaySettingOption(
+                  label: '显示阅读进度',
+                  selected: _gridShowProgressBar,
+                  onChanged:
+                      (value) =>
+                          unawaited(_setDesktopGridShowProgressBar(value)),
+                ),
+                DesktopBookshelfDisplaySettingOption(
+                  label: '阅读信息: 进度条',
+                  selected:
+                      _gridProgressInfoMode ==
+                      _BookshelfProgressInfoMode.progressBar,
+                  modeGroup: 'grid_progress_info_mode',
+                  onChanged:
+                      (_) => unawaited(
+                        _setDesktopGridProgressInfoMode(
+                          _BookshelfProgressInfoMode.progressBar,
+                        ),
+                      ),
+                ),
+                DesktopBookshelfDisplaySettingOption(
+                  label: '阅读信息: 未读章节数',
+                  selected:
+                      _gridProgressInfoMode ==
+                      _BookshelfProgressInfoMode.unreadChapters,
+                  modeGroup: 'grid_progress_info_mode',
+                  onChanged:
+                      (_) => unawaited(
+                        _setDesktopGridProgressInfoMode(
+                          _BookshelfProgressInfoMode.unreadChapters,
+                        ),
+                      ),
+                ),
+                DesktopBookshelfDisplaySettingOption(
+                  label: '显示来源标记',
+                  selected: _gridShowSourceBadge,
+                  onChanged:
+                      (value) =>
+                          unawaited(_setDesktopGridShowSourceBadge(value)),
+                ),
+                DesktopBookshelfDisplaySettingOption(
+                  label: '封面阴影',
+                  selected: _gridCoverShadow,
+                  onChanged:
+                      (value) => unawaited(_setDesktopGridCoverShadow(value)),
+                ),
+              ],
+              listSettingOptions: [
+                DesktopBookshelfDisplaySettingOption(
+                  label: '显示封面',
+                  selected: _listShowCover,
+                  onChanged:
+                      (value) => unawaited(_setDesktopListShowCover(value)),
+                ),
+                DesktopBookshelfDisplaySettingOption(
+                  label: '紧凑列表',
+                  selected: _listCompactMode,
+                  onChanged:
+                      (value) => unawaited(_setDesktopListCompactMode(value)),
+                ),
+                DesktopBookshelfDisplaySettingOption(
+                  label: '显示书名',
+                  selected: _listShowTitle,
+                  onChanged:
+                      (value) => unawaited(_setDesktopListShowTitle(value)),
+                ),
+                DesktopBookshelfDisplaySettingOption(
+                  label: '显示作者',
+                  selected: _listShowAuthor,
+                  onChanged:
+                      (value) => unawaited(_setDesktopListShowAuthor(value)),
+                ),
+                DesktopBookshelfDisplaySettingOption(
+                  label: '显示最新章节',
+                  selected: _listShowLatestChapter,
+                  onChanged:
+                      (value) =>
+                          unawaited(_setDesktopListShowLatestChapter(value)),
+                ),
+                DesktopBookshelfDisplaySettingOption(
+                  label: '显示阅读进度',
+                  selected: _listShowProgressBar,
+                  onChanged:
+                      (value) =>
+                          unawaited(_setDesktopListShowProgressBar(value)),
+                ),
+                DesktopBookshelfDisplaySettingOption(
+                  label: '阅读信息: 进度条',
+                  selected:
+                      _listProgressInfoMode ==
+                      _BookshelfProgressInfoMode.progressBar,
+                  modeGroup: 'list_progress_info_mode',
+                  onChanged:
+                      (_) => unawaited(
+                        _setDesktopListProgressInfoMode(
+                          _BookshelfProgressInfoMode.progressBar,
+                        ),
+                      ),
+                ),
+                DesktopBookshelfDisplaySettingOption(
+                  label: '阅读信息: 未读章节数',
+                  selected:
+                      _listProgressInfoMode ==
+                      _BookshelfProgressInfoMode.unreadChapters,
+                  modeGroup: 'list_progress_info_mode',
+                  onChanged:
+                      (_) => unawaited(
+                        _setDesktopListProgressInfoMode(
+                          _BookshelfProgressInfoMode.unreadChapters,
+                        ),
+                      ),
+                ),
+                DesktopBookshelfDisplaySettingOption(
+                  label: '显示来源标记',
+                  selected: _listShowSourceBadge,
+                  onChanged:
+                      (value) =>
+                          unawaited(_setDesktopListShowSourceBadge(value)),
+                ),
+                DesktopBookshelfDisplaySettingOption(
+                  label: '显示最近阅读',
+                  selected: _listShowRecentReadTime,
+                  onChanged:
+                      (value) =>
+                          unawaited(_setDesktopListShowRecentReadTime(value)),
+                ),
+              ],
               onSortModeSelected:
                   (mode) => unawaited(_applyDesktopBookshelfSortMode(mode)),
               onViewModeSelected:
                   (useGridView) =>
                       unawaited(_setBookshelfViewMode(useGridView)),
               onSelectBooks: _startSelectionMode,
-              onOpenSettings: () => unawaited(_showBookshelfSettingsSheet()),
               onImportLocal: () => unawaited(_showImportLocalBooksSheet()),
             )
             : null;
@@ -1093,7 +1279,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       if (!mounted) {
         return;
       }
-      notifier.state = actions;
+      _desktopToolbarActionsNotifier.state = actions;
     });
   }
 
@@ -1123,6 +1309,275 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       return;
     }
     setState(mutation);
+  }
+
+  Future<void> _setDesktopGridShowTitle(bool value) {
+    return _setDesktopBookshelfDisplaySetting(
+      currentValue: _gridShowTitle,
+      value: value,
+      applyValue: () => _gridShowTitle = value,
+      saveValue: _bookshelfService.saveGridShowTitle,
+    );
+  }
+
+  Future<void> _setDesktopGridShowAuthor(bool value) {
+    return _setDesktopBookshelfDisplaySetting(
+      currentValue: _gridShowAuthor,
+      value: value,
+      applyValue: () => _gridShowAuthor = value,
+      saveValue: _bookshelfService.saveGridShowAuthor,
+    );
+  }
+
+  Future<void> _setDesktopGridShowLatestChapter(bool value) {
+    return _setDesktopBookshelfDisplaySetting(
+      currentValue: _gridShowLatestChapter,
+      value: value,
+      applyValue: () => _gridShowLatestChapter = value,
+      saveValue: _bookshelfService.saveGridShowLatestChapter,
+    );
+  }
+
+  Future<void> _setDesktopGridShowProgressBar(bool value) {
+    return _setDesktopBookshelfDisplaySetting(
+      currentValue: _gridShowProgressBar,
+      value: value,
+      applyValue: () => _gridShowProgressBar = value,
+      saveValue: _bookshelfService.saveGridShowProgressBar,
+    );
+  }
+
+  Future<void> _setDesktopGridProgressInfoMode(
+    _BookshelfProgressInfoMode value,
+  ) {
+    return _setDesktopBookshelfProgressInfoMode(
+      currentValue: _gridProgressInfoMode,
+      value: value,
+      applyValue: () => _gridProgressInfoMode = value,
+      saveValue: _bookshelfService.saveGridProgressInfoMode,
+    );
+  }
+
+  Future<void> _setDesktopGridShowSourceBadge(bool value) {
+    return _setDesktopBookshelfDisplaySetting(
+      currentValue: _gridShowSourceBadge,
+      value: value,
+      applyValue: () => _gridShowSourceBadge = value,
+      saveValue: _bookshelfService.saveGridShowSourceBadge,
+    );
+  }
+
+  Future<void> _setDesktopGridCoverShadow(bool value) {
+    return _setDesktopBookshelfDisplaySetting(
+      currentValue: _gridCoverShadow,
+      value: value,
+      applyValue: () => _gridCoverShadow = value,
+      saveValue: _bookshelfService.saveGridCoverShadow,
+    );
+  }
+
+  Future<void> _setDesktopListShowCover(bool value) {
+    return _setDesktopBookshelfDisplaySetting(
+      currentValue: _listShowCover,
+      value: value,
+      applyValue: () => _listShowCover = value,
+      saveValue: _bookshelfService.saveListShowCover,
+    );
+  }
+
+  Future<void> _setDesktopListCompactMode(bool value) {
+    return _setDesktopBookshelfDisplaySetting(
+      currentValue: _listCompactMode,
+      value: value,
+      applyValue: () => _listCompactMode = value,
+      saveValue: _bookshelfService.saveListCompactMode,
+    );
+  }
+
+  Future<void> _setDesktopListShowTitle(bool value) {
+    return _setDesktopBookshelfDisplaySetting(
+      currentValue: _listShowTitle,
+      value: value,
+      applyValue: () => _listShowTitle = value,
+      saveValue: _bookshelfService.saveListShowTitle,
+    );
+  }
+
+  Future<void> _setDesktopListShowAuthor(bool value) {
+    return _setDesktopBookshelfDisplaySetting(
+      currentValue: _listShowAuthor,
+      value: value,
+      applyValue: () => _listShowAuthor = value,
+      saveValue: _bookshelfService.saveListShowAuthor,
+    );
+  }
+
+  Future<void> _setDesktopListShowLatestChapter(bool value) {
+    return _setDesktopBookshelfDisplaySetting(
+      currentValue: _listShowLatestChapter,
+      value: value,
+      applyValue: () => _listShowLatestChapter = value,
+      saveValue: _bookshelfService.saveListShowLatestChapter,
+    );
+  }
+
+  Future<void> _setDesktopListShowProgressBar(bool value) {
+    return _setDesktopBookshelfDisplaySetting(
+      currentValue: _listShowProgressBar,
+      value: value,
+      applyValue: () => _listShowProgressBar = value,
+      saveValue: _bookshelfService.saveListShowProgressBar,
+    );
+  }
+
+  Future<void> _setDesktopListProgressInfoMode(
+    _BookshelfProgressInfoMode value,
+  ) {
+    return _setDesktopBookshelfProgressInfoMode(
+      currentValue: _listProgressInfoMode,
+      value: value,
+      applyValue: () => _listProgressInfoMode = value,
+      saveValue: _bookshelfService.saveListProgressInfoMode,
+    );
+  }
+
+  Future<void> _setDesktopListShowSourceBadge(bool value) {
+    return _setDesktopBookshelfDisplaySetting(
+      currentValue: _listShowSourceBadge,
+      value: value,
+      applyValue: () => _listShowSourceBadge = value,
+      saveValue: _bookshelfService.saveListShowSourceBadge,
+    );
+  }
+
+  Future<void> _setDesktopListShowRecentReadTime(bool value) {
+    return _setDesktopBookshelfDisplaySetting(
+      currentValue: _listShowRecentReadTime,
+      value: value,
+      applyValue: () => _listShowRecentReadTime = value,
+      saveValue: _bookshelfService.saveListShowRecentReadTime,
+    );
+  }
+
+  Future<void> _setDesktopBookshelfDisplaySetting({
+    required bool currentValue,
+    required bool value,
+    required VoidCallback applyValue,
+    required Future<void> Function(bool value) saveValue,
+  }) async {
+    if (currentValue == value || !mounted) {
+      return;
+    }
+
+    _updateBookshelfLayoutPreservingScroll(() {
+      _updateBookshelfState(() {
+        applyValue();
+        _derivedBookshelfFingerprint = null;
+        _lastDesktopToolbarActionsFingerprint = null;
+      });
+    });
+
+    try {
+      await saveValue(value);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage('书架设置保存失败，请重试。');
+    }
+  }
+
+  Future<void> _setDesktopBookshelfProgressInfoMode({
+    required _BookshelfProgressInfoMode currentValue,
+    required _BookshelfProgressInfoMode value,
+    required VoidCallback applyValue,
+    required Future<void> Function(String value) saveValue,
+  }) async {
+    if (currentValue == value || !mounted) {
+      return;
+    }
+
+    _updateBookshelfLayoutPreservingScroll(() {
+      _updateBookshelfState(() {
+        applyValue();
+        _lastDesktopToolbarActionsFingerprint = null;
+      });
+    });
+
+    try {
+      await saveValue(_progressInfoModeStorageValue(value));
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage('书架设置保存失败，请重试。');
+    }
+  }
+
+  void _handleBookMoreAction(
+    BookshelfBook book,
+    _BookshelfBookMoreAction action,
+  ) {
+    if (_isBatchDeleting || _isBatchUpdatingCovers) {
+      return;
+    }
+
+    switch (action) {
+      case _BookshelfBookMoreAction.detail:
+        _openBookDetail(book);
+      case _BookshelfBookMoreAction.select:
+        final key = _bookKey(book);
+        if (key.isEmpty) {
+          return;
+        }
+        _updateBookshelfState(
+          () => _setSelectionEnabled(true, selectedKeys: <String>{key}),
+        );
+    }
+  }
+
+  Widget _buildBookMoreButton(BookshelfBook book, {required bool compact}) {
+    final palette = _resolvedPalette(context);
+    final iconSize = compact ? 18.0 : 20.0;
+    final tapSize = compact ? 28.0 : 32.0;
+    return PopupMenuButton<_BookshelfBookMoreAction>(
+      tooltip: '更多',
+      padding: EdgeInsets.zero,
+      iconSize: iconSize,
+      constraints: const BoxConstraints(minWidth: 128),
+      onSelected: (action) => _handleBookMoreAction(book, action),
+      itemBuilder:
+          (context) => const [
+            PopupMenuItem<_BookshelfBookMoreAction>(
+              value: _BookshelfBookMoreAction.detail,
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline_rounded, size: 18),
+                  SizedBox(width: 10),
+                  Text('查看详情'),
+                ],
+              ),
+            ),
+            PopupMenuItem<_BookshelfBookMoreAction>(
+              value: _BookshelfBookMoreAction.select,
+              child: Row(
+                children: [
+                  Icon(Icons.checklist_rounded, size: 18),
+                  SizedBox(width: 10),
+                  Text('选择书籍'),
+                ],
+              ),
+            ),
+          ],
+      child: SizedBox.square(
+        dimension: tapSize,
+        child: Icon(
+          Icons.more_vert_rounded,
+          size: iconSize,
+          color: palette.textSecondaryColor,
+        ),
+      ),
+    );
   }
 
   Future<void> _openOnlineSearchWithReveal(BuildContext sourceContext) async {
@@ -1599,13 +2054,16 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         _gridShowLatestChapter ||
         _gridShowProgressBar;
     if (!hasMetaInfo) {
-      return 16;
+      return 36;
     }
     if (_gridShowTitle && _gridTitleMaxLines > 1) {
-      return 104;
+      return 128;
     }
     if (_gridShowLatestChapter) {
-      return 82;
+      return 92;
+    }
+    if (_gridShowProgressBar) {
+      return 78;
     }
     return 62;
   }
@@ -2061,26 +2519,55 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                               ? 4
                               : 0,
                     ),
-                    _BookshelfAnimatedProgressSection(
-                      key: ValueKey<String>('grid_progress_$bookKey'),
-                      progressDisplay: progressDisplay,
-                      summaryStyle: null,
-                      trailingStyle: Theme.of(
-                        context,
-                      ).textTheme.labelSmall?.copyWith(
-                        color:
-                            progressDisplay.hasProgress
-                                ? palette.primaryColor
-                                : palette.textSecondaryColor,
-                        fontWeight: FontWeight.w700,
-                      ),
-                      fillColor: palette.primaryColor,
-                      backgroundColor: palette.elevatedSurfaceColor,
-                      showSummaryText: false,
-                      showTrailingText: false,
-                      showBar: true,
-                      minHeight: 3,
-                      spacing: 4,
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child:
+                              _gridProgressInfoMode ==
+                                      _BookshelfProgressInfoMode.unreadChapters
+                                  ? _buildUnreadChapterLabel(
+                                    progressDisplay,
+                                    compact: true,
+                                  )
+                                  : _BookshelfAnimatedProgressSection(
+                                    key: ValueKey<String>(
+                                      'grid_progress_$bookKey',
+                                    ),
+                                    progressDisplay: progressDisplay,
+                                    summaryStyle: null,
+                                    trailingStyle: Theme.of(
+                                      context,
+                                    ).textTheme.labelSmall?.copyWith(
+                                      color:
+                                          progressDisplay.hasProgress
+                                              ? palette.primaryColor
+                                              : palette.textSecondaryColor,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                    fillColor: palette.primaryColor,
+                                    backgroundColor:
+                                        palette.elevatedSurfaceColor,
+                                    showSummaryText: false,
+                                    showTrailingText: false,
+                                    showBar: true,
+                                    minHeight: 3,
+                                    spacing: 4,
+                                  ),
+                        ),
+                        if (!_isSelectionMode) ...[
+                          const SizedBox(width: 4),
+                          _buildBookMoreButton(book, compact: true),
+                        ],
+                      ],
+                    ),
+                  ] else if (!coverOnly &&
+                      !overlayTitle &&
+                      !_isSelectionMode) ...[
+                    const SizedBox(height: 4),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: _buildBookMoreButton(book, compact: true),
                     ),
                   ],
                   const Spacer(),
@@ -2090,6 +2577,83 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildUnreadChapterLabel(
+    _BookshelfProgressDisplay progressDisplay, {
+    required bool compact,
+  }) {
+    final palette = _resolvedPalette(context);
+    final style = Theme.of(context).textTheme.labelSmall?.copyWith(
+      color:
+          progressDisplay.hasUnreadChapters
+              ? palette.primaryColor
+              : palette.textSecondaryColor,
+      fontWeight: FontWeight.w700,
+    );
+    return Container(
+      constraints: const BoxConstraints(minHeight: 20),
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 7 : 9,
+        vertical: compact ? 2 : 3,
+      ),
+      decoration: BoxDecoration(
+        color:
+            progressDisplay.hasUnreadChapters
+                ? palette.primaryColor.withValues(alpha: 0.08)
+                : palette.elevatedSurfaceColor,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color:
+              progressDisplay.hasUnreadChapters
+                  ? palette.primaryColor.withValues(alpha: 0.18)
+                  : palette.cardBorderColor.withValues(alpha: 0.7),
+        ),
+      ),
+      child: Text(
+        progressDisplay.unreadLabel,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: style,
+      ),
+    );
+  }
+
+  Widget _buildListProgressInfo(
+    _BookshelfProgressDisplay progressDisplay,
+    String bookKey,
+  ) {
+    final palette = _resolvedPalette(context);
+    if (_listProgressInfoMode == _BookshelfProgressInfoMode.unreadChapters) {
+      return _buildUnreadChapterLabel(
+        progressDisplay,
+        compact: _listCompactMode,
+      );
+    }
+
+    return _BookshelfAnimatedProgressSection(
+      key: ValueKey<String>('list_progress_$bookKey'),
+      progressDisplay: progressDisplay,
+      summaryStyle: Theme.of(context).textTheme.labelSmall?.copyWith(
+        color: palette.textSecondaryColor.withValues(alpha: 0.88),
+        fontWeight: FontWeight.w600,
+      ),
+      trailingStyle: Theme.of(context).textTheme.labelSmall?.copyWith(
+        color:
+            progressDisplay.hasProgress
+                ? palette.primaryColor
+                : palette.textSecondaryColor,
+        fontWeight: FontWeight.w700,
+      ),
+      fillColor: palette.primaryColor,
+      backgroundColor: palette.elevatedSurfaceColor,
+      summaryText: '阅读进度',
+      showSummaryText: true,
+      showTrailingText: true,
+      showBar: true,
+      minHeight: 4,
+      spacing: _listCompactMode ? 4 : 5,
     );
   }
 
@@ -2317,28 +2881,16 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                                 const Spacer(),
                               if (!_isSelectionMode) ...[
                                 const SizedBox(width: 8),
-                                SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child:
-                                      isOpening
-                                          ? const CircularProgressIndicator(
-                                            strokeWidth: 1.9,
-                                          )
-                                          : Container(
-                                            decoration: BoxDecoration(
-                                              color:
-                                                  palette.elevatedSurfaceColor,
-                                              shape: BoxShape.circle,
-                                            ),
-                                            alignment: Alignment.center,
-                                            child: Icon(
-                                              Icons.chevron_right_rounded,
-                                              size: 18,
-                                              color: palette.textSecondaryColor,
-                                            ),
-                                          ),
-                                ),
+                                if (isOpening)
+                                  const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 1.9,
+                                    ),
+                                  )
+                                else
+                                  _buildBookMoreButton(book, compact: false),
                               ],
                             ],
                           ),
@@ -2404,35 +2956,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                           ],
                           if (_listShowProgressBar) ...[
                             SizedBox(height: _listCompactMode ? 5 : 7),
-                            _BookshelfAnimatedProgressSection(
-                              key: ValueKey<String>('list_progress_$bookKey'),
-                              progressDisplay: progressDisplay,
-                              summaryStyle: Theme.of(
-                                context,
-                              ).textTheme.labelSmall?.copyWith(
-                                color: palette.textSecondaryColor.withValues(
-                                  alpha: 0.88,
-                                ),
-                                fontWeight: FontWeight.w600,
-                              ),
-                              trailingStyle: Theme.of(
-                                context,
-                              ).textTheme.labelSmall?.copyWith(
-                                color:
-                                    progressDisplay.hasProgress
-                                        ? palette.primaryColor
-                                        : palette.textSecondaryColor,
-                                fontWeight: FontWeight.w700,
-                              ),
-                              fillColor: palette.primaryColor,
-                              backgroundColor: palette.elevatedSurfaceColor,
-                              summaryText: '阅读进度',
-                              showSummaryText: true,
-                              showTrailingText: true,
-                              showBar: true,
-                              minHeight: 4,
-                              spacing: _listCompactMode ? 4 : 5,
-                            ),
+                            _buildListProgressInfo(progressDisplay, bookKey),
                           ],
                         ],
                       ),
@@ -4047,6 +4571,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final showLatestChapter =
         await _bookshelfService.loadListShowLatestChapter();
     final showProgressBar = await _bookshelfService.loadListShowProgressBar();
+    final progressInfoMode = _progressInfoModeFromStorageValue(
+      await _bookshelfService.loadListProgressInfoMode(),
+    );
     final showSourceBadge = await _bookshelfService.loadListShowSourceBadge();
     final showTaxonomyBadges =
         await _bookshelfService.loadListShowTaxonomyBadges();
@@ -4067,6 +4594,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         _listShowAuthor == showAuthor &&
         _listShowLatestChapter == showLatestChapter &&
         _listShowProgressBar == showProgressBar &&
+        _listProgressInfoMode == progressInfoMode &&
         _listShowSourceBadge == showSourceBadge &&
         _listShowTaxonomyBadges == showTaxonomyBadges &&
         _listShowCover == showCover &&
@@ -4082,6 +4610,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       _listShowAuthor = showAuthor;
       _listShowLatestChapter = showLatestChapter;
       _listShowProgressBar = showProgressBar;
+      _listProgressInfoMode = progressInfoMode;
       _listShowSourceBadge = showSourceBadge;
       _listShowTaxonomyBadges = showTaxonomyBadges;
       _listShowCover = showCover;
@@ -4121,6 +4650,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final showLatestChapter =
         await _bookshelfService.loadGridShowLatestChapter();
     final showProgressBar = await _bookshelfService.loadGridShowProgressBar();
+    final progressInfoMode = _progressInfoModeFromStorageValue(
+      await _bookshelfService.loadGridProgressInfoMode(),
+    );
     final showSourceBadge = await _bookshelfService.loadGridShowSourceBadge();
     final showTaxonomyBadges =
         await _bookshelfService.loadGridShowTaxonomyBadges();
@@ -4145,6 +4677,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         _gridShowAuthor == showAuthor &&
         _gridShowLatestChapter == showLatestChapter &&
         _gridShowProgressBar == showProgressBar &&
+        _gridProgressInfoMode == progressInfoMode &&
         _gridShowSourceBadge == showSourceBadge &&
         _gridShowTaxonomyBadges == showTaxonomyBadges &&
         _gridAlwaysShowSearchBar == alwaysShowSearchBar &&
@@ -4165,6 +4698,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       _gridShowAuthor = showAuthor;
       _gridShowLatestChapter = showLatestChapter;
       _gridShowProgressBar = showProgressBar;
+      _gridProgressInfoMode = progressInfoMode;
       _gridShowSourceBadge = showSourceBadge;
       _gridShowTaxonomyBadges = showTaxonomyBadges;
       _gridAlwaysShowSearchBar = alwaysShowSearchBar;
@@ -4203,6 +4737,30 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         BookshelfService.gridOverlayTitleVisualStyle,
       _BookshelfGridVisualStyle.coverOnly =>
         BookshelfService.gridCoverOnlyVisualStyle,
+    };
+  }
+
+  _BookshelfProgressInfoMode _progressInfoModeFromStorageValue(String value) {
+    return switch (value) {
+      BookshelfService.progressInfoModeUnreadChapters =>
+        _BookshelfProgressInfoMode.unreadChapters,
+      _ => _BookshelfProgressInfoMode.progressBar,
+    };
+  }
+
+  String _progressInfoModeStorageValue(_BookshelfProgressInfoMode value) {
+    return switch (value) {
+      _BookshelfProgressInfoMode.progressBar =>
+        BookshelfService.progressInfoModeProgressBar,
+      _BookshelfProgressInfoMode.unreadChapters =>
+        BookshelfService.progressInfoModeUnreadChapters,
+    };
+  }
+
+  String _progressInfoModeLabel(_BookshelfProgressInfoMode value) {
+    return switch (value) {
+      _BookshelfProgressInfoMode.progressBar => '进度条',
+      _BookshelfProgressInfoMode.unreadChapters => '未读章节数',
     };
   }
 
@@ -4488,14 +5046,18 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
           progressValue: 0,
           summaryText: '已读 0 / $normalizedTotal 章 · 剩余 $normalizedTotal 章',
           trailingLabel: '0%',
+          unreadLabel: '未读 $normalizedTotal 章',
           hasProgress: false,
+          hasUnreadChapters: normalizedTotal > 0,
         );
       }
       return const _BookshelfProgressDisplay(
         progressValue: 0,
         summaryText: '阅读进度: 未开始',
         trailingLabel: '0%',
+        unreadLabel: '未开始',
         hasProgress: false,
+        hasUnreadChapters: false,
       );
     }
 
@@ -4529,7 +5091,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                 ? '已读 $normalizedTotal / $normalizedTotal 章 · 已读完'
                 : '读到第 $normalizedChapterNo / $normalizedTotal 章 · 剩余 $remainingChapters 章',
         trailingLabel: '$percentage%',
+        unreadLabel: remainingChapters > 0 ? '未读 $remainingChapters 章' : '已读完',
         hasProgress: clampedOverallProgress > 0,
+        hasUnreadChapters: remainingChapters > 0,
       );
     }
 
@@ -4541,7 +5105,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
               ? '已读完 · 第 $currentChapterNo 章'
               : '读到第 $currentChapterNo 章',
       trailingLabel: '${(fallbackProgress * 100).round()}%',
+      unreadLabel:
+          fallbackProgress >= 0.999 ? '已读完' : '读到第 $currentChapterNo 章',
       hasProgress: fallbackProgress > 0,
+      hasUnreadChapters: false,
     );
   }
 

@@ -18,6 +18,7 @@ import '../features/bookshelf/providers.dart';
 import '../features/mine/application/advanced_theme_provider.dart';
 import 'layout/app_adaptive.dart';
 import 'theme/app_advanced_theme_tokens.dart';
+import 'theme/app_theme_provider.dart';
 import 'theme/app_border_tokens.dart';
 import 'theme/app_component_theme_tokens.dart';
 import 'layout/app_layout.dart';
@@ -473,6 +474,8 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
                 ],
                 _buildDesktopTopBarNotificationButton(context),
                 const SizedBox(width: 10),
+                _buildDesktopTopBarThemeModeButton(context),
+                const SizedBox(width: 10),
                 _buildDesktopTopBarSettingsButton(context),
                 const SizedBox(width: 14),
                 _buildDesktopTopBarDivider(context),
@@ -561,10 +564,28 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
                   onPressed: actions.onImportLocal,
                   child: const Text('导入图书'),
                 ),
-                MenuItemButton(
+                SubmenuButton(
                   leadingIcon: const Icon(Icons.tune_rounded),
-                  onPressed: actions.onOpenSettings,
-                  child: const Text('书架设置'),
+                  menuChildren: [
+                    for (final option
+                        in actions.useGridView
+                            ? actions.gridSettingOptions
+                            : actions.listSettingOptions)
+                      MenuItemButton(
+                        leadingIcon:
+                            option.selected
+                                ? const Icon(Icons.check_rounded)
+                                : const SizedBox(width: 24),
+                        onPressed:
+                            option.modeGroup == null
+                                ? () => option.onChanged(!option.selected)
+                                : option.selected
+                                ? null
+                                : () => option.onChanged(true),
+                        child: Text(option.label),
+                      ),
+                  ],
+                  child: Text(actions.useGridView ? '网格设置' : '列表设置'),
                 ),
               ],
       builder: (menuContext, controller, child) {
@@ -645,6 +666,23 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
         unawaited(context.push('/announcements'));
       },
       showBadge: true,
+    );
+  }
+
+  Widget _buildDesktopTopBarThemeModeButton(BuildContext context) {
+    ref.watch(appThemeModeProvider);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final nextMode = isDark ? ThemeMode.light : ThemeMode.dark;
+    return _buildDesktopTopBarIconButton(
+      context,
+      key: const ValueKey<String>('desktop_top_bar_theme_mode_toggle'),
+      icon: isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+      tooltip: isDark ? '切换为日间' : '切换为夜间',
+      onTap: () {
+        unawaited(
+          ref.read(appThemeModeProvider.notifier).setThemeMode(nextMode),
+        );
+      },
     );
   }
 
