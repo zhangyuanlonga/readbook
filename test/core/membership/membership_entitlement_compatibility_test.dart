@@ -2,9 +2,18 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:shuxiang_reading_next/core/membership/membership_entitlement.dart';
 import 'package:shuxiang_reading_next/core/membership/membership_features.dart';
+import 'package:shuxiang_reading_next/core/membership/membership_service.dart';
+import 'package:shuxiang_reading_next/core/network/api_client.dart';
 import 'package:shuxiang_reading_next/core/user/user_profile.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
+
   test('MembershipEntitlement keeps legacy fields as source of truth', () {
     final entitlement = MembershipEntitlement.fromJson(<String, dynamic>{
       'vip_level': 'svip',
@@ -71,11 +80,79 @@ void main() {
       ),
       isTrue,
     );
+    expect(MembershipFeatures.hasOnlineServiceAccess(entitlement), isTrue);
+  });
+
+  test('free membership level is not treated as active', () {
+    final entitlement = MembershipEntitlement.fromJson(<String, dynamic>{
+      'vip_level': 'free',
+      'membership_level': 'free',
+      'vip_status': 'active',
+      'features': const <String>['theme_custom'],
+    });
+
+    expect(entitlement.isActive, isFalse);
     expect(
-      MembershipFeatures.hasOnlineServiceAccess(entitlement),
-      isTrue,
+      MembershipFeatures.hasFeature(
+        entitlement,
+        MembershipFeatures.themeCustom,
+      ),
+      isFalse,
     );
   });
+
+  test('membership level can backfill vip level for active payloads', () {
+    final entitlement = MembershipEntitlement.fromJson(<String, dynamic>{
+      'membership_level': 'pro',
+      'vip_status': 'active',
+      'features': const <String>[],
+    });
+
+    expect(entitlement.vipLevel, 'pro');
+    expect(entitlement.isActive, isTrue);
+  });
+
+  test(
+    'MembershipService keeps free entitlement inactive without status',
+    () async {
+      final service = MembershipService(
+        baseUrl: 'https://example.com',
+        client: _MembershipPayloadApiClient(const <String, dynamic>{
+          'entitlement': <String, dynamic>{
+            'vip_level': 'free',
+            'membership_level': 'free',
+            'features': <String>['theme_custom'],
+          },
+        }),
+      );
+
+      final entitlement = await service.fetchEntitlement();
+
+      expect(entitlement.vipStatus, 'expired');
+      expect(entitlement.isActive, isFalse);
+    },
+  );
+
+  test(
+    'MembershipService treats member levels without status as active',
+    () async {
+      final service = MembershipService(
+        baseUrl: 'https://example.com',
+        client: _MembershipPayloadApiClient(const <String, dynamic>{
+          'membership': <String, dynamic>{
+            'membership_level': 'pro',
+            'features': <String>[],
+          },
+        }),
+      );
+
+      final entitlement = await service.fetchEntitlement();
+
+      expect(entitlement.vipLevel, 'pro');
+      expect(entitlement.vipStatus, 'active');
+      expect(entitlement.isActive, isTrue);
+    },
+  );
 
   test('profile membership matches account page vip fields', () {
     const profile = UserProfile(
@@ -102,9 +179,62 @@ void main() {
       ),
       isTrue,
     );
+    expect(MembershipFeatures.hasProfileOnlineServiceAccess(profile), isTrue);
+  });
+
+  test('profile free level does not unlock membership features', () {
+    const profile = UserProfile(
+      userId: 'user_profile_free',
+      username: 'reader',
+      account: 'reader',
+      displayName: 'Reader',
+      phone: null,
+      email: null,
+      role: 'user',
+      createdAt: null,
+      vipLevel: 'free',
+      planType: 'month',
+      vipStatus: 'active',
+      vipExpireAt: null,
+      features: <String>['theme_custom'],
+    );
+
+    expect(MembershipFeatures.hasActiveProfileMembership(profile), isFalse);
     expect(
-      MembershipFeatures.hasProfileOnlineServiceAccess(profile),
-      isTrue,
+      MembershipFeatures.hasProfileFeature(
+        profile,
+        MembershipFeatures.themeCustom,
+      ),
+      isFalse,
     );
   });
+}
+
+class _MembershipPayloadApiClient extends ApiClient {
+  _MembershipPayloadApiClient(this.payload);
+
+  final Map<String, dynamic> payload;
+
+  @override
+  Future<T> request<T>({
+    required ApiMethod method,
+    required String path,
+    Map<String, dynamic> queryParameters = const {},
+    Object? body,
+    Map<String, String> headers = const {},
+    Duration? timeout,
+    int? maxRetries,
+    bool enableRetry = true,
+    bool enableCache = false,
+    Duration? cacheTtl,
+    bool attachAccessToken = false,
+    bool enableAuthRefresh = true,
+    dynamic stage,
+    T Function(Object? data)? decoder,
+  }) async {
+    if (decoder != null) {
+      return decoder(payload);
+    }
+    return payload as T;
+  }
 }

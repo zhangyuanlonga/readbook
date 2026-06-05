@@ -23,7 +23,7 @@ class MembershipFeatures {
   static bool hasActiveProfileMembership(UserProfile? profile) {
     final level = profile?.vipLevel?.trim().toLowerCase() ?? '';
     final status = profile?.vipStatus?.trim().toLowerCase() ?? '';
-    return level.isNotEmpty && level != 'none' && status == 'active';
+    return status == 'active' && !_isInactiveLevel(level);
   }
 
   static bool hasFeature(MembershipEntitlement? entitlement, String feature) {
@@ -66,5 +66,20 @@ class MembershipFeatures {
 
   static bool hasProfileOnlineServiceAccess(UserProfile? profile) {
     return hasProfileFeature(profile, onlineService);
+  }
+
+  static bool _isInactiveLevel(String level) {
+    switch (level) {
+      case '':
+      case 'none':
+      case 'free':
+      case 'basic':
+      case 'normal':
+      case 'guest':
+      case 'expired':
+        return true;
+      default:
+        return false;
+    }
   }
 }

@@ -33,7 +33,7 @@ class MembershipService {
       stage: ErrorStage.unknown,
       decoder: _decodeMap,
     );
-    return MembershipEntitlement.fromJson(data);
+    return MembershipEntitlement.fromJson(_extractEntitlementPayload(data));
   }
 
   Future<MembershipEntitlement> redeemActivationCode(String code) async {
@@ -249,12 +249,18 @@ class MembershipService {
         _readNestedMap(data['benefit']) ??
         _readNestedMap(data['result']);
     final source = nested ?? data;
+    final vipLevel =
+        source['vip_level'] ?? data['vip_level'] ?? source['membership_level'];
+    final membershipLevel =
+        source['membership_level'] ?? data['membership_level'] ?? vipLevel;
 
     return <String, dynamic>{
-      'vip_level': source['vip_level'] ?? data['vip_level'],
-      'membership_level':
-          source['membership_level'] ?? data['membership_level'],
-      'vip_status': source['vip_status'] ?? data['vip_status'] ?? 'active',
+      'vip_level': vipLevel,
+      'membership_level': membershipLevel,
+      'vip_status':
+          source['vip_status'] ??
+          data['vip_status'] ??
+          _fallbackVipStatusForLevel(vipLevel, membershipLevel),
       'plan_type': source['plan_type'] ?? data['plan_type'],
       'expire_at': source['expire_at'] ?? data['expire_at'],
       'source': source['source'] ?? data['source'],
@@ -267,6 +273,39 @@ class MembershipService {
       'max_devices': source['max_devices'] ?? data['max_devices'],
       'features': source['features'] ?? data['features'],
     };
+  }
+
+  String _fallbackVipStatusForLevel(Object? vipLevel, Object? membershipLevel) {
+    final normalizedLevel =
+        _firstNonEmptyString(<Object?>[
+          vipLevel,
+          membershipLevel,
+        ])?.toLowerCase() ??
+        '';
+    if (normalizedLevel.isEmpty) {
+      return 'expired';
+    }
+    switch (normalizedLevel) {
+      case 'none':
+      case 'free':
+      case 'basic':
+      case 'normal':
+      case 'guest':
+      case 'expired':
+        return 'expired';
+      default:
+        return 'active';
+    }
+  }
+
+  String? _firstNonEmptyString(List<Object?> values) {
+    for (final value in values) {
+      final normalized = value?.toString().trim() ?? '';
+      if (normalized.isNotEmpty) {
+        return normalized;
+      }
+    }
+    return null;
   }
 
   Map<String, dynamic> _extractSeatSyncPayload(Map<String, dynamic> data) {

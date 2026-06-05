@@ -110,6 +110,7 @@ import '../application/reader_settings_resolution_service.dart';
 import '../application/reader_surface_policy_resolver.dart';
 import '../application/reader_surface_metrics.dart';
 import '../application/reader_logical_position.dart';
+import '../application/local/local_chapter_content_service.dart';
 import '../application/reader_session_controller.dart';
 import '../application/reader_preferences_service.dart';
 import '../application/reader_preload_controller.dart';
@@ -335,6 +336,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   late final RemoteContentTaskConflictService _taskConflictService;
   late final RemoteContentTaskSchedulerService _taskScheduler;
   late final String _readerSessionScopeKey;
+  late final ProviderContainer _readerSessionProviderContainer;
   final ReaderSourceSwitchCoordinator _sourceSwitchCoordinator =
       const ReaderSourceSwitchCoordinator();
   final ReaderSourceSwitchTargetResolver _sourceSwitchTargetResolver =
@@ -1733,6 +1735,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _readerSessionScopeKey =
         '${widget.bookId}|${widget.chapterId}|${widget.sourceId ?? ''}|'
         '${widget.openRouteKind ?? ''}|${widget.openRequestedAtMs ?? 0}';
+    _readerSessionProviderContainer = ProviderScope.containerOf(
+      context,
+      listen: false,
+    );
     _readerSessionController = ref.read(
       readerSessionControllerProvider(_readerSessionScopeKey).notifier,
     );

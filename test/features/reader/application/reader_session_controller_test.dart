@@ -121,5 +121,23 @@ void main() {
       expect(container.read(first).chapterContentGeneration, 1);
       expect(container.read(second).chapterContentGeneration, 0);
     });
+
+    test('cancels dispose tasks without publishing provider state', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      final provider = readerSessionControllerProvider('reader-dispose');
+      final notifier = container.read(provider.notifier);
+
+      final chapter = notifier.nextChapterContentToken();
+      final preload = notifier.nextPreloadTaskToken();
+      final beforeDispose = container.read(provider);
+
+      notifier.cancelAllForDispose();
+
+      expect(notifier.isActiveChapterContentToken(chapter), isFalse);
+      expect(notifier.isActivePreloadTaskToken(preload), isFalse);
+      expect(container.read(provider), beforeDispose);
+    });
   });
 }

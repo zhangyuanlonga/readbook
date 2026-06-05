@@ -55,7 +55,9 @@ class MinePageSessionPriming {
   }
 
   static AuthSession? take() {
-    return _primedSession;
+    final session = _primedSession;
+    _primedSession = null;
+    return session;
   }
 }
 
@@ -138,10 +140,9 @@ class MinePageSessionService {
             modules: modules,
             entitlement: entitlement,
           );
-      final mergedSnapshot = _mergeProfileMembershipAccess(
-        remoteSnapshot,
-        profile,
-      ) ?? remoteSnapshot;
+      final mergedSnapshot =
+          _mergeProfileMembershipAccess(remoteSnapshot, profile) ??
+          remoteSnapshot;
       if (normalizedUserId.isNotEmpty) {
         await _remoteAccessSnapshotService.save(
           normalizedUserId,

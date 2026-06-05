@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shuxiang_reading_next/core/auth/auth_session.dart';
@@ -13,6 +14,7 @@ import 'package:shuxiang_reading_next/core/mobile_features/mobile_feature_servic
 import 'package:shuxiang_reading_next/core/storage/managed_asset_store.dart';
 import 'package:shuxiang_reading_next/core/user/user_profile.dart';
 import 'package:shuxiang_reading_next/core/user/user_profile_service.dart';
+import 'package:shuxiang_reading_next/data/datasources/local/app_database.dart';
 import 'package:shuxiang_reading_next/features/mine/application/mine_page_session_service.dart';
 import 'package:shuxiang_reading_next/features/mine/application/remote_access_snapshot_service.dart';
 
@@ -169,6 +171,74 @@ void main() {
       expect(snapshot.hasThemeCustom, isTrue);
       expect(snapshot.membershipPlanType, 'lifetime');
       expect(snapshot.vipExpireAt, isNull);
+    },
+  );
+
+  test(
+    'remote refresh replaces stale member cache when current account is inactive',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      final database = AppDatabase(executor: NativeDatabase.memory());
+      addTearDown(database.close);
+      final remoteSnapshotService = RemoteAccessSnapshotService(
+        preferences: prefs,
+        database: database,
+      );
+      await remoteSnapshotService.save(
+        'user_inactive',
+        RemoteAccessSnapshot(
+          serverSourceGatewayEnabled: true,
+          hasMembership: true,
+          hasThemeCustom: true,
+          serverSourceGatewayLimit: 88,
+          cachedAt: DateTime.utc(2026, 6, 1),
+          vipExpireAt: DateTime.utc(2026, 12, 31),
+          membershipPlanType: 'premium',
+        ),
+      );
+      final store = AuthSessionStore(
+        preferences: prefs,
+        secretStore: FakeAuthSessionSecretStore(),
+      );
+      await store.saveSession(
+        const AuthSession(
+          accessToken: 'token',
+          userId: 'user_inactive',
+          username: 'tester',
+        ),
+      );
+
+      final service = MinePageSessionService(
+        authSessionStore: store,
+        mobileFeatureService: _FakeMobileFeatureService(),
+        membershipService: _InactiveMembershipService(),
+        userProfileService: _FakeUserProfileService(
+          userId: 'user_inactive',
+          username: 'tester',
+          account: 'tester',
+          displayName: 'Tester',
+          vipLevel: 'none',
+          planType: 'month',
+          vipStatus: 'expired',
+        ),
+        remoteAccessSnapshotService: remoteSnapshotService,
+        database: database,
+      );
+
+      final snapshot = await service.loadSession(refreshRemote: true);
+
+      expect(snapshot.session?.userId, 'user_inactive');
+      expect(snapshot.hasMembership, isFalse);
+      expect(snapshot.hasThemeCustom, isFalse);
+      expect(snapshot.vipExpireAt, isNull);
+      expect(snapshot.membershipPlanType, isNull);
+
+      final cached = await remoteSnapshotService.load('user_inactive');
+      expect(cached, isNotNull);
+      expect(cached!.hasMembership, isFalse);
+      expect(cached.hasThemeCustom, isFalse);
+      expect(cached.vipExpireAt, isNull);
+      expect(cached.membershipPlanType, isNull);
     },
   );
 

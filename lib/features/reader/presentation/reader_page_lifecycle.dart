@@ -147,8 +147,8 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
   void _disposeReaderPage() {
     WidgetsBinding.instance.removeObserver(this);
     _cancelActiveSwitchSourceSearch();
-    _readerSessionController.cancelAll();
-    ref.invalidate(readerSessionControllerProvider(_readerSessionScopeKey));
+    _readerSessionController.cancelAllForDispose();
+    _scheduleReaderSessionProviderInvalidation();
     _flushProgressSave();
     _commitReadingRecordSession(
       endRatio: _activeReadingRecordSession?.furthestPositionRatio,
@@ -195,6 +195,18 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
     _pagedTransitionController.dispose();
     _curlAutoTurnController.dispose();
     _crossChapterSnapshotController.dispose();
+  }
+
+  void _scheduleReaderSessionProviderInvalidation() {
+    final container = _readerSessionProviderContainer;
+    final provider = readerSessionControllerProvider(_readerSessionScopeKey);
+    Future<void>(() {
+      try {
+        container.invalidate(provider);
+      } catch (_) {
+        // 页面释放清理不应影响返回流程；容器已释放时忽略即可。
+      }
+    });
   }
 
   void _applyReaderImageCacheBudget() {

@@ -29,7 +29,8 @@ class MembershipEntitlement {
   final int maxDevices;
   final List<String> features;
 
-  bool get isActive => vipStatus == 'active' && vipLevel != 'none';
+  bool get isActive =>
+      vipStatus.trim().toLowerCase() == 'active' && !_isInactiveLevel(vipLevel);
 
   bool get isCampaignTrial => (grantSubtype?.trim() ?? '') == 'campaign_trial';
 
@@ -111,9 +112,15 @@ class MembershipEntitlement {
             ? maxDevicesRaw.toInt()
             : int.tryParse(maxDevicesRaw?.toString() ?? '') ?? 1;
 
+    final vipLevel = _firstNonEmpty(<Object?>[
+      json['vip_level'],
+      json['membership_level'],
+    ]);
+    final vipStatus = _firstNonEmpty(<Object?>[json['vip_status']]);
+
     return MembershipEntitlement(
-      vipLevel: (json['vip_level']?.toString().trim() ?? 'none'),
-      vipStatus: (json['vip_status']?.toString().trim() ?? 'expired'),
+      vipLevel: vipLevel ?? 'none',
+      vipStatus: vipStatus ?? 'expired',
       planType: (json['plan_type']?.toString().trim() ?? 'month'),
       expireAt: readTime('expire_at'),
       source:
@@ -142,5 +149,30 @@ class MembershipEntitlement {
       maxDevices: maxDevices <= 0 ? 1 : maxDevices,
       features: readFeatures(json['features']),
     );
+  }
+
+  static String? _firstNonEmpty(List<Object?> values) {
+    for (final value in values) {
+      final normalized = value?.toString().trim() ?? '';
+      if (normalized.isNotEmpty) {
+        return normalized;
+      }
+    }
+    return null;
+  }
+
+  static bool _isInactiveLevel(String level) {
+    switch (level.trim().toLowerCase()) {
+      case '':
+      case 'none':
+      case 'free':
+      case 'basic':
+      case 'normal':
+      case 'guest':
+      case 'expired':
+        return true;
+      default:
+        return false;
+    }
   }
 }

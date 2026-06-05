@@ -1571,10 +1571,13 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
           ],
       child: SizedBox.square(
         dimension: tapSize,
-        child: Icon(
-          Icons.more_vert_rounded,
-          size: iconSize,
-          color: palette.textSecondaryColor,
+        child: Align(
+          alignment: compact ? Alignment.centerRight : Alignment.center,
+          child: Icon(
+            Icons.more_vert_rounded,
+            size: iconSize,
+            color: palette.textSecondaryColor,
+          ),
         ),
       ),
     );

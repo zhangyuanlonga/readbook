@@ -300,6 +300,62 @@ $chapter2
       expect(refreshedBook!.indexStatus, LocalBookIndexStatus.ready);
     });
 
+    test(
+      'builds cleaned reader document for stored local text content',
+      () async {
+        final file = File('${tempDir.path}/stored_single_break_book.txt');
+        const firstParagraph =
+            '这是第一段正文内容，用来模拟本地图文导入后只有单换行的长段落。它应该被识别为一个完整段落，而不是和下一段黏在一起。';
+        const secondParagraph =
+            '这是第二段正文内容，同样没有额外空行。智能分段应当在上一段句号后断开，保证阅读器里显示为独立段落。';
+        const content = '$firstParagraph\n$secondParagraph';
+        await file.writeAsString(content);
+        final fileStat = await file.stat();
+
+        final now = DateTime.parse('2026-03-21T12:00:00.000Z');
+        await repository.upsertBook(
+          LocalBook(
+            id: 'local_stored_clean_1',
+            title: '本地图文分段测试',
+            format: LocalBookFormat.txt,
+            storagePath: file.path,
+            fileSize: fileStat.size,
+            storageFileLastModifiedMs: fileStat.modified.millisecondsSinceEpoch,
+            indexStatus: LocalBookIndexStatus.ready,
+            chapterCount: 1,
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
+        await repository.replaceChapters(
+          bookId: 'local_stored_clean_1',
+          chapters: <LocalChapter>[
+            LocalChapter(
+              id: 'local_stored_clean_1_0',
+              bookId: 'local_stored_clean_1',
+              chapterIndex: 0,
+              title: '第1章 开始',
+              content: content,
+              createdAt: now,
+              updatedAt: now,
+            ),
+          ],
+        );
+
+        final chapter = await contentService.load(
+          bookId: 'local_stored_clean_1',
+          chapterIndex: 0,
+        );
+
+        expect(chapter.document, isNotNull);
+        expect(chapter.document!.paragraphs, <String>[
+          firstParagraph,
+          secondParagraph,
+        ]);
+        expect(chapter.content, '$firstParagraph\n\n$secondParagraph');
+      },
+    );
+
     test('returns epub chapter content directly from indexed storage', () async {
       final archive =
           Archive()

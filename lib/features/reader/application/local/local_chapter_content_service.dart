@@ -7,13 +7,115 @@ import '../../../../core/errors/error_codes.dart';
 import '../../../../core/errors/error_stage.dart';
 import '../../../../domain/entities/local_book.dart';
 import '../../../../domain/entities/local_chapter.dart';
+import '../../../../domain/entities/reader_document.dart';
 import '../../../../domain/repositories/local_book_repository.dart';
+import '../content_text_cleaner.dart';
 import 'epub_local_book_parser.dart';
 import 'local_book_index_service.dart';
 import 'local_book_parser.dart';
 import 'local_book_storage_service.dart';
 import 'local_text_encoding_detector.dart';
 import 'pdf_local_book_parser.dart';
+
+class LocalChapterReadableDocumentNormalizer {
+  const LocalChapterReadableDocumentNormalizer({
+    ContentTextCleaner contentTextCleaner = const ContentTextCleaner(),
+  }) : _contentTextCleaner = contentTextCleaner;
+
+  final ContentTextCleaner _contentTextCleaner;
+  static final RegExp _localParagraphEndPattern = RegExp(
+    r'[。！？!?…]+[”’」』）)\]]*$',
+  );
+
+  /// 本地阅读器最终依赖 [ReaderDocument] 做段落、图片块和逻辑进度定位。
+  ///
+  /// 仓库的正文轻量查询会跳过 document 解码，TXT 偏移读取也只返回原始正文。
+  /// 因此这里作为本地内容出口，统一补齐清洗后的正文和结构化文档，避免不同端、
+  /// 不同导入格式在阅读器里出现分段不一致。
+  LocalChapter normalize(LocalChapter chapter) {
+    final storedDocument = chapter.document;
+    if (storedDocument != null && !storedDocument.isEmpty) {
+      return chapter;
+    }
+
+    final cleanedContent = _cleanReadableContent(chapter.content);
+    final normalizedImages = chapter.imageUrls
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+    final documentContent = _appendMissingInlineImageMarkers(
+      content: cleanedContent,
+      imageUrls: normalizedImages,
+    );
+    final document = ReaderDocument.fromContent(
+      content: documentContent,
+      imageUrls: normalizedImages,
+      title: chapter.title,
+    );
+    if (document.isEmpty) {
+      return chapter;
+    }
+
+    return chapter.copyWith(
+      content:
+          document.isPureImageDocument ? '' : document.compatibilityContent,
+      imageUrls: normalizedImages,
+      document: document,
+    );
+  }
+
+  String _cleanReadableContent(String content) {
+    final rawContent = content.trim();
+    if (rawContent.isEmpty) {
+      return '';
+    }
+    final preparedContent = _preferLocalParagraphBreaks(rawContent);
+    final cleaned = _contentTextCleaner.clean(preparedContent);
+    return cleaned.isEmpty ? rawContent : cleaned;
+  }
+
+  String _preferLocalParagraphBreaks(String content) {
+    final normalized = content.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+    if (RegExp(r'\n{2,}').hasMatch(normalized)) {
+      return normalized;
+    }
+    final lines = normalized
+        .split('\n')
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+    if (lines.length < 2 || !lines.every(_looksLikeStandaloneLocalParagraph)) {
+      return normalized;
+    }
+
+    // 本地图文/TXT 常见“每段一个单换行”的内容。若每行都像完整段落，
+    // 先提升为空行分段，再交给统一 cleaner 做广告过滤和文本规范化。
+    return lines.join('\n\n');
+  }
+
+  bool _looksLikeStandaloneLocalParagraph(String line) {
+    return line.length >= 24 && _localParagraphEndPattern.hasMatch(line);
+  }
+
+  String _appendMissingInlineImageMarkers({
+    required String content,
+    required List<String> imageUrls,
+  }) {
+    if (imageUrls.isEmpty ||
+        content.contains(ReaderDocument.inlineImageMarkerPrefix)) {
+      return content;
+    }
+    final imageParagraphs = imageUrls
+        .map(ReaderDocument.inlineImageParagraph)
+        .join('\n\n');
+    if (content.trim().isEmpty) {
+      return '';
+    }
+    // 如果旧数据只有独立 imageUrls，没有兼容内容里的图片标记，至少把图片
+    // 接到正文末尾，避免轻量正文路径丢失图文混排里的图片块。
+    return '$content\n\n$imageParagraphs';
+  }
+}
 
 class LocalChapterContentService {
   LocalChapterContentService({
@@ -27,6 +129,8 @@ class LocalChapterContentService {
   final LocalBookRepository _localBookRepository;
   final LocalBookIndexService _indexService;
   final LocalBookStorageService _storageService;
+  final LocalChapterReadableDocumentNormalizer _readableDocumentNormalizer =
+      const LocalChapterReadableDocumentNormalizer();
   final LocalTextEncodingDetector _textEncodingDetector =
       const LocalTextEncodingDetector();
 
@@ -127,7 +231,9 @@ class LocalChapterContentService {
           chapter: chapter,
           book: readableBook,
         );
-        return chapter.copyWith(content: hydratedContent);
+        return _readableDocumentNormalizer.normalize(
+          chapter.copyWith(content: hydratedContent),
+        );
       }
 
       _ensureBookReadyForReading(book);
@@ -142,7 +248,7 @@ class LocalChapterContentService {
     }
 
     if (_canUseStoredChapterContent(chapter: chapter)) {
-      return chapter;
+      return _readableDocumentNormalizer.normalize(chapter);
     }
 
     if (_canLoadTxtChapterContentByOffsets(book: book, chapter: chapter)) {
@@ -151,7 +257,9 @@ class LocalChapterContentService {
         chapter: chapter,
         book: readableBook,
       );
-      return chapter.copyWith(content: hydratedContent);
+      return _readableDocumentNormalizer.normalize(
+        chapter.copyWith(content: hydratedContent),
+      );
     }
 
     if (_canLoadEpubChapterContentBySourceRef(book: book, chapter: chapter)) {

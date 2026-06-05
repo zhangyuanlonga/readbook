@@ -446,6 +446,46 @@ void main() {
     expect(tester.getSize(sheetBox).width, 390);
   });
 
+  testWidgets('AppTaskBottomSheet shrink-wraps desktop fitContent surface', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1280, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      AdaptiveTestHarness(
+        width: 1280,
+        height: 800,
+        dpr: 1,
+        wrapWithMaterialApp: true,
+        child: Scaffold(
+          body: Theme(
+            data: ThemeData(platform: TargetPlatform.macOS),
+            child: const AppTaskBottomSheet(
+              title: '导入本地图书',
+              fitContent: true,
+              body: SizedBox(height: 120),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final outerAlign =
+        find
+            .byWidgetPredicate(
+              (widget) =>
+                  widget is Align &&
+                  widget.alignment == Alignment.center &&
+                  widget.heightFactor == 1,
+            )
+            .first;
+
+    expect(tester.getSize(outerAlign).height, lessThan(360));
+    expect(find.byType(AdaptiveSheetDragHandle), findsNothing);
+  });
+
   testWidgets('showAdaptiveRawSurface dismisses when tapping outside', (
     tester,
   ) async {

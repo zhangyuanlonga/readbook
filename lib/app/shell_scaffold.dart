@@ -16,6 +16,7 @@ import '../domain/entities/bottom_nav_icon_gallery.dart';
 import '../features/auth/providers.dart';
 import '../features/bookshelf/providers.dart';
 import '../features/mine/application/advanced_theme_provider.dart';
+import '../features/mine/providers.dart';
 import 'layout/app_adaptive.dart';
 import 'theme/app_advanced_theme_tokens.dart';
 import 'theme/app_theme_provider.dart';
@@ -204,7 +205,11 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
       _isShellLoggingOut = true;
     });
     try {
+      final userId = _topBarSession?.userId;
       await _authService.logout();
+      await ref
+          .read(minePageSessionServiceProvider)
+          .clearUserScopedCache(userId);
       if (!mounted || !context.mounted) {
         return;
       }

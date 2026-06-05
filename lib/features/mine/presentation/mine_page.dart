@@ -181,6 +181,19 @@ class _MinePageState extends ConsumerState<MinePage> {
     _username = session.displayIdentity ?? session.loginIdentity;
   }
 
+  void _resetAccountScopedState({bool remoteAccessResolved = true}) {
+    _userId = null;
+    _username = null;
+    _localAvatarPath = null;
+    _vipExpireAt = null;
+    _membershipPlanType = null;
+    _totalReadingHours = 0;
+    _readingStreakDays = 0;
+    _hasMembership = false;
+    _hasThemeCustom = false;
+    _isRemoteAccessResolved = remoteAccessResolved;
+  }
+
   Future<void> _restoreLayoutMode() async {
     final preferGridByDefault = AppAdaptiveMetrics.of(context).isMediumUpWindow;
     final defaultMode =
@@ -228,17 +241,24 @@ class _MinePageState extends ConsumerState<MinePage> {
       return;
     }
     setState(() {
-      _userId = snapshot.session?.userId;
-      _username =
-          snapshot.session?.displayIdentity ?? snapshot.session?.loginIdentity;
-      _hasMembership = snapshot.hasMembership;
-      _hasThemeCustom = snapshot.hasThemeCustom;
-      _isRemoteAccessResolved = snapshot.isRemoteAccessResolved;
-      _localAvatarPath = snapshot.localAvatarPath;
-      _vipExpireAt = snapshot.vipExpireAt;
-      _membershipPlanType = snapshot.membershipPlanType;
-      _totalReadingHours = snapshot.totalReadingHours;
-      _readingStreakDays = snapshot.readingStreakDays;
+      if (snapshot.session == null) {
+        _resetAccountScopedState(
+          remoteAccessResolved: snapshot.isRemoteAccessResolved,
+        );
+      } else {
+        _userId = snapshot.session?.userId;
+        _username =
+            snapshot.session?.displayIdentity ??
+            snapshot.session?.loginIdentity;
+        _hasMembership = snapshot.hasMembership;
+        _hasThemeCustom = snapshot.hasThemeCustom;
+        _isRemoteAccessResolved = snapshot.isRemoteAccessResolved;
+        _localAvatarPath = snapshot.localAvatarPath;
+        _vipExpireAt = snapshot.vipExpireAt;
+        _membershipPlanType = snapshot.membershipPlanType;
+        _totalReadingHours = snapshot.totalReadingHours;
+        _readingStreakDays = snapshot.readingStreakDays;
+      }
     });
     if (snapshot.session == null) {
       return;
@@ -342,16 +362,7 @@ class _MinePageState extends ConsumerState<MinePage> {
       }
       ++_sessionReloadVersion;
       setState(() {
-        _userId = null;
-        _username = null;
-        _localAvatarPath = null;
-        _vipExpireAt = null;
-        _membershipPlanType = null;
-        _totalReadingHours = 0;
-        _readingStreakDays = 0;
-        _hasMembership = false;
-        _hasThemeCustom = false;
-        _isRemoteAccessResolved = true;
+        _resetAccountScopedState();
       });
       _showMessage('已退出登录。');
     } catch (_) {
@@ -586,10 +597,22 @@ class _MinePageState extends ConsumerState<MinePage> {
   void _handleAuthEvent(AuthEvent event) {
     switch (event.type) {
       case AuthEventType.loggedIn:
+        ++_sessionReloadVersion;
+        if (mounted) {
+          setState(() {
+            _resetAccountScopedState(remoteAccessResolved: false);
+          });
+        }
         unawaited(_reloadSession(showLoading: false, refreshRemote: true));
         break;
       case AuthEventType.loggedOut:
       case AuthEventType.sessionExpired:
+        ++_sessionReloadVersion;
+        if (mounted) {
+          setState(() {
+            _resetAccountScopedState();
+          });
+        }
         unawaited(_reloadSession(showLoading: false, refreshRemote: false));
         break;
     }

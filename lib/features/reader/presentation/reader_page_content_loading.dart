@@ -850,6 +850,8 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
         if (chapter == null || !chapter.hasReadablePayload) {
           return false;
         }
+        final readableChapter = const LocalChapterReadableDocumentNormalizer()
+            .normalize(chapter);
 
         final previewProgress = _bootstrapProgressForCurrentChapter();
         var previewRatio = 0.0;
@@ -868,13 +870,13 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
           _isCurrentChapterCached = true;
           _errorText = null;
           _setContentFlow(
-            chapter.content,
-            imageUrls: chapter.imageUrls,
+            readableChapter.content,
+            imageUrls: readableChapter.imageUrls,
             contentType: null,
             sourceFilePath: null,
             totalPageCount: null,
             executionContext: null,
-            document: chapter.document,
+            document: readableChapter.document,
           );
           previewRatio = _resolveDocumentRestoreRatio(
             progress: previewProgress,
@@ -891,7 +893,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
                 displayTitle:
                     (_chapterTitle ?? resolvedCurrentChapter.title).trim(),
                 chapterIndex: _currentIndex!,
-                content: chapter.content,
+                content: readableChapter.content,
                 document: _document,
                 paragraphs:
                     _paragraphs.isEmpty

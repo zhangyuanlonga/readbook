@@ -1,6 +1,7 @@
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shuxiang_reading_next/core/membership/membership_entitlement.dart';
 import 'package:shuxiang_reading_next/data/datasources/local/app_database.dart';
 import 'package:shuxiang_reading_next/features/mine/application/remote_access_snapshot_service.dart';
 
@@ -133,5 +134,61 @@ void main() {
       expect(stored!.vipExpireAt?.toUtc(), DateTime.utc(2026, 12, 31));
       expect(stored.membershipPlanType, 'premium');
     });
+
+    test(
+      'inactive membership refresh clears stale membership metadata',
+      () async {
+        final prefs = await SharedPreferences.getInstance();
+        final service = RemoteAccessSnapshotService(
+          preferences: prefs,
+          database: database,
+        );
+        await service.save(
+          'user_1',
+          RemoteAccessSnapshot(
+            serverSourceGatewayEnabled: true,
+            hasMembership: true,
+            hasThemeCustom: true,
+            serverSourceGatewayLimit: 12,
+            cachedAt: DateTime.utc(2026, 6, 2),
+            vipExpireAt: DateTime.utc(2026, 12, 31),
+            membershipPlanType: 'premium',
+          ),
+        );
+
+        await service.saveMergedMembership(
+          userId: 'user_1',
+          entitlement: const MembershipEntitlement(
+            vipLevel: 'none',
+            vipStatus: 'expired',
+            planType: 'month',
+            expireAt: null,
+            source: null,
+            membershipLevel: 'none',
+            grantType: null,
+            grantSubtype: null,
+            grantLabel: null,
+            isCustomExpire: false,
+            isTrial: false,
+            maxDevices: 1,
+            features: <String>[],
+          ),
+        );
+
+        final loaded = await service.load('user_1');
+        expect(loaded, isNotNull);
+        expect(loaded!.hasMembership, isFalse);
+        expect(loaded.hasThemeCustom, isFalse);
+        expect(loaded.vipExpireAt, isNull);
+        expect(loaded.membershipPlanType, isNull);
+
+        final stored = await database.getRemoteAccessSnapshot('user_1');
+        expect(stored, isNotNull);
+        expect(stored!.hasMembership, isFalse);
+        expect(stored.hasThemeCustom, isFalse);
+        expect(stored.vipExpireAt, isNull);
+        expect(stored.membershipPlanType, isNull);
+      },
+    );
   });
 }

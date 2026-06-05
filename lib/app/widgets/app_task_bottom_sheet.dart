@@ -143,7 +143,8 @@ class AppTaskBottomSheet extends StatelessWidget {
         bottom: desktopLike,
         child: Align(
           alignment: desktopLike ? Alignment.center : Alignment.bottomCenter,
-          heightFactor: desktopLike ? null : 1,
+          heightFactor:
+              desktopLike && fitContent ? 1 : (desktopLike ? null : 1),
           child: ConstrainedBox(
             constraints: BoxConstraints(
               maxWidth: desktopLike ? metrics.dialogMaxWidth : viewportWidth,

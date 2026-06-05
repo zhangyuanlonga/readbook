@@ -7,6 +7,8 @@ import '../../../core/membership/membership_entitlement.dart';
 import '../../../core/membership/membership_features.dart';
 import '../../../core/mobile_features/mobile_feature_module.dart';
 
+const Object _remoteAccessSnapshotUnset = Object();
+
 class RemoteAccessSnapshot {
   const RemoteAccessSnapshot({
     required this.serverSourceGatewayEnabled,
@@ -39,8 +41,8 @@ class RemoteAccessSnapshot {
     bool? hasThemeCustom,
     int? serverSourceGatewayLimit,
     DateTime? cachedAt,
-    DateTime? vipExpireAt,
-    String? membershipPlanType,
+    Object? vipExpireAt = _remoteAccessSnapshotUnset,
+    Object? membershipPlanType = _remoteAccessSnapshotUnset,
   }) {
     return RemoteAccessSnapshot(
       serverSourceGatewayEnabled:
@@ -50,8 +52,14 @@ class RemoteAccessSnapshot {
       serverSourceGatewayLimit:
           serverSourceGatewayLimit ?? this.serverSourceGatewayLimit,
       cachedAt: cachedAt ?? this.cachedAt,
-      vipExpireAt: vipExpireAt ?? this.vipExpireAt,
-      membershipPlanType: membershipPlanType ?? this.membershipPlanType,
+      vipExpireAt:
+          identical(vipExpireAt, _remoteAccessSnapshotUnset)
+              ? this.vipExpireAt
+              : vipExpireAt as DateTime?,
+      membershipPlanType:
+          identical(membershipPlanType, _remoteAccessSnapshotUnset)
+              ? this.membershipPlanType
+              : membershipPlanType as String?,
     );
   }
 
@@ -231,16 +239,19 @@ class RemoteAccessSnapshotService {
     required MembershipEntitlement entitlement,
   }) async {
     final existing = await load(userId);
+    final hasMembership = entitlement.isActive;
     await save(
       userId,
       (existing ?? _defaultSnapshot()).copyWith(
-        hasMembership: entitlement.isActive,
-        hasThemeCustom: MembershipFeatures.hasFeature(
-          entitlement,
-          MembershipFeatures.themeCustom,
-        ),
-        vipExpireAt: entitlement.expireAt,
-        membershipPlanType: entitlement.planType,
+        hasMembership: hasMembership,
+        hasThemeCustom:
+            hasMembership &&
+            MembershipFeatures.hasFeature(
+              entitlement,
+              MembershipFeatures.themeCustom,
+            ),
+        vipExpireAt: hasMembership ? entitlement.expireAt : null,
+        membershipPlanType: hasMembership ? entitlement.planType : null,
         cachedAt: DateTime.now().toUtc(),
       ),
     );
@@ -271,6 +282,7 @@ class RemoteAccessSnapshotService {
     required List<MobileFeatureModule> modules,
     required MembershipEntitlement entitlement,
   }) {
+    final hasMembership = entitlement.isActive;
     final gatewayEntry =
         _findModule(modules, 'server_source_gateway') ??
         _findModule(modules, 'source_entry');
@@ -279,14 +291,16 @@ class RemoteAccessSnapshotService {
         _findModule(modules, 'source_import');
     return RemoteAccessSnapshot(
       serverSourceGatewayEnabled: gatewayEntry?.visible == true,
-      hasMembership: entitlement.isActive,
-      hasThemeCustom: MembershipFeatures.hasFeature(
-        entitlement,
-        MembershipFeatures.themeCustom,
-      ),
+      hasMembership: hasMembership,
+      hasThemeCustom:
+          hasMembership &&
+          MembershipFeatures.hasFeature(
+            entitlement,
+            MembershipFeatures.themeCustom,
+          ),
       serverSourceGatewayLimit: gatewayQuota?.quotaLimit ?? 10,
-      vipExpireAt: entitlement.expireAt,
-      membershipPlanType: entitlement.planType,
+      vipExpireAt: hasMembership ? entitlement.expireAt : null,
+      membershipPlanType: hasMembership ? entitlement.planType : null,
       cachedAt: DateTime.now().toUtc(),
     );
   }

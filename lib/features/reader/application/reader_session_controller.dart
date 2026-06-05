@@ -131,6 +131,14 @@ class ReaderSessionControllerNotifier
     state = _controller.snapshot;
   }
 
+  /// 页面释放时只需要推进 generation 让异步任务失效，不能同步通知监听者。
+  ///
+  /// Riverpod 不允许在 `dispose` 等 widget 生命周期里修改 provider state。
+  /// 调用方会在当前帧结束后再清理 provider scope。
+  void cancelAllForDispose() {
+    _controller.cancelAll();
+  }
+
   int get chapterContentGeneration => _controller.chapterContentGeneration;
   int get preloadGeneration => _controller.preloadGeneration;
   int get paginationGeneration => _controller.paginationGeneration;
