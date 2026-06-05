@@ -177,11 +177,29 @@ ResolvedBookCover? _resolveRealCover(String? realCoverUrl) {
 }
 
 ResolvedBookCover? _resolveCustomCover(String? customCoverPath) {
-  final normalized = _resolveManagedFilePathSync(customCoverPath);
-  if (normalized == null || normalized.isEmpty) {
+  final normalized = customCoverPath?.trim() ?? '';
+  if (normalized.isEmpty) {
     return null;
   }
-  return ResolvedBookCover.custom(normalized);
+  final uri = Uri.tryParse(normalized);
+  if (uri != null && uri.hasScheme) {
+    if (uri.scheme == 'file') {
+      final resolvedPath = _resolveManagedFilePathSync(
+        localFilePathFromUri(uri),
+      );
+      if (resolvedPath == null) {
+        return null;
+      }
+      return ResolvedBookCover.custom(resolvedPath);
+    }
+    return ResolvedBookCover.real(normalized);
+  }
+
+  final resolvedPath = _resolveManagedFilePathSync(normalized);
+  if (resolvedPath == null || resolvedPath.isEmpty) {
+    return null;
+  }
+  return ResolvedBookCover.custom(resolvedPath);
 }
 
 String? _resolveManagedFilePathSync(String? rawPath) {

@@ -137,6 +137,10 @@ class BookMetadataPresentationResolver {
     required String? customCoverPath,
     required String? realCoverUrl,
   }) {
+    final normalizedCustomCover = _normalize(customCoverPath);
+    if (_isExternalCoverUri(normalizedCustomCover)) {
+      return normalizedCustomCover;
+    }
     final resolvedCustomPath = _pathResolver.tryResolveExistingFilePathSync(
       customCoverPath,
     );
@@ -151,9 +155,15 @@ class BookMetadataPresentationResolver {
     required String? localCoverPath,
     required String? realCoverUrl,
   }) {
+    if (_isExternalCoverUri(_normalize(overrideCoverPath))) {
+      return BookDisplayCoverSource.overrideCustom;
+    }
     if (_pathResolver.tryResolveExistingFilePathSync(overrideCoverPath) !=
         null) {
       return BookDisplayCoverSource.overrideCustom;
+    }
+    if (_isExternalCoverUri(_normalize(localCoverPath))) {
+      return BookDisplayCoverSource.localManaged;
     }
     if (_pathResolver.tryResolveExistingFilePathSync(localCoverPath) != null) {
       return BookDisplayCoverSource.localManaged;
@@ -162,6 +172,15 @@ class BookMetadataPresentationResolver {
       return BookDisplayCoverSource.remote;
     }
     return BookDisplayCoverSource.none;
+  }
+
+  bool _isExternalCoverUri(String? value) {
+    final normalized = value?.trim() ?? '';
+    if (normalized.isEmpty) {
+      return false;
+    }
+    final uri = Uri.tryParse(normalized);
+    return uri != null && uri.hasScheme && uri.scheme != 'file';
   }
 
   String? _normalize(String? value) {

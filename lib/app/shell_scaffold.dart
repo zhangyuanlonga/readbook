@@ -867,53 +867,194 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     final displayName = session?.displayIdentity ?? '登录';
     final avatarLabel = _topBarAvatarLabel(displayName);
 
-    return Material(
-      key: const ValueKey<String>('desktop_top_bar_account_entry'),
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(999),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(999),
-        onTap: () {
-          unawaited(context.push(session == null ? '/auth' : '/profile'));
-        },
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(4, 3, 10, 3),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: colorScheme.surfaceContainerHigh,
-                child:
-                    avatarLabel == null
-                        ? Icon(
-                          Icons.person_outline,
-                          size: 19,
-                          color: colorScheme.onSurfaceVariant,
-                        )
-                        : Text(
-                          avatarLabel,
-                          style: textTheme.labelMedium?.copyWith(
-                            color: colorScheme.onSurface,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-              ),
-              const SizedBox(width: 10),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 112),
-                child: Text(
-                  displayName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: textTheme.labelLarge?.copyWith(
-                    color: colorScheme.onSurface,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
+    return MenuAnchor(
+      menuChildren: [
+        if (session != null) ...[
+          _buildDesktopAccountMenuHeader(
+            context,
+            displayName: displayName,
+            avatarLabel: avatarLabel,
           ),
+          const Divider(height: 1),
+          MenuItemButton(
+            key: const ValueKey<String>('desktop_account_menu_profile'),
+            leadingIcon: const Icon(Icons.person_outline_rounded),
+            onPressed: () {
+              unawaited(context.push('/profile'));
+            },
+            child: const Text('个人信息'),
+          ),
+        ] else
+          MenuItemButton(
+            key: const ValueKey<String>('desktop_account_menu_login'),
+            leadingIcon: const Icon(Icons.login_rounded),
+            onPressed: () {
+              unawaited(context.push('/auth'));
+            },
+            child: const Text('登录账号'),
+          ),
+        MenuItemButton(
+          key: const ValueKey<String>('desktop_account_menu_settings'),
+          leadingIcon: const Icon(Icons.settings_outlined),
+          onPressed: () {
+            unawaited(context.push('/system-settings'));
+          },
+          child: const Text('设置'),
+        ),
+        if (session != null) ...[
+          const Divider(height: 1),
+          MenuItemButton(
+            key: const ValueKey<String>('desktop_account_menu_logout'),
+            leadingIcon:
+                _isShellLoggingOut
+                    ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                    : Icon(Icons.logout_rounded, color: colorScheme.error),
+            onPressed:
+                _isShellLoggingOut
+                    ? null
+                    : () {
+                      unawaited(_handleShellLogout(context));
+                    },
+            child: Text(
+              '退出登录',
+              style: textTheme.labelLarge?.copyWith(color: colorScheme.error),
+            ),
+          ),
+        ],
+      ],
+      builder: (menuContext, controller, child) {
+        return Material(
+          key: const ValueKey<String>('desktop_top_bar_account_entry'),
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(999),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(999),
+            onTap: () {
+              if (controller.isOpen) {
+                controller.close();
+              } else {
+                controller.open();
+              }
+            },
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(4, 3, 6, 3),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: colorScheme.surfaceContainerHigh,
+                    child:
+                        avatarLabel == null
+                            ? Icon(
+                              Icons.person_outline,
+                              size: 19,
+                              color: colorScheme.onSurfaceVariant,
+                            )
+                            : Text(
+                              avatarLabel,
+                              style: textTheme.labelMedium?.copyWith(
+                                color: colorScheme.onSurface,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                  ),
+                  const SizedBox(width: 8),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 88),
+                    child: Text(
+                      displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: textTheme.labelLarge?.copyWith(
+                        color: colorScheme.onSurface,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  Icon(
+                    controller.isOpen
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.keyboard_arrow_down_rounded,
+                    size: 16,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDesktopAccountMenuHeader(
+    BuildContext context, {
+    required String displayName,
+    required String? avatarLabel,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final session = _topBarSession;
+    final identity = session?.loginIdentity?.trim() ?? '';
+    return SizedBox(
+      key: const ValueKey<String>('desktop_account_menu_header'),
+      width: 220,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 20,
+              backgroundColor: colorScheme.surfaceContainerHigh,
+              child:
+                  avatarLabel == null
+                      ? Icon(
+                        Icons.person_outline,
+                        size: 20,
+                        color: colorScheme.onSurfaceVariant,
+                      )
+                      : Text(
+                        avatarLabel,
+                        style: textTheme.labelLarge?.copyWith(
+                          color: colorScheme.onSurface,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: textTheme.labelLarge?.copyWith(
+                      color: colorScheme.onSurface,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  if (identity.isNotEmpty)
+                    Text(
+                      identity,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

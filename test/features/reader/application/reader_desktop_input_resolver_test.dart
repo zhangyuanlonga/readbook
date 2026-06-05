@@ -41,6 +41,45 @@ void main() {
       );
     });
 
+    test('keeps overlay, busy, and auto-read keyboard gates centralized', () {
+      expect(
+        resolver.resolveKeyAction(
+          LogicalKeyboardKey.arrowRight,
+          overlayVisible: true,
+        ),
+        ReaderDesktopInputAction.none,
+      );
+      expect(
+        resolver.resolveKeyAction(
+          LogicalKeyboardKey.escape,
+          overlayVisible: true,
+        ),
+        ReaderDesktopInputAction.toggleOverlay,
+      );
+      expect(
+        resolver.resolveKeyAction(
+          LogicalKeyboardKey.keyA,
+          autoReadSessionEnabled: true,
+        ),
+        ReaderDesktopInputAction.pauseAutoRead,
+      );
+      expect(
+        resolver.resolveKeyAction(
+          LogicalKeyboardKey.arrowRight,
+          readerBusy: true,
+          autoReadSessionEnabled: true,
+        ),
+        ReaderDesktopInputAction.none,
+      );
+      expect(
+        resolver.resolveKeyAction(
+          LogicalKeyboardKey.escape,
+          textSelectionActive: true,
+        ),
+        ReaderDesktopInputAction.none,
+      );
+    });
+
     test(
       'resolves pointer wheel page turns only for eligible paged viewport',
       () {
@@ -92,6 +131,16 @@ void main() {
             isPagedViewport: true,
             overlayVisible: true,
             textSelectionActive: false,
+            now: now,
+          ),
+          ReaderDesktopInputAction.none,
+        );
+        expect(
+          resolver.resolvePointerScrollAction(
+            deltaY: 24,
+            isPagedViewport: true,
+            overlayVisible: false,
+            textSelectionActive: true,
             now: now,
           ),
           ReaderDesktopInputAction.none,

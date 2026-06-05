@@ -28,8 +28,6 @@ enum BookshelfSortMode {
   title,
 }
 
-enum BookshelfReadingStatus { unread, reading, finished }
-
 enum BookshelfViewKind { base, tag, category }
 
 enum BookshelfBatchAction { delete, updateCover }

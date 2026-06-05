@@ -163,10 +163,13 @@ extension on _BookDetailPageState {
     String? bookId,
     String? sourceId,
     String? detailUrl,
+    double? coverWidth,
+    VoidCallback? onTap,
   }) {
     final metrics = AppAdaptiveMetrics.of(context);
-    final coverWidth = metrics.isCompactDensity ? 92.0 : 104.0;
-    final coverHeight = coverWidth * 1.42;
+    final resolvedCoverWidth =
+        coverWidth ?? (metrics.isCompactDensity ? 92.0 : 104.0);
+    final coverHeight = resolvedCoverWidth * 1.42;
     return Consumer(
       builder: (context, ref, _) {
         ref.watch(activeAdvancedThemeProvider);
@@ -187,6 +190,7 @@ extension on _BookDetailPageState {
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap:
+                onTap ??
                 () => _openCoverPreview(
                   cover: resolvedCover,
                   title: title,
@@ -197,7 +201,7 @@ extension on _BookDetailPageState {
               cover: resolvedCover,
               title: title,
               author: author,
-              width: coverWidth,
+              width: resolvedCoverWidth,
               height: coverHeight,
               borderRadius: BorderRadius.circular(metrics.cardRadius),
             ),

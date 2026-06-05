@@ -41,77 +41,69 @@ extension _ReaderPageShellExtension on _ReaderPageState {
     if (event is! KeyDownEvent) {
       return KeyEventResult.ignored;
     }
-    if (_isTextSelectionActive || _isEditingBookmarkNote) {
-      return KeyEventResult.ignored;
-    }
-    if (_isBootstrapping || _isLoadingContent || _errorText != null) {
-      return KeyEventResult.ignored;
-    }
 
-    final key = event.logicalKey;
-    if (key == LogicalKeyboardKey.escape) {
-      if (_showOverlayControls) {
-        _hideOverlayControls(resumeAutoRead: true);
-      } else {
-        _setOverlayControlsVisibility(true);
-      }
-      return KeyEventResult.handled;
-    }
-
-    if (_showOverlayControls) {
-      return KeyEventResult.ignored;
-    }
-    if (_isAutoReadSessionEnabled) {
-      _pauseAutoReadSession();
-      return KeyEventResult.handled;
-    }
-
-    if (key == LogicalKeyboardKey.arrowLeft ||
-        key == LogicalKeyboardKey.arrowUp ||
-        key == LogicalKeyboardKey.pageUp) {
-      unawaited(_turnReaderByDirection(forward: false));
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.arrowRight ||
-        key == LogicalKeyboardKey.arrowDown ||
-        key == LogicalKeyboardKey.space ||
-        key == LogicalKeyboardKey.pageDown) {
-      unawaited(_turnReaderByDirection(forward: true));
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.home) {
-      _restoreScrollPosition(0);
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.end) {
-      _restoreScrollPosition(1);
-      return KeyEventResult.handled;
-    }
-    return KeyEventResult.ignored;
+    final action = _desktopInputResolver.resolveKeyAction(
+      event.logicalKey,
+      textSelectionActive: _isTextSelectionActive,
+      editingText: _isEditingBookmarkNote,
+      readerBusy: _isBootstrapping || _isLoadingContent || _errorText != null,
+      overlayVisible: _showOverlayControls,
+      autoReadSessionEnabled: _isAutoReadSessionEnabled,
+    );
+    return _dispatchReaderDesktopInputAction(action);
   }
 
   void _handleReaderPointerSignal(PointerSignalEvent event) {
     if (event is! PointerScrollEvent) {
       return;
     }
-    if (_currentViewportKind != ReaderModeViewportKind.textPaged &&
-        _currentViewportKind != ReaderModeViewportKind.imagePaged) {
-      return;
-    }
-    if (_showOverlayControls || _isTextSelectionActive) {
-      return;
-    }
-    final delta = event.scrollDelta.dy;
-    if (delta.abs() < 8) {
-      return;
-    }
     final now = DateTime.now();
-    final lastAt = _lastPointerScrollPageTurnAt;
-    if (lastAt != null && now.difference(lastAt).inMilliseconds < 180) {
+    final action = _desktopInputResolver.resolvePointerScrollAction(
+      deltaY: event.scrollDelta.dy,
+      isPagedViewport:
+          _currentViewportKind == ReaderModeViewportKind.textPaged ||
+          _currentViewportKind == ReaderModeViewportKind.imagePaged,
+      overlayVisible: _showOverlayControls,
+      textSelectionActive: _isTextSelectionActive,
+      lastPageTurnAt: _lastPointerScrollPageTurnAt,
+      now: now,
+    );
+    if (action == ReaderDesktopInputAction.none) {
       return;
     }
     _lastPointerScrollPageTurnAt = now;
-    unawaited(_turnReaderByDirection(forward: delta > 0));
+    _dispatchReaderDesktopInputAction(action);
+  }
+
+  KeyEventResult _dispatchReaderDesktopInputAction(
+    ReaderDesktopInputAction action,
+  ) {
+    switch (action) {
+      case ReaderDesktopInputAction.none:
+        return KeyEventResult.ignored;
+      case ReaderDesktopInputAction.toggleOverlay:
+        if (_showOverlayControls) {
+          _hideOverlayControls(resumeAutoRead: true);
+        } else {
+          _setOverlayControlsVisibility(true);
+        }
+        return KeyEventResult.handled;
+      case ReaderDesktopInputAction.pauseAutoRead:
+        _pauseAutoReadSession();
+        return KeyEventResult.handled;
+      case ReaderDesktopInputAction.previousPage:
+        unawaited(_turnReaderByDirection(forward: false));
+        return KeyEventResult.handled;
+      case ReaderDesktopInputAction.nextPage:
+        unawaited(_turnReaderByDirection(forward: true));
+        return KeyEventResult.handled;
+      case ReaderDesktopInputAction.chapterStart:
+        _restoreScrollPosition(0);
+        return KeyEventResult.handled;
+      case ReaderDesktopInputAction.chapterEnd:
+        _restoreScrollPosition(1);
+        return KeyEventResult.handled;
+    }
   }
 
   Future<void> _handleVolumeKeyEvent(ReaderVolumeKeyEvent event) async {

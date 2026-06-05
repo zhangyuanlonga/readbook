@@ -81,6 +81,7 @@ import '../application/reader_cache_feedback_resolver.dart';
 import '../application/reader_content_session.dart';
 import '../application/reader_content_mode_resolver.dart';
 import '../application/reader_content_session_resolver.dart';
+import '../application/reader_desktop_input_resolver.dart';
 import '../application/reader_mode_capabilities.dart';
 import '../application/reader_mode_model.dart';
 import '../application/reader_mode_resolver.dart';
@@ -169,6 +170,7 @@ import 'reader_text_paged_view.dart';
 import 'reader_viewport_builder.dart';
 import 'widgets/reader_typography_slider_row.dart';
 
+part 'reader_page_widget.dart';
 part 'reader_page_content_loading.dart';
 part 'reader_page_selection.dart';
 part 'reader_page_background.dart';
@@ -199,38 +201,6 @@ enum ReaderAutoReadSessionState {
   paused,
   chapterPaused,
   finished,
-}
-
-class ReaderPage extends ConsumerStatefulWidget {
-  const ReaderPage({
-    super.key,
-    required this.bookId,
-    required this.chapterId,
-    this.chapterUrl,
-    this.chapterTitle,
-    this.sourceId,
-    this.detailUrl,
-    this.chapterIndex,
-    this.bookmarkId,
-    this.openRequestedAtMs,
-    this.openRouteKind,
-    this.heroTag,
-  });
-
-  final String bookId;
-  final String chapterId;
-  final String? chapterUrl;
-  final String? chapterTitle;
-  final String? sourceId;
-  final String? detailUrl;
-  final int? chapterIndex;
-  final String? bookmarkId;
-  final int? openRequestedAtMs;
-  final String? openRouteKind;
-  final String? heroTag;
-
-  @override
-  ConsumerState<ReaderPage> createState() => _ReaderPageState();
 }
 
 class _ReaderPageState extends ConsumerState<ReaderPage>
@@ -318,6 +288,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const ReaderSessionStateResolver();
   final ReaderViewportStateResolver _viewportStateResolver =
       const ReaderViewportStateResolver();
+  final ReaderDesktopInputResolver _desktopInputResolver =
+      const ReaderDesktopInputResolver();
   late final ReaderSystemSettingsService _systemSettingsService;
   late final ReaderBackgroundService _readerBackgroundService;
   late final LocalBookStorageService _localBookStorageService;

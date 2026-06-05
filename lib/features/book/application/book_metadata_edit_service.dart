@@ -40,10 +40,12 @@ class BookMetadataEditService {
 
   Future<String?> pickAndPersistCustomCover({
     required BookDetail detail,
+    ImageSelectionSource source = ImageSelectionSource.auto,
   }) async {
     final picked = await _imageSelectionService.pickImage(
       confirmButtonText: '选择封面',
       allowedExtensions: const {'jpg', 'jpeg', 'png', 'webp', 'gif'},
+      source: source,
     );
     if (picked == null) {
       return null;

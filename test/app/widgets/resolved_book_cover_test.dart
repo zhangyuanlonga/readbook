@@ -62,6 +62,21 @@ void main() {
     expect(resolved.filePath, customCoverFile.path);
   });
 
+  test('prefers custom cover url over real cover and gallery cover', () {
+    final resolved = resolveBookCover(
+      realCoverUrl: 'https://example.com/cover.jpg',
+      customCoverPath: 'https://example.com/custom-cover.webp',
+      activeTheme: activeTheme,
+      galleries: <CoverGallery>[coverGallery],
+      bookId: 'book_1',
+      sourceId: 'source_a',
+      detailUrl: 'https://example.com/book/1',
+    );
+
+    expect(resolved.source, ResolvedBookCoverSource.real);
+    expect(resolved.imageUrl, 'https://example.com/custom-cover.webp');
+  });
+
   test('prefers custom cover over gallery cover when real cover missing', () {
     final resolved = resolveBookCover(
       customCoverPath: customCoverFile.path,

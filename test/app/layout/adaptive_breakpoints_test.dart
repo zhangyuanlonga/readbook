@@ -734,6 +734,30 @@ void main() {
       findsNothing,
     );
     expect(find.text('Desktop Reader'), findsWidgets);
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('desktop_top_bar_account_entry')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('desktop_account_menu_header')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('desktop_account_menu_profile')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('desktop_account_menu_settings')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('desktop_account_menu_logout')),
+      findsOneWidget,
+    );
+    expect(find.text('个人信息'), findsOneWidget);
+    expect(find.text('设置'), findsOneWidget);
   });
 
   testWidgets('ShellScaffold 桌面顶部栏未登录时显示登录入口', (tester) async {
@@ -749,6 +773,26 @@ void main() {
       findsNothing,
     );
     expect(find.text('登录'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('desktop_top_bar_account_entry')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('desktop_account_menu_login')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('desktop_account_menu_settings')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('desktop_account_menu_profile')),
+      findsNothing,
+    );
+    expect(find.text('登录账号'), findsOneWidget);
+    expect(find.text('设置'), findsOneWidget);
   });
 
   testWidgets('ShellScaffold 桌面书架显示状态侧栏和视图下拉', (tester) async {

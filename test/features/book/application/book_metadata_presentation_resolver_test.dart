@@ -72,6 +72,36 @@ void main() {
     );
   });
 
+  test('resolveBookshelfBook supports override cover url', () {
+    final presentation = resolver.resolveBookshelfBook(
+      book: BookshelfBook(
+        bookId: 'book_1',
+        sourceId: 'source_a',
+        title: '原始标题',
+        detailUrl: 'https://example.com/book/1',
+        addedAt: now,
+        coverUrl: 'https://example.com/cover.jpg',
+      ),
+      metadataOverride: BookMetadataOverride.forRemote(
+        sourceId: 'source_a',
+        detailUrl: 'https://example.com/book/1',
+        coverPath: 'https://example.com/custom-cover.webp',
+        createdAt: now,
+        updatedAt: now,
+      ),
+    );
+
+    expect(
+      presentation.customCoverPath,
+      'https://example.com/custom-cover.webp',
+    );
+    expect(
+      presentation.displayCoverSource,
+      BookMetadataPresentationCoverSource.overrideCustom,
+    );
+    expect(presentation.displayCover, 'https://example.com/custom-cover.webp');
+  });
+
   test(
     'resolveReadingRecord falls back to record values when no overrides',
     () {

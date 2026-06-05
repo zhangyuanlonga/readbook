@@ -10,6 +10,12 @@ import '../../reader/application/local/local_reader_identity.dart';
 import '../../reader/application/reader_preferences_service.dart';
 import 'book_detail_service.dart';
 
+/// 书籍阅读状态的统一业务枚举。
+///
+/// 当前项目没有单独的“阅读状态表”，未读/阅读中/已读完都由
+/// [ReadingProgress] 推导或写入：无进度即未读，有进度即阅读中，
+/// 进度到末尾即已读完。书架、详情页和后续书籍编辑器都应复用这里，
+/// 避免同一状态在不同端出现不同判断。
 enum BookReadingStatus { unread, reading, finished }
 
 extension BookReadingStatusLabel on BookReadingStatus {
@@ -115,6 +121,7 @@ class BookReadingStatusService {
   Future<BookReadingStatusMarkResult?> markBookDetailStatus({
     required BookDetail detail,
     required List<Chapter> chapters,
+    required bool chaptersComplete,
     required BookReadingStatus status,
     ReadingProgress? existingProgress,
     LocalBook? localBook,
@@ -127,6 +134,7 @@ class BookReadingStatusService {
       fallbackAuthor: detail.author,
       status: status,
       chapters: chapters,
+      chaptersComplete: chaptersComplete,
       existingProgress: existingProgress,
       localBook: localBook,
       cachedChapterCount: detail.totalChapterNum,
@@ -141,10 +149,13 @@ class BookReadingStatusService {
     String? fallbackTitle,
     String? fallbackAuthor,
     List<Chapter> chapters = const <Chapter>[],
+    bool chaptersComplete = true,
     ReadingProgress? existingProgress,
     LocalBook? localBook,
     int? cachedChapterCount,
   }) async {
+    // “未读”本质上是清除阅读进度，不能额外保留一个独立状态，
+    // 否则阅读器恢复、书架筛选和详情展示会出现三套状态来源。
     if (status == BookReadingStatus.unread) {
       await _readerPreferencesService.deleteProgress(bookId);
       return BookReadingStatusMarkResult(status: status, progress: null);
@@ -158,6 +169,7 @@ class BookReadingStatusService {
       fallbackAuthor: fallbackAuthor,
       status: status,
       chapters: chapters,
+      chaptersComplete: chaptersComplete,
       existingProgress: existingProgress,
       localBook: localBook,
       cachedChapterCount: cachedChapterCount,
@@ -183,14 +195,19 @@ class BookReadingStatusService {
     String? fallbackTitle,
     String? fallbackAuthor,
     List<Chapter> chapters = const <Chapter>[],
+    bool chaptersComplete = true,
     ReadingProgress? existingProgress,
     LocalBook? localBook,
     int? cachedChapterCount,
   }) async {
+    // 标记阅读中/已读完时必须写入一个可恢复的章节锚点。
+    // 优先使用现有进度或已加载目录；目录不完整时再拉完整目录，
+    // 保证详情页和书架页保存出的进度都能被阅读器直接打开。
     final targetIndex = _resolveMarkedTargetIndex(
       status: status,
       existingProgress: existingProgress,
       chapters: chapters,
+      chaptersComplete: chaptersComplete,
       localBook: localBook,
       cachedChapterCount: cachedChapterCount,
     );
@@ -203,6 +220,7 @@ class BookReadingStatusService {
       targetIndex: targetIndex,
       preferLast: status == BookReadingStatus.finished,
       chapters: chapters,
+      chaptersComplete: chaptersComplete,
       existingProgress: existingProgress,
       localBook: localBook,
     );
@@ -235,6 +253,7 @@ class BookReadingStatusService {
     required BookReadingStatus status,
     required ReadingProgress? existingProgress,
     required List<Chapter> chapters,
+    required bool chaptersComplete,
     required LocalBook? localBook,
     required int? cachedChapterCount,
   }) {
@@ -244,7 +263,7 @@ class BookReadingStatusService {
     }
 
     final readableChapters = _readableChapters(chapters);
-    if (readableChapters.isNotEmpty) {
+    if (chaptersComplete && readableChapters.isNotEmpty) {
       return readableChapters.last.index;
     }
 
@@ -272,9 +291,13 @@ class BookReadingStatusService {
     required int targetIndex,
     required bool preferLast,
     required List<Chapter> chapters,
+    required bool chaptersComplete,
     required ReadingProgress? existingProgress,
     required LocalBook? localBook,
   }) async {
+    // 锚点选择顺序要保持稳定：现有进度、本地图书索引、当前目录、
+    // 远程完整目录、最后兜底现有进度。这样既减少网络请求，也避免
+    // 桌面/Web/移动端在相同书籍上写出不同章节位置。
     final normalizedTargetIndex = math.max(0, targetIndex);
     if (existingProgress != null &&
         !preferLast &&
@@ -304,6 +327,7 @@ class BookReadingStatusService {
       chapters: chapters,
       targetIndex: normalizedTargetIndex,
       preferLast: preferLast,
+      chaptersComplete: chaptersComplete,
     );
     if (chapterAnchor != null) {
       return chapterAnchor;
@@ -353,8 +377,12 @@ class BookReadingStatusService {
     final resolvedLocalBook =
         localBook ?? await repository.getBookById(bookId.trim());
     final chapterCount = resolvedLocalBook?.chapterCount ?? 0;
-    final index = preferLast && chapterCount > 0 ? chapterCount - 1 : targetIndex;
-    final chapter = await repository.getChapterMetaByIndex(bookId.trim(), index);
+    final index =
+        preferLast && chapterCount > 0 ? chapterCount - 1 : targetIndex;
+    final chapter = await repository.getChapterMetaByIndex(
+      bookId.trim(),
+      index,
+    );
     if (chapter == null) {
       return null;
     }
@@ -371,9 +399,13 @@ class BookReadingStatusService {
     required List<Chapter> chapters,
     required int targetIndex,
     required bool preferLast,
+    required bool chaptersComplete,
   }) {
     final readableChapters = _readableChapters(chapters);
     if (readableChapters.isEmpty) {
+      return null;
+    }
+    if (preferLast && !chaptersComplete) {
       return null;
     }
 
@@ -423,6 +455,7 @@ class BookReadingStatusService {
         chapters: result.chapters,
         targetIndex: targetIndex,
         preferLast: preferLast,
+        chaptersComplete: result.catalogComplete,
       );
       if (anchor == null) {
         return null;
@@ -440,6 +473,8 @@ class BookReadingStatusService {
   }
 
   List<Chapter> _readableChapters(List<Chapter> chapters) {
-    return chapters.where((chapter) => !chapter.isVolume).toList(growable: false);
+    return chapters
+        .where((chapter) => !chapter.isVolume)
+        .toList(growable: false);
   }
 }

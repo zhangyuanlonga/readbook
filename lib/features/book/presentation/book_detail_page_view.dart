@@ -20,6 +20,8 @@ extension on _BookDetailPageState {
         final canPopRoute = context.canPop();
         final clampedOffset = _detailScrollOffset.clamp(0.0, 96.0);
         final appBarOverlayOpacity = (clampedOffset / 96.0).clamp(0.0, 1.0);
+        final usesInlineMetadataEditor =
+            _isEditingMetadata && !metrics.isMediumUpWindow;
 
         return PopScope<void>(
           canPop: canPopRoute,
@@ -47,7 +49,7 @@ extension on _BookDetailPageState {
                     ),
               ),
               actions: [
-                if (_isEditingMetadata) ...[
+                if (usesInlineMetadataEditor) ...[
                   TextButton(
                     onPressed: _isSavingMetadata ? null : _cancelEditingMode,
                     child: const Text('取消'),
@@ -89,7 +91,7 @@ extension on _BookDetailPageState {
                   valueListenable: _presentationStateNotifier,
                   builder: (context, presentationState, _) {
                     final result = presentationState.result;
-                    return result == null || _isEditingMetadata
+                    return result == null || usesInlineMetadataEditor
                         ? const SizedBox.shrink()
                         : (_buildReadFloatingActionButton(result) ??
                             const SizedBox.shrink());
@@ -148,7 +150,9 @@ extension on _BookDetailPageState {
                                 horizontal,
                                 metrics.sectionGap +
                                     bottomSafe +
-                                    (_isEditingMetadata ? keyboardInset : 0),
+                                    (usesInlineMetadataEditor
+                                        ? keyboardInset
+                                        : 0),
                               ),
                               children: [
                                 if (_metadataInlineNotice != null) ...[

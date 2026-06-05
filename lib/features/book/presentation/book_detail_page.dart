@@ -75,6 +75,7 @@ import '../application/book_local_metadata_service.dart';
 import '../application/book_detail_metadata_flow_service.dart';
 import '../application/book_metadata_edit_service.dart';
 import '../application/book_metadata_presentation_resolver.dart';
+import '../application/book_reading_status_service.dart';
 import 'book_detail_switch_source_helper.dart';
 import 'widgets/book_detail_primary_actions.dart';
 import 'widgets/book_detail_sections.dart';
@@ -164,6 +165,7 @@ class _BookDetailAuxiliaryState {
     this.isShelfStateLoading = true,
     this.isShelfActionLoading = false,
     this.localBookMeta,
+    this.readingProgress,
     this.showLocalAdvancedOptions = false,
   });
 
@@ -171,6 +173,7 @@ class _BookDetailAuxiliaryState {
   final bool isShelfStateLoading;
   final bool isShelfActionLoading;
   final LocalBook? localBookMeta;
+  final ReadingProgress? readingProgress;
   final bool showLocalAdvancedOptions;
 
   _BookDetailAuxiliaryState copyWith({
@@ -179,6 +182,8 @@ class _BookDetailAuxiliaryState {
     bool? isShelfActionLoading,
     LocalBook? localBookMeta,
     bool clearLocalBookMeta = false,
+    ReadingProgress? readingProgress,
+    bool clearReadingProgress = false,
     bool? showLocalAdvancedOptions,
   }) {
     return _BookDetailAuxiliaryState(
@@ -187,11 +192,17 @@ class _BookDetailAuxiliaryState {
       isShelfActionLoading: isShelfActionLoading ?? this.isShelfActionLoading,
       localBookMeta:
           clearLocalBookMeta ? null : (localBookMeta ?? this.localBookMeta),
+      readingProgress:
+          clearReadingProgress
+              ? null
+              : (readingProgress ?? this.readingProgress),
       showLocalAdvancedOptions:
           showLocalAdvancedOptions ?? this.showLocalAdvancedOptions,
     );
   }
 }
+
+enum _EditableCoverAction { gallery, files, focusLink, clear }
 
 class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   static const List<_LocalCharsetOption> _kLocalCharsetOptions =
@@ -249,6 +260,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   late final BookDetailActionService _actionService;
   late final BookDetailCatalogService _catalogService;
   late final BookDetailService _bookDetailService;
+  late final BookReadingStatusService _bookReadingStatusService;
   late final AppLogger _logger;
   final Stopwatch _detailOpenStopwatch = Stopwatch()..start();
   final BookDisplayStateResolver _bookMetadataPresentationResolver =
@@ -263,7 +275,9 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   late final RemoteContentTaskSchedulerService _taskScheduler;
   final TextEditingController _editTitleController = TextEditingController();
   final TextEditingController _editAuthorController = TextEditingController();
+  final TextEditingController _editCoverController = TextEditingController();
   final TextEditingController _editIntroController = TextEditingController();
+  final FocusNode _editCoverFocusNode = FocusNode();
   String? _editingCoverPath;
   String? _editingCharset;
   bool _editingSplitLongChapter = true;
@@ -280,6 +294,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   @override
   void initState() {
     super.initState();
+    _editCoverController.addListener(_handleEditCoverTextChanged);
     _pendingInitialEditMode = widget.initialEditMode;
     _logger = ref.read(app_providers.appLoggerProvider);
     final dependencies = ref.read(bookDetailDependenciesProvider);
@@ -290,6 +305,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     _localMetadataService = ref.read(bookLocalMetadataServiceProvider);
     _bookMetadataEditService = dependencies.bookMetadataEditService;
     _metadataFlowService = dependencies.metadataFlowService;
+    _bookReadingStatusService = dependencies.readingStatusService;
     _actionService = dependencies.actionService;
     _catalogService = dependencies.catalogService;
     _taskConflictService = ref.read(bookTaskConflictServiceProvider);
@@ -389,6 +405,10 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     _localIndexEventSubscription?.cancel();
     _editTitleController.dispose();
     _editAuthorController.dispose();
+    _editCoverController
+      ..removeListener(_handleEditCoverTextChanged)
+      ..dispose();
+    _editCoverFocusNode.dispose();
     _editIntroController.dispose();
     _presentationStateNotifier.dispose();
     _auxiliaryStateNotifier.dispose();
@@ -408,6 +428,19 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     }
     setState(() {
       _detailScrollOffset = offset;
+    });
+  }
+
+  void _handleEditCoverTextChanged() {
+    if (!_isEditingMetadata || !mounted) {
+      return;
+    }
+    final nextCover = _normalizeOptionalEditText(_editCoverController.text);
+    if (nextCover == _editingCoverPath) {
+      return;
+    }
+    setState(() {
+      _editingCoverPath = nextCover;
     });
   }
 
@@ -451,7 +484,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       return;
     }
     _pendingInitialEditMode = false;
-    await _enterEditingMode();
+    await _handleEditAction();
   }
 
   BookDisplayState _resolvePresentedMetadata({BookDetailLoadResult? result}) {
@@ -847,6 +880,216 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     );
   }
 
+  Widget _buildDetailReadingStatusCard({
+    required BookDetailLoadResult result,
+    required _BookDetailAuxiliaryState auxiliaryState,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final status = _readingStatusOfDetail(
+      result: result,
+      auxiliaryState: auxiliaryState,
+    );
+    final progress = auxiliaryState.readingProgress;
+    final chapterTitle = progress?.chapterTitle.trim() ?? '';
+    final subtitle = switch (status) {
+      BookReadingStatus.unread => '尚未记录阅读进度',
+      BookReadingStatus.reading =>
+        chapterTitle.isEmpty ? '正在阅读' : '读到 $chapterTitle',
+      BookReadingStatus.finished =>
+        chapterTitle.isEmpty ? '已读完' : '已读完 · $chapterTitle',
+    };
+
+    return Material(
+      color: colorScheme.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => unawaited(_showReadingStatusPicker(result)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+          child: Row(
+            children: [
+              Icon(
+                _readingStatusIcon(status),
+                size: 22,
+                color: colorScheme.primary,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '阅读状态',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.tonalIcon(
+                onPressed: () => unawaited(_showReadingStatusPicker(result)),
+                icon: const Icon(Icons.expand_more_rounded, size: 18),
+                label: Text(status.label),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  BookReadingStatus _readingStatusOfDetail({
+    required BookDetailLoadResult result,
+    required _BookDetailAuxiliaryState auxiliaryState,
+  }) {
+    final progress = auxiliaryState.readingProgress;
+    return _bookReadingStatusService.resolveStatus(
+      progress: progress,
+      progressValue: _detailReadingProgressValue(
+        result: result,
+        progress: progress,
+      ),
+      hasProgressDisplay: progress != null,
+    );
+  }
+
+  double? _detailReadingProgressValue({
+    required BookDetailLoadResult result,
+    required ReadingProgress? progress,
+  }) {
+    if (progress == null) {
+      return null;
+    }
+    final readableChapterCount =
+        result.detail.totalChapterNum ??
+        result.chapters.where((chapter) => !chapter.isVolume).length;
+    if (readableChapterCount > 0) {
+      final position =
+          progress.chapterIndex + progress.chapterPositionRatio.clamp(0.0, 1.0);
+      return (position / readableChapterCount).clamp(0.0, 1.0);
+    }
+    return progress.chapterPositionRatio.clamp(0.0, 1.0);
+  }
+
+  Future<void> _showReadingStatusPicker(BookDetailLoadResult result) async {
+    if (!mounted) {
+      return;
+    }
+    final currentStatus = _readingStatusOfDetail(
+      result: result,
+      auxiliaryState: _auxiliaryState,
+    );
+    final selected = await showAdaptiveActionSurface<BookReadingStatus>(
+      context: context,
+      maxWidth: 380,
+      builder: (surfaceContext) {
+        final theme = Theme.of(surfaceContext);
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '阅读状态',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 10),
+            for (final status in BookReadingStatus.values)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(_readingStatusIcon(status)),
+                title: Text(status.label),
+                trailing:
+                    status == currentStatus
+                        ? const Icon(Icons.check_rounded)
+                        : null,
+                onTap: () => Navigator.of(surfaceContext).pop(status),
+              ),
+          ],
+        );
+      },
+    );
+    if (selected == null || !mounted) {
+      return;
+    }
+    await _markDetailReadingStatus(result, selected);
+  }
+
+  Future<void> _markDetailReadingStatus(
+    BookDetailLoadResult result,
+    BookReadingStatus status,
+  ) async {
+    if (_readingStatusOfDetail(
+          result: result,
+          auxiliaryState: _auxiliaryState,
+        ) ==
+        status) {
+      _showMessage('当前已是${status.label}。');
+      return;
+    }
+
+    final localBook =
+        _isLocalContent ? await _ensureEditableLocalBookMeta() : _localBookMeta;
+    BookReadingStatusMarkResult? markResult;
+    try {
+      markResult = await _bookReadingStatusService.markBookDetailStatus(
+        detail: result.detail,
+        chapters: result.chapters,
+        chaptersComplete: result.catalogComplete,
+        status: status,
+        existingProgress: _auxiliaryState.readingProgress,
+        localBook: localBook,
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage('阅读状态保存失败，请重试。');
+      return;
+    }
+
+    if (markResult == null) {
+      if (mounted) {
+        _showMessage('暂无可用章节，暂不能标记为${status.label}。');
+      }
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+    _updateAuxiliaryState(
+      _auxiliaryState.copyWith(
+        clearReadingProgress: markResult.progress == null,
+        readingProgress: markResult.progress,
+      ),
+    );
+    _showMessage(
+      markResult.progress == null ? '已标记为未读。' : '已标记为${status.label}。',
+    );
+  }
+
+  IconData _readingStatusIcon(BookReadingStatus status) {
+    return switch (status) {
+      BookReadingStatus.unread => Icons.markunread_outlined,
+      BookReadingStatus.reading => Icons.menu_book_outlined,
+      BookReadingStatus.finished => Icons.task_alt_rounded,
+    };
+  }
+
   Widget _buildDetailServerMetaLine(BookDetailLoadResult result) {
     final detail = result.detail;
     return BookDetailServerMetaLine(
@@ -963,15 +1206,13 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       ],
     ];
 
-    if (_isEditingMetadata) {
-      sections.addAll(<Widget>[
-        _buildEditingDetailCard(result),
-        SizedBox(height: metrics.sectionGap),
-        _buildEditingActionCard(result),
-        SizedBox(height: metrics.sectionGap),
-        _buildEditingIntroCard(result),
-        _buildEditingLocalOptionsCard(),
-      ]);
+    if (_isEditingMetadata && !metrics.isMediumUpWindow) {
+      sections.add(
+        _buildMobileMetadataEditor(
+          result: result,
+          auxiliaryState: auxiliaryState,
+        ),
+      );
     } else {
       final introCard = _buildPresentedIntroCard(result);
       final localBookMeta = auxiliaryState.localBookMeta;
@@ -1034,6 +1275,11 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
                       SizedBox(height: metrics.sectionGap),
                     ],
                     quickActionsCard,
+                    SizedBox(height: metrics.sectionGap),
+                    _buildDetailReadingStatusCard(
+                      result: result,
+                      auxiliaryState: auxiliaryState,
+                    ),
                     if (_detailCategory != null || _detailTags.isNotEmpty) ...[
                       SizedBox(height: metrics.sectionGap),
                       organizationCard,
@@ -1057,6 +1303,11 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
             SizedBox(height: metrics.sectionGap),
           ],
           quickActionsCard,
+          SizedBox(height: metrics.sectionGap),
+          _buildDetailReadingStatusCard(
+            result: result,
+            auxiliaryState: auxiliaryState,
+          ),
           if (_detailCategory != null || _detailTags.isNotEmpty) ...[
             SizedBox(height: metrics.sectionGap),
             organizationCard,
@@ -1109,7 +1360,442 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     ];
   }
 
-  Widget _buildEditingDetailCard(BookDetailLoadResult result) {
+  Widget _buildMobileMetadataEditor({
+    required BookDetailLoadResult result,
+    required _BookDetailAuxiliaryState auxiliaryState,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildMobileEditableCover(result),
+        const SizedBox(height: 18),
+        _buildMobileEditTextField(
+          controller: _editTitleController,
+          label: '书名',
+          textInputAction: TextInputAction.next,
+        ),
+        const SizedBox(height: 12),
+        _buildMobileEditTextField(
+          controller: _editAuthorController,
+          label: '作者',
+          textInputAction: TextInputAction.next,
+        ),
+        const SizedBox(height: 12),
+        _buildMobileEditTextField(
+          controller: _editCoverController,
+          focusNode: _editCoverFocusNode,
+          label: '封面链接',
+          hintText: '可粘贴图片链接，或点击封面选择本地图片',
+          keyboardType: TextInputType.url,
+          textInputAction: TextInputAction.next,
+          suffixIcon: IconButton(
+            tooltip: '清空封面',
+            onPressed: _isSavingMetadata ? null : _clearEditingCover,
+            icon: const Icon(Icons.close_rounded),
+          ),
+        ),
+        const SizedBox(height: 16),
+        _buildMobileReadingStatusSegment(
+          result: result,
+          auxiliaryState: auxiliaryState,
+        ),
+        const SizedBox(height: 16),
+        _buildMobileEditTextField(
+          controller: _editIntroController,
+          label: '简介',
+          hintText: '输入书籍简介',
+          minLines: 4,
+          maxLines: 8,
+          textInputAction: TextInputAction.newline,
+        ),
+        if (_isLocalContent && _localBookMeta != null) ...[
+          const SizedBox(height: 18),
+          _buildMobileEditingLocalOptions(),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildMobileEditableCover(BookDetailLoadResult result) {
+    final detail = result.detail;
+    final presentation = _resolvePresentedMetadata(result: result);
+    final title =
+        _editTitleController.text.trim().isEmpty
+            ? presentation.displayTitle
+            : _editTitleController.text.trim();
+    final author =
+        _editAuthorController.text.trim().isEmpty
+            ? presentation.displayAuthor
+            : _editAuthorController.text.trim();
+    final heroTag =
+        widget.heroTag?.trim().isNotEmpty == true
+            ? widget.heroTag!.trim()
+            : _buildBookCoverHeroTag(
+              bookId: detail.id,
+              sourceId: detail.sourceId,
+              detailUrl: detail.detailUrl,
+            );
+
+    return Column(
+      children: [
+        _buildCoverPreview(
+          presentation.realCoverUrl,
+          customCoverPath: _editingCoverPath,
+          title: title,
+          author: author,
+          heroTag: heroTag,
+          bookId: detail.id,
+          sourceId: detail.sourceId,
+          detailUrl: detail.detailUrl,
+          coverWidth: 128,
+          onTap:
+              _isSavingMetadata
+                  ? null
+                  : () => unawaited(_showEditableCoverActionSheet(result)),
+        ),
+        const SizedBox(height: 10),
+        TextButton.icon(
+          onPressed:
+              _isSavingMetadata
+                  ? null
+                  : () => unawaited(_showEditableCoverActionSheet(result)),
+          icon: const Icon(Icons.photo_library_outlined, size: 18),
+          label: const Text('点击封面更换'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileEditTextField({
+    required TextEditingController controller,
+    FocusNode? focusNode,
+    required String label,
+    String? hintText,
+    TextInputType? keyboardType,
+    TextInputAction? textInputAction,
+    Widget? suffixIcon,
+    int minLines = 1,
+    int maxLines = 1,
+  }) {
+    return TextField(
+      controller: controller,
+      focusNode: focusNode,
+      enabled: !_isSavingMetadata,
+      keyboardType: keyboardType,
+      textInputAction: textInputAction,
+      minLines: minLines,
+      maxLines: maxLines,
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hintText,
+        filled: true,
+        fillColor: Theme.of(context).colorScheme.surfaceContainerLowest,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(
+            color: Theme.of(context).colorScheme.outlineVariant,
+          ),
+        ),
+        suffixIcon: suffixIcon,
+      ),
+    );
+  }
+
+  Widget _buildMobileReadingStatusSegment({
+    required BookDetailLoadResult result,
+    required _BookDetailAuxiliaryState auxiliaryState,
+  }) {
+    final theme = Theme.of(context);
+    final currentStatus = _readingStatusOfDetail(
+      result: result,
+      auxiliaryState: auxiliaryState,
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '阅读状态',
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: SegmentedButton<BookReadingStatus>(
+            showSelectedIcon: false,
+            selected: <BookReadingStatus>{currentStatus},
+            style: ButtonStyle(
+              visualDensity: VisualDensity.compact,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              padding: WidgetStateProperty.all(
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+              ),
+            ),
+            segments: [
+              for (final status in BookReadingStatus.values)
+                ButtonSegment<BookReadingStatus>(
+                  value: status,
+                  label: Text(status.label),
+                  icon: Icon(_readingStatusIcon(status), size: 18),
+                ),
+            ],
+            onSelectionChanged:
+                _isSavingMetadata
+                    ? null
+                    : (values) {
+                      if (values.isEmpty) {
+                        return;
+                      }
+                      final next = values.first;
+                      unawaited(_markDetailReadingStatus(result, next));
+                    },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileEditingLocalOptions() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '本地图书高级项',
+          style: Theme.of(
+            context,
+          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 12),
+        DropdownButtonFormField<String?>(
+          initialValue: _editingCharset,
+          decoration: InputDecoration(
+            labelText: '编码',
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+          items: _kLocalCharsetOptions
+              .map(
+                (option) => DropdownMenuItem<String?>(
+                  value: option.charset,
+                  child: Text(option.label),
+                ),
+              )
+              .toList(growable: false),
+          onChanged:
+              _isSavingMetadata
+                  ? null
+                  : (value) {
+                    setState(() {
+                      _editingCharset = value;
+                    });
+                  },
+        ),
+        const SizedBox(height: 8),
+        SwitchListTile.adaptive(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('长章节拆分'),
+          subtitle: const Text('保存后可选择重新索引使正文生效。'),
+          value: _editingSplitLongChapter,
+          onChanged:
+              _isSavingMetadata
+                  ? null
+                  : (value) {
+                    setState(() {
+                      _editingSplitLongChapter = value;
+                    });
+                  },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDesktopMetadataEditorDialog({
+    required BuildContext surfaceContext,
+    required BookDetailLoadResult result,
+    required _BookDetailAuxiliaryState auxiliaryState,
+    required VoidCallback refreshSurface,
+    required VoidCallback onCancel,
+    required Future<void> Function() onReset,
+    required Future<void> Function() onSave,
+  }) {
+    final theme = Theme.of(surfaceContext);
+    final colorScheme = theme.colorScheme;
+    final presentation = _resolvePresentedMetadata(result: result);
+    final title = presentation.displayTitle.trim();
+    final author = (presentation.displayAuthor ?? '').trim();
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 18, 16, 16),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '编辑书籍',
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    if (title.isNotEmpty || author.isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        [
+                          if (title.isNotEmpty) title,
+                          if (author.isNotEmpty) author,
+                        ].join(' · '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: '关闭',
+                onPressed: _isSavingMetadata ? null : onCancel,
+                icon: const Icon(Icons.close_rounded),
+              ),
+            ],
+          ),
+        ),
+        Divider(height: 1, color: colorScheme.outlineVariant),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 22, 24, 22),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 220,
+                child: _buildDesktopEditableCover(
+                  result,
+                  refreshSurface: refreshSurface,
+                ),
+              ),
+              const SizedBox(width: 28),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildDesktopEditTextField(
+                      controller: _editTitleController,
+                      label: '书名',
+                      textInputAction: TextInputAction.next,
+                    ),
+                    const SizedBox(height: 12),
+                    _buildDesktopEditTextField(
+                      controller: _editAuthorController,
+                      label: '作者',
+                      textInputAction: TextInputAction.next,
+                    ),
+                    const SizedBox(height: 12),
+                    _buildDesktopEditTextField(
+                      controller: _editCoverController,
+                      focusNode: _editCoverFocusNode,
+                      label: '封面链接',
+                      hintText: '可粘贴图片链接，或点击左侧封面选择本地图片',
+                      keyboardType: TextInputType.url,
+                      textInputAction: TextInputAction.next,
+                      suffixIcon: IconButton(
+                        tooltip: '清空封面',
+                        onPressed:
+                            _isSavingMetadata
+                                ? null
+                                : () {
+                                  _clearEditingCover();
+                                  refreshSurface();
+                                },
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    _buildDesktopReadingStatusSegment(
+                      result: result,
+                      auxiliaryState: auxiliaryState,
+                      refreshSurface: refreshSurface,
+                    ),
+                    const SizedBox(height: 14),
+                    _buildDesktopEditTextField(
+                      controller: _editIntroController,
+                      label: '简介',
+                      hintText: '输入书籍简介',
+                      minLines: 4,
+                      maxLines: 7,
+                      textInputAction: TextInputAction.newline,
+                    ),
+                    if (_isLocalContent && _localBookMeta != null) ...[
+                      const SizedBox(height: 18),
+                      _buildDesktopEditingLocalOptions(
+                        refreshSurface: refreshSurface,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        Divider(height: 1, color: colorScheme.outlineVariant),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 14, 24, 18),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _isLocalContent
+                      ? '本地图书信息保存后会影响书架和阅读展示。'
+                      : '在线书仅保存本地覆盖信息，不会修改书源数据。',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              TextButton(
+                onPressed: _isSavingMetadata ? null : onCancel,
+                child: const Text('取消'),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
+                onPressed:
+                    _isSavingMetadata ? null : () => unawaited(onReset()),
+                icon: const Icon(Icons.restart_alt_rounded, size: 18),
+                label: const Text('恢复默认'),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                onPressed: _isSavingMetadata ? null : () => unawaited(onSave()),
+                icon:
+                    _isSavingMetadata
+                        ? const SizedBox.square(
+                          dimension: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                        : const Icon(Icons.save_outlined, size: 18),
+                label: Text(_isSavingMetadata ? '保存中' : '保存'),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDesktopEditableCover(
+    BookDetailLoadResult result, {
+    required VoidCallback refreshSurface,
+  }) {
     final detail = result.detail;
     final heroTag =
         widget.heroTag?.trim().isNotEmpty == true
@@ -1119,213 +1805,187 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
               sourceId: detail.sourceId,
               detailUrl: detail.detailUrl,
             );
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+
+    return AnimatedBuilder(
+      animation: Listenable.merge(<Listenable>[
+        _editTitleController,
+        _editAuthorController,
+        _editCoverController,
+      ]),
+      builder: (context, _) {
+        final presentation = _resolvePresentedMetadata(result: result);
+        final title =
+            _editTitleController.text.trim().isEmpty
+                ? presentation.displayTitle
+                : _editTitleController.text.trim();
+        final author =
+            _editAuthorController.text.trim().isEmpty
+                ? presentation.displayAuthor
+                : _editAuthorController.text.trim();
+        return Column(
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildCoverPreview(
-                  _resolvePresentedMetadata(result: result).realCoverUrl,
-                  customCoverPath: _editingCoverPath,
-                  title:
-                      _editTitleController.text.trim().isEmpty
-                          ? _resolvePresentedMetadata(
-                            result: result,
-                          ).displayTitle
-                          : _editTitleController.text.trim(),
-                  author:
-                      _editAuthorController.text.trim().isEmpty
-                          ? null
-                          : _editAuthorController.text.trim(),
-                  heroTag: heroTag,
-                  bookId: detail.id,
-                  sourceId: detail.sourceId,
-                  detailUrl: detail.detailUrl,
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    children: [
-                      TextField(
-                        controller: _editTitleController,
-                        enabled: !_isSavingMetadata,
-                        decoration: const InputDecoration(
-                          labelText: '书名',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      TextField(
-                        controller: _editAuthorController,
-                        enabled: !_isSavingMetadata,
-                        decoration: const InputDecoration(
-                          labelText: '作者',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+            _buildCoverPreview(
+              presentation.realCoverUrl,
+              customCoverPath: _editingCoverPath,
+              title: title,
+              author: author,
+              heroTag: '${heroTag}_desktop_editor',
+              bookId: detail.id,
+              sourceId: detail.sourceId,
+              detailUrl: detail.detailUrl,
+              coverWidth: 176,
+              onTap:
+                  _isSavingMetadata
+                      ? null
+                      : () async {
+                        await _showEditableCoverActionSheet(result);
+                        refreshSurface();
+                      },
             ),
             const SizedBox(height: 12),
+            TextButton.icon(
+              onPressed:
+                  _isSavingMetadata
+                      ? null
+                      : () async {
+                        await _showEditableCoverActionSheet(result);
+                        refreshSurface();
+                      },
+              icon: const Icon(Icons.photo_library_outlined, size: 18),
+              label: const Text('点击封面更换'),
+            ),
           ],
+        );
+      },
+    );
+  }
+
+  Widget _buildDesktopEditTextField({
+    required TextEditingController controller,
+    FocusNode? focusNode,
+    required String label,
+    String? hintText,
+    TextInputType? keyboardType,
+    TextInputAction? textInputAction,
+    Widget? suffixIcon,
+    int minLines = 1,
+    int maxLines = 1,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return TextField(
+      controller: controller,
+      focusNode: focusNode,
+      enabled: !_isSavingMetadata,
+      keyboardType: keyboardType,
+      textInputAction: textInputAction,
+      minLines: minLines,
+      maxLines: maxLines,
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hintText,
+        isDense: true,
+        filled: true,
+        fillColor: colorScheme.surfaceContainerLowest,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 13,
+          vertical: 12,
         ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: colorScheme.outlineVariant),
+        ),
+        suffixIcon: suffixIcon,
       ),
     );
   }
 
-  Widget _buildEditingIntroCard(BookDetailLoadResult result) {
-    return Column(
+  Widget _buildDesktopReadingStatusSegment({
+    required BookDetailLoadResult result,
+    required _BookDetailAuxiliaryState auxiliaryState,
+    required VoidCallback refreshSurface,
+  }) {
+    final theme = Theme.of(context);
+    final currentStatus = _readingStatusOfDetail(
+      result: result,
+      auxiliaryState: auxiliaryState,
+    );
+    return Row(
       children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '简介',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _editIntroController,
-                enabled: !_isSavingMetadata,
-                minLines: 6,
-                maxLines: 12,
-                decoration: const InputDecoration(
-                  hintText: '输入书籍简介',
-                  border: OutlineInputBorder(),
-                  alignLabelWithHint: true,
-                ),
-              ),
-            ],
+        SizedBox(
+          width: 72,
+          child: Text(
+            '阅读状态',
+            style: theme.textTheme.labelLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(width: 12),
+        Expanded(
+          child: SegmentedButton<BookReadingStatus>(
+            showSelectedIcon: false,
+            selected: <BookReadingStatus>{currentStatus},
+            style: ButtonStyle(
+              visualDensity: VisualDensity.compact,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              padding: WidgetStateProperty.all(
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              ),
+            ),
+            segments: [
+              for (final status in BookReadingStatus.values)
+                ButtonSegment<BookReadingStatus>(
+                  value: status,
+                  label: Text(status.label),
+                  icon: Icon(_readingStatusIcon(status), size: 18),
+                ),
+            ],
+            onSelectionChanged:
+                _isSavingMetadata
+                    ? null
+                    : (values) {
+                      if (values.isEmpty) {
+                        return;
+                      }
+                      unawaited(
+                        _markDetailReadingStatus(
+                          result,
+                          values.first,
+                        ).then((_) => refreshSurface()),
+                      );
+                    },
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildEditingActionCard(BookDetailLoadResult result) {
+  Widget _buildDesktopEditingLocalOptions({
+    required VoidCallback refreshSurface,
+  }) {
+    final theme = Theme.of(context);
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: Theme.of(context).colorScheme.outlineVariant,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '操作',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  OutlinedButton.icon(
-                    onPressed:
-                        _isSavingMetadata
-                            ? null
-                            : () async {
-                              final nextPath = await _pickEditableCoverPath(
-                                result,
-                              );
-                              if (!mounted || nextPath == null) {
-                                return;
-                              }
-                              setState(() {
-                                _editingCoverPath = nextPath;
-                              });
-                            },
-                    icon: const Icon(Icons.image_outlined, size: 16),
-                    label: const Text('更换封面'),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed:
-                        _isSavingMetadata
-                            ? null
-                            : () {
-                              setState(() {
-                                _editingCoverPath = null;
-                              });
-                            },
-                    icon: const Icon(Icons.delete_outline, size: 16),
-                    label: const Text('移除封面'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Text(
-                _isLocalContent
-                    ? '当前为本地图书编辑，保存后会影响书架和阅读展示。'
-                    : '当前为在线书本地覆盖编辑，保存后不会修改书源。',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  height: 1.35,
-                ),
-              ),
-            ],
+        Text(
+          '本地图书高级项',
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w700,
           ),
         ),
-        const SizedBox(height: 12),
-      ],
-    );
-  }
-
-  Widget _buildEditingLocalOptionsCard() {
-    if (!_isLocalContent || _localBookMeta == null) {
-      return const SizedBox.shrink();
-    }
-    return Column(
-      children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: Theme.of(context).colorScheme.outlineVariant,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '本地图书高级项',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String?>(
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: DropdownButtonFormField<String?>(
                 initialValue: _editingCharset,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: '编码',
-                  border: OutlineInputBorder(),
+                  isDense: true,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
                 items: _kLocalCharsetOptions
                     .map(
@@ -1342,13 +2002,17 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
                           setState(() {
                             _editingCharset = value;
                           });
+                          refreshSurface();
                         },
               ),
-              const SizedBox(height: 12),
-              SwitchListTile.adaptive(
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: SwitchListTile.adaptive(
                 contentPadding: EdgeInsets.zero,
+                dense: true,
                 title: const Text('长章节拆分'),
-                subtitle: const Text('修改后可选择立即重新索引使正文生效。'),
+                subtitle: const Text('保存后可选择重新索引。'),
                 value: _editingSplitLongChapter,
                 onChanged:
                     _isSavingMetadata
@@ -1357,12 +2021,12 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
                           setState(() {
                             _editingSplitLongChapter = value;
                           });
+                          refreshSurface();
                         },
               ),
-            ],
-          ),
+            ),
+          ],
         ),
-        const SizedBox(height: 12),
       ],
     );
   }
@@ -1707,6 +2371,11 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       return null;
     }
     return trimmed;
+  }
+
+  String? _normalizeOptionalEditText(String? value) {
+    final trimmed = value?.trim() ?? '';
+    return trimmed.isEmpty ? null : trimmed;
   }
 
   void _applyLocalSchemeFallback() {
@@ -2378,6 +3047,9 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       sourceId: sourceId,
       detailUrl: detailUrl,
     );
+    final readingProgressFuture = _loadReadingProgressSnapshot(
+      detail: result.detail,
+    );
     final bookshelfStateFuture = _loadBookshelfStateSnapshot(
       sourceId: sourceId,
       detailUrl: detailUrl,
@@ -2385,6 +3057,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
 
     final localBook = await localBookFuture;
     final metadataOverride = await metadataOverrideFuture;
+    final readingProgress = await readingProgressFuture;
     final isActive =
         loadRequestToken != null
             ? _isActiveDetailLoadRequest(loadRequestToken)
@@ -2398,6 +3071,8 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       _auxiliaryState.copyWith(
         clearLocalBookMeta: localBook == null,
         localBookMeta: localBook,
+        clearReadingProgress: readingProgress == null,
+        readingProgress: readingProgress,
         showLocalAdvancedOptions: _resolveShowLocalAdvancedOptions(
           localBook,
           currentValue: initialShowLocalAdvancedOptions,
@@ -2539,6 +3214,28 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       sourceId: sourceId,
       detailUrl: detailUrl,
     );
+  }
+
+  Future<ReadingProgress?> _loadReadingProgressSnapshot({
+    required BookDetail detail,
+  }) async {
+    final bookId = detail.id.trim();
+    if (bookId.isEmpty) {
+      return null;
+    }
+    final progress = await _readerPreferencesService.loadProgress(bookId);
+    if (!_isProgressMatchingDetail(progress, detail)) {
+      return null;
+    }
+    return progress;
+  }
+
+  bool _isProgressMatchingDetail(ReadingProgress? progress, BookDetail detail) {
+    if (progress == null) {
+      return false;
+    }
+    return progress.sourceId.trim() == detail.sourceId.trim() &&
+        progress.detailUrl.trim() == detail.detailUrl.trim();
   }
 
   Future<bool> _loadBookshelfStateSnapshot({

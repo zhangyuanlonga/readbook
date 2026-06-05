@@ -22,6 +22,8 @@ extension on _BookDetailPageState {
     _editAuthorController.text = presentation.displayAuthor ?? '';
     _editIntroController.text = presentation.displayIntro ?? '';
     _editingCoverPath = presentation.customCoverPath;
+    _editCoverController.text =
+        presentation.customCoverPath ?? presentation.realCoverUrl ?? '';
     _editingCharset = ensuredLocalBook?.charset?.trim();
     if (_editingCharset != null && _editingCharset!.isEmpty) {
       _editingCharset = null;
@@ -73,7 +75,7 @@ extension on _BookDetailPageState {
         title: _editTitleController.text.trim(),
         author: _editAuthorController.text.trim(),
         intro: _editIntroController.text.trim(),
-        customCoverPath: _editingCoverPath,
+        customCoverPath: _resolveEditingCoverDraftValue(result),
         charset: _editingCharset,
         splitLongChapter: _editingSplitLongChapter,
       );
@@ -152,13 +154,233 @@ extension on _BookDetailPageState {
   }
 
   Future<void> _handleEditAction() async {
+    final useDesktopEditor = AppAdaptiveMetrics.of(context).isMediumUpWindow;
     await _enterEditingMode();
+    if (!mounted || !_isEditingMetadata || !useDesktopEditor) {
+      return;
+    }
+    final result = _result;
+    if (result == null) {
+      _cancelEditingMode();
+      return;
+    }
+    await _showDesktopMetadataEditorDialog(result);
   }
 
-  Future<String?> _pickEditableCoverPath(BookDetailLoadResult result) async {
+  /// 桌面端编辑使用弹窗承载，业务状态仍复用详情页现有控制器和保存链路。
+  Future<void> _showDesktopMetadataEditorDialog(
+    BookDetailLoadResult result,
+  ) async {
+    await showAdaptiveActionSurface<bool>(
+      context: context,
+      mode: AdaptiveActionSurfaceMode.desktopDialog,
+      maxWidth: 920,
+      maxHeightFactor: 0.9,
+      padding: EdgeInsets.zero,
+      builder: (surfaceContext) {
+        return StatefulBuilder(
+          builder: (surfaceContext, setSurfaceState) {
+            Future<void> closeAfterSuccessfulAction(
+              Future<void> Function() action,
+            ) async {
+              final actionFuture = action();
+              if (!mounted || !surfaceContext.mounted) {
+                return;
+              }
+              setSurfaceState(() {});
+              await actionFuture;
+              if (!mounted || !surfaceContext.mounted) {
+                return;
+              }
+              setSurfaceState(() {});
+              if (!_isEditingMetadata) {
+                Navigator.of(surfaceContext).pop(true);
+              }
+            }
+
+            return _buildDesktopMetadataEditorDialog(
+              surfaceContext: surfaceContext,
+              result: _result ?? result,
+              auxiliaryState: _auxiliaryState,
+              refreshSurface: () {
+                if (surfaceContext.mounted) {
+                  setSurfaceState(() {});
+                }
+              },
+              onCancel: () => Navigator.of(surfaceContext).pop(false),
+              onReset:
+                  () => closeAfterSuccessfulAction(_handleResetMetadataEditing),
+              onSave:
+                  () => closeAfterSuccessfulAction(_handleSaveMetadataEditing),
+            );
+          },
+        );
+      },
+    );
+
+    if (mounted && _isEditingMetadata) {
+      _cancelEditingMode();
+    }
+  }
+
+  Future<String?> _pickEditableCoverPath(
+    BookDetailLoadResult result, {
+    ImageSelectionSource source = ImageSelectionSource.auto,
+  }) async {
     return _bookMetadataEditService.pickAndPersistCustomCover(
       detail: result.detail,
+      source: source,
     );
+  }
+
+  Future<void> _showEditableCoverActionSheet(
+    BookDetailLoadResult result,
+  ) async {
+    final action = await showAdaptiveActionSurface<_EditableCoverAction>(
+      context: context,
+      maxWidth: 420,
+      padding: EdgeInsets.zero,
+      builder: (surfaceContext) {
+        final colorScheme = Theme.of(surfaceContext).colorScheme;
+        final bottomInset = MediaQuery.viewPaddingOf(surfaceContext).bottom;
+        return SafeArea(
+          top: false,
+          bottom: false,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(8, 0, 8, 12 + bottomInset),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: Text(
+                    '更换封面',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(surfaceContext).textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                ListTile(
+                  leading: Icon(
+                    Icons.photo_library_outlined,
+                    color: colorScheme.primary,
+                  ),
+                  title: const Text('相册'),
+                  subtitle: const Text('从系统照片库选择封面图片'),
+                  onTap:
+                      () => Navigator.of(
+                        surfaceContext,
+                      ).pop(_EditableCoverAction.gallery),
+                ),
+                ListTile(
+                  leading: Icon(
+                    Icons.folder_open_outlined,
+                    color: colorScheme.primary,
+                  ),
+                  title: const Text('文件'),
+                  subtitle: const Text('从文件 App 或本地目录选择封面图片'),
+                  onTap:
+                      () => Navigator.of(
+                        surfaceContext,
+                      ).pop(_EditableCoverAction.files),
+                ),
+                ListTile(
+                  leading: Icon(Icons.link_rounded, color: colorScheme.primary),
+                  title: const Text('封面链接'),
+                  subtitle: const Text('粘贴图片链接作为封面'),
+                  onTap:
+                      () => Navigator.of(
+                        surfaceContext,
+                      ).pop(_EditableCoverAction.focusLink),
+                ),
+                ListTile(
+                  leading: Icon(
+                    Icons.delete_outline_rounded,
+                    color: colorScheme.error,
+                  ),
+                  title: Text(
+                    '清除封面',
+                    style: TextStyle(color: colorScheme.error),
+                  ),
+                  onTap:
+                      () => Navigator.of(
+                        surfaceContext,
+                      ).pop(_EditableCoverAction.clear),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (action == null || !mounted) {
+      return;
+    }
+
+    switch (action) {
+      case _EditableCoverAction.gallery:
+        await _pickAndSetEditingCoverPath(
+          result,
+          source: ImageSelectionSource.gallery,
+        );
+      case _EditableCoverAction.files:
+        await _pickAndSetEditingCoverPath(
+          result,
+          source: ImageSelectionSource.files,
+        );
+      case _EditableCoverAction.focusLink:
+        _editCoverFocusNode.requestFocus();
+      case _EditableCoverAction.clear:
+        _clearEditingCover();
+    }
+  }
+
+  Future<void> _pickAndSetEditingCoverPath(
+    BookDetailLoadResult result, {
+    required ImageSelectionSource source,
+  }) async {
+    try {
+      final nextPath = await _pickEditableCoverPath(result, source: source);
+      if (!mounted || nextPath == null) {
+        return;
+      }
+      _setEditingCoverPath(nextPath);
+    } on ImageSelectionException catch (error) {
+      _showMessage(error.message);
+    } catch (_) {
+      _showMessage('设置封面失败，请重试。');
+    }
+  }
+
+  void _setEditingCoverPath(String? value) {
+    final normalized = _normalizeOptionalEditText(value);
+    _updateDetailPageState(() {
+      _editingCoverPath = normalized;
+    });
+    final nextText = normalized ?? '';
+    if (_editCoverController.text != nextText) {
+      _editCoverController.text = nextText;
+    }
+  }
+
+  void _clearEditingCover() {
+    _setEditingCoverPath(null);
+  }
+
+  String? _resolveEditingCoverDraftValue(BookDetailLoadResult result) {
+    final normalized = _normalizeOptionalEditText(_editCoverController.text);
+    if (normalized == null) {
+      return null;
+    }
+    final presentation = _resolvePresentedMetadata(result: result);
+    final hasCustomCover =
+        presentation.customCoverPath?.trim().isNotEmpty == true;
+    if (!hasCustomCover &&
+        normalized == (presentation.realCoverUrl ?? '').trim()) {
+      return null;
+    }
+    return normalized;
   }
 
   Future<void> _saveRemoteBookMetadata({

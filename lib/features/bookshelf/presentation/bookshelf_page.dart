@@ -49,6 +49,7 @@ import '../providers.dart';
 import '../../reader/application/reader_preferences_service.dart';
 import '../../reader/application/local/local_book_index_service.dart';
 import '../../reader/application/local/local_book_workflow_policy.dart';
+import '../../book/application/book_reading_status_service.dart';
 import '../../book/application/book_metadata_presentation_resolver.dart';
 import '../../book/application/book_detail_service.dart';
 import '../../book/application/custom_cover_storage_service.dart';
@@ -74,7 +75,7 @@ enum _BookshelfMoreAction { selectBooks, sortBooks, settings, importLocal }
 
 typedef _BookshelfSortMode = BookshelfSortMode;
 
-typedef _BookshelfReadingStatus = BookshelfReadingStatus;
+typedef _BookshelfReadingStatus = BookReadingStatus;
 
 typedef _BookshelfViewKind = BookshelfViewKind;
 
@@ -107,20 +108,6 @@ class _BookCategoryEditorResult {
 
   final String? category;
   final List<BookshelfTaxonomyItem> createdItems;
-}
-
-class _BookProgressAnchor {
-  const _BookProgressAnchor({
-    required this.chapterId,
-    required this.chapterUrl,
-    required this.chapterTitle,
-    required this.chapterIndex,
-  });
-
-  final String chapterId;
-  final String chapterUrl;
-  final String chapterTitle;
-  final int chapterIndex;
 }
 
 enum _BookshelfSearchQuickFilterContent { none, tags, categories }
@@ -540,6 +527,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   final BookDisplayStateResolver _bookMetadataPresentationResolver =
       const BookDisplayStateResolver();
   late final BookDetailService _bookDetailService;
+  late final BookReadingStatusService _bookReadingStatusService;
   late final BookshelfReaderOpenService _readerOpenService;
   late final AppLogger _logger;
   final TextEditingController _bookshelfSearchController =
@@ -749,6 +737,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     _pageRouteService = dependencies.pageRouteService;
     _localBookIndexService = dependencies.localBookIndexService;
     _bookDetailService = dependencies.bookDetailService;
+    _bookReadingStatusService = dependencies.readingStatusService;
     _readerOpenService = dependencies.readerOpenService;
     _logger = dependencies.logger;
     _localBookImportService = dependencies.localBookImportService;
@@ -2327,46 +2316,15 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     }
 
     final bookKey = _bookKey(book);
-    if (status == _BookshelfReadingStatus.unread) {
-      try {
-        await _readerPreferencesService.deleteProgress(book.bookId);
-      } catch (_) {
-        if (!mounted) {
-          return;
-        }
-        _showMessage('阅读状态保存失败，请重试。');
-        return;
-      }
-      if (!mounted) {
-        return;
-      }
-      _updateBookshelfLayoutPreservingScroll(() {
-        _updateBookshelfState(() {
-          final nextProgress = Map<String, ReadingProgress>.from(
-            _progressByBookKey,
-          )..remove(bookKey);
-          _progressByBookKey = Map<String, ReadingProgress>.unmodifiable(
-            nextProgress,
-          );
-          _derivedBookshelfFingerprint = null;
-          _ensureFilterStillValid();
-        });
-      });
-      _updateBookCardState(book, clearProgress: true);
-      _showMessage('已标记为未读。');
-      return;
-    }
-
-    final progress = await _buildMarkedReadingProgress(book, status: status);
-    if (progress == null) {
-      if (mounted) {
-        _showMessage('暂无可用章节，暂不能标记为${_readingStatusLabel(status)}。');
-      }
-      return;
-    }
-
+    BookReadingStatusMarkResult? result;
     try {
-      await _readerPreferencesService.saveProgress(progress);
+      result = await _bookReadingStatusService.markBookshelfBookStatus(
+        book: book,
+        status: status,
+        existingProgress: _progressByBookKey[bookKey],
+        localBook: _bookshelfLocalBook(book),
+        cachedChapterCount: _cachedChapterCountByBookKey[bookKey],
+      );
     } catch (_) {
       if (!mounted) {
         return;
@@ -2374,221 +2332,54 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       _showMessage('阅读状态保存失败，请重试。');
       return;
     }
+    if (result == null) {
+      if (mounted) {
+        _showMessage('暂无可用章节，暂不能标记为${_readingStatusLabel(status)}。');
+      }
+      return;
+    }
+    final markResult = result;
 
     if (!mounted) {
       return;
     }
     _updateBookshelfLayoutPreservingScroll(() {
       _updateBookshelfState(() {
-        _progressByBookKey = Map<String, ReadingProgress>.unmodifiable(
-          Map<String, ReadingProgress>.from(_progressByBookKey)
-            ..[bookKey] = progress,
+        final nextProgress = Map<String, ReadingProgress>.from(
+          _progressByBookKey,
         );
+        final progress = markResult.progress;
+        if (progress == null) {
+          nextProgress.remove(bookKey);
+        } else {
+          nextProgress[bookKey] = progress;
+        }
+        _progressByBookKey = Map<String, ReadingProgress>.unmodifiable(
+          nextProgress,
+        );
+        final cachedChapterCount = markResult.cachedChapterCount;
+        if (cachedChapterCount != null && cachedChapterCount > 0) {
+          _cachedChapterCountByBookKey = Map<String, int>.unmodifiable(
+            Map<String, int>.from(_cachedChapterCountByBookKey)
+              ..[bookKey] = cachedChapterCount,
+          );
+        }
         _derivedBookshelfFingerprint = null;
         _ensureFilterStillValid();
       });
     });
-    _updateBookCardState(book, progress: progress);
-    _showMessage('已标记为${_readingStatusLabel(status)}。');
-  }
-
-  Future<ReadingProgress?> _buildMarkedReadingProgress(
-    BookshelfBook book, {
-    required _BookshelfReadingStatus status,
-  }) async {
-    final existing = _progressByBookKey[_bookKey(book)];
-    final targetIndex = await _resolveMarkedReadingTargetIndex(
-      book,
-      status: status,
-      existing: existing,
-    );
-    final anchor = await _resolveBookProgressAnchor(
-      book,
-      targetIndex: targetIndex,
-      existing: existing,
-      preferLast: status == _BookshelfReadingStatus.finished,
-    );
-    if (anchor == null) {
-      return null;
-    }
-
-    final ratio = switch (status) {
-      _BookshelfReadingStatus.finished => 1.0,
-      _BookshelfReadingStatus.reading => _readingMarkProgressRatio(existing),
-      _BookshelfReadingStatus.unread => 0.0,
-    };
-    return ReadingProgress(
-      bookId: book.bookId,
-      sourceId: book.sourceId,
-      detailUrl: book.detailUrl,
-      chapterId: anchor.chapterId,
-      chapterUrl: anchor.chapterUrl,
-      chapterTitle: anchor.chapterTitle,
-      chapterIndex: anchor.chapterIndex,
-      updatedAt: DateTime.now(),
-      chapterPositionRatio: ratio,
-    );
-  }
-
-  Future<int> _resolveMarkedReadingTargetIndex(
-    BookshelfBook book, {
-    required _BookshelfReadingStatus status,
-    required ReadingProgress? existing,
-  }) async {
-    if (status == _BookshelfReadingStatus.reading) {
-      final existingIndex = existing?.chapterIndex;
-      return existingIndex != null && existingIndex > 0 ? existingIndex : 0;
-    }
-
-    final cachedCount = _resolveApproximateChapterCount(
-      book,
-      localBook: _bookshelfLocalBook(book),
-      cachedChapterCount: _cachedChapterCountByBookKey[_bookKey(book)],
-    );
-    if (cachedCount != null && cachedCount > 0) {
-      return cachedCount - 1;
-    }
-    if (book.sourceId == _kLocalBookSourceId) {
-      final localBook =
-          _bookshelfLocalBook(book) ??
-          await _localBookRepository.getBookById(book.bookId.trim());
-      final chapterCount = localBook?.chapterCount ?? 0;
-      if (chapterCount > 0) {
-        return chapterCount - 1;
-      }
-    }
-    return existing?.chapterIndex ?? 0;
-  }
-
-  double _readingMarkProgressRatio(ReadingProgress? existing) {
-    final ratio = existing?.chapterPositionRatio.clamp(0.0, 0.98);
-    if (ratio != null && ratio > 0) {
-      return ratio;
-    }
-    return 0.001;
-  }
-
-  Future<_BookProgressAnchor?> _resolveBookProgressAnchor(
-    BookshelfBook book, {
-    required int targetIndex,
-    required ReadingProgress? existing,
-    required bool preferLast,
-  }) async {
-    final normalizedTargetIndex = math.max(0, targetIndex);
-    if (existing != null &&
-        !preferLast &&
-        existing.chapterIndex == normalizedTargetIndex &&
-        existing.chapterId.trim().isNotEmpty &&
-        existing.chapterUrl.trim().isNotEmpty) {
-      return _BookProgressAnchor(
-        chapterId: existing.chapterId,
-        chapterUrl: existing.chapterUrl,
-        chapterTitle: existing.chapterTitle,
-        chapterIndex: existing.chapterIndex,
-      );
-    }
-
-    if (book.sourceId == _kLocalBookSourceId) {
-      final localBook =
-          _bookshelfLocalBook(book) ??
-          await _localBookRepository.getBookById(book.bookId.trim());
-      final chapterCount = localBook?.chapterCount ?? 0;
-      final index =
-          preferLast && chapterCount > 0
-              ? chapterCount - 1
-              : normalizedTargetIndex;
-      final chapter = await _localBookRepository.getChapterMetaByIndex(
-        book.bookId.trim(),
-        index,
-      );
-      if (chapter != null) {
-        return _BookProgressAnchor(
-          chapterId: chapter.id,
-          chapterUrl: chapter.sourceRef ?? chapter.id,
-          chapterTitle: chapter.title,
-          chapterIndex: chapter.chapterIndex,
-        );
-      }
+    final nextProgress = markResult.progress;
+    if (nextProgress == null) {
+      _updateBookCardState(book, clearProgress: true);
+      _showMessage('已标记为未读。');
     } else {
-      final remoteAnchor = await _resolveRemoteBookProgressAnchor(
-        book,
-        targetIndex: normalizedTargetIndex,
-        preferLast: preferLast,
-      );
-      if (remoteAnchor != null) {
-        return remoteAnchor;
-      }
-    }
-
-    if (existing != null &&
-        existing.chapterId.trim().isNotEmpty &&
-        existing.chapterUrl.trim().isNotEmpty) {
-      return _BookProgressAnchor(
-        chapterId: existing.chapterId,
-        chapterUrl: existing.chapterUrl,
-        chapterTitle: existing.chapterTitle,
-        chapterIndex: existing.chapterIndex,
-      );
-    }
-    return null;
-  }
-
-  Future<_BookProgressAnchor?> _resolveRemoteBookProgressAnchor(
-    BookshelfBook book, {
-    required int targetIndex,
-    required bool preferLast,
-  }) async {
-    try {
-      final result = await _bookDetailService
-          .load(
-            sourceId: book.sourceId,
-            bookId: book.bookId,
-            detailUrl: book.detailUrl,
-            fallbackTitle: _displayBookTitle(book),
-            fallbackAuthor: _displayBookAuthor(book),
-            includeCatalog: true,
-          )
-          .timeout(const Duration(seconds: 8));
-      final chapters = result.chapters
-          .where((chapter) => !chapter.isVolume)
-          .toList(growable: false);
-      if (chapters.isEmpty) {
-        return null;
-      }
-
-      final chapter =
-          preferLast
-              ? chapters.last
-              : chapters.firstWhere(
-                (item) => item.index == targetIndex,
-                orElse: () => chapters.first,
-              );
-      final bookKey = _bookKey(book);
-      final detailChapterCount =
-          result.detail.totalChapterNum ?? result.chapters.length;
-      if (mounted && detailChapterCount > 0) {
-        _cachedChapterCountByBookKey = Map<String, int>.unmodifiable(
-          Map<String, int>.from(_cachedChapterCountByBookKey)
-            ..[bookKey] = detailChapterCount,
-        );
-      }
-      return _BookProgressAnchor(
-        chapterId: chapter.id,
-        chapterUrl: chapter.chapterUrl,
-        chapterTitle: chapter.title,
-        chapterIndex: chapter.index,
-      );
-    } catch (_) {
-      return null;
+      _updateBookCardState(book, progress: nextProgress);
+      _showMessage('已标记为${_readingStatusLabel(status)}。');
     }
   }
 
   String _readingStatusLabel(_BookshelfReadingStatus status) {
-    return switch (status) {
-      _BookshelfReadingStatus.unread => '未读',
-      _BookshelfReadingStatus.reading => '阅读中',
-      _BookshelfReadingStatus.finished => '已读完',
-    };
+    return status.label;
   }
 
   Future<void> _confirmAndRemoveBook(BookshelfBook book) async {
@@ -4388,25 +4179,13 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         );
   }
 
-  bool _bookHasStartedReading(BookshelfBook book) {
-    final display = _progressDisplayForBook(book);
-    final progress = _progressByBookKey[_bookKey(book)];
-    return (display.hasProgress && display.progressValue > 0) ||
-        (progress != null && progress.chapterIndex > 0);
-  }
-
-  bool _bookIsFinished(BookshelfBook book) {
-    return _progressDisplayForBook(book).progressValue >= 0.999;
-  }
-
   _BookshelfReadingStatus _readingStatusOfBook(BookshelfBook book) {
-    if (_bookIsFinished(book)) {
-      return _BookshelfReadingStatus.finished;
-    }
-    if (_bookHasStartedReading(book)) {
-      return _BookshelfReadingStatus.reading;
-    }
-    return _BookshelfReadingStatus.unread;
+    final display = _progressDisplayForBook(book);
+    return _bookReadingStatusService.resolveStatus(
+      progress: _progressByBookKey[_bookKey(book)],
+      progressValue: display.progressValue,
+      hasProgressDisplay: display.hasProgress,
+    );
   }
 
   List<String> get _userTags {
