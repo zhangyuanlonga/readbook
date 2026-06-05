@@ -7,7 +7,17 @@ import '../../book/application/book_display_state.dart';
 
 part 'bookshelf_page_state.freezed.dart';
 
-enum BookshelfFilter { all, local, novel, manga, custom }
+enum BookshelfFilter {
+  all,
+  todo,
+  unread,
+  reading,
+  finished,
+  local,
+  novel,
+  manga,
+  custom,
+}
 
 enum BookshelfSortMode {
   defaultOrder,
@@ -17,6 +27,8 @@ enum BookshelfSortMode {
   author,
   title,
 }
+
+enum BookshelfReadingStatus { unread, reading, finished }
 
 enum BookshelfViewKind { base, tag, category }
 

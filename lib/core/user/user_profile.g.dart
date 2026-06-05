@@ -15,6 +15,9 @@ UserProfile _$UserProfileFromJson(Map<String, dynamic> json) => UserProfile(
   email: UserProfile._optionalStringFromJson(json['email']),
   role: UserProfile._optionalStringFromJson(json['role']),
   createdAt: UserProfile._optionalUtcDateTimeFromJson(json['created_at']),
+  membershipActive: UserProfile._optionalBoolFromJson(
+    json['membership_active'],
+  ),
   vipLevel: UserProfile._optionalStringFromJson(json['vip_level']),
   planType: UserProfile._optionalStringFromJson(json['plan_type']),
   vipStatus: UserProfile._optionalStringFromJson(json['vip_status']),

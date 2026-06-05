@@ -296,6 +296,8 @@ class StoredBookshelfBooks extends Table {
   TextColumn get category => text().nullable()();
   TextColumn get coverUrl => text().nullable()();
   TextColumn get latestChapter => text().nullable()();
+  BoolColumn get inReadingQueue =>
+      boolean().withDefault(const Constant(false))();
   DateTimeColumn get addedAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 
@@ -544,7 +546,7 @@ class AppDatabase extends _$AppDatabase {
   static final AppDatabase instance = AppDatabase();
 
   @override
-  int get schemaVersion => 33;
+  int get schemaVersion => 34;
 
   @override
   MigrationStrategy get migration {
@@ -801,6 +803,18 @@ class AppDatabase extends _$AppDatabase {
                 () => migrator.addColumn(
                   storedRemoteAccessSnapshots,
                   storedRemoteAccessSnapshots.membershipPlanType,
+                ),
+          );
+        }
+        if (from < 34) {
+          await _addColumnIfMissing(
+            migrator: migrator,
+            tableName: storedBookshelfBooks.tableName,
+            columnName: 'in_reading_queue',
+            addColumn:
+                () => migrator.addColumn(
+                  storedBookshelfBooks,
+                  storedBookshelfBooks.inReadingQueue,
                 ),
           );
         }
@@ -3291,6 +3305,7 @@ class AppDatabase extends _$AppDatabase {
                     latestChapter: Value(
                       _nullableBookshelfString(book.latestChapter),
                     ),
+                    inReadingQueue: Value(book.inReadingQueue),
                     addedAt: book.addedAt,
                     updatedAt: Value(DateTime.now().toUtc()),
                   ),

@@ -10,6 +10,7 @@ import 'package:shuxiang_reading_next/app/shell_navigation_provider.dart';
 import 'package:shuxiang_reading_next/app/shell_scaffold.dart';
 import 'package:shuxiang_reading_next/app/widgets/bottom_nav_icon_view.dart';
 import 'package:shuxiang_reading_next/app/widgets/cupertino_dock_navigation_bar.dart';
+import 'package:shuxiang_reading_next/features/bookshelf/providers.dart';
 import '../../test_utils/adaptive_test_harness.dart';
 
 void main() {
@@ -748,6 +749,75 @@ void main() {
       findsNothing,
     );
     expect(find.text('登录'), findsOneWidget);
+  });
+
+  testWidgets('ShellScaffold 桌面书架显示状态侧栏和视图下拉', (tester) async {
+    var selectedStatus = '';
+    final actions = DesktopBookshelfLibraryActions(
+      activeLabel: '全部',
+      statusActions: [
+        DesktopBookshelfLibraryStatusAction(
+          label: '全部',
+          count: 5,
+          selected: true,
+          icon: Icons.library_books_outlined,
+          onSelected: () => selectedStatus = 'all',
+        ),
+        DesktopBookshelfLibraryStatusAction(
+          label: '待读清单',
+          count: 0,
+          selected: false,
+          icon: Icons.playlist_add_check_rounded,
+          onSelected: () => selectedStatus = 'todo',
+        ),
+        DesktopBookshelfLibraryStatusAction(
+          label: '未读',
+          count: 2,
+          selected: false,
+          icon: Icons.markunread_outlined,
+          onSelected: () => selectedStatus = 'unread',
+        ),
+        DesktopBookshelfLibraryStatusAction(
+          label: '阅读中',
+          count: 3,
+          selected: false,
+          icon: Icons.menu_book_outlined,
+          onSelected: () => selectedStatus = 'reading',
+        ),
+        DesktopBookshelfLibraryStatusAction(
+          label: '已读完',
+          count: 1,
+          selected: false,
+          icon: Icons.task_alt_rounded,
+          onSelected: () => selectedStatus = 'finished',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      AdaptiveTestHarness(
+        width: 1280,
+        wrapWithMaterialApp: true,
+        overrides: [
+          desktopBookshelfLibraryActionsProvider.overrideWith((ref) => actions),
+        ],
+        child: const ShellScaffold(location: '/bookshelf', child: SizedBox()),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey<String>('desktop_bookshelf_view_selector')),
+      findsOneWidget,
+    );
+    expect(find.text('我的书架'), findsOneWidget);
+    expect(find.text('待读清单'), findsOneWidget);
+    expect(find.text('未读'), findsOneWidget);
+    expect(find.text('阅读中'), findsOneWidget);
+    expect(find.text('已读完'), findsOneWidget);
+
+    await tester.tap(find.text('阅读中'));
+    expect(selectedStatus, 'reading');
   });
 
   testWidgets('ShellScaffold 底部导航保持统计页位于我的之前', (tester) async {

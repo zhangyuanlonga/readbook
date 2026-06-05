@@ -136,9 +136,9 @@ class DeviceIdentityService {
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
         final info = await _deviceInfo.androidInfo;
-        final hardwareId = selectAndroidHardwareId(
-          serialNumber: info.serialNumber,
-        );
+        // device_info_plus 12 起不再暴露 Android 序列号；Android 设备席位使用安装
+        // ID 兜底，避免依赖系统层不稳定或不可访问的硬件标识。
+        final hardwareId = selectAndroidHardwareId();
         return _ResolvedDeviceInfo(
           brand: info.brand,
           model: info.model,
@@ -237,9 +237,7 @@ class DeviceIdentityService {
   }
 
   @visibleForTesting
-  static String? selectAndroidHardwareId({
-    required String? serialNumber,
-  }) {
+  static String? selectAndroidHardwareId({String? serialNumber}) {
     return normalizeHardwareId(serialNumber);
   }
 

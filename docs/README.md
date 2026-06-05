@@ -6,7 +6,7 @@
 
 ## 当前执行口径
 
-当前里程碑已经重排为 5 个阶段：M1 是已完成的成熟库与架构治理基线，M2 是已完成验收的手搓实现替换与稳定性治理，M3 是当前优先的核心业务链多端兼容与验收，M4-M5 是后续规划。旧 M1-M3 已删除，不再作为执行入口；旧 M4 已升为新 M1，旧 M5 已升为新 M2。
+当前里程碑已经重排并扩展为 6 个阶段：M1 是已完成的成熟库与架构治理基线，M2 是已完成验收的手搓实现替换与稳定性治理，M3 是当前优先的核心业务链多端兼容与验收，M4 聚焦本地内容、资源与性能，M5 聚焦长期门禁、发布验收与 AI 接力，M6 是阅读器全平台可用与架构收敛专项。旧 M1-M3 已删除，不再作为执行入口；旧 M4 已升为新 M1，旧 M5 已升为新 M2。
 
 后续里程碑任务不再只按“做完某个功能”拆分，默认按 **业务链兼容 + 测试验收** 拆分。也就是说，一个任务写成“兼容 Web / Desktop 登录”时，完成标准不是 Web / Desktop 页面能点通，而是要同时回答：
 
@@ -74,7 +74,7 @@
 
 ## 当前里程碑
 
-里程碑按“已完成治理基线 -> 手搓替换 -> 业务兼容 -> 本地内容资源 -> 长期门禁”推进。M2 已完成验收，当前优先执行 M3；Windows 并行环境正在处理 M3 登录 / session 可拆部分，本机后续领取任务时应避开同一文件和同一业务状态链。每次只领取一个最小 checkbox 任务。
+里程碑按“已完成治理基线 -> 手搓替换 -> 业务兼容 -> 本地内容资源 -> 长期门禁 -> 阅读器全平台专项”推进。M2 已完成验收，当前优先执行 M3；M6 用于承接阅读器全平台可用和架构收敛任务，执行时仍必须继承 M3 / M4 / M5 的业务链、多端和门禁规则。Windows 并行环境正在处理 M3 登录 / session 可拆部分，本机后续领取任务时应避开同一文件和同一业务状态链。每次只领取一个最小 checkbox 任务。
 
 - [里程碑 01：已完成的成熟库与架构治理基线](milestone_01_completed_mature_library_architecture_governance_2026-06-04.md)
 - [里程碑 02：手搓实现替换与稳定性治理](milestone_02_handrolled_replacement_stability_2026-06-04.md)
@@ -84,6 +84,7 @@
 - [里程碑 03：核心业务链多端兼容与验收](milestone_03_multiplatform_business_compatibility_acceptance_2026-06-04.md)
 - [里程碑 04：本地内容、资源与性能成熟化](milestone_04_local_content_resource_performance_maturity_2026-06-04.md)
 - [里程碑 05：长期门禁、发布验收与 AI 接力](milestone_05_long_term_guard_ai_handoff_2026-06-04.md)
+- [里程碑 06：阅读器全平台可用与架构收敛](milestone_06_reader_cross_platform_availability_2026-06-05.md)
 - [AI 后续执行序列与维护优先级](ai_maintenance_execution_sequence_2026-06-04.md)
 - [缓存治理优化计划](cache_governance_optimization_plan_2026-06-02.md)
 - [代码库工程治理专项 Backlog](codebase_engineering_governance_backlog_2026-06-02.md)

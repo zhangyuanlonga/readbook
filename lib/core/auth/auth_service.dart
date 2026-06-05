@@ -151,13 +151,14 @@ class AuthService {
 
   Future<void> logout({String? refreshToken}) async {
     _ensureBaseUrl();
+    final previousSession = await _sessionStore.getSession();
     final resolvedRefreshToken =
         (refreshToken == null || refreshToken.trim().isEmpty)
             ? await _sessionStore.getRefreshToken()
             : refreshToken.trim();
     if (resolvedRefreshToken == null || resolvedRefreshToken.isEmpty) {
       await _sessionStore.clear();
-      AuthEventBus.instance.emitLoggedOut();
+      AuthEventBus.instance.emitLoggedOut('已退出登录。', previousSession);
       return;
     }
     await _client.request<Map<String, dynamic>>(
@@ -169,12 +170,13 @@ class AuthService {
       decoder: _decodeMap,
     );
     await _sessionStore.clear();
-    AuthEventBus.instance.emitLoggedOut();
+    AuthEventBus.instance.emitLoggedOut('已退出登录。', previousSession);
   }
 
   Future<void> _persistAuthenticatedSession(AuthSession session) async {
+    final previousSession = await _sessionStore.getSession();
     await _sessionStore.saveSession(session);
-    AuthEventBus.instance.emitLoggedIn();
+    AuthEventBus.instance.emitLoggedIn('登录成功。', session, previousSession);
     // 登录 / 注册成功后的 UI 必须先拿到新 session，设备席位、访问统计等后置任务失败不能拖慢或覆盖账号卡片刷新。
     unawaited(_runPostAuthBootstrap());
   }
@@ -285,6 +287,25 @@ class AuthService {
       ]);
     }
 
+    DateTime? readOptionalTime(String key) {
+      return _parseTime(
+        firstNonEmpty(<String?>[
+          readOptionalStringFrom(data, key),
+          readOptionalStringFrom(userData, key),
+        ]),
+      );
+    }
+
+    bool? readOptionalBool(String key) {
+      for (final raw in <Object?>[data[key], userData[key]]) {
+        final value = _parseBool(raw);
+        if (value != null) {
+          return value;
+        }
+      }
+      return null;
+    }
+
     return AuthSession(
       accessToken: requireString('access_token'),
       refreshToken: readOptionalString('refresh_token'),
@@ -297,6 +318,11 @@ class AuthService {
         'display_name',
         aliases: <String>['username', 'account'],
       ),
+      membershipActive: readOptionalBool('membership_active'),
+      vipLevel: readOptionalString('vip_level'),
+      planType: readOptionalString('plan_type'),
+      vipStatus: readOptionalString('vip_status'),
+      vipExpireAt: readOptionalTime('vip_expire_at'),
     );
   }
 
@@ -348,6 +374,11 @@ class AuthService {
         account: read('account') ?? read('username'),
         displayName:
             read('display_name') ?? read('username') ?? read('account'),
+        membershipActive: _parseBool(userData['membership_active']),
+        vipLevel: read('vip_level'),
+        planType: read('plan_type'),
+        vipStatus: read('vip_status'),
+        vipExpireAt: _parseTime(read('vip_expire_at')),
       );
     } catch (_) {
       return null;
@@ -371,6 +402,11 @@ class AuthService {
           fallback?.displayName ??
           fallback?.username ??
           fallback?.account,
+      membershipActive: session.membershipActive ?? fallback?.membershipActive,
+      vipLevel: session.vipLevel ?? fallback?.vipLevel,
+      planType: session.planType ?? fallback?.planType,
+      vipStatus: session.vipStatus ?? fallback?.vipStatus,
+      vipExpireAt: session.vipExpireAt ?? fallback?.vipExpireAt,
     );
   }
 
@@ -380,5 +416,22 @@ class AuthService {
       return null;
     }
     return DateTime.tryParse(raw)?.toUtc();
+  }
+
+  bool? _parseBool(Object? value) {
+    if (value is bool) {
+      return value;
+    }
+    final raw = value?.toString().trim().toLowerCase() ?? '';
+    if (raw.isEmpty) {
+      return null;
+    }
+    if (raw == 'true' || raw == '1') {
+      return true;
+    }
+    if (raw == 'false' || raw == '0') {
+      return false;
+    }
+    return null;
   }
 }

@@ -45,15 +45,15 @@ dependencies:
   logger: ^2.5.0
   uuid: ^4.5.1
   shared_preferences: ^2.3.3
-  flutter_secure_storage: ^9.2.4
-  device_info_plus: ^10.1.0
+  flutter_secure_storage: ^10.3.1
+  device_info_plus: ^12.4.0
   package_info_plus: ^8.3.1
   path_provider: ^2.1.5
   path_provider_platform_interface: ^2.1.2
   sqlite3_flutter_libs: ^0.5.26
   file_selector: ^1.0.4
   charset: ^2.0.1
-  flutter_charset_detector: ^2.0.0
+  flutter_charset_detector: ^5.0.0
   charset_converter: ^2.3.0
   url_launcher: ^6.3.1
   share_plus: ^10.1.4
@@ -115,6 +115,8 @@ dependency_overrides:
     path: third_party/plugins/flutter_charset_detector_web_stub
   pdf_text_extract:
     path: third_party/plugins/pdf_text_extract
+  screen_retriever_macos:
+    path: third_party/plugins/screen_retriever_macos
   turnable_page:
     path: third_party/plugins/turnable_page
 

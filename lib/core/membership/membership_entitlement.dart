@@ -13,6 +13,8 @@ class MembershipEntitlement {
     required this.isTrial,
     required this.maxDevices,
     required this.features,
+    this.membershipActive,
+    this.hasExplicitMembershipState = true,
   });
 
   final String vipLevel;
@@ -28,9 +30,13 @@ class MembershipEntitlement {
   final bool isTrial;
   final int maxDevices;
   final List<String> features;
+  final bool? membershipActive;
+  final bool hasExplicitMembershipState;
 
   bool get isActive =>
-      vipStatus.trim().toLowerCase() == 'active' && !_isInactiveLevel(vipLevel);
+      membershipActive ??
+      (vipStatus.trim().toLowerCase() == 'active' &&
+          !_isInactiveLevel(vipLevel));
 
   bool get isCampaignTrial => (grantSubtype?.trim() ?? '') == 'campaign_trial';
 
@@ -117,6 +123,12 @@ class MembershipEntitlement {
       json['membership_level'],
     ]);
     final vipStatus = _firstNonEmpty(<Object?>[json['vip_status']]);
+    final membershipActive = _optionalBool(json['membership_active']);
+    final hasExplicitMembershipState =
+        json['_has_explicit_membership_state'] == true ||
+        membershipActive != null ||
+        vipLevel != null ||
+        vipStatus != null;
 
     return MembershipEntitlement(
       vipLevel: vipLevel ?? 'none',
@@ -148,6 +160,8 @@ class MembershipEntitlement {
       isTrial: json['is_trial'] == true,
       maxDevices: maxDevices <= 0 ? 1 : maxDevices,
       features: readFeatures(json['features']),
+      membershipActive: membershipActive,
+      hasExplicitMembershipState: hasExplicitMembershipState,
     );
   }
 
@@ -157,6 +171,23 @@ class MembershipEntitlement {
       if (normalized.isNotEmpty) {
         return normalized;
       }
+    }
+    return null;
+  }
+
+  static bool? _optionalBool(Object? value) {
+    if (value is bool) {
+      return value;
+    }
+    final normalized = value?.toString().trim().toLowerCase() ?? '';
+    if (normalized.isEmpty) {
+      return null;
+    }
+    if (normalized == 'true' || normalized == '1') {
+      return true;
+    }
+    if (normalized == 'false' || normalized == '0') {
+      return false;
     }
     return null;
   }

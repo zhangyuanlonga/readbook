@@ -87,7 +87,11 @@ class BookshelfPageRouteService {
     return _readerEntryRouteResolver.buildRouteFromProgress(progress);
   }
 
-  String resolveBookDetailRoute(BookshelfBook book, {String? heroTag}) {
+  String resolveBookDetailRoute(
+    BookshelfBook book, {
+    String? heroTag,
+    bool initialEditMode = false,
+  }) {
     final normalizedSourceId = book.sourceId.trim();
     final normalizedBookId = book.bookId.trim();
     final titleHeroTag =
@@ -104,6 +108,7 @@ class BookshelfPageRouteService {
       heroTag: heroTag,
       titleHeroTag: titleHeroTag,
       metaHeroTag: metaHeroTag,
+      initialEditMode: initialEditMode,
     );
   }
 

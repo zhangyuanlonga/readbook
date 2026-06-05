@@ -1,63 +1,45 @@
+import '../auth/auth_session.dart';
 import 'membership_entitlement.dart';
 import '../user/user_profile.dart';
+import 'membership_access_resolver.dart';
 
 class MembershipFeatures {
   const MembershipFeatures._();
 
-  static const String themeCustom = 'theme_custom';
-  static const String onlineService = 'online_service';
-  static const String cloudBackup = 'cloud_backup';
-  static const String advancedRule = 'advanced_rule';
+  static const String themeCustom = MembershipAccessResolver.themeCustomFeature;
+  static const String onlineService =
+      MembershipAccessResolver.onlineServiceFeature;
+  static const String cloudBackup = MembershipAccessResolver.cloudBackupFeature;
+  static const String advancedRule =
+      MembershipAccessResolver.advancedRuleFeature;
 
-  static const Set<String> _activeMembershipDefaultFeatures = <String>{
-    themeCustom,
-    onlineService,
-    cloudBackup,
-    advancedRule,
-  };
+  static const Set<String> activeMembershipDefaultFeatures =
+      MembershipAccessResolver.activeMembershipDefaultFeatures;
 
   static bool hasActiveMembership(MembershipEntitlement? entitlement) {
-    return entitlement?.isActive ?? false;
+    return MembershipAccessResolver.fromEntitlement(entitlement).hasMembership;
   }
 
   static bool hasActiveProfileMembership(UserProfile? profile) {
-    final level = profile?.vipLevel?.trim().toLowerCase() ?? '';
-    final status = profile?.vipStatus?.trim().toLowerCase() ?? '';
-    return status == 'active' && !_isInactiveLevel(level);
+    return MembershipAccessResolver.fromProfile(profile).hasMembership;
+  }
+
+  static bool hasActiveSessionMembership(AuthSession? session) {
+    return MembershipAccessResolver.fromSession(session).hasMembership;
   }
 
   static bool hasFeature(MembershipEntitlement? entitlement, String feature) {
-    if (entitlement == null || !entitlement.isActive) {
-      return false;
-    }
-    final normalized = feature.trim();
-    if (normalized.isEmpty) {
-      return false;
-    }
-    if (entitlement.features.contains(normalized)) {
-      return true;
-    }
-
-    // 高级主题、在线服务等属于会员基础能力。旧接口、桌面端同步链或赠送会员账号
-    // 可能只返回 active 会员状态，不补齐 features 明细；基础会员能力按有效会员兜底。
-    return _activeMembershipDefaultFeatures.contains(normalized);
+    return MembershipAccessResolver.fromEntitlement(
+      entitlement,
+    ).hasFeature(feature);
   }
 
   static bool hasProfileFeature(UserProfile? profile, String feature) {
-    if (!hasActiveProfileMembership(profile)) {
-      return false;
-    }
-    final normalized = feature.trim();
-    if (normalized.isEmpty) {
-      return false;
-    }
-    if (profile!.features.contains(normalized)) {
-      return true;
-    }
+    return MembershipAccessResolver.fromProfile(profile).hasFeature(feature);
+  }
 
-    // 账号信息页以 vip_level/vip_status 作为会员展示来源；当该来源已确认
-    // 会员有效但 features 明细缺失时，基础会员能力必须和账号信息页保持一致。
-    return _activeMembershipDefaultFeatures.contains(normalized);
+  static bool hasSessionFeature(AuthSession? session, String feature) {
+    return MembershipAccessResolver.fromSession(session).hasFeature(feature);
   }
 
   static bool hasOnlineServiceAccess(MembershipEntitlement? entitlement) {
@@ -68,18 +50,7 @@ class MembershipFeatures {
     return hasProfileFeature(profile, onlineService);
   }
 
-  static bool _isInactiveLevel(String level) {
-    switch (level) {
-      case '':
-      case 'none':
-      case 'free':
-      case 'basic':
-      case 'normal':
-      case 'guest':
-      case 'expired':
-        return true;
-      default:
-        return false;
-    }
+  static bool hasSessionOnlineServiceAccess(AuthSession? session) {
+    return hasSessionFeature(session, onlineService);
   }
 }

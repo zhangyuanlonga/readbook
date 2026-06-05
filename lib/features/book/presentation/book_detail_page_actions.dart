@@ -349,6 +349,10 @@ extension on _BookDetailPageState {
     final initialCategoryMap = await _bookshelfService.getCategoryMap();
     final initialCategoryOrder = await _bookshelfService.getCategoryOrder();
     final initialCategoryItems = await _bookshelfService.getCategoryItems();
+    final initialInReadingQueue = await _bookshelfService.isInReadingQueue(
+      sourceId: detail.sourceId,
+      detailUrl: detail.detailUrl,
+    );
     final bookKey = '${detail.sourceId}::${detail.detailUrl}';
 
     var selectedTags = List<String>.from(
@@ -371,6 +375,7 @@ extension on _BookDetailPageState {
 
     var createTagColor = BookshelfTaxonomyItem.defaultColorForName('新标签');
     var createCategoryColor = BookshelfTaxonomyItem.defaultColorForName('新分类');
+    var inReadingQueue = initialInReadingQueue;
     final tagColorByName = <String, int>{
       for (final item in initialTagItems) item.name: item.colorValue,
     };
@@ -849,7 +854,7 @@ extension on _BookDetailPageState {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    '编辑分类和标签',
+                                    '编辑书籍整理信息',
                                     style: theme.textTheme.titleMedium
                                         ?.copyWith(fontWeight: FontWeight.w800),
                                   ),
@@ -866,6 +871,22 @@ extension on _BookDetailPageState {
                               ),
                             ),
                           ],
+                        ),
+                        const SizedBox(height: 10),
+                        buildSectionCard(
+                          icon: Icons.playlist_add_check_rounded,
+                          title: '书籍状态',
+                          child: SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                            value: inReadingQueue,
+                            onChanged: (value) {
+                              setSheetState(() {
+                                inReadingQueue = value;
+                              });
+                            },
+                            title: const Text('加入待读清单'),
+                          ),
                         ),
                         const SizedBox(height: 10),
                         buildSectionCard(
@@ -1080,6 +1101,7 @@ extension on _BookDetailPageState {
         detail: detail,
         category: selectedCategory,
         tags: selectedTags,
+        inReadingQueue: inReadingQueue,
       );
       for (final entry in tagColorByName.entries) {
         await _bookshelfService.upsertTagItem(

@@ -24,6 +24,7 @@ final List<RouteBase> bookRoutes = <RouteBase>[
         heroTag: route.heroTag,
         titleHeroTag: route.titleHeroTag,
         metaHeroTag: route.metaHeroTag,
+        initialEditMode: route.initialEditMode,
       );
 
       if (route.revealTransition) {

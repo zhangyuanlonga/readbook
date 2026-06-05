@@ -13,6 +13,7 @@ class UserProfile {
     required this.email,
     required this.role,
     required this.createdAt,
+    this.membershipActive,
     required this.vipLevel,
     required this.planType,
     required this.vipStatus,
@@ -36,6 +37,8 @@ class UserProfile {
   final String? role;
   @JsonKey(fromJson: _optionalUtcDateTimeFromJson)
   final DateTime? createdAt;
+  @JsonKey(fromJson: _optionalBoolFromJson)
+  final bool? membershipActive;
   @JsonKey(fromJson: _optionalStringFromJson)
   final String? vipLevel;
   @JsonKey(fromJson: _optionalStringFromJson)
@@ -61,6 +64,16 @@ class UserProfile {
       return normalizedDisplayName;
     }
     return loginIdentity;
+  }
+
+  bool get hasActiveMembership {
+    final explicit = membershipActive;
+    if (explicit != null) {
+      return explicit;
+    }
+    final level = vipLevel?.trim().toLowerCase() ?? '';
+    final status = vipStatus?.trim().toLowerCase() ?? '';
+    return status == 'active' && !_isInactiveLevel(level);
   }
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
@@ -117,6 +130,23 @@ class UserProfile {
     return DateTime.tryParse(raw)?.toUtc();
   }
 
+  static bool? _optionalBoolFromJson(Object? value) {
+    if (value is bool) {
+      return value;
+    }
+    final normalized = value?.toString().trim().toLowerCase() ?? '';
+    if (normalized.isEmpty) {
+      return null;
+    }
+    if (normalized == 'true' || normalized == '1') {
+      return true;
+    }
+    if (normalized == 'false' || normalized == '0') {
+      return false;
+    }
+    return null;
+  }
+
   static List<String> _featuresFromJson(Object? value) {
     if (value is! List) {
       return const <String>[];
@@ -125,5 +155,20 @@ class UserProfile {
         .map((item) => item?.toString().trim() ?? '')
         .where((item) => item.isNotEmpty)
         .toList(growable: false);
+  }
+
+  static bool _isInactiveLevel(String level) {
+    switch (level) {
+      case '':
+      case 'none':
+      case 'free':
+      case 'basic':
+      case 'normal':
+      case 'guest':
+      case 'expired':
+        return true;
+      default:
+        return false;
+    }
   }
 }

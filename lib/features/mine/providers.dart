@@ -88,6 +88,12 @@ final remoteAccessSnapshotServiceProvider =
       return RemoteAccessSnapshotService();
     });
 
+/// Mine 页账号权益缓存修订号。
+///
+/// 会员中心会在拉到最新 entitlement 并落地缓存后递增它，避免 Mine 页只依赖
+/// 路由返回路径刷新，导致从资料页等其它入口进入会员页后卡片继续显示旧状态。
+final mineRemoteAccessSnapshotRevisionProvider = StateProvider<int>((ref) => 0);
+
 final mineImageSelectionServiceProvider = Provider<ImageSelectionService>((
   ref,
 ) {

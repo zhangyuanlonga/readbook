@@ -11,6 +11,7 @@ import '../../../core/auth/auth_service.dart';
 import '../../../core/auth/auth_session.dart';
 import '../../../core/auth/auth_session_store.dart';
 import '../../../core/errors/app_exception.dart';
+import '../../../core/membership/membership_access_resolver.dart';
 import '../../../core/user/user_profile.dart';
 import '../../../core/user/user_profile_service.dart';
 import '../../mine/application/mine_page_session_service.dart';
@@ -478,9 +479,7 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
 
   /// 判断是否为有效会员
   bool _isValidVip(UserProfile? profile) {
-    final level = profile?.vipLevel?.toLowerCase() ?? '';
-    final status = profile?.vipStatus?.toLowerCase() ?? '';
-    return level != 'none' && level != '' && status == 'active';
+    return MembershipAccessResolver.fromProfile(profile).hasMembership;
   }
 
   /// 格式化天数
@@ -911,9 +910,7 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
     });
 
     try {
-      final userId = _session?.userId;
       await _authService.logout();
-      await _minePageSessionService.clearUserScopedCache(userId);
       if (!mounted) {
         return;
       }
@@ -985,6 +982,11 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
             updated.displayName?.trim().isNotEmpty == true
                 ? updated.displayName
                 : updated.username,
+        membershipActive: updated.membershipActive,
+        vipLevel: updated.vipLevel,
+        planType: updated.planType,
+        vipStatus: updated.vipStatus,
+        vipExpireAt: updated.vipExpireAt,
       );
       await _sessionStore.saveSession(nextSession);
       if (!mounted) {

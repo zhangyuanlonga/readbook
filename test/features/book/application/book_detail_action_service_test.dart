@@ -89,15 +89,21 @@ void main() {
       detail: detail,
       category: '玄幻',
       tags: const ['在读', '收藏'],
+      inReadingQueue: true,
     );
 
     final categories = await bookshelfService.getCategoryMap();
     final tags = await bookshelfService.getTagMap();
+    final inReadingQueue = await bookshelfService.isInReadingQueue(
+      sourceId: detail.sourceId,
+      detailUrl: detail.detailUrl,
+    );
     expect(categories['source_a::https://example.com/book/1'], '玄幻');
     expect(
       tags['source_a::https://example.com/book/1'],
       orderedEquals(const ['在读', '收藏']),
     );
+    expect(inReadingQueue, isTrue);
     expect(prefs.getString('bookshelf.book_tags'), isNull);
     expect(prefs.getString('bookshelf.category_order'), isNull);
   });

@@ -17,6 +17,7 @@ BookshelfBook _$BookshelfBookFromJson(Map<String, dynamic> json) =>
       category: json['category'] as String?,
       coverUrl: json['coverUrl'] as String?,
       latestChapter: json['latestChapter'] as String?,
+      inReadingQueue: json['inReadingQueue'] as bool? ?? false,
     );
 
 Map<String, dynamic> _$BookshelfBookToJson(BookshelfBook instance) =>
@@ -30,4 +31,5 @@ Map<String, dynamic> _$BookshelfBookToJson(BookshelfBook instance) =>
       'category': instance.category,
       'coverUrl': instance.coverUrl,
       'latestChapter': instance.latestChapter,
+      'inReadingQueue': instance.inReadingQueue,
     };

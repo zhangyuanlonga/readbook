@@ -10,7 +10,8 @@ import battery_plus
 import charset_converter
 import device_info_plus
 import file_selector_macos
-import flutter_secure_storage_macos
+import flutter_charset_detector_darwin
+import flutter_secure_storage_darwin
 import just_audio
 import package_info_plus
 import screen_retriever_macos
@@ -29,7 +30,8 @@ func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
   CharsetConverterPlugin.register(with: registry.registrar(forPlugin: "CharsetConverterPlugin"))
   DeviceInfoPlusMacosPlugin.register(with: registry.registrar(forPlugin: "DeviceInfoPlusMacosPlugin"))
   FileSelectorPlugin.register(with: registry.registrar(forPlugin: "FileSelectorPlugin"))
-  FlutterSecureStoragePlugin.register(with: registry.registrar(forPlugin: "FlutterSecureStoragePlugin"))
+  FlutterCharsetDetectorPlugin.register(with: registry.registrar(forPlugin: "FlutterCharsetDetectorPlugin"))
+  FlutterSecureStorageDarwinPlugin.register(with: registry.registrar(forPlugin: "FlutterSecureStorageDarwinPlugin"))
   JustAudioPlugin.register(with: registry.registrar(forPlugin: "JustAudioPlugin"))
   FPPPackageInfoPlusPlugin.register(with: registry.registrar(forPlugin: "FPPPackageInfoPlusPlugin"))
   ScreenRetrieverMacosPlugin.register(with: registry.registrar(forPlugin: "ScreenRetrieverMacosPlugin"))

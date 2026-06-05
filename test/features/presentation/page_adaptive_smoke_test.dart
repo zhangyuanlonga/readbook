@@ -128,6 +128,87 @@ void main() {
     },
   );
 
+  testWidgets('MinePage refreshes remote access after cached session load', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    await tester.binding.setSurfaceSize(const Size(1280, 800));
+    addTearDown(() async {
+      await tester.binding.setSurfaceSize(null);
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final sessionService = _MembershipAwareMinePageSessionService(
+      cachedHasMembership: false,
+      remoteHasMembership: true,
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          minePageSessionServiceProvider.overrideWithValue(sessionService),
+        ],
+        child: MaterialApp(
+          theme: ThemeData(platform: TargetPlatform.macOS),
+          home: const MinePage(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(milliseconds: 300));
+
+    expect(
+      sessionService.refreshRemoteRequests.length,
+      greaterThanOrEqualTo(2),
+    );
+    expect(sessionService.refreshRemoteRequests[0], isFalse);
+    expect(sessionService.refreshRemoteRequests[1], isTrue);
+    expect(find.text('终身会员 · 永久有效'), findsOneWidget);
+  });
+
+  testWidgets('MinePage refreshes when membership snapshot revision changes', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    await tester.binding.setSurfaceSize(const Size(1280, 800));
+    addTearDown(() async {
+      await tester.binding.setSurfaceSize(null);
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final sessionService = _MembershipAwareMinePageSessionService(
+      cachedHasMembership: false,
+      remoteHasMembership: false,
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          minePageSessionServiceProvider.overrideWithValue(sessionService),
+        ],
+        child: MaterialApp(
+          theme: ThemeData(platform: TargetPlatform.macOS),
+          home: const MinePage(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(milliseconds: 300));
+
+    expect(find.text('开通会员，享受专属特权'), findsOneWidget);
+
+    sessionService.remoteHasMembership = true;
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(MinePage)),
+      listen: false,
+    );
+    container
+        .read(mineRemoteAccessSnapshotRevisionProvider.notifier)
+        .update((value) => value + 1);
+    await tester.pumpAndSettle(const Duration(milliseconds: 300));
+
+    expect(sessionService.refreshRemoteRequests.last, isTrue);
+    expect(find.text('终身会员 · 永久有效'), findsOneWidget);
+  });
+
   testWidgets(
     'MinePage profile card opens profile and logout button confirms logout',
     (tester) async {
@@ -388,6 +469,57 @@ class _ScriptedMinePageSessionService extends MinePageSessionService {
       shouldRefreshRemoteAccess: false,
       vipExpireAt: null,
       membershipPlanType: null,
+      totalReadingHours: 0,
+      readingStreakDays: 0,
+    );
+  }
+
+  @override
+  Future<void> clearUserScopedCache(String? userId) async {}
+}
+
+class _MembershipAwareMinePageSessionService extends MinePageSessionService {
+  _MembershipAwareMinePageSessionService({
+    required this.cachedHasMembership,
+    required this.remoteHasMembership,
+  }) : super(
+         authSessionStore: AuthSessionStore(
+           secretStore: FakeAuthSessionSecretStore(),
+         ),
+         mobileFeatureService: _UnusedMobileFeatureService(),
+         membershipService: _UnusedMembershipService(),
+         userProfileService: _UnusedUserProfileService(),
+         remoteAccessSnapshotService: _UnusedRemoteAccessSnapshotService(),
+       );
+
+  final bool cachedHasMembership;
+  bool remoteHasMembership;
+  final List<bool> refreshRemoteRequests = <bool>[];
+
+  @override
+  Future<MinePageSessionSnapshot> loadSession({
+    bool refreshRemote = true,
+  }) async {
+    refreshRemoteRequests.add(refreshRemote);
+    final hasMembership =
+        refreshRemote ? remoteHasMembership : cachedHasMembership;
+    return MinePageSessionSnapshot(
+      session: const AuthSession(
+        accessToken: 'token',
+        refreshToken: 'refresh',
+        userId: 'member_user',
+        username: 'member@example.com',
+        displayName: 'Member Reader',
+      ),
+      localAvatarPath: null,
+      serverSourceGatewayEnabled: false,
+      hasMembership: hasMembership,
+      hasThemeCustom: hasMembership,
+      serverSourceGatewayLimit: 10,
+      isRemoteAccessResolved: true,
+      shouldRefreshRemoteAccess: false,
+      vipExpireAt: null,
+      membershipPlanType: hasMembership ? 'lifetime' : null,
       totalReadingHours: 0,
       readingStreakDays: 0,
     );

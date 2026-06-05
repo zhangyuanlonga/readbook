@@ -129,7 +129,10 @@ extension _ReaderPageSourceSwitchExtension on _ReaderPageState {
         return false;
       }
 
-      final hasAccess = await _loadSwitchSourceMembershipAccess(sessionStore);
+      final hasAccess = await _loadSwitchSourceMembershipAccess(
+        sessionStore,
+        session: session,
+      );
       if (!hasAccess) {
         _showMessage('切换书源为会员服务，开通会员后可使用。');
         if (mounted) {
@@ -147,21 +150,11 @@ extension _ReaderPageSourceSwitchExtension on _ReaderPageState {
   }
 
   Future<bool> _loadSwitchSourceMembershipAccess(
-    AuthSessionStore sessionStore,
-  ) async {
-    try {
-      final entitlement = await MembershipService().fetchEntitlement();
-      if (MembershipFeatures.hasOnlineServiceAccess(entitlement)) {
-        return true;
-      }
-    } catch (_) {
-      // 账号信息页使用 /v1/users/me 展示会员状态；切换书源需与该来源保持一致。
-    }
-
-    final profile = await UserProfileService(
-      sessionStore: sessionStore,
-    ).fetchMe();
-    return MembershipFeatures.hasProfileOnlineServiceAccess(profile);
+    AuthSessionStore sessionStore, {
+    required AuthSession session,
+  }) async {
+    final accessService = MembershipAccessService(sessionStore: sessionStore);
+    return accessService.fetchOnlineServiceAccess(session: session);
   }
 
   Future<ReaderSwitchSourceScopePlan> _buildSwitchSourceScope({

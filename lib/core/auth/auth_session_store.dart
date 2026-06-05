@@ -35,6 +35,11 @@ class AuthSessionStore {
       username: displaySession?.username,
       account: displaySession?.account,
       displayName: displaySession?.displayName,
+      membershipActive: displaySession?.membershipActive,
+      vipLevel: displaySession?.vipLevel,
+      planType: displaySession?.planType,
+      vipStatus: displaySession?.vipStatus,
+      vipExpireAt: displaySession?.vipExpireAt,
     );
   }
 
@@ -62,6 +67,11 @@ class AuthSessionStore {
       username: displaySession?.username,
       account: displaySession?.account,
       displayName: displaySession?.displayName,
+      membershipActive: displaySession?.membershipActive,
+      vipLevel: displaySession?.vipLevel,
+      planType: displaySession?.planType,
+      vipStatus: displaySession?.vipStatus,
+      vipExpireAt: displaySession?.vipExpireAt,
     );
   }
 
@@ -71,6 +81,10 @@ class AuthSessionStore {
     final account = (prefs.getString(authAccountStorageKey) ?? '').trim();
     final displayName =
         (prefs.getString(authDisplayNameStorageKey) ?? '').trim();
+    final vipLevel = (prefs.getString(authVipLevelStorageKey) ?? '').trim();
+    final planType = (prefs.getString(authPlanTypeStorageKey) ?? '').trim();
+    final vipStatus = (prefs.getString(authVipStatusStorageKey) ?? '').trim();
+    final vipExpireAt = _parseTime(prefs.getString(authVipExpireAtStorageKey));
     if (userId.isEmpty &&
         username.isEmpty &&
         account.isEmpty &&
@@ -83,6 +97,11 @@ class AuthSessionStore {
       username: username.isEmpty ? null : username,
       account: account.isEmpty ? null : account,
       displayName: displayName.isEmpty ? null : displayName,
+      membershipActive: prefs.getBool(authMembershipActiveStorageKey),
+      vipLevel: vipLevel.isEmpty ? null : vipLevel,
+      planType: planType.isEmpty ? null : planType,
+      vipStatus: vipStatus.isEmpty ? null : vipStatus,
+      vipExpireAt: vipExpireAt,
     );
   }
 
@@ -145,6 +164,44 @@ class AuthSessionStore {
       await prefs.setString(authDisplayNameStorageKey, displayName);
     }
 
+    final membershipActive = session.membershipActive;
+    if (membershipActive == null) {
+      await prefs.remove(authMembershipActiveStorageKey);
+    } else {
+      await prefs.setBool(authMembershipActiveStorageKey, membershipActive);
+    }
+
+    final vipLevel = session.vipLevel?.trim() ?? '';
+    if (vipLevel.isEmpty) {
+      await prefs.remove(authVipLevelStorageKey);
+    } else {
+      await prefs.setString(authVipLevelStorageKey, vipLevel);
+    }
+
+    final planType = session.planType?.trim() ?? '';
+    if (planType.isEmpty) {
+      await prefs.remove(authPlanTypeStorageKey);
+    } else {
+      await prefs.setString(authPlanTypeStorageKey, planType);
+    }
+
+    final vipStatus = session.vipStatus?.trim() ?? '';
+    if (vipStatus.isEmpty) {
+      await prefs.remove(authVipStatusStorageKey);
+    } else {
+      await prefs.setString(authVipStatusStorageKey, vipStatus);
+    }
+
+    final vipExpireAt = session.vipExpireAt;
+    if (vipExpireAt == null) {
+      await prefs.remove(authVipExpireAtStorageKey);
+    } else {
+      await prefs.setString(
+        authVipExpireAtStorageKey,
+        vipExpireAt.toIso8601String(),
+      );
+    }
+
     await _clearLegacyCredentialKeys(prefs);
   }
 
@@ -155,6 +212,11 @@ class AuthSessionStore {
     await prefs.remove(authUsernameStorageKey);
     await prefs.remove(authAccountStorageKey);
     await prefs.remove(authDisplayNameStorageKey);
+    await prefs.remove(authMembershipActiveStorageKey);
+    await prefs.remove(authVipLevelStorageKey);
+    await prefs.remove(authPlanTypeStorageKey);
+    await prefs.remove(authVipStatusStorageKey);
+    await prefs.remove(authVipExpireAtStorageKey);
     await _clearLegacyCredentialKeys(prefs);
   }
 

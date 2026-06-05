@@ -49,6 +49,7 @@ class _MinePageState extends ConsumerState<MinePage> {
   late final MinePageFlowCoordinator _pageFlowCoordinator;
   late final MinePageSessionService _sessionService;
   late final AuthService _authService;
+  late final ProviderSubscription<int> _snapshotRevisionSubscription;
   String? _userId;
   String? _username;
   String? _localAvatarPath;
@@ -149,6 +150,10 @@ class _MinePageState extends ConsumerState<MinePage> {
     _sessionService = ref.read(minePageSessionServiceProvider);
     _authService = ref.read(authServiceProvider);
     _pageFlowCoordinator.initialize(onAuthEvent: _handleAuthEvent);
+    _snapshotRevisionSubscription = ref.listenManual<int>(
+      mineRemoteAccessSnapshotRevisionProvider,
+      (_, __) => unawaited(_refreshMine()),
+    );
     _applyPrimedSession();
     _loadSession();
   }
@@ -165,6 +170,7 @@ class _MinePageState extends ConsumerState<MinePage> {
 
   @override
   void dispose() {
+    _snapshotRevisionSubscription.close();
     unawaited(_pageFlowCoordinator.dispose());
     super.dispose();
   }
@@ -222,6 +228,12 @@ class _MinePageState extends ConsumerState<MinePage> {
 
   Future<void> _loadSession() async {
     await _reloadSession(showLoading: true, refreshRemote: false);
+    if (!mounted || _userId == null) {
+      return;
+    }
+    // 登录页返回、资料页返回都可能触发普通加载；先用缓存保障首屏，再补远端刷新，
+    // 避免新账号或刚开通会员继续命中旧的本地权益快照。
+    unawaited(_reloadSession(showLoading: false, refreshRemote: true));
   }
 
   Future<void> _refreshMine() async {
@@ -350,13 +362,11 @@ class _MinePageState extends ConsumerState<MinePage> {
     if (_isLoggingOut) {
       return;
     }
-    final userId = _userId;
     setState(() {
       _isLoggingOut = true;
     });
     try {
       await _authService.logout();
-      await _sessionService.clearUserScopedCache(userId);
       if (!mounted) {
         return;
       }

@@ -112,6 +112,13 @@ void main() {
     expect(entitlement.isActive, isTrue);
   });
 
+  test('empty entitlement payload is an unknown membership state', () {
+    final entitlement = MembershipEntitlement.fromJson(<String, dynamic>{});
+
+    expect(entitlement.isActive, isFalse);
+    expect(entitlement.hasExplicitMembershipState, isFalse);
+  });
+
   test(
     'MembershipService keeps free entitlement inactive without status',
     () async {

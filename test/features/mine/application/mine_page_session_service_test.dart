@@ -150,7 +150,7 @@ void main() {
       final service = MinePageSessionService(
         authSessionStore: store,
         mobileFeatureService: _FakeMobileFeatureService(),
-        membershipService: _InactiveMembershipService(),
+        membershipService: _UnknownMembershipService(),
         userProfileService: _FakeUserProfileService(
           userId: 'user_profile_member',
           username: 'tester',
@@ -170,6 +170,49 @@ void main() {
       expect(snapshot.hasMembership, isTrue);
       expect(snapshot.hasThemeCustom, isTrue);
       expect(snapshot.membershipPlanType, 'lifetime');
+      expect(snapshot.vipExpireAt, isNull);
+    },
+  );
+
+  test(
+    'explicit inactive entitlement is not overridden by stale profile membership',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      final store = AuthSessionStore(
+        preferences: prefs,
+        secretStore: FakeAuthSessionSecretStore(),
+      );
+      await store.saveSession(
+        const AuthSession(
+          accessToken: 'token',
+          userId: 'user_profile_stale_member',
+          username: 'tester',
+        ),
+      );
+
+      final service = MinePageSessionService(
+        authSessionStore: store,
+        mobileFeatureService: _FakeMobileFeatureService(),
+        membershipService: _InactiveMembershipService(),
+        userProfileService: _FakeUserProfileService(
+          userId: 'user_profile_stale_member',
+          username: 'tester',
+          account: 'tester',
+          displayName: 'Tester',
+          vipLevel: 'pro',
+          planType: 'lifetime',
+          vipStatus: 'active',
+        ),
+        remoteAccessSnapshotService: RemoteAccessSnapshotService(
+          preferences: prefs,
+        ),
+      );
+
+      final snapshot = await service.loadSession(refreshRemote: true);
+
+      expect(snapshot.hasMembership, isFalse);
+      expect(snapshot.hasThemeCustom, isFalse);
+      expect(snapshot.membershipPlanType, isNull);
       expect(snapshot.vipExpireAt, isNull);
     },
   );
@@ -400,6 +443,30 @@ class _InactiveMembershipService extends MembershipService {
       isTrial: false,
       maxDevices: 1,
       features: <String>[],
+    );
+  }
+}
+
+class _UnknownMembershipService extends MembershipService {
+  _UnknownMembershipService() : super(baseUrl: 'https://example.com');
+
+  @override
+  Future<MembershipEntitlement> fetchEntitlement() async {
+    return const MembershipEntitlement(
+      vipLevel: 'none',
+      vipStatus: 'expired',
+      planType: 'month',
+      membershipLevel: 'none',
+      grantType: null,
+      grantSubtype: null,
+      grantLabel: null,
+      isCustomExpire: false,
+      expireAt: null,
+      source: null,
+      isTrial: false,
+      maxDevices: 1,
+      features: <String>[],
+      hasExplicitMembershipState: false,
     );
   }
 }

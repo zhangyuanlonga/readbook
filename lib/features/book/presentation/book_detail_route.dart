@@ -10,6 +10,7 @@ class BookDetailRouteData {
     this.titleHeroTag,
     this.metaHeroTag,
     this.revealTransition = false,
+    this.initialEditMode = false,
   });
 
   static const String routeName = 'book';
@@ -25,6 +26,7 @@ class BookDetailRouteData {
   final String? titleHeroTag;
   final String? metaHeroTag;
   final bool revealTransition;
+  final bool initialEditMode;
 
   String get location {
     final normalizedBookId = bookId.trim();
@@ -51,6 +53,9 @@ class BookDetailRouteData {
     if (revealTransition) {
       query['transition'] = 'reveal';
     }
+    if (initialEditMode) {
+      query['mode'] = 'edit';
+    }
     final encodedBookId = Uri.encodeComponent(effectiveBookId);
 
     return Uri(
@@ -76,6 +81,7 @@ class BookDetailRouteData {
       titleHeroTag: uri.queryParameters['titleHeroTag'],
       metaHeroTag: uri.queryParameters['metaHeroTag'],
       revealTransition: uri.queryParameters['transition'] == 'reveal',
+      initialEditMode: uri.queryParameters['mode'] == 'edit',
     );
   }
 }
@@ -91,6 +97,7 @@ String buildBookDetailRoute({
   String? titleHeroTag,
   String? metaHeroTag,
   bool revealTransition = false,
+  bool initialEditMode = false,
 }) {
   return BookDetailRouteData(
     bookId: bookId,
@@ -103,5 +110,6 @@ String buildBookDetailRoute({
     titleHeroTag: titleHeroTag,
     metaHeroTag: metaHeroTag,
     revealTransition: revealTransition,
+    initialEditMode: initialEditMode,
   ).location;
 }

@@ -97,6 +97,7 @@ class BookDetailPage extends ConsumerStatefulWidget {
     this.heroTag,
     this.titleHeroTag,
     this.metaHeroTag,
+    this.initialEditMode = false,
     this.bookDetailService,
     this.bookshelfService,
     this.switchSourceSearchService,
@@ -112,6 +113,7 @@ class BookDetailPage extends ConsumerStatefulWidget {
   final String? heroTag;
   final String? titleHeroTag;
   final String? metaHeroTag;
+  final bool initialEditMode;
   final BookDetailService? bookDetailService;
   final BookshelfService? bookshelfService;
   final SearchService? switchSourceSearchService;
@@ -234,6 +236,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   String? _displayTitle;
   BookMetadataOverride? _metadataOverride;
   int _metadataMutationEpoch = 0;
+  bool _pendingInitialEditMode = false;
   StreamSubscription<LocalBookIndexEvent>? _localIndexEventSubscription;
   late final SearchHitCacheService _searchHitCacheService;
   final SourceSwitchScoreService _switchSourceScoreService =
@@ -277,6 +280,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   @override
   void initState() {
     super.initState();
+    _pendingInitialEditMode = widget.initialEditMode;
     _logger = ref.read(app_providers.appLoggerProvider);
     final dependencies = ref.read(bookDetailDependenciesProvider);
     _bookmarkRepository = ref.read(bookBookmarkRepositoryProvider);
@@ -440,6 +444,14 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       return;
     }
     setState(mutation);
+  }
+
+  Future<void> _maybeEnterInitialEditingMode() async {
+    if (!_pendingInitialEditMode || _isEditingMetadata || _result == null) {
+      return;
+    }
+    _pendingInitialEditMode = false;
+    await _enterEditingMode();
   }
 
   BookDisplayState _resolvePresentedMetadata({BookDetailLoadResult? result}) {
@@ -2420,6 +2432,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
         _detailCategory = null;
       });
     }
+    unawaited(_maybeEnterInitialEditingMode());
   }
 
   Future<void> _loadDetailOrganizationSnapshot({

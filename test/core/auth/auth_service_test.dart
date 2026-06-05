@@ -39,6 +39,9 @@ void main() {
       );
 
       final client = _FakeAuthApiClient();
+      final events = <AuthEvent>[];
+      final subscription = AuthEventBus.instance.stream.listen(events.add);
+      addTearDown(subscription.cancel);
       final service = AuthService(
         client: client,
         baseUrl: 'https://example.com',
@@ -56,6 +59,9 @@ void main() {
       expect(secrets.hasAnyValue, isFalse);
       expect(prefs.getString('auth.user_id'), isNull);
       expect(prefs.getString('auth.display_name'), isNull);
+      expect(events, hasLength(1));
+      expect(events.single.type, AuthEventType.loggedOut);
+      expect(events.single.previousUserId, 'user_1');
     },
   );
 
@@ -107,8 +113,68 @@ void main() {
         events.map((event) => event.type),
         contains(AuthEventType.loggedIn),
       );
+      final loggedInEvent = events.lastWhere(
+        (event) => event.type == AuthEventType.loggedIn,
+      );
+      expect(loggedInEvent.userId, 'new_user');
+      expect(loggedInEvent.previousUserId, isNull);
       expect(heartbeatService.started, isTrue);
       expect(heartbeatService.completed, isFalse);
+    },
+  );
+
+  test(
+    'login event carries previous session when switching accounts',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      final secretStore = FakeAuthSessionSecretStore();
+      final sessionStore = AuthSessionStore(
+        preferences: prefs,
+        secretStore: secretStore,
+      );
+      await sessionStore.saveSession(
+        const AuthSession(
+          accessToken: 'old_access',
+          refreshToken: 'old_refresh',
+          userId: 'old_user',
+          username: 'old@example.com',
+        ),
+      );
+      final client = _FakeAuthApiClient(
+        responseByPath: <String, Map<String, dynamic>>{
+          '/v1/auth/login': <String, dynamic>{
+            'access_token': 'new_access',
+            'refresh_token': 'new_refresh',
+            'user_id': 'new_user',
+            'username': 'new@example.com',
+            'account': 'new@example.com',
+          },
+        },
+      );
+      final events = <AuthEvent>[];
+      final subscription = AuthEventBus.instance.stream.listen(events.add);
+      addTearDown(subscription.cancel);
+      final service = AuthService(
+        client: client,
+        baseUrl: 'https://example.com',
+        heartbeatService: _ImmediateHeartbeatService(),
+        analyticsService: _NoopAnalyticsService(),
+        membershipService: _NoopMembershipService(),
+        sessionStore: sessionStore,
+      );
+
+      await service.loginAndStore(
+        account: 'new@example.com',
+        password: 'password123',
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      final loggedInEvent = events.lastWhere(
+        (event) => event.type == AuthEventType.loggedIn,
+      );
+      expect(loggedInEvent.userId, 'new_user');
+      expect(loggedInEvent.previousUserId, 'old_user');
+      expect(loggedInEvent.isAccountSwitch, isTrue);
     },
   );
 }
@@ -168,6 +234,13 @@ class _BlockingHeartbeatService extends DeviceHeartbeatService {
       _completer.complete();
     }
   }
+}
+
+class _ImmediateHeartbeatService extends DeviceHeartbeatService {
+  _ImmediateHeartbeatService() : super(baseUrl: 'https://example.com');
+
+  @override
+  Future<void> sendHeartbeat() async {}
 }
 
 class _NoopAnalyticsService extends AnalyticsService {

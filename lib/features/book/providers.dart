@@ -27,6 +27,7 @@ import 'application/book_metadata_edit_service.dart';
 import 'application/book_detail_metadata_flow_service.dart';
 import 'application/book_presentation_sync_service.dart';
 import 'application/book_metadata_presentation_resolver.dart';
+import 'application/book_reading_status_service.dart';
 import 'application/custom_cover_storage_service.dart';
 import 'application/local_book_detail_service.dart';
 
@@ -47,6 +48,7 @@ class BookDetailDependencies {
     required this.actionService,
     required this.catalogService,
     required this.metadataFlowService,
+    required this.readingStatusService,
   });
 
   final BookDetailService bookDetailService;
@@ -64,6 +66,7 @@ class BookDetailDependencies {
   final BookDetailActionService actionService;
   final BookDetailCatalogService catalogService;
   final BookDetailMetadataFlowService metadataFlowService;
+  final BookReadingStatusService readingStatusService;
 }
 
 final bookBookmarkRepositoryProvider = Provider<BookmarkRepository>((ref) {
@@ -232,6 +235,18 @@ final bookDetailMetadataFlowServiceProvider =
       );
     });
 
+final bookReadingStatusServiceProvider = Provider<BookReadingStatusService>((
+  ref,
+) {
+  return BookReadingStatusService(
+    readerPreferencesService: ref.watch(
+      bookDetailReaderPreferencesServiceProvider,
+    ),
+    bookDetailService: ref.watch(bookDetailServiceProvider),
+    localBookRepository: ref.watch(bookLocalBookRepositoryProvider),
+  );
+});
+
 final bookTaskConflictServiceProvider =
     Provider<RemoteContentTaskConflictService>((ref) {
       return ref.watch(
@@ -287,5 +302,6 @@ final bookDetailDependenciesProvider = Provider<BookDetailDependencies>((ref) {
     actionService: ref.watch(bookDetailActionServiceProvider),
     catalogService: ref.watch(bookDetailCatalogServiceProvider),
     metadataFlowService: ref.watch(bookDetailMetadataFlowServiceProvider),
+    readingStatusService: ref.watch(bookReadingStatusServiceProvider),
   );
 });

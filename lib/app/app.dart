@@ -21,6 +21,7 @@ import '../features/source/application/external_source_import_bridge.dart';
 import 'widgets/app_task_status.dart';
 import 'widgets/import_export_copy.dart';
 import 'widgets/import_export_task_overlay.dart';
+import 'lifecycle/auth_account_lifecycle_coordinator.dart';
 import 'lifecycle/app_lifecycle_coordinator.dart';
 import 'layout/app_layout.dart';
 import 'router.dart';
@@ -262,6 +263,7 @@ class _SystemUiOverlayWrapperState
   Announcement? _startupAnnouncementBanner;
   Timer? _startupAnnouncementBannerTimer;
   late final AppLifecycleCoordinator _lifecycleCoordinator;
+  late final AuthAccountLifecycleCoordinator _authAccountLifecycleCoordinator;
   late final AppAnnouncementCoordinator _announcementCoordinator;
   late final AppStartupCoordinator _startupCoordinator;
   static const Duration _startupAnnouncementBannerDuration = Duration(
@@ -281,6 +283,9 @@ class _SystemUiOverlayWrapperState
     super.initState();
     _lifecycleCoordinator =
         ref.read(app_providers.appLifecycleCoordinatorFactoryProvider)();
+    _authAccountLifecycleCoordinator = ref.read(
+      app_providers.appAuthAccountLifecycleCoordinatorProvider,
+    );
     _announcementCoordinator =
         ref.read(app_providers.appAnnouncementCoordinatorFactoryProvider)();
     _startupCoordinator = ref.read(
@@ -351,6 +356,7 @@ class _SystemUiOverlayWrapperState
     if (!mounted) {
       return;
     }
+    unawaited(_authAccountLifecycleCoordinator.handle(event));
     if (event.type == AuthEventType.loggedIn) {
       return;
     }

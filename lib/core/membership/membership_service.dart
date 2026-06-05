@@ -253,10 +253,24 @@ class MembershipService {
         source['vip_level'] ?? data['vip_level'] ?? source['membership_level'];
     final membershipLevel =
         source['membership_level'] ?? data['membership_level'] ?? vipLevel;
+    final hasExplicitMembershipState =
+        _firstNonEmptyString(<Object?>[
+          source['vip_level'],
+          data['vip_level'],
+          source['membership_level'],
+          data['membership_level'],
+          source['vip_status'],
+          data['vip_status'],
+          source['membership_active'],
+          data['membership_active'],
+        ]) !=
+        null;
 
     return <String, dynamic>{
       'vip_level': vipLevel,
       'membership_level': membershipLevel,
+      'membership_active':
+          source['membership_active'] ?? data['membership_active'],
       'vip_status':
           source['vip_status'] ??
           data['vip_status'] ??
@@ -272,6 +286,7 @@ class MembershipService {
       'is_trial': source['is_trial'] ?? data['is_trial'],
       'max_devices': source['max_devices'] ?? data['max_devices'],
       'features': source['features'] ?? data['features'],
+      '_has_explicit_membership_state': hasExplicitMembershipState,
     };
   }
 

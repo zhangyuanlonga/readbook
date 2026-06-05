@@ -86,6 +86,41 @@ void main() {
       expect(all, isEmpty);
     });
 
+    test('persists reading queue flag on bookshelf book', () async {
+      final service = BookshelfService(database: database);
+      final book = BookshelfBook(
+        bookId: 'book_1',
+        sourceId: 'src_1',
+        title: '凡人修仙传',
+        detailUrl: 'https://example.com/detail/1',
+        addedAt: DateTime.parse('2026-02-12T12:00:00.000Z'),
+      );
+
+      await service.upsert(book);
+      await service.setInReadingQueue(
+        sourceId: 'src_1',
+        detailUrl: 'https://example.com/detail/1',
+        inReadingQueue: true,
+      );
+
+      expect(
+        await service.isInReadingQueue(
+          sourceId: 'src_1',
+          detailUrl: 'https://example.com/detail/1',
+        ),
+        isTrue,
+      );
+      expect((await service.getAll()).single.inReadingQueue, isTrue);
+
+      await service.setInReadingQueue(
+        sourceId: 'src_1',
+        detailUrl: 'https://example.com/detail/1',
+        inReadingQueue: false,
+      );
+
+      expect((await service.getAll()).single.inReadingQueue, isFalse);
+    });
+
     test('emits collection changes for add and remove operations', () async {
       final service = BookshelfService(database: database);
       final book = BookshelfBook(

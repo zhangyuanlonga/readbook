@@ -74,13 +74,54 @@ enum _BookshelfMoreAction { selectBooks, sortBooks, settings, importLocal }
 
 typedef _BookshelfSortMode = BookshelfSortMode;
 
+typedef _BookshelfReadingStatus = BookshelfReadingStatus;
+
 typedef _BookshelfViewKind = BookshelfViewKind;
 
 enum _BookshelfGridVisualStyle { standard, overlayTitle, coverOnly }
 
 enum _BookshelfProgressInfoMode { progressBar, unreadChapters }
 
-enum _BookshelfBookMoreAction { detail, select }
+enum _BookshelfBookMoreAction {
+  detail,
+  edit,
+  tags,
+  category,
+  readingQueue,
+  select,
+  delete,
+}
+
+class _BookTagEditorResult {
+  const _BookTagEditorResult({required this.tags, required this.createdItems});
+
+  final List<String> tags;
+  final List<BookshelfTaxonomyItem> createdItems;
+}
+
+class _BookCategoryEditorResult {
+  const _BookCategoryEditorResult({
+    required this.category,
+    required this.createdItems,
+  });
+
+  final String? category;
+  final List<BookshelfTaxonomyItem> createdItems;
+}
+
+class _BookProgressAnchor {
+  const _BookProgressAnchor({
+    required this.chapterId,
+    required this.chapterUrl,
+    required this.chapterTitle,
+    required this.chapterIndex,
+  });
+
+  final String chapterId;
+  final String chapterUrl;
+  final String chapterTitle;
+  final int chapterIndex;
+}
 
 enum _BookshelfSearchQuickFilterContent { none, tags, categories }
 
@@ -482,6 +523,14 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     _BookshelfFilter.novel,
     _BookshelfFilter.manga,
   ];
+  static const List<_BookshelfFilter> _kDesktopLibraryStatusFilters =
+      <_BookshelfFilter>[
+        _BookshelfFilter.all,
+        _BookshelfFilter.todo,
+        _BookshelfFilter.unread,
+        _BookshelfFilter.reading,
+        _BookshelfFilter.finished,
+      ];
 
   late final BookshelfService _bookshelfService;
   late final BookshelfSystemSettingsService _bookshelfSystemSettingsService;
@@ -606,8 +655,11 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   bool _reloadAfterActiveLoad = false;
   bool? _lastKnownAutoRefreshOnTabActiveEnabled;
   Object? _lastDesktopToolbarActionsFingerprint;
+  Object? _lastDesktopLibraryActionsFingerprint;
   late final StateController<DesktopBookshelfToolbarActions?>
   _desktopToolbarActionsNotifier;
+  late final StateController<DesktopBookshelfLibraryActions?>
+  _desktopLibraryActionsNotifier;
   final Stopwatch _bookshelfOpenStopwatch = Stopwatch()..start();
   bool _hasLoggedBookshelfFirstVisible = false;
   bool _hasShownContinueReadingPrompt = false;
@@ -686,6 +738,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     super.initState();
     _desktopToolbarActionsNotifier = ref.read(
       desktopBookshelfToolbarActionsProvider.notifier,
+    );
+    _desktopLibraryActionsNotifier = ref.read(
+      desktopBookshelfLibraryActionsProvider.notifier,
     );
     final dependencies = ref.read(bookshelfPageDependenciesProvider);
     _bookshelfService = dependencies.bookshelfService;
@@ -779,6 +834,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     _bookshelfSearchFocusNode.dispose();
     _bookshelfSearchController.dispose();
     _desktopToolbarActionsNotifier.state = null;
+    _desktopLibraryActionsNotifier.state = null;
     super.dispose();
   }
 
@@ -876,6 +932,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     );
     _scheduleDesktopToolbarActionsRegistration(
       filteredBooks: filteredBooks,
+      enabled: useDesktopLayout && !_isSelectionMode,
+    );
+    _scheduleDesktopLibraryActionsRegistration(
       enabled: useDesktopLayout && !_isSelectionMode,
     );
 
@@ -1283,6 +1342,80 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     });
   }
 
+  void _scheduleDesktopLibraryActionsRegistration({required bool enabled}) {
+    final statusCounts = _buildDesktopLibraryStatusBookCounts();
+    final fingerprint = Object.hashAll([
+      enabled,
+      _activeView,
+      _books.length,
+      identityHashCode(_progressByBookKey),
+      identityHashCode(_localBooksById),
+      identityHashCode(_cachedChapterCountByBookKey),
+      for (final filter in _kDesktopLibraryStatusFilters)
+        statusCounts[filter] ?? 0,
+    ]);
+    if (_lastDesktopLibraryActionsFingerprint == fingerprint) {
+      return;
+    }
+    _lastDesktopLibraryActionsFingerprint = fingerprint;
+
+    final actions =
+        enabled
+            ? DesktopBookshelfLibraryActions(
+              activeLabel: _activeFilterLabel(),
+              statusActions: [
+                for (final filter in _kDesktopLibraryStatusFilters)
+                  DesktopBookshelfLibraryStatusAction(
+                    label: _filterLabel(filter),
+                    count: statusCounts[filter] ?? 0,
+                    selected:
+                        !_activeView.isTag &&
+                        !_activeView.isCategory &&
+                        _activeView.filter == filter,
+                    icon: _desktopLibraryStatusIcon(filter),
+                    onSelected:
+                        () =>
+                            _activateView(_BookshelfViewSelection.base(filter)),
+                  ),
+              ],
+            )
+            : null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _desktopLibraryActionsNotifier.state = actions;
+    });
+  }
+
+  Map<_BookshelfFilter, int> _buildDesktopLibraryStatusBookCounts() {
+    final counts = <_BookshelfFilter, int>{
+      for (final filter in _kDesktopLibraryStatusFilters) filter: 0,
+    };
+    for (final book in _books) {
+      for (final filter in _kDesktopLibraryStatusFilters) {
+        if (_bookMatchesStaticFilter(book, filter)) {
+          counts[filter] = (counts[filter] ?? 0) + 1;
+        }
+      }
+    }
+    return counts;
+  }
+
+  IconData _desktopLibraryStatusIcon(_BookshelfFilter filter) {
+    return switch (filter) {
+      _BookshelfFilter.all => Icons.library_books_outlined,
+      _BookshelfFilter.todo => Icons.playlist_add_check_rounded,
+      _BookshelfFilter.unread => Icons.markunread_outlined,
+      _BookshelfFilter.reading => Icons.menu_book_outlined,
+      _BookshelfFilter.finished => Icons.task_alt_rounded,
+      _BookshelfFilter.local => Icons.folder_outlined,
+      _BookshelfFilter.novel => Icons.auto_stories_outlined,
+      _BookshelfFilter.manga => Icons.photo_library_outlined,
+      _BookshelfFilter.custom => Icons.sell_outlined,
+    };
+  }
+
   Future<void> _applyDesktopBookshelfSortMode(
     _BookshelfSortMode selected,
   ) async {
@@ -1525,6 +1658,14 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     switch (action) {
       case _BookshelfBookMoreAction.detail:
         _openBookDetail(book);
+      case _BookshelfBookMoreAction.edit:
+        _openBookDetail(book, initialEditMode: true);
+      case _BookshelfBookMoreAction.tags:
+        unawaited(_showBookTagEditor(book));
+      case _BookshelfBookMoreAction.category:
+        unawaited(_showBookCategoryEditor(book));
+      case _BookshelfBookMoreAction.readingQueue:
+        unawaited(_setBookReadingQueue(book, !book.inReadingQueue));
       case _BookshelfBookMoreAction.select:
         final key = _bookKey(book);
         if (key.isEmpty) {
@@ -1533,6 +1674,990 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         _updateBookshelfState(
           () => _setSelectionEnabled(true, selectedKeys: <String>{key}),
         );
+      case _BookshelfBookMoreAction.delete:
+        unawaited(_confirmAndRemoveBook(book));
+    }
+  }
+
+  Future<void> _showBookTagEditor(BookshelfBook book) async {
+    if (book.sourceId.trim().isEmpty || book.detailUrl.trim().isEmpty) {
+      _showMessage('书籍信息不完整，暂不能设置标签。');
+      return;
+    }
+
+    final bookKey = _bookKey(book);
+    var selectedTags = _normalizeTags(_tagsOfBook(book));
+    var createdItems = const <BookshelfTaxonomyItem>[];
+    final result = await _showBookshelfBottomSheet<_BookTagEditorResult>(
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            final availableItems = _availableBookTagItems(
+              selectedTags: selectedTags,
+              createdItems: createdItems,
+            );
+
+            return _buildBookTaxonomyEditSurface(
+              context: sheetContext,
+              icon: Icons.sell_rounded,
+              title: '编辑标签',
+              subtitle: _displayBookTitle(book),
+              createLabel: '新建标签',
+              onCreate: () async {
+                final created = await _createBookTaxonomyItem(
+                  kind: BookshelfTaxonomyKind.tag,
+                );
+                if (created == null) {
+                  return;
+                }
+                setSheetState(() {
+                  createdItems = _upsertDraftTaxonomyItem(
+                    createdItems,
+                    created,
+                  );
+                  selectedTags = _normalizeTags([
+                    ...selectedTags,
+                    created.name,
+                  ]);
+                });
+              },
+              onCancel: () => _dismissBookshelfBottomSheet(sheetContext),
+              onSave: () {
+                _dismissBookshelfBottomSheet(
+                  sheetContext,
+                  _BookTagEditorResult(
+                    tags: List<String>.unmodifiable(selectedTags),
+                    createdItems: List<BookshelfTaxonomyItem>.unmodifiable(
+                      createdItems,
+                    ),
+                  ),
+                );
+              },
+              child: _buildBookTagPicker(
+                context: sheetContext,
+                items: availableItems,
+                selectedTags: selectedTags,
+                onChanged: (tags) {
+                  setSheetState(() {
+                    selectedTags = _normalizeTags(tags);
+                  });
+                },
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (result == null) {
+      return;
+    }
+
+    await _saveBookTags(
+      book: book,
+      bookKey: bookKey,
+      tags: result.tags,
+      createdItems: result.createdItems,
+    );
+  }
+
+  Future<void> _showBookCategoryEditor(BookshelfBook book) async {
+    if (book.sourceId.trim().isEmpty || book.detailUrl.trim().isEmpty) {
+      _showMessage('书籍信息不完整，暂不能设置分类。');
+      return;
+    }
+
+    final bookKey = _bookKey(book);
+    var selectedCategory = _categoryOfBook(book);
+    var createdItems = const <BookshelfTaxonomyItem>[];
+    final result = await _showBookshelfBottomSheet<_BookCategoryEditorResult>(
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            final availableItems = _availableBookCategoryItems(
+              selectedCategory: selectedCategory,
+              createdItems: createdItems,
+            );
+
+            return _buildBookTaxonomyEditSurface(
+              context: sheetContext,
+              icon: Icons.folder_rounded,
+              title: '编辑分类',
+              subtitle: _displayBookTitle(book),
+              createLabel: '新建分类',
+              onCreate: () async {
+                final created = await _createBookTaxonomyItem(
+                  kind: BookshelfTaxonomyKind.category,
+                );
+                if (created == null) {
+                  return;
+                }
+                setSheetState(() {
+                  createdItems = _upsertDraftTaxonomyItem(
+                    createdItems,
+                    created,
+                  );
+                  selectedCategory = created.name;
+                });
+              },
+              onCancel: () => _dismissBookshelfBottomSheet(sheetContext),
+              onSave: () {
+                _dismissBookshelfBottomSheet(
+                  sheetContext,
+                  _BookCategoryEditorResult(
+                    category: _firstNormalizedTaxonomyName([
+                      selectedCategory ?? '',
+                    ]),
+                    createdItems: List<BookshelfTaxonomyItem>.unmodifiable(
+                      createdItems,
+                    ),
+                  ),
+                );
+              },
+              child: _buildBookCategoryPicker(
+                context: sheetContext,
+                items: availableItems,
+                selectedCategory: selectedCategory,
+                onChanged: (category) {
+                  setSheetState(() {
+                    selectedCategory = _firstNormalizedTaxonomyName([
+                      category ?? '',
+                    ]);
+                  });
+                },
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (result == null) {
+      return;
+    }
+
+    await _saveBookCategory(
+      book: book,
+      bookKey: bookKey,
+      category: result.category,
+      createdItems: result.createdItems,
+    );
+  }
+
+  String? _firstNormalizedTaxonomyName(Iterable<String> values) {
+    final normalized = _normalizeTags(values);
+    return normalized.isEmpty ? null : normalized.first;
+  }
+
+  Future<BookshelfTaxonomyItem?> _createBookTaxonomyItem({
+    required BookshelfTaxonomyKind kind,
+  }) async {
+    final isTag = kind == BookshelfTaxonomyKind.tag;
+    final fallbackName = isTag ? '新标签' : '新分类';
+    final result =
+        await _showBookshelfBottomSheet<_BookshelfTaxonomyEditorResult>(
+          isScrollControlled: true,
+          builder:
+              (_) => _BookshelfTaxonomyEditorDialog(
+                kind: kind,
+                isNew: true,
+                initialName: '',
+                initialColorValue: BookshelfTaxonomyItem.defaultColorForName(
+                  fallbackName,
+                ),
+              ),
+        );
+    if (result == null || result.delete) {
+      return null;
+    }
+
+    final normalizedName = _firstNormalizedTaxonomyName([result.name]);
+    if (normalizedName == null) {
+      _showMessage(isTag ? '请输入标签名称。' : '请输入分类名称。');
+      return null;
+    }
+    return BookshelfTaxonomyItem(
+      name: normalizedName,
+      colorValue: result.colorValue,
+    );
+  }
+
+  Widget _buildBookTaxonomyEditSurface({
+    required BuildContext context,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required String createLabel,
+    required VoidCallback onCancel,
+    required VoidCallback onSave,
+    required VoidCallback onCreate,
+    required Widget child,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final desktopLike = AppLayout.isDesktopLike(
+      context,
+      platform: theme.platform,
+    );
+    final contentMaxHeight = math.max(
+      180.0,
+      MediaQuery.sizeOf(context).height * (desktopLike ? 0.46 : 0.52),
+    );
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 22, color: colorScheme.primary),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                title,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            IconButton(
+              tooltip: '关闭',
+              onPressed: onCancel,
+              icon: const Icon(Icons.close_rounded),
+            ),
+          ],
+        ),
+        Text(
+          subtitle,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 14),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            onPressed: onCreate,
+            icon: const Icon(Icons.add_rounded, size: 18),
+            label: Text(createLabel),
+          ),
+        ),
+        const SizedBox(height: 12),
+        ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: contentMaxHeight),
+          child: SingleChildScrollView(child: child),
+        ),
+        const SizedBox(height: 18),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            TextButton(onPressed: onCancel, child: const Text('取消')),
+            const SizedBox(width: 8),
+            FilledButton.icon(
+              onPressed: onSave,
+              icon: const Icon(Icons.check_rounded, size: 18),
+              label: const Text('保存'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBookTagPicker({
+    required BuildContext context,
+    required List<BookshelfTaxonomyItem> items,
+    required List<String> selectedTags,
+    required ValueChanged<List<String>> onChanged,
+  }) {
+    final theme = Theme.of(context);
+    return Theme(
+      data: theme.copyWith(visualDensity: VisualDensity.compact),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          FilterChip(
+            avatar: const Icon(Icons.block_rounded, size: 16),
+            label: const Text('未打标签'),
+            selected: selectedTags.isEmpty,
+            onSelected: (_) => onChanged(const <String>[]),
+          ),
+          for (final item in items)
+            FilterChip(
+              avatar: _buildTaxonomyColorDot(item.colorValue),
+              label: Text(item.name),
+              selected: selectedTags.contains(item.name),
+              onSelected: (selected) {
+                if (selected) {
+                  onChanged(_normalizeTags([...selectedTags, item.name]));
+                  return;
+                }
+                onChanged(
+                  selectedTags
+                      .where((tag) => tag != item.name)
+                      .toList(growable: false),
+                );
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBookCategoryPicker({
+    required BuildContext context,
+    required List<BookshelfTaxonomyItem> items,
+    required String? selectedCategory,
+    required ValueChanged<String?> onChanged,
+  }) {
+    final theme = Theme.of(context);
+    return Theme(
+      data: theme.copyWith(visualDensity: VisualDensity.compact),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          ChoiceChip(
+            avatar: const Icon(Icons.block_rounded, size: 16),
+            label: const Text('未分类'),
+            selected: selectedCategory == null || selectedCategory.isEmpty,
+            onSelected: (_) => onChanged(null),
+          ),
+          for (final item in items)
+            ChoiceChip(
+              avatar: _buildTaxonomyColorDot(item.colorValue),
+              label: Text(item.name),
+              selected: selectedCategory == item.name,
+              onSelected: (selected) => onChanged(selected ? item.name : null),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTaxonomyColorDot(int colorValue) {
+    return Container(
+      width: 10,
+      height: 10,
+      decoration: BoxDecoration(
+        color: Color(colorValue),
+        shape: BoxShape.circle,
+      ),
+    );
+  }
+
+  List<BookshelfTaxonomyItem> _availableBookTagItems({
+    required List<String> selectedTags,
+    required List<BookshelfTaxonomyItem> createdItems,
+  }) {
+    final createdByName = <String, BookshelfTaxonomyItem>{
+      for (final item in createdItems) item.name: item,
+    };
+    final counts = _buildTagBookCount();
+    final names = mergeBookshelfTaxonomyNames(
+      counts: counts,
+      order: <String>[
+        ..._tagOrder,
+        ..._tagItemByName.keys,
+        ...selectedTags,
+        ...createdByName.keys,
+      ],
+    );
+    return [for (final name in names) createdByName[name] ?? _tagItem(name)];
+  }
+
+  List<BookshelfTaxonomyItem> _availableBookCategoryItems({
+    required String? selectedCategory,
+    required List<BookshelfTaxonomyItem> createdItems,
+  }) {
+    final createdByName = <String, BookshelfTaxonomyItem>{
+      for (final item in createdItems) item.name: item,
+    };
+    final counts = _buildCategoryBookCount();
+    final names = mergeBookshelfTaxonomyNames(
+      counts: counts,
+      order: <String>[
+        ..._categoryOrder,
+        ..._categoryItemByName.keys,
+        if (selectedCategory != null) selectedCategory,
+        ...createdByName.keys,
+      ],
+    );
+    return [
+      for (final name in names) createdByName[name] ?? _categoryItem(name),
+    ];
+  }
+
+  List<BookshelfTaxonomyItem> _upsertDraftTaxonomyItem(
+    List<BookshelfTaxonomyItem> items,
+    BookshelfTaxonomyItem item,
+  ) {
+    final normalizedName = _firstNormalizedTaxonomyName([item.name]);
+    if (normalizedName == null) {
+      return items;
+    }
+
+    final normalizedItem = item.copyWith(name: normalizedName);
+    final next = List<BookshelfTaxonomyItem>.from(items);
+    final index = next.indexWhere((entry) => entry.name == normalizedName);
+    if (index < 0) {
+      next.add(normalizedItem);
+    } else {
+      next[index] = normalizedItem;
+    }
+    return List<BookshelfTaxonomyItem>.unmodifiable(next);
+  }
+
+  Future<void> _saveBookTags({
+    required BookshelfBook book,
+    required String bookKey,
+    required List<String> tags,
+    required List<BookshelfTaxonomyItem> createdItems,
+  }) async {
+    final normalizedTags = _normalizeTags(tags);
+    try {
+      for (final item in createdItems) {
+        await _bookshelfService.upsertTagItem(
+          name: item.name,
+          colorValue: item.colorValue,
+        );
+      }
+      await _bookshelfService.setBookTags(
+        sourceId: book.sourceId,
+        detailUrl: book.detailUrl,
+        tags: normalizedTags,
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage('标签保存失败，请重试。');
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+    _updateBookshelfLayoutPreservingScroll(() {
+      _updateBookshelfState(() {
+        _applyBookTagAssignment(
+          bookKey: bookKey,
+          tags: normalizedTags,
+          createdItems: createdItems,
+        );
+      });
+    });
+    _showMessage(normalizedTags.isEmpty ? '已清除标签。' : '标签已更新。');
+  }
+
+  Future<void> _saveBookCategory({
+    required BookshelfBook book,
+    required String bookKey,
+    required String? category,
+    required List<BookshelfTaxonomyItem> createdItems,
+  }) async {
+    final normalizedCategory = _firstNormalizedTaxonomyName([category ?? '']);
+    try {
+      for (final item in createdItems) {
+        await _bookshelfService.upsertCategoryItem(
+          name: item.name,
+          colorValue: item.colorValue,
+        );
+      }
+      await _bookshelfService.setBookCategory(
+        sourceId: book.sourceId,
+        detailUrl: book.detailUrl,
+        category: normalizedCategory,
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage('分类保存失败，请重试。');
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+    _updateBookshelfLayoutPreservingScroll(() {
+      _updateBookshelfState(() {
+        _applyBookCategoryAssignment(
+          bookKey: bookKey,
+          category: normalizedCategory,
+          createdItems: createdItems,
+        );
+      });
+    });
+    _showMessage(normalizedCategory == null ? '已清除分类。' : '分类已更新。');
+  }
+
+  // 保存成功后先更新当前页缓存，让筛选、搜索、书籍角标立即响应；服务层事件随后会兜底刷新元数据。
+  void _applyBookTagAssignment({
+    required String bookKey,
+    required List<String> tags,
+    required List<BookshelfTaxonomyItem> createdItems,
+  }) {
+    final nextTagMap = Map<String, List<String>>.from(_bookTagsByKey);
+    if (tags.isEmpty) {
+      nextTagMap.remove(bookKey);
+    } else {
+      nextTagMap[bookKey] = List<String>.unmodifiable(tags);
+    }
+    _bookTagsByKey = Map<String, List<String>>.unmodifiable(nextTagMap);
+
+    final nextItemByName = Map<String, BookshelfTaxonomyItem>.from(
+      _tagItemByName,
+    );
+    for (final item in createdItems) {
+      final normalizedName = _firstNormalizedTaxonomyName([item.name]);
+      if (normalizedName == null) {
+        continue;
+      }
+      nextItemByName[normalizedName] = item.copyWith(name: normalizedName);
+    }
+    _tagItemByName = Map<String, BookshelfTaxonomyItem>.unmodifiable(
+      nextItemByName,
+    );
+    _tagOrder = List<String>.unmodifiable(
+      _normalizeTags([..._tagOrder, ...createdItems.map((item) => item.name)]),
+    );
+    _derivedBookshelfFingerprint = null;
+    _ensureFilterStillValid();
+  }
+
+  void _applyBookCategoryAssignment({
+    required String bookKey,
+    required String? category,
+    required List<BookshelfTaxonomyItem> createdItems,
+  }) {
+    final nextCategoryMap = Map<String, String>.from(_bookCategoriesByKey);
+    if (category == null) {
+      nextCategoryMap.remove(bookKey);
+    } else {
+      nextCategoryMap[bookKey] = category;
+    }
+    _bookCategoriesByKey = Map<String, String>.unmodifiable(nextCategoryMap);
+
+    _books = List<BookshelfBook>.unmodifiable(
+      _books.map((entry) {
+        if (_bookKey(entry) != bookKey) {
+          return entry;
+        }
+        return entry.copyWith(
+          category: category,
+          clearCategory: category == null,
+        );
+      }),
+    );
+
+    final nextItemByName = Map<String, BookshelfTaxonomyItem>.from(
+      _categoryItemByName,
+    );
+    for (final item in createdItems) {
+      final normalizedName = _firstNormalizedTaxonomyName([item.name]);
+      if (normalizedName == null) {
+        continue;
+      }
+      nextItemByName[normalizedName] = item.copyWith(name: normalizedName);
+    }
+    _categoryItemByName = Map<String, BookshelfTaxonomyItem>.unmodifiable(
+      nextItemByName,
+    );
+    _categoryOrder = List<String>.unmodifiable(
+      _normalizeTags([
+        ..._categoryOrder,
+        ...createdItems.map((item) => item.name),
+      ]),
+    );
+    _derivedBookshelfFingerprint = null;
+    _ensureFilterStillValid();
+  }
+
+  Future<void> _setBookReadingQueue(
+    BookshelfBook book,
+    bool inReadingQueue,
+  ) async {
+    try {
+      await _bookshelfService.setInReadingQueue(
+        sourceId: book.sourceId,
+        detailUrl: book.detailUrl,
+        inReadingQueue: inReadingQueue,
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage('待读清单更新失败，请重试。');
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+    _updateBookshelfLayoutPreservingScroll(() {
+      _updateBookshelfState(() {
+        _books = List<BookshelfBook>.unmodifiable(
+          _books.map((entry) {
+            if (_bookKey(entry) != _bookKey(book)) {
+              return entry;
+            }
+            return entry.copyWith(inReadingQueue: inReadingQueue);
+          }),
+        );
+        _derivedBookshelfFingerprint = null;
+        _ensureFilterStillValid();
+      });
+    });
+    _showMessage(inReadingQueue ? '已加入待读清单。' : '已移出待读清单。');
+  }
+
+  Future<void> _markBookReadingStatus(
+    BookshelfBook book,
+    _BookshelfReadingStatus status,
+  ) async {
+    if (_readingStatusOfBook(book) == status) {
+      _showMessage('当前已是${_readingStatusLabel(status)}。');
+      return;
+    }
+
+    final bookKey = _bookKey(book);
+    if (status == _BookshelfReadingStatus.unread) {
+      try {
+        await _readerPreferencesService.deleteProgress(book.bookId);
+      } catch (_) {
+        if (!mounted) {
+          return;
+        }
+        _showMessage('阅读状态保存失败，请重试。');
+        return;
+      }
+      if (!mounted) {
+        return;
+      }
+      _updateBookshelfLayoutPreservingScroll(() {
+        _updateBookshelfState(() {
+          final nextProgress = Map<String, ReadingProgress>.from(
+            _progressByBookKey,
+          )..remove(bookKey);
+          _progressByBookKey = Map<String, ReadingProgress>.unmodifiable(
+            nextProgress,
+          );
+          _derivedBookshelfFingerprint = null;
+          _ensureFilterStillValid();
+        });
+      });
+      _updateBookCardState(book, clearProgress: true);
+      _showMessage('已标记为未读。');
+      return;
+    }
+
+    final progress = await _buildMarkedReadingProgress(book, status: status);
+    if (progress == null) {
+      if (mounted) {
+        _showMessage('暂无可用章节，暂不能标记为${_readingStatusLabel(status)}。');
+      }
+      return;
+    }
+
+    try {
+      await _readerPreferencesService.saveProgress(progress);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage('阅读状态保存失败，请重试。');
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+    _updateBookshelfLayoutPreservingScroll(() {
+      _updateBookshelfState(() {
+        _progressByBookKey = Map<String, ReadingProgress>.unmodifiable(
+          Map<String, ReadingProgress>.from(_progressByBookKey)
+            ..[bookKey] = progress,
+        );
+        _derivedBookshelfFingerprint = null;
+        _ensureFilterStillValid();
+      });
+    });
+    _updateBookCardState(book, progress: progress);
+    _showMessage('已标记为${_readingStatusLabel(status)}。');
+  }
+
+  Future<ReadingProgress?> _buildMarkedReadingProgress(
+    BookshelfBook book, {
+    required _BookshelfReadingStatus status,
+  }) async {
+    final existing = _progressByBookKey[_bookKey(book)];
+    final targetIndex = await _resolveMarkedReadingTargetIndex(
+      book,
+      status: status,
+      existing: existing,
+    );
+    final anchor = await _resolveBookProgressAnchor(
+      book,
+      targetIndex: targetIndex,
+      existing: existing,
+      preferLast: status == _BookshelfReadingStatus.finished,
+    );
+    if (anchor == null) {
+      return null;
+    }
+
+    final ratio = switch (status) {
+      _BookshelfReadingStatus.finished => 1.0,
+      _BookshelfReadingStatus.reading => _readingMarkProgressRatio(existing),
+      _BookshelfReadingStatus.unread => 0.0,
+    };
+    return ReadingProgress(
+      bookId: book.bookId,
+      sourceId: book.sourceId,
+      detailUrl: book.detailUrl,
+      chapterId: anchor.chapterId,
+      chapterUrl: anchor.chapterUrl,
+      chapterTitle: anchor.chapterTitle,
+      chapterIndex: anchor.chapterIndex,
+      updatedAt: DateTime.now(),
+      chapterPositionRatio: ratio,
+    );
+  }
+
+  Future<int> _resolveMarkedReadingTargetIndex(
+    BookshelfBook book, {
+    required _BookshelfReadingStatus status,
+    required ReadingProgress? existing,
+  }) async {
+    if (status == _BookshelfReadingStatus.reading) {
+      final existingIndex = existing?.chapterIndex;
+      return existingIndex != null && existingIndex > 0 ? existingIndex : 0;
+    }
+
+    final cachedCount = _resolveApproximateChapterCount(
+      book,
+      localBook: _bookshelfLocalBook(book),
+      cachedChapterCount: _cachedChapterCountByBookKey[_bookKey(book)],
+    );
+    if (cachedCount != null && cachedCount > 0) {
+      return cachedCount - 1;
+    }
+    if (book.sourceId == _kLocalBookSourceId) {
+      final localBook =
+          _bookshelfLocalBook(book) ??
+          await _localBookRepository.getBookById(book.bookId.trim());
+      final chapterCount = localBook?.chapterCount ?? 0;
+      if (chapterCount > 0) {
+        return chapterCount - 1;
+      }
+    }
+    return existing?.chapterIndex ?? 0;
+  }
+
+  double _readingMarkProgressRatio(ReadingProgress? existing) {
+    final ratio = existing?.chapterPositionRatio.clamp(0.0, 0.98);
+    if (ratio != null && ratio > 0) {
+      return ratio;
+    }
+    return 0.001;
+  }
+
+  Future<_BookProgressAnchor?> _resolveBookProgressAnchor(
+    BookshelfBook book, {
+    required int targetIndex,
+    required ReadingProgress? existing,
+    required bool preferLast,
+  }) async {
+    final normalizedTargetIndex = math.max(0, targetIndex);
+    if (existing != null &&
+        !preferLast &&
+        existing.chapterIndex == normalizedTargetIndex &&
+        existing.chapterId.trim().isNotEmpty &&
+        existing.chapterUrl.trim().isNotEmpty) {
+      return _BookProgressAnchor(
+        chapterId: existing.chapterId,
+        chapterUrl: existing.chapterUrl,
+        chapterTitle: existing.chapterTitle,
+        chapterIndex: existing.chapterIndex,
+      );
+    }
+
+    if (book.sourceId == _kLocalBookSourceId) {
+      final localBook =
+          _bookshelfLocalBook(book) ??
+          await _localBookRepository.getBookById(book.bookId.trim());
+      final chapterCount = localBook?.chapterCount ?? 0;
+      final index =
+          preferLast && chapterCount > 0
+              ? chapterCount - 1
+              : normalizedTargetIndex;
+      final chapter = await _localBookRepository.getChapterMetaByIndex(
+        book.bookId.trim(),
+        index,
+      );
+      if (chapter != null) {
+        return _BookProgressAnchor(
+          chapterId: chapter.id,
+          chapterUrl: chapter.sourceRef ?? chapter.id,
+          chapterTitle: chapter.title,
+          chapterIndex: chapter.chapterIndex,
+        );
+      }
+    } else {
+      final remoteAnchor = await _resolveRemoteBookProgressAnchor(
+        book,
+        targetIndex: normalizedTargetIndex,
+        preferLast: preferLast,
+      );
+      if (remoteAnchor != null) {
+        return remoteAnchor;
+      }
+    }
+
+    if (existing != null &&
+        existing.chapterId.trim().isNotEmpty &&
+        existing.chapterUrl.trim().isNotEmpty) {
+      return _BookProgressAnchor(
+        chapterId: existing.chapterId,
+        chapterUrl: existing.chapterUrl,
+        chapterTitle: existing.chapterTitle,
+        chapterIndex: existing.chapterIndex,
+      );
+    }
+    return null;
+  }
+
+  Future<_BookProgressAnchor?> _resolveRemoteBookProgressAnchor(
+    BookshelfBook book, {
+    required int targetIndex,
+    required bool preferLast,
+  }) async {
+    try {
+      final result = await _bookDetailService
+          .load(
+            sourceId: book.sourceId,
+            bookId: book.bookId,
+            detailUrl: book.detailUrl,
+            fallbackTitle: _displayBookTitle(book),
+            fallbackAuthor: _displayBookAuthor(book),
+            includeCatalog: true,
+          )
+          .timeout(const Duration(seconds: 8));
+      final chapters = result.chapters
+          .where((chapter) => !chapter.isVolume)
+          .toList(growable: false);
+      if (chapters.isEmpty) {
+        return null;
+      }
+
+      final chapter =
+          preferLast
+              ? chapters.last
+              : chapters.firstWhere(
+                (item) => item.index == targetIndex,
+                orElse: () => chapters.first,
+              );
+      final bookKey = _bookKey(book);
+      final detailChapterCount =
+          result.detail.totalChapterNum ?? result.chapters.length;
+      if (mounted && detailChapterCount > 0) {
+        _cachedChapterCountByBookKey = Map<String, int>.unmodifiable(
+          Map<String, int>.from(_cachedChapterCountByBookKey)
+            ..[bookKey] = detailChapterCount,
+        );
+      }
+      return _BookProgressAnchor(
+        chapterId: chapter.id,
+        chapterUrl: chapter.chapterUrl,
+        chapterTitle: chapter.title,
+        chapterIndex: chapter.index,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _readingStatusLabel(_BookshelfReadingStatus status) {
+    return switch (status) {
+      _BookshelfReadingStatus.unread => '未读',
+      _BookshelfReadingStatus.reading => '阅读中',
+      _BookshelfReadingStatus.finished => '已读完',
+    };
+  }
+
+  Future<void> _confirmAndRemoveBook(BookshelfBook book) async {
+    if (!mounted) {
+      return;
+    }
+    final title = _displayBookTitle(book);
+    final confirmed = await showAdaptiveActionSurface<bool>(
+      context: context,
+      maxWidth: 460,
+      builder: (dialogContext) {
+        final theme = Theme.of(dialogContext);
+        final colorScheme = theme.colorScheme;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '删除书籍',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text('确定从书架删除「$title」吗？', style: theme.textTheme.bodyMedium),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('取消'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: colorScheme.error,
+                    foregroundColor: colorScheme.onError,
+                  ),
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  child: const Text('删除'),
+                ),
+              ],
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    _removeBooksFromLocalState(
+      <BookshelfBook>[book],
+      clearSelection: true,
+      exitSelectionMode: _isSelectionMode,
+    );
+    try {
+      await _removeBook(book, reload: false, showFeedback: false);
+    } catch (_) {
+      await _loadBookshelf(force: true);
+      if (!mounted) {
+        return;
+      }
+      _showMessage('删除失败，请稍后重试。');
+      return;
+    }
+    if (mounted) {
+      _showMessage('已从书架删除。');
     }
   }
 
@@ -1540,47 +2665,143 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final palette = _resolvedPalette(context);
     final iconSize = compact ? 18.0 : 20.0;
     final tapSize = compact ? 28.0 : 32.0;
-    return PopupMenuButton<_BookshelfBookMoreAction>(
-      tooltip: '更多',
-      padding: EdgeInsets.zero,
-      iconSize: iconSize,
-      constraints: const BoxConstraints(minWidth: 128),
-      onSelected: (action) => _handleBookMoreAction(book, action),
-      itemBuilder:
-          (context) => const [
-            PopupMenuItem<_BookshelfBookMoreAction>(
-              value: _BookshelfBookMoreAction.detail,
-              child: Row(
-                children: [
-                  Icon(Icons.info_outline_rounded, size: 18),
-                  SizedBox(width: 10),
-                  Text('查看详情'),
-                ],
+    return MenuAnchor(
+      menuChildren: _buildBookMoreMenuItems(book),
+      builder: (context, controller, child) {
+        return SizedBox.square(
+          dimension: tapSize,
+          child: IconButton(
+            tooltip: '更多',
+            padding: EdgeInsets.zero,
+            constraints: BoxConstraints.tightFor(
+              width: tapSize,
+              height: tapSize,
+            ),
+            onPressed: () {
+              if (controller.isOpen) {
+                controller.close();
+              } else {
+                controller.open();
+              }
+            },
+            icon: Align(
+              alignment: compact ? Alignment.centerRight : Alignment.center,
+              child: Icon(
+                Icons.more_vert_rounded,
+                size: iconSize,
+                color: palette.textSecondaryColor,
               ),
             ),
-            PopupMenuItem<_BookshelfBookMoreAction>(
-              value: _BookshelfBookMoreAction.select,
-              child: Row(
-                children: [
-                  Icon(Icons.checklist_rounded, size: 18),
-                  SizedBox(width: 10),
-                  Text('选择书籍'),
-                ],
-              ),
-            ),
-          ],
-      child: SizedBox.square(
-        dimension: tapSize,
-        child: Align(
-          alignment: compact ? Alignment.centerRight : Alignment.center,
-          child: Icon(
-            Icons.more_vert_rounded,
-            size: iconSize,
-            color: palette.textSecondaryColor,
           ),
-        ),
-      ),
+        );
+      },
     );
+  }
+
+  List<Widget> _buildBookMoreMenuItems(BookshelfBook book) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return <Widget>[
+      _buildBookMenuItem(
+        icon: Icons.info_outline_rounded,
+        label: '查看详情',
+        onPressed:
+            () => _handleBookMoreAction(book, _BookshelfBookMoreAction.detail),
+      ),
+      _buildBookMenuItem(
+        icon: Icons.edit_outlined,
+        label: '编辑',
+        onPressed:
+            () => _handleBookMoreAction(book, _BookshelfBookMoreAction.edit),
+      ),
+      const Divider(height: 1),
+      _buildBookMenuItem(
+        icon: Icons.sell_outlined,
+        label: '标签',
+        onPressed:
+            () => _handleBookMoreAction(book, _BookshelfBookMoreAction.tags),
+      ),
+      _buildBookMenuItem(
+        icon: Icons.folder_outlined,
+        label: '分类',
+        onPressed:
+            () =>
+                _handleBookMoreAction(book, _BookshelfBookMoreAction.category),
+      ),
+      _buildBookMenuItem(
+        icon:
+            book.inReadingQueue
+                ? Icons.playlist_remove_rounded
+                : Icons.playlist_add_rounded,
+        label: book.inReadingQueue ? '移出待读清单' : '添加待读清单',
+        onPressed:
+            () => _handleBookMoreAction(
+              book,
+              _BookshelfBookMoreAction.readingQueue,
+            ),
+      ),
+      SubmenuButton(
+        leadingIcon: const Icon(Icons.flag_outlined, size: 18),
+        menuChildren: [
+          for (final status in _BookshelfReadingStatus.values)
+            _buildReadingStatusMenuItem(book, status),
+        ],
+        child: const Text('标记'),
+      ),
+      const Divider(height: 1),
+      _buildBookMenuItem(
+        icon: Icons.checklist_rounded,
+        label: '选择书籍',
+        onPressed:
+            () => _handleBookMoreAction(book, _BookshelfBookMoreAction.select),
+      ),
+      _buildBookMenuItem(
+        icon: Icons.delete_outline_rounded,
+        label: '删除',
+        foregroundColor: colorScheme.error,
+        onPressed:
+            () => _handleBookMoreAction(book, _BookshelfBookMoreAction.delete),
+      ),
+    ];
+  }
+
+  Widget _buildBookMenuItem({
+    required IconData icon,
+    required String label,
+    required VoidCallback onPressed,
+    Color? foregroundColor,
+  }) {
+    return MenuItemButton(
+      leadingIcon: Icon(icon, size: 18),
+      style:
+          foregroundColor == null
+              ? null
+              : ButtonStyle(
+                foregroundColor: WidgetStateProperty.all(foregroundColor),
+              ),
+      onPressed: onPressed,
+      child: Text(label),
+    );
+  }
+
+  Widget _buildReadingStatusMenuItem(
+    BookshelfBook book,
+    _BookshelfReadingStatus status,
+  ) {
+    final selected = _readingStatusOfBook(book) == status;
+    return MenuItemButton(
+      leadingIcon: Icon(_readingStatusIcon(status), size: 18),
+      trailingIcon: selected ? const Icon(Icons.check_rounded, size: 18) : null,
+      onPressed: () => unawaited(_markBookReadingStatus(book, status)),
+      child: Text(_readingStatusLabel(status)),
+    );
+  }
+
+  IconData _readingStatusIcon(_BookshelfReadingStatus status) {
+    return switch (status) {
+      _BookshelfReadingStatus.unread => Icons.markunread_outlined,
+      _BookshelfReadingStatus.reading => Icons.menu_book_outlined,
+      _BookshelfReadingStatus.finished => Icons.task_alt_rounded,
+    };
   }
 
   Future<void> _openOnlineSearchWithReveal(BuildContext sourceContext) async {
@@ -1855,6 +3076,12 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         value.isEmpty
             ? const _BookshelfViewSelection.category(null)
             : _BookshelfViewSelection.category(value),
+      'todo' => const _BookshelfViewSelection.base(_BookshelfFilter.todo),
+      'unread' => const _BookshelfViewSelection.base(_BookshelfFilter.unread),
+      'reading' => const _BookshelfViewSelection.base(_BookshelfFilter.reading),
+      'finished' => const _BookshelfViewSelection.base(
+        _BookshelfFilter.finished,
+      ),
       'local' => const _BookshelfViewSelection.base(_BookshelfFilter.local),
       'novel' => const _BookshelfViewSelection.base(_BookshelfFilter.novel),
       'manga' => const _BookshelfViewSelection.base(_BookshelfFilter.manga),
@@ -3129,6 +4356,14 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     switch (filter) {
       case _BookshelfFilter.all:
         return true;
+      case _BookshelfFilter.todo:
+        return book.inReadingQueue;
+      case _BookshelfFilter.unread:
+        return _readingStatusOfBook(book) == _BookshelfReadingStatus.unread;
+      case _BookshelfFilter.reading:
+        return _readingStatusOfBook(book) == _BookshelfReadingStatus.reading;
+      case _BookshelfFilter.finished:
+        return _readingStatusOfBook(book) == _BookshelfReadingStatus.finished;
       case _BookshelfFilter.local:
         return book.sourceId == _kLocalBookSourceId;
       case _BookshelfFilter.manga:
@@ -3140,6 +4375,38 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       case _BookshelfFilter.custom:
         return false;
     }
+  }
+
+  _BookshelfProgressDisplay _progressDisplayForBook(BookshelfBook book) {
+    final bookKey = _bookKey(book);
+    return _progressDisplayByBookKey[bookKey] ??
+        _resolveBookshelfProgressDisplay(
+          book,
+          progress: _progressByBookKey[bookKey],
+          localBook: _bookshelfLocalBook(book),
+          cachedChapterCount: _cachedChapterCountByBookKey[bookKey],
+        );
+  }
+
+  bool _bookHasStartedReading(BookshelfBook book) {
+    final display = _progressDisplayForBook(book);
+    final progress = _progressByBookKey[_bookKey(book)];
+    return (display.hasProgress && display.progressValue > 0) ||
+        (progress != null && progress.chapterIndex > 0);
+  }
+
+  bool _bookIsFinished(BookshelfBook book) {
+    return _progressDisplayForBook(book).progressValue >= 0.999;
+  }
+
+  _BookshelfReadingStatus _readingStatusOfBook(BookshelfBook book) {
+    if (_bookIsFinished(book)) {
+      return _BookshelfReadingStatus.finished;
+    }
+    if (_bookHasStartedReading(book)) {
+      return _BookshelfReadingStatus.reading;
+    }
+    return _BookshelfReadingStatus.unread;
   }
 
   List<String> get _userTags {
@@ -3437,6 +4704,14 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     switch (filter) {
       case _BookshelfFilter.all:
         return '全部';
+      case _BookshelfFilter.todo:
+        return '待读清单';
+      case _BookshelfFilter.unread:
+        return '未读';
+      case _BookshelfFilter.reading:
+        return '阅读中';
+      case _BookshelfFilter.finished:
+        return '已读完';
       case _BookshelfFilter.local:
         return '本地';
       case _BookshelfFilter.novel:
@@ -3480,10 +4755,15 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     switch (view.kind) {
       case _BookshelfViewKind.base:
         final kind = switch (view.filter) {
+          _BookshelfFilter.all => 'all',
+          _BookshelfFilter.todo => 'todo',
+          _BookshelfFilter.unread => 'unread',
+          _BookshelfFilter.reading => 'reading',
+          _BookshelfFilter.finished => 'finished',
           _BookshelfFilter.local => 'local',
           _BookshelfFilter.novel => 'novel',
           _BookshelfFilter.manga => 'manga',
-          _BookshelfFilter.all || _BookshelfFilter.custom => 'all',
+          _BookshelfFilter.custom => 'all',
         };
         await _bookshelfService.saveViewSelection(kind: kind);
       case _BookshelfViewKind.tag:
@@ -5711,7 +6991,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     _openBookDetail(book);
   }
 
-  void _openBookDetail(BookshelfBook book) {
+  void _openBookDetail(BookshelfBook book, {bool initialEditMode = false}) {
     _cancelBackgroundLatestInfoRefresh();
     _cancelBackgroundRefreshForBook(
       sourceId: book.sourceId,
@@ -5726,6 +7006,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final route = _pageRouteService.resolveBookDetailRoute(
       book,
       heroTag: _buildBookCoverHeroTag(book),
+      initialEditMode: initialEditMode,
     );
     context.push(route);
   }

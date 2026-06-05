@@ -34,8 +34,12 @@ class AuthTokenRefresherImpl implements AuthTokenRefresher {
       if (_shouldInvalidateSession(error)) {
         // 只有服务端明确拒绝凭证时才清理本地会话并广播过期事件。
         // 网络抖动或临时 5xx 不应把用户踢回登录页。
+        final previousSession = await _sessionStore.getSession();
         await _sessionStore.clear();
-        AuthEventBus.instance.emitSessionExpired();
+        AuthEventBus.instance.emitSessionExpired(
+          '登录已过期，请重新登录。',
+          previousSession,
+        );
       }
       return false;
     } catch (_) {

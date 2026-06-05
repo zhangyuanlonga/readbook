@@ -23,9 +23,7 @@ import '../../../app/widgets/app_empty_state_card.dart';
 import '../../../core/auth/auth_event_bus.dart';
 import '../../../core/auth/auth_session_store.dart';
 import '../../../core/errors/app_exception.dart';
-import '../../../core/membership/membership_features.dart';
-import '../../../core/membership/membership_service.dart';
-import '../../../core/user/user_profile_service.dart';
+import '../../../core/membership/membership_access_service.dart';
 import '../../../domain/entities/book.dart';
 import '../../../domain/entities/book_metadata_override.dart';
 import '../../book/application/book_display_state.dart';
@@ -69,8 +67,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   late final SearchHistoryService _historyService;
   late final SearchSystemSettingsService _searchSystemSettingsService;
   late final AuthSessionStore _sessionStore;
-  late final MembershipService _membershipService;
-  late final UserProfileService _userProfileService;
+  late final MembershipAccessService _membershipAccessService;
 
   static const Duration _progressUiThrottleWindow = Duration(
     milliseconds: 1500,
@@ -283,8 +280,9 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       searchSystemSettingsServiceProvider,
     );
     _sessionStore = AuthSessionStore();
-    _membershipService = MembershipService();
-    _userProfileService = UserProfileService(sessionStore: _sessionStore);
+    _membershipAccessService = MembershipAccessService(
+      sessionStore: _sessionStore,
+    );
     _authEventSubscription = AuthEventBus.instance.stream.listen(
       _handleAuthEvent,
     );
@@ -845,7 +843,9 @@ class _SearchPageState extends ConsumerState<SearchPage> {
         return false;
       }
 
-      final hasAccess = await _loadOnlineServiceAccessFromRemoteProfile();
+      final hasAccess = await _membershipAccessService.fetchOnlineServiceAccess(
+        session: session,
+      );
       if (!_isLatestOnlineSearchAccessRequest(requestId)) {
         return false;
       }
@@ -885,21 +885,6 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       });
       return false;
     }
-  }
-
-  Future<bool> _loadOnlineServiceAccessFromRemoteProfile() async {
-    try {
-      final entitlement = await _membershipService.fetchEntitlement();
-      if (MembershipFeatures.hasOnlineServiceAccess(entitlement)) {
-        return true;
-      }
-    } catch (_) {
-      // 账号信息页使用 /v1/users/me 的会员字段；entitlement 接口异常时继续
-      // 用同源资料兜底，避免会员卡显示有效而功能入口误判无权。
-    }
-
-    final profile = await _userProfileService.fetchMe();
-    return MembershipFeatures.hasProfileOnlineServiceAccess(profile);
   }
 
   bool _isLatestOnlineSearchAccessRequest(int requestId) {

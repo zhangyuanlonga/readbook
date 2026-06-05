@@ -14,6 +14,7 @@ void main() {
         category: '仙侠',
         coverUrl: 'https://example.com/cover.jpg',
         latestChapter: '第100章',
+        inReadingQueue: true,
       );
 
       final restored = BookshelfBook.fromJson(book.toJson());
@@ -25,6 +26,7 @@ void main() {
       expect(restored.author, '忘语');
       expect(restored.category, '仙侠');
       expect(restored.latestChapter, '第100章');
+      expect(restored.inReadingQueue, isTrue);
     });
 
     test('copyWith can clear nullable fields', () {
@@ -55,6 +57,7 @@ void main() {
       expect(updated.category, isNull);
       expect(updated.coverUrl, isNull);
       expect(updated.latestChapter, isNull);
+      expect(updated.inReadingQueue, isFalse);
     });
   });
 }

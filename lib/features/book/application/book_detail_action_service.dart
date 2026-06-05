@@ -58,7 +58,13 @@ class BookDetailActionService {
     required BookDetail detail,
     required String? category,
     required List<String> tags,
+    required bool inReadingQueue,
   }) async {
+    await _bookshelfService.setInReadingQueue(
+      sourceId: detail.sourceId,
+      detailUrl: detail.detailUrl,
+      inReadingQueue: inReadingQueue,
+    );
     await _bookshelfService.setBookCategory(
       sourceId: detail.sourceId,
       detailUrl: detail.detailUrl,

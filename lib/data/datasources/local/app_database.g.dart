@@ -8977,6 +8977,21 @@ class $StoredBookshelfBooksTable extends StoredBookshelfBooks
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _inReadingQueueMeta = const VerificationMeta(
+    'inReadingQueue',
+  );
+  @override
+  late final GeneratedColumn<bool> inReadingQueue = GeneratedColumn<bool>(
+    'in_reading_queue',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("in_reading_queue" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _addedAtMeta = const VerificationMeta(
     'addedAt',
   );
@@ -9010,6 +9025,7 @@ class $StoredBookshelfBooksTable extends StoredBookshelfBooks
     category,
     coverUrl,
     latestChapter,
+    inReadingQueue,
     addedAt,
     updatedAt,
   ];
@@ -9084,6 +9100,15 @@ class $StoredBookshelfBooksTable extends StoredBookshelfBooks
         ),
       );
     }
+    if (data.containsKey('in_reading_queue')) {
+      context.handle(
+        _inReadingQueueMeta,
+        inReadingQueue.isAcceptableOrUnknown(
+          data['in_reading_queue']!,
+          _inReadingQueueMeta,
+        ),
+      );
+    }
     if (data.containsKey('added_at')) {
       context.handle(
         _addedAtMeta,
@@ -9143,6 +9168,11 @@ class $StoredBookshelfBooksTable extends StoredBookshelfBooks
         DriftSqlType.string,
         data['${effectivePrefix}latest_chapter'],
       ),
+      inReadingQueue:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.bool,
+            data['${effectivePrefix}in_reading_queue'],
+          )!,
       addedAt:
           attachedDatabase.typeMapping.read(
             DriftSqlType.dateTime,
@@ -9172,6 +9202,7 @@ class StoredBookshelfBook extends DataClass
   final String? category;
   final String? coverUrl;
   final String? latestChapter;
+  final bool inReadingQueue;
   final DateTime addedAt;
   final DateTime updatedAt;
   const StoredBookshelfBook({
@@ -9183,6 +9214,7 @@ class StoredBookshelfBook extends DataClass
     this.category,
     this.coverUrl,
     this.latestChapter,
+    required this.inReadingQueue,
     required this.addedAt,
     required this.updatedAt,
   });
@@ -9205,6 +9237,7 @@ class StoredBookshelfBook extends DataClass
     if (!nullToAbsent || latestChapter != null) {
       map['latest_chapter'] = Variable<String>(latestChapter);
     }
+    map['in_reading_queue'] = Variable<bool>(inReadingQueue);
     map['added_at'] = Variable<DateTime>(addedAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     return map;
@@ -9230,6 +9263,7 @@ class StoredBookshelfBook extends DataClass
           latestChapter == null && nullToAbsent
               ? const Value.absent()
               : Value(latestChapter),
+      inReadingQueue: Value(inReadingQueue),
       addedAt: Value(addedAt),
       updatedAt: Value(updatedAt),
     );
@@ -9249,6 +9283,7 @@ class StoredBookshelfBook extends DataClass
       category: serializer.fromJson<String?>(json['category']),
       coverUrl: serializer.fromJson<String?>(json['coverUrl']),
       latestChapter: serializer.fromJson<String?>(json['latestChapter']),
+      inReadingQueue: serializer.fromJson<bool>(json['inReadingQueue']),
       addedAt: serializer.fromJson<DateTime>(json['addedAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -9265,6 +9300,7 @@ class StoredBookshelfBook extends DataClass
       'category': serializer.toJson<String?>(category),
       'coverUrl': serializer.toJson<String?>(coverUrl),
       'latestChapter': serializer.toJson<String?>(latestChapter),
+      'inReadingQueue': serializer.toJson<bool>(inReadingQueue),
       'addedAt': serializer.toJson<DateTime>(addedAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -9279,6 +9315,7 @@ class StoredBookshelfBook extends DataClass
     Value<String?> category = const Value.absent(),
     Value<String?> coverUrl = const Value.absent(),
     Value<String?> latestChapter = const Value.absent(),
+    bool? inReadingQueue,
     DateTime? addedAt,
     DateTime? updatedAt,
   }) => StoredBookshelfBook(
@@ -9291,6 +9328,7 @@ class StoredBookshelfBook extends DataClass
     coverUrl: coverUrl.present ? coverUrl.value : this.coverUrl,
     latestChapter:
         latestChapter.present ? latestChapter.value : this.latestChapter,
+    inReadingQueue: inReadingQueue ?? this.inReadingQueue,
     addedAt: addedAt ?? this.addedAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -9307,6 +9345,10 @@ class StoredBookshelfBook extends DataClass
           data.latestChapter.present
               ? data.latestChapter.value
               : this.latestChapter,
+      inReadingQueue:
+          data.inReadingQueue.present
+              ? data.inReadingQueue.value
+              : this.inReadingQueue,
       addedAt: data.addedAt.present ? data.addedAt.value : this.addedAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -9323,6 +9365,7 @@ class StoredBookshelfBook extends DataClass
           ..write('category: $category, ')
           ..write('coverUrl: $coverUrl, ')
           ..write('latestChapter: $latestChapter, ')
+          ..write('inReadingQueue: $inReadingQueue, ')
           ..write('addedAt: $addedAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -9339,6 +9382,7 @@ class StoredBookshelfBook extends DataClass
     category,
     coverUrl,
     latestChapter,
+    inReadingQueue,
     addedAt,
     updatedAt,
   );
@@ -9354,6 +9398,7 @@ class StoredBookshelfBook extends DataClass
           other.category == this.category &&
           other.coverUrl == this.coverUrl &&
           other.latestChapter == this.latestChapter &&
+          other.inReadingQueue == this.inReadingQueue &&
           other.addedAt == this.addedAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -9368,6 +9413,7 @@ class StoredBookshelfBooksCompanion
   final Value<String?> category;
   final Value<String?> coverUrl;
   final Value<String?> latestChapter;
+  final Value<bool> inReadingQueue;
   final Value<DateTime> addedAt;
   final Value<DateTime> updatedAt;
   final Value<int> rowid;
@@ -9380,6 +9426,7 @@ class StoredBookshelfBooksCompanion
     this.category = const Value.absent(),
     this.coverUrl = const Value.absent(),
     this.latestChapter = const Value.absent(),
+    this.inReadingQueue = const Value.absent(),
     this.addedAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -9393,6 +9440,7 @@ class StoredBookshelfBooksCompanion
     this.category = const Value.absent(),
     this.coverUrl = const Value.absent(),
     this.latestChapter = const Value.absent(),
+    this.inReadingQueue = const Value.absent(),
     required DateTime addedAt,
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -9410,6 +9458,7 @@ class StoredBookshelfBooksCompanion
     Expression<String>? category,
     Expression<String>? coverUrl,
     Expression<String>? latestChapter,
+    Expression<bool>? inReadingQueue,
     Expression<DateTime>? addedAt,
     Expression<DateTime>? updatedAt,
     Expression<int>? rowid,
@@ -9423,6 +9472,7 @@ class StoredBookshelfBooksCompanion
       if (category != null) 'category': category,
       if (coverUrl != null) 'cover_url': coverUrl,
       if (latestChapter != null) 'latest_chapter': latestChapter,
+      if (inReadingQueue != null) 'in_reading_queue': inReadingQueue,
       if (addedAt != null) 'added_at': addedAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -9438,6 +9488,7 @@ class StoredBookshelfBooksCompanion
     Value<String?>? category,
     Value<String?>? coverUrl,
     Value<String?>? latestChapter,
+    Value<bool>? inReadingQueue,
     Value<DateTime>? addedAt,
     Value<DateTime>? updatedAt,
     Value<int>? rowid,
@@ -9451,6 +9502,7 @@ class StoredBookshelfBooksCompanion
       category: category ?? this.category,
       coverUrl: coverUrl ?? this.coverUrl,
       latestChapter: latestChapter ?? this.latestChapter,
+      inReadingQueue: inReadingQueue ?? this.inReadingQueue,
       addedAt: addedAt ?? this.addedAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -9484,6 +9536,9 @@ class StoredBookshelfBooksCompanion
     if (latestChapter.present) {
       map['latest_chapter'] = Variable<String>(latestChapter.value);
     }
+    if (inReadingQueue.present) {
+      map['in_reading_queue'] = Variable<bool>(inReadingQueue.value);
+    }
     if (addedAt.present) {
       map['added_at'] = Variable<DateTime>(addedAt.value);
     }
@@ -9507,6 +9562,7 @@ class StoredBookshelfBooksCompanion
           ..write('category: $category, ')
           ..write('coverUrl: $coverUrl, ')
           ..write('latestChapter: $latestChapter, ')
+          ..write('inReadingQueue: $inReadingQueue, ')
           ..write('addedAt: $addedAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -18534,6 +18590,7 @@ typedef $$StoredBookshelfBooksTableCreateCompanionBuilder =
       Value<String?> category,
       Value<String?> coverUrl,
       Value<String?> latestChapter,
+      Value<bool> inReadingQueue,
       required DateTime addedAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -18548,6 +18605,7 @@ typedef $$StoredBookshelfBooksTableUpdateCompanionBuilder =
       Value<String?> category,
       Value<String?> coverUrl,
       Value<String?> latestChapter,
+      Value<bool> inReadingQueue,
       Value<DateTime> addedAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -18599,6 +18657,11 @@ class $$StoredBookshelfBooksTableFilterComposer
 
   ColumnFilters<String> get latestChapter => $composableBuilder(
     column: $table.latestChapter,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get inReadingQueue => $composableBuilder(
+    column: $table.inReadingQueue,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -18662,6 +18725,11 @@ class $$StoredBookshelfBooksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get inReadingQueue => $composableBuilder(
+    column: $table.inReadingQueue,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get addedAt => $composableBuilder(
     column: $table.addedAt,
     builder: (column) => ColumnOrderings(column),
@@ -18705,6 +18773,11 @@ class $$StoredBookshelfBooksTableAnnotationComposer
 
   GeneratedColumn<String> get latestChapter => $composableBuilder(
     column: $table.latestChapter,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get inReadingQueue => $composableBuilder(
+    column: $table.inReadingQueue,
     builder: (column) => column,
   );
 
@@ -18769,6 +18842,7 @@ class $$StoredBookshelfBooksTableTableManager
                 Value<String?> category = const Value.absent(),
                 Value<String?> coverUrl = const Value.absent(),
                 Value<String?> latestChapter = const Value.absent(),
+                Value<bool> inReadingQueue = const Value.absent(),
                 Value<DateTime> addedAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -18781,6 +18855,7 @@ class $$StoredBookshelfBooksTableTableManager
                 category: category,
                 coverUrl: coverUrl,
                 latestChapter: latestChapter,
+                inReadingQueue: inReadingQueue,
                 addedAt: addedAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -18795,6 +18870,7 @@ class $$StoredBookshelfBooksTableTableManager
                 Value<String?> category = const Value.absent(),
                 Value<String?> coverUrl = const Value.absent(),
                 Value<String?> latestChapter = const Value.absent(),
+                Value<bool> inReadingQueue = const Value.absent(),
                 required DateTime addedAt,
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -18807,6 +18883,7 @@ class $$StoredBookshelfBooksTableTableManager
                 category: category,
                 coverUrl: coverUrl,
                 latestChapter: latestChapter,
+                inReadingQueue: inReadingQueue,
                 addedAt: addedAt,
                 updatedAt: updatedAt,
                 rowid: rowid,

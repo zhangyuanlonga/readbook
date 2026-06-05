@@ -151,6 +151,7 @@ class BookshelfService {
               category: item.category,
               coverUrl: item.coverUrl,
               latestChapter: item.latestChapter,
+              inReadingQueue: item.inReadingQueue,
             ),
           )
           .toList(growable: false);
@@ -171,6 +172,7 @@ class BookshelfService {
               category: item.category,
               coverUrl: item.coverUrl,
               latestChapter: item.latestChapter,
+              inReadingQueue: item.inReadingQueue,
             ),
           )
           .toList(growable: false);
@@ -202,15 +204,20 @@ class BookshelfService {
 
   Future<void> upsert(BookshelfBook item) async {
     final all = (await getAll()).toList(growable: true);
+    bool previousInReadingQueue = false;
     final index = all.indexWhere(
       (entry) =>
           entry.sourceId == item.sourceId && entry.detailUrl == item.detailUrl,
     );
 
-    final value = item.copyWith(addedAt: DateTime.now());
     if (index >= 0) {
+      previousInReadingQueue = all[index].inReadingQueue;
       all.removeAt(index);
     }
+    final value = item.copyWith(
+      addedAt: DateTime.now(),
+      inReadingQueue: item.inReadingQueue || previousInReadingQueue,
+    );
     all.insert(0, value);
 
     await _save(all);
@@ -241,6 +248,7 @@ class BookshelfService {
 
     final all = (await getAll()).toList(growable: true);
     String? previousCategory;
+    bool previousInReadingQueue = false;
     for (final entry in all) {
       final entryKey = _bookKey(
         sourceId: entry.sourceId,
@@ -248,6 +256,7 @@ class BookshelfService {
       );
       if (entryKey == previousKey) {
         previousCategory = entry.category?.trim();
+        previousInReadingQueue = entry.inReadingQueue;
         break;
       }
     }
@@ -271,6 +280,7 @@ class BookshelfService {
                     (previousCategory?.isNotEmpty ?? false)
                 ? previousCategory
                 : nextBook.category,
+        inReadingQueue: nextBook.inReadingQueue || previousInReadingQueue,
       ),
     );
     await _save(all);
@@ -329,6 +339,59 @@ class BookshelfService {
     );
     await removeBookTags(sourceId: sourceId, detailUrl: detailUrl);
     await removeBookCategory(sourceId: sourceId, detailUrl: detailUrl);
+  }
+
+  Future<bool> isInReadingQueue({
+    required String sourceId,
+    required String detailUrl,
+  }) async {
+    final normalizedSourceId = sourceId.trim();
+    final normalizedDetailUrl = detailUrl.trim();
+    if (normalizedSourceId.isEmpty || normalizedDetailUrl.isEmpty) {
+      return false;
+    }
+    final all = await getAll();
+    for (final book in all) {
+      if (book.sourceId == normalizedSourceId &&
+          book.detailUrl == normalizedDetailUrl) {
+        return book.inReadingQueue;
+      }
+    }
+    return false;
+  }
+
+  Future<void> setInReadingQueue({
+    required String sourceId,
+    required String detailUrl,
+    required bool inReadingQueue,
+  }) async {
+    final normalizedSourceId = sourceId.trim();
+    final normalizedDetailUrl = detailUrl.trim();
+    if (normalizedSourceId.isEmpty || normalizedDetailUrl.isEmpty) {
+      return;
+    }
+
+    final all = (await getAll()).toList(growable: true);
+    final index = all.indexWhere(
+      (book) =>
+          book.sourceId == normalizedSourceId &&
+          book.detailUrl == normalizedDetailUrl,
+    );
+    if (index < 0 || all[index].inReadingQueue == inReadingQueue) {
+      return;
+    }
+
+    final updated = all[index].copyWith(inReadingQueue: inReadingQueue);
+    all[index] = updated;
+    await _save(all);
+    _emitCollectionChange(
+      BookshelfCollectionChange(
+        action: BookshelfCollectionAction.upsert,
+        sourceId: normalizedSourceId,
+        detailUrl: normalizedDetailUrl,
+        bookId: updated.bookId,
+      ),
+    );
   }
 
   Future<void> replaceAllForSync(List<BookshelfBook> books) async {

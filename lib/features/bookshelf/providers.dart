@@ -9,6 +9,7 @@ import '../../domain/repositories/local_book_repository.dart';
 import '../announcement/application/announcement_read_state_service.dart';
 import '../announcement/application/announcement_service.dart';
 import '../book/application/book_detail_service.dart';
+import '../book/application/book_reading_status_service.dart';
 import '../book/application/custom_cover_storage_service.dart';
 import '../reader/application/local/local_book_index_service.dart';
 import '../reader/application/local/local_reader_entry_guard_service.dart';
@@ -44,6 +45,7 @@ class BookshelfPageDependencies {
     required this.announcementService,
     required this.announcementReadStateService,
     required this.flowCoordinator,
+    required this.readingStatusService,
   });
 
   final BookshelfService bookshelfService;
@@ -60,6 +62,7 @@ class BookshelfPageDependencies {
   final AnnouncementService announcementService;
   final AnnouncementReadStateService announcementReadStateService;
   final BookshelfFlowCoordinator flowCoordinator;
+  final BookReadingStatusService readingStatusService;
 }
 
 class DesktopBookshelfSortOption {
@@ -102,6 +105,36 @@ class DesktopBookshelfToolbarActions {
   final VoidCallback onImportLocal;
 }
 
+class DesktopBookshelfLibraryStatusAction {
+  const DesktopBookshelfLibraryStatusAction({
+    required this.label,
+    required this.count,
+    required this.selected,
+    required this.icon,
+    required this.onSelected,
+    this.enabled = true,
+  });
+
+  /// 桌面端书架状态名称，Shell 只展示文案，具体筛选仍由 BookshelfPage 处理。
+  final String label;
+  final int count;
+  final bool selected;
+  final IconData icon;
+  final VoidCallback onSelected;
+  final bool enabled;
+}
+
+class DesktopBookshelfLibraryActions {
+  const DesktopBookshelfLibraryActions({
+    required this.activeLabel,
+    required this.statusActions,
+  });
+
+  /// 当前书架视图名称，用于桌面顶栏的紧凑下拉入口。
+  final String activeLabel;
+  final List<DesktopBookshelfLibraryStatusAction> statusActions;
+}
+
 class DesktopBookshelfDisplaySettingOption {
   const DesktopBookshelfDisplaySettingOption({
     required this.label,
@@ -135,6 +168,15 @@ final desktopBookshelfSearchKeywordProvider = StateProvider<String>((ref) {
 /// 避免壳层直接依赖书架页面的内部状态。
 final desktopBookshelfToolbarActionsProvider =
     StateProvider<DesktopBookshelfToolbarActions?>((ref) {
+      return null;
+    });
+
+/// 桌面端书架状态入口注册器。
+///
+/// ShellScaffold 只消费当前状态列表和回调，不直接读取书架数据，避免桌面壳层和
+/// BookshelfPage 各自维护一套筛选逻辑。
+final desktopBookshelfLibraryActionsProvider =
+    StateProvider<DesktopBookshelfLibraryActions?>((ref) {
       return null;
     });
 
@@ -191,6 +233,17 @@ final bookshelfBookDetailServiceProvider = Provider<BookDetailService>((ref) {
     ),
   );
 });
+
+final bookshelfBookReadingStatusServiceProvider =
+    Provider<BookReadingStatusService>((ref) {
+      return BookReadingStatusService(
+        readerPreferencesService: ref.watch(
+          bookshelfReaderPreferencesServiceProvider,
+        ),
+        bookDetailService: ref.watch(bookshelfBookDetailServiceProvider),
+        localBookRepository: ref.watch(bookshelfLocalBookRepositoryProvider),
+      );
+    });
 
 final bookshelfReadingRecordServiceProvider = Provider<ReadingRecordService>((
   ref,
@@ -302,6 +355,7 @@ final bookshelfPageDependenciesProvider = Provider<BookshelfPageDependencies>((
       bookshelfAnnouncementReadStateServiceProvider,
     ),
     flowCoordinator: ref.watch(bookshelfFlowCoordinatorProvider),
+    readingStatusService: ref.watch(bookshelfBookReadingStatusServiceProvider),
   );
 });
 

@@ -16,7 +16,6 @@ import '../domain/entities/bottom_nav_icon_gallery.dart';
 import '../features/auth/providers.dart';
 import '../features/bookshelf/providers.dart';
 import '../features/mine/application/advanced_theme_provider.dart';
-import '../features/mine/providers.dart';
 import 'layout/app_adaptive.dart';
 import 'theme/app_advanced_theme_tokens.dart';
 import 'theme/app_theme_provider.dart';
@@ -205,11 +204,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
       _isShellLoggingOut = true;
     });
     try {
-      final userId = _topBarSession?.userId;
       await _authService.logout();
-      await ref
-          .read(minePageSessionServiceProvider)
-          .clearUserScopedCache(userId);
       if (!mounted || !context.mounted) {
         return;
       }
@@ -430,6 +425,10 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
         currentTab == AppShellTab.bookshelf
             ? ref.watch(desktopBookshelfToolbarActionsProvider)
             : null;
+    final bookshelfLibraryActions =
+        currentTab == AppShellTab.bookshelf
+            ? ref.watch(desktopBookshelfLibraryActionsProvider)
+            : null;
     if (_desktopBookshelfSearchController.text != bookshelfSearchKeyword) {
       _desktopBookshelfSearchController.value = TextEditingValue(
         text: bookshelfSearchKeyword,
@@ -463,12 +462,15 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
             ),
             child: Row(
               children: [
-                Expanded(
-                  child:
-                      currentTab == AppShellTab.bookshelf
-                          ? _buildDesktopTopBarBookshelfSearch(context)
-                          : const SizedBox.shrink(),
-                ),
+                if (currentTab == AppShellTab.bookshelf) ...[
+                  _buildDesktopBookshelfViewSelector(
+                    context,
+                    actions: bookshelfLibraryActions,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(child: _buildDesktopTopBarBookshelfSearch(context)),
+                ] else
+                  const Expanded(child: SizedBox.shrink()),
                 const SizedBox(width: 18),
                 if (currentTab == AppShellTab.bookshelf) ...[
                   _buildDesktopBookshelfViewOptionsButton(
@@ -491,6 +493,95 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildDesktopBookshelfViewSelector(
+    BuildContext context, {
+    required DesktopBookshelfLibraryActions? actions,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final activeLabel = actions?.activeLabel.trim();
+    return MenuAnchor(
+      menuChildren:
+          actions == null
+              ? const <Widget>[]
+              : [
+                for (final action in actions.statusActions)
+                  MenuItemButton(
+                    leadingIcon:
+                        action.selected
+                            ? const Icon(Icons.check_rounded)
+                            : Icon(action.icon),
+                    onPressed:
+                        action.enabled && !action.selected
+                            ? action.onSelected
+                            : null,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(action.label),
+                        const SizedBox(width: 16),
+                        Text(
+                          '${action.count}',
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(color: colorScheme.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+      builder: (menuContext, controller, child) {
+        return Material(
+          key: const ValueKey<String>('desktop_bookshelf_view_selector'),
+          color: colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(999),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(999),
+            onTap:
+                actions == null
+                    ? null
+                    : () {
+                      if (controller.isOpen) {
+                        controller.close();
+                      } else {
+                        controller.open();
+                      }
+                    },
+            child: SizedBox(
+              height: 40,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 12, 0),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 116),
+                      child: Text(
+                        activeLabel == null || activeLabel.isEmpty
+                            ? '全部'
+                            : activeLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: colorScheme.onSurface,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 18,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -843,6 +934,11 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     required int selectedIndex,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
+    final currentTab = _locationTab(widget.location);
+    final bookshelfLibraryActions =
+        currentTab == AppShellTab.bookshelf
+            ? ref.watch(desktopBookshelfLibraryActionsProvider)
+            : null;
     return SizedBox(
       key: const ValueKey('desktop_shell_sidebar'),
       width: width,
@@ -865,23 +961,143 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
                 _buildDesktopSidebarHeader(context),
                 const SizedBox(height: 34),
                 Expanded(
-                  child: ListView.separated(
+                  child: ListView(
                     padding: EdgeInsets.zero,
-                    itemBuilder: (context, index) {
-                      final destination = destinations[index];
-                      return _buildDesktopNavItem(
-                        context,
-                        destination: destination,
-                        selected: index == selectedIndex,
-                        onTap: () => _goToDestination(context, destination),
-                      );
-                    },
-                    separatorBuilder:
-                        (context, index) => const SizedBox(height: 8),
-                    itemCount: destinations.length,
+                    children: [
+                      for (
+                        var index = 0;
+                        index < destinations.length;
+                        index++
+                      ) ...[
+                        _buildDesktopNavItem(
+                          context,
+                          destination: destinations[index],
+                          selected: index == selectedIndex,
+                          onTap:
+                              () => _goToDestination(
+                                context,
+                                destinations[index],
+                              ),
+                        ),
+                        if (index != destinations.length - 1)
+                          const SizedBox(height: 8),
+                      ],
+                      if (bookshelfLibraryActions != null) ...[
+                        const SizedBox(height: 24),
+                        _buildDesktopBookshelfLibrarySection(
+                          context,
+                          actions: bookshelfLibraryActions,
+                        ),
+                      ],
+                    ],
                   ),
                 ),
                 _buildDesktopSidebarFooter(context),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopBookshelfLibrarySection(
+    BuildContext context, {
+    required DesktopBookshelfLibraryActions actions,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Divider(
+            color: colorScheme.outlineVariant.withValues(alpha: 0.74),
+            height: 1,
+          ),
+          const SizedBox(height: 18),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Text(
+              '我的书架',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: textTheme.labelMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          for (final action in actions.statusActions) ...[
+            _buildDesktopBookshelfLibraryStatusItem(context, action: action),
+            const SizedBox(height: 4),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDesktopBookshelfLibraryStatusItem(
+    BuildContext context, {
+    required DesktopBookshelfLibraryStatusAction action,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final selected = action.selected;
+    final foreground =
+        selected ? colorScheme.primary : colorScheme.onSurfaceVariant;
+    final background =
+        selected
+            ? _desktopSelectedNavBackground(colorScheme)
+            : Colors.transparent;
+    final enabledForeground =
+        action.enabled ? foreground : foreground.withValues(alpha: 0.38);
+
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        overlayColor: WidgetStateProperty.all(Colors.transparent),
+        splashFactory: NoSplash.splashFactory,
+        onTap: action.enabled && !selected ? action.onSelected : null,
+        child: SizedBox(
+          height: 36,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: background,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                const SizedBox(width: 12),
+                Icon(action.icon, size: 18, color: enabledForeground),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    action.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: enabledForeground,
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                    ),
+                  ),
+                ),
+                Text(
+                  '${action.count}',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color:
+                        selected
+                            ? colorScheme.primary
+                            : colorScheme.onSurfaceVariant.withValues(
+                              alpha: 0.74,
+                            ),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(width: 12),
               ],
             ),
           ),

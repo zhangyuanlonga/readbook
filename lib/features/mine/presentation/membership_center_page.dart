@@ -18,6 +18,7 @@ import '../../../core/auth/auth_session.dart';
 import '../../../core/auth/auth_session_store.dart';
 import '../../../core/device/device_identity.dart';
 import '../../../core/errors/app_exception.dart';
+import '../../../core/membership/membership_access_resolver.dart';
 import '../../../core/membership/membership_device_seat.dart';
 import '../../../core/membership/membership_entitlement.dart';
 import '../../../core/membership/membership_seat_sync_result.dart';
@@ -126,7 +127,8 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
   bool _isClaimingTrial = false;
   String? _errorMessage;
 
-  bool get _hasActiveMembership => _entitlement?.isActive ?? false;
+  bool get _hasActiveMembership =>
+      MembershipAccessResolver.fromEntitlement(_entitlement).hasMembership;
   bool get _isActing => _isRedeeming || _isClaimingTrial;
 
   @override
@@ -254,13 +256,21 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
   }
 
   Future<void> _loadMembershipData() async {
+    final remoteAccessSnapshotService = ref.read(
+      remoteAccessSnapshotServiceProvider,
+    );
+    final snapshotRevisionNotifier = ref.read(
+      mineRemoteAccessSnapshotRevisionProvider.notifier,
+    );
     try {
       final entitlement = await _membershipService.fetchEntitlement();
       final userId = _session?.userId?.trim() ?? '';
       if (userId.isNotEmpty) {
-        await ref
-            .read(remoteAccessSnapshotServiceProvider)
-            .saveMergedMembership(userId: userId, entitlement: entitlement);
+        await remoteAccessSnapshotService.saveMergedMembership(
+          userId: userId,
+          entitlement: entitlement,
+        );
+        snapshotRevisionNotifier.update((value) => value + 1);
       }
       MembershipSeatSyncResult? seatSyncResult;
       String? transientError;

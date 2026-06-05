@@ -5,7 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/auth/auth_session.dart';
 import '../../../core/auth/auth_session_store.dart';
 import '../../../core/media/image_selection_service.dart';
-import '../../../core/membership/membership_features.dart';
+import '../../../core/membership/membership_access_resolver.dart';
+import '../../../core/membership/membership_entitlement.dart';
 import '../../../core/membership/membership_service.dart';
 import '../../../core/mobile_features/mobile_feature_service.dart';
 import '../../../core/storage/managed_asset_store.dart';
@@ -118,9 +119,11 @@ class MinePageSessionService {
             ? null
             : await _remoteAccessSnapshotService.load(normalizedUserId);
     if (!refreshRemote) {
-      final mergedSnapshot = _mergeProfileMembershipAccess(
+      final mergedSnapshot = _mergeMembershipAccess(
         cachedRemoteSnapshot,
-        profile,
+        session: session,
+        profile: profile,
+        allowLocalMembershipFallback: cachedRemoteSnapshot == null,
       );
       return _buildSnapshot(
         session: session,
@@ -141,7 +144,14 @@ class MinePageSessionService {
             entitlement: entitlement,
           );
       final mergedSnapshot =
-          _mergeProfileMembershipAccess(remoteSnapshot, profile) ??
+          _mergeMembershipAccess(
+            remoteSnapshot,
+            session: session,
+            profile: profile,
+            entitlement: entitlement,
+            allowLocalMembershipFallback:
+                !entitlement.hasExplicitMembershipState,
+          ) ??
           remoteSnapshot;
       if (normalizedUserId.isNotEmpty) {
         await _remoteAccessSnapshotService.save(
@@ -160,9 +170,11 @@ class MinePageSessionService {
         readingSummary: readingSummary,
       );
     } catch (_) {
-      final mergedSnapshot = _mergeProfileMembershipAccess(
+      final mergedSnapshot = _mergeMembershipAccess(
         cachedRemoteSnapshot,
-        profile,
+        session: session,
+        profile: profile,
+        allowLocalMembershipFallback: cachedRemoteSnapshot == null,
       );
       return _buildSnapshot(
         session: session,
@@ -307,36 +319,33 @@ class MinePageSessionService {
     );
   }
 
-  RemoteAccessSnapshot? _mergeProfileMembershipAccess(
-    RemoteAccessSnapshot? snapshot,
+  RemoteAccessSnapshot? _mergeMembershipAccess(
+    RemoteAccessSnapshot? snapshot, {
+    required AuthSession session,
     UserProfile? profile,
-  ) {
-    if (!MembershipFeatures.hasActiveProfileMembership(profile)) {
+    MembershipEntitlement? entitlement,
+    required bool allowLocalMembershipFallback,
+  }) {
+    final access = MembershipAccessResolver.resolve(
+      session: allowLocalMembershipFallback ? session : null,
+      profile: allowLocalMembershipFallback ? profile : null,
+      entitlement: entitlement,
+    );
+    if (!access.hasExplicitMembershipState && !access.hasMembership) {
       return snapshot;
     }
-    final shouldUseProfileMembership = snapshot?.hasMembership != true;
-    final merged = (snapshot ?? _defaultProfileMembershipSnapshot()).copyWith(
-      hasMembership: true,
-      hasThemeCustom:
-          snapshot?.hasThemeCustom == true ||
-          MembershipFeatures.hasProfileFeature(
-            profile,
-            MembershipFeatures.themeCustom,
-          ),
-      vipExpireAt:
-          shouldUseProfileMembership
-              ? profile?.vipExpireAt
-              : snapshot?.vipExpireAt ?? profile?.vipExpireAt,
-      membershipPlanType:
-          shouldUseProfileMembership
-              ? profile?.planType
-              : snapshot?.membershipPlanType ?? profile?.planType,
+    final hasMembership = access.hasMembership;
+    final merged = (snapshot ?? _defaultMembershipSnapshot()).copyWith(
+      hasMembership: hasMembership,
+      hasThemeCustom: hasMembership && access.hasThemeCustom,
+      vipExpireAt: hasMembership ? access.vipExpireAt : null,
+      membershipPlanType: hasMembership ? access.planType : null,
       cachedAt: DateTime.now().toUtc(),
     );
     return merged.normalizedMembershipAccess();
   }
 
-  RemoteAccessSnapshot _defaultProfileMembershipSnapshot() {
+  RemoteAccessSnapshot _defaultMembershipSnapshot() {
     return RemoteAccessSnapshot(
       serverSourceGatewayEnabled: false,
       hasMembership: false,
@@ -366,6 +375,11 @@ class MinePageSessionService {
             profile.displayName?.trim().isNotEmpty == true
                 ? profile.displayName
                 : profile.username,
+        membershipActive: profile.membershipActive,
+        vipLevel: profile.vipLevel,
+        planType: profile.planType,
+        vipStatus: profile.vipStatus,
+        vipExpireAt: profile.vipExpireAt,
       );
       if (_isSameIdentity(session, nextSession)) {
         return (session: session, profile: profile);
@@ -381,7 +395,19 @@ class MinePageSessionService {
     return (a.userId?.trim() ?? '') == (b.userId?.trim() ?? '') &&
         (a.username?.trim() ?? '') == (b.username?.trim() ?? '') &&
         (a.account?.trim() ?? '') == (b.account?.trim() ?? '') &&
-        (a.displayName?.trim() ?? '') == (b.displayName?.trim() ?? '');
+        (a.displayName?.trim() ?? '') == (b.displayName?.trim() ?? '') &&
+        a.membershipActive == b.membershipActive &&
+        (a.vipLevel?.trim() ?? '') == (b.vipLevel?.trim() ?? '') &&
+        (a.planType?.trim() ?? '') == (b.planType?.trim() ?? '') &&
+        (a.vipStatus?.trim() ?? '') == (b.vipStatus?.trim() ?? '') &&
+        _sameMoment(a.vipExpireAt, b.vipExpireAt);
+  }
+
+  bool _sameMoment(DateTime? left, DateTime? right) {
+    if (left == null || right == null) {
+      return left == right;
+    }
+    return left.toUtc().isAtSameMomentAs(right.toUtc());
   }
 
   Future<_MineReadingSummary> _loadReadingSummary() async {

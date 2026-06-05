@@ -15,8 +15,10 @@ import '../../domain/repositories/local_book_repository.dart';
 import '../../features/source/application/external_source_import_bridge.dart';
 import '../../features/source/application/source_health_service.dart';
 import '../../features/book/application/book_presentation_query_service.dart';
+import '../../features/mine/providers.dart' as mine_providers;
 import '../../features/source/application/remote_content_task_scheduler_service.dart';
 import '../../features/source/application/remote_content_task_conflict_service.dart';
+import '../lifecycle/auth_account_lifecycle_coordinator.dart';
 import '../lifecycle/app_lifecycle_coordinator.dart';
 import '../platform/app_platform_capabilities.dart';
 import '../startup/app_announcement_coordinator.dart';
@@ -78,6 +80,28 @@ final appExternalImportBridgeProvider = Provider<ExternalImportBridge>((ref) {
 final appAuthEventStreamProvider = Provider<Stream<AuthEvent>>((ref) {
   return AuthEventBus.instance.stream;
 });
+
+final appAuthAccountLifecycleCoordinatorProvider =
+    Provider<AuthAccountLifecycleCoordinator>((ref) {
+      final sessionService = ref.watch(
+        mine_providers.minePageSessionServiceProvider,
+      );
+      return AuthAccountLifecycleCoordinator(
+        clearAccountScopedCache: sessionService.clearUserScopedCache,
+        refreshCurrentAccountData: () async {
+          await sessionService.loadSession(refreshRemote: true);
+        },
+        notifyAccountDataChanged: () {
+          ref
+              .read(
+                mine_providers
+                    .mineRemoteAccessSnapshotRevisionProvider
+                    .notifier,
+              )
+              .update((value) => value + 1);
+        },
+      );
+    });
 
 final bookPresentationQueryServiceProvider =
     Provider<BookPresentationQueryService>((ref) {
