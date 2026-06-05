@@ -68,33 +68,39 @@ class BookDetailSummaryCard extends StatelessWidget {
         horizontal: metrics.isCompactDensity ? 0 : 2,
         vertical: 2,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Flex(
-            direction: expanded ? Axis.vertical : Axis.horizontal,
-            crossAxisAlignment:
-                expanded ? CrossAxisAlignment.start : CrossAxisAlignment.center,
-            children: [
-              Align(alignment: Alignment.topLeft, child: cover),
-              SizedBox(
-                width: expanded ? 0 : metrics.sectionGap,
-                height: expanded ? metrics.sectionGap : 0,
+      child:
+          expanded
+              ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Align(alignment: Alignment.topLeft, child: cover),
+                  SizedBox(height: metrics.sectionGap),
+                  _BookDetailSummaryText(
+                    title: title,
+                    sourceName: sourceName,
+                    author: author,
+                    titleHeroTag: titleHeroTag,
+                    metaHeroTag: metaHeroTag,
+                  ),
+                ],
+              )
+              : Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Align(alignment: Alignment.topLeft, child: cover),
+                  SizedBox(width: metrics.sectionGap),
+                  Expanded(
+                    child: _BookDetailSummaryText(
+                      title: title,
+                      sourceName: sourceName,
+                      author: author,
+                      titleHeroTag: titleHeroTag,
+                      metaHeroTag: metaHeroTag,
+                    ),
+                  ),
+                ],
               ),
-              Flexible(
-                fit: expanded ? FlexFit.loose : FlexFit.tight,
-                child: _BookDetailSummaryText(
-                  title: title,
-                  sourceName: sourceName,
-                  author: author,
-                  titleHeroTag: titleHeroTag,
-                  metaHeroTag: metaHeroTag,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
     );
   }
 }
@@ -446,9 +452,7 @@ class _BookDetailIntroCardState extends State<BookDetailIntroCard> {
                   widget.intro,
                   maxLines: _expanded ? null : collapsedLines,
                   overflow:
-                      _expanded
-                          ? TextOverflow.visible
-                          : TextOverflow.ellipsis,
+                      _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: colorScheme.onSurfaceVariant,
                     height: 1.45,
