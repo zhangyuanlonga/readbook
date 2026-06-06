@@ -1804,7 +1804,6 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
       AppShellTab.discover => 1,
       AppShellTab.stats => 2,
       AppShellTab.mine => 3,
-      AppShellTab.home => 0,
     };
   }
 

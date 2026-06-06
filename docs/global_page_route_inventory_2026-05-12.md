@@ -1,6 +1,6 @@
 # 全局页面路由清单
 
-更新时间：2026-06-02
+更新时间：2026-06-06
 
 本文用于 `tool/check_route_inventory.dart` 校验。新增路由必须同步登记。
 
@@ -9,7 +9,6 @@
 | 路由 | 名称 | 所属模块 | 页面 / 说明 |
 | --- | --- | --- | --- |
 | `/` | root | app | 根据启动策略重定向 |
-| `/home` | home | home | 首页 |
 | `/bookshelf` | bookshelf | bookshelf | 书架 |
 | `/discover` | discover | discover | 发现 |
 | `source/:sourceId/category/:categoryId` | discover-category-books | discover | 发现分类书籍，嵌套路由 |

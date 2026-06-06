@@ -176,7 +176,6 @@ class BottomNavIconGalleryService {
       isEditable: true,
       isDeletable: true,
       items: const {
-        BottomNavIconGalleryTab.home: BottomNavIconSet(),
         BottomNavIconGalleryTab.bookshelf: BottomNavIconSet(),
         BottomNavIconGalleryTab.discover: BottomNavIconSet(),
         BottomNavIconGalleryTab.stats: BottomNavIconSet(),

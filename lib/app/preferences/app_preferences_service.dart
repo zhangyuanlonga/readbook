@@ -25,6 +25,7 @@ const String appNavigationStandardFrostedEffectPreferenceKey =
     'app.navigation.standard.frostedEffect';
 const String appNavigationCupertinoDockFrostedEffectPreferenceKey =
     'app.navigation.cupertinoDock.frostedEffect';
+// 旧首页入口已删除。保留 key 常量只用于清理历史偏好，不能再恢复首页导航。
 const String appShellNavigationHomePreferenceKey = 'app.shell.navigation.home';
 const String appShellNavigationBookshelfPreferenceKey =
     'app.shell.navigation.bookshelf';
@@ -35,11 +36,6 @@ const String appShellNavigationStatsPreferenceKey =
 const String appShellNavigationSourcePreferenceKey =
     'app.shell.navigation.source';
 
-const PreferenceKey<bool> appShellNavigationHomePreference =
-    PreferenceKey<bool>(
-      appShellNavigationHomePreferenceKey,
-      defaultValue: true,
-    );
 const PreferenceKey<bool> appShellNavigationBookshelfPreference =
     PreferenceKey<bool>(
       appShellNavigationBookshelfPreferenceKey,
@@ -316,8 +312,8 @@ class AppShellNavigationPreferencesService {
   Future<AppShellNavigationSnapshot> loadShellNavigation() async {
     final prefs = await _preferencesFuture;
     await prefs.remove(appShellNavigationSourcePreferenceKey);
+    await prefs.remove(appShellNavigationHomePreferenceKey);
     return AppShellNavigationSnapshot(
-      showHome: _readBool(prefs, appShellNavigationHomePreference),
       showBookshelf: _readBool(prefs, appShellNavigationBookshelfPreference),
       showDiscover: _readBool(prefs, appShellNavigationDiscoverPreference),
       showStats: _readBool(prefs, appShellNavigationStatsPreference),
@@ -326,11 +322,7 @@ class AppShellNavigationPreferencesService {
 
   Future<void> saveShellNavigation(AppShellNavigationSnapshot snapshot) async {
     final prefs = await _preferencesFuture;
-    await _writeBool(
-      prefs,
-      appShellNavigationHomePreference,
-      snapshot.showHome,
-    );
+    await prefs.remove(appShellNavigationHomePreferenceKey);
     await _writeBool(
       prefs,
       appShellNavigationBookshelfPreference,

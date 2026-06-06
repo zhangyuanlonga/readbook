@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shuxiang_reading_next/app/navigation/bottom_nav_icon_gallery_provider.dart';
@@ -13,9 +14,45 @@ import 'package:shuxiang_reading_next/features/mine/application/advanced_theme_s
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  const pathProviderChannel = MethodChannel('plugins.flutter.io/path_provider');
 
   setUp(() async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
+    final documentsDir = await Directory.systemTemp.createTemp(
+      'nav_provider_path_docs_',
+    );
+    final supportDir = await Directory.systemTemp.createTemp(
+      'nav_provider_path_support_',
+    );
+    final temporaryDir = await Directory.systemTemp.createTemp(
+      'nav_provider_path_temporary_',
+    );
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(pathProviderChannel, (call) async {
+          if (call.method == 'getApplicationDocumentsDirectory') {
+            return documentsDir.path;
+          }
+          if (call.method == 'getApplicationSupportDirectory') {
+            return supportDir.path;
+          }
+          if (call.method == 'getTemporaryDirectory') {
+            return temporaryDir.path;
+          }
+          return null;
+        });
+    addTearDown(() async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(pathProviderChannel, null);
+      if (documentsDir.existsSync()) {
+        await documentsDir.delete(recursive: true);
+      }
+      if (supportDir.existsSync()) {
+        await supportDir.delete(recursive: true);
+      }
+      if (temporaryDir.existsSync()) {
+        await temporaryDir.delete(recursive: true);
+      }
+    });
     final prefs = await SharedPreferences.getInstance();
     ActiveAdvancedThemeIdNotifier.prime(prefs);
   });
@@ -124,7 +161,7 @@ BottomNavIconGallery _gallery({required String id, required String name}) {
     isEditable: true,
     isDeletable: true,
     items: const <BottomNavIconGalleryTab, BottomNavIconSet>{
-      BottomNavIconGalleryTab.home: BottomNavIconSet(),
+      BottomNavIconGalleryTab.bookshelf: BottomNavIconSet(),
     },
   );
 }

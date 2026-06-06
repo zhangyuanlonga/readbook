@@ -599,7 +599,6 @@ class _BottomNavIconGalleryPageState
 
   ResolvedBottomNavIcon _fallbackIconForTab(BottomNavIconGalleryTab tab) {
     final shellTab = switch (tab) {
-      BottomNavIconGalleryTab.home => AppShellTab.home,
       BottomNavIconGalleryTab.bookshelf => AppShellTab.bookshelf,
       BottomNavIconGalleryTab.discover => AppShellTab.discover,
       BottomNavIconGalleryTab.stats => AppShellTab.stats,

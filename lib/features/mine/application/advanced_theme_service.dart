@@ -734,8 +734,9 @@ class AdvancedThemeService {
     );
     return switch (packageKind) {
       _AdvancedThemeImportPackageKind.red => importRedThemePackageBytes(bytes),
-      _AdvancedThemeImportPackageKind.rgshare =>
-        importRgShareThemePackageBytes(bytes),
+      _AdvancedThemeImportPackageKind.rgshare => importRgShareThemePackageBytes(
+        bytes,
+      ),
       _AdvancedThemeImportPackageKind.official =>
         _isZipThemeFile(path: path, mimeType: mimeType, bytes: bytes)
             ? importThemeBundleZipBytes(bytes)
@@ -752,23 +753,14 @@ class AdvancedThemeService {
     String? mimeType,
     AdvancedThemeBatchImportProgressCallback? onProgress,
   }) async {
-    onProgress?.call(
-      AdvancedThemeImportProgressStage.reading,
-      '正在准备导入...',
-    );
+    onProgress?.call(AdvancedThemeImportProgressStage.reading, '正在准备导入...');
     await _yieldToEventLoop();
     if (isBatchThemeBundleFile(path: path, mimeType: mimeType)) {
-      onProgress?.call(
-        AdvancedThemeImportProgressStage.parsing,
-        '正在解析批量主题包',
-      );
+      onProgress?.call(AdvancedThemeImportProgressStage.parsing, '正在解析批量主题包');
       await _yieldToEventLoop();
       return _importThemeBatchBundleFile(path, onProgress: onProgress);
     }
-    onProgress?.call(
-      AdvancedThemeImportProgressStage.importing,
-      '正在导入主题资源',
-    );
+    onProgress?.call(AdvancedThemeImportProgressStage.importing, '正在导入主题资源');
     await _yieldToEventLoop();
     await importThemeFile(path: path, mimeType: mimeType);
     return const AdvancedThemeBatchImportSummary(
@@ -866,9 +858,7 @@ class AdvancedThemeService {
     AdvancedThemeBatchExportProgressCallback? onProgress,
   }) async {
     final tempDir = await getTemporaryDirectory();
-    final file = File(
-      p.join(tempDir.path, themeBatchBundleExportFileName()),
-    );
+    final file = File(p.join(tempDir.path, themeBatchBundleExportFileName()));
     return writeThemeBatchBundleFile(
       summaries: summaries,
       outputFile: file,
@@ -2630,14 +2620,17 @@ class AdvancedThemeService {
         BottomNavIconGalleryTab.bookshelf,
       ],
       'library' => const <BottomNavIconGalleryTab>[
-        BottomNavIconGalleryTab.home,
+        BottomNavIconGalleryTab.bookshelf,
         BottomNavIconGalleryTab.discover,
       ],
       'statistic' => const <BottomNavIconGalleryTab>[
         BottomNavIconGalleryTab.stats,
       ],
       'mine' => const <BottomNavIconGalleryTab>[BottomNavIconGalleryTab.mine],
-      'home' => const <BottomNavIconGalleryTab>[BottomNavIconGalleryTab.home],
+      // 旧 RG share 主题包仍可能用 home 命名首页槽位；导入时迁移为书架。
+      'home' => const <BottomNavIconGalleryTab>[
+        BottomNavIconGalleryTab.bookshelf,
+      ],
       'discover' => const <BottomNavIconGalleryTab>[
         BottomNavIconGalleryTab.discover,
       ],
@@ -3420,8 +3413,8 @@ class AdvancedThemeService {
     final slotName = parts.last;
     final tabName = parts.sublist(0, parts.length - 1).join('_');
     final tab = switch (tabName) {
-      'featured' || 'home' => BottomNavIconGalleryTab.home,
-      'bookshelf' => BottomNavIconGalleryTab.bookshelf,
+      // 旧红色主题包使用 featured/home 表示原首页槽位；首页删除后统一落到书架。
+      'featured' || 'home' || 'bookshelf' => BottomNavIconGalleryTab.bookshelf,
       'discover' || 'notes' => BottomNavIconGalleryTab.discover,
       'statistics' => BottomNavIconGalleryTab.stats,
       'settings' || 'mine' => BottomNavIconGalleryTab.mine,
@@ -3449,7 +3442,8 @@ class AdvancedThemeService {
 
   BottomNavIconGalleryTab? _bottomNavTabFromName(String raw) {
     return switch (raw.trim()) {
-      'home' => BottomNavIconGalleryTab.home,
+      // 导入旧 manifest 时只做兼容迁移，应用运行时不再提供 home 导航槽位。
+      'home' => BottomNavIconGalleryTab.bookshelf,
       'bookshelf' => BottomNavIconGalleryTab.bookshelf,
       'discover' => BottomNavIconGalleryTab.discover,
       'stats' => BottomNavIconGalleryTab.stats,

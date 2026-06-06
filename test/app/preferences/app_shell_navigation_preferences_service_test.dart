@@ -8,7 +8,9 @@ void main() {
     test(
       'loads typed defaults while keeping discover hidden by default',
       () async {
-        SharedPreferences.setMockInitialValues(<String, Object>{});
+        SharedPreferences.setMockInitialValues(<String, Object>{
+          appShellNavigationHomePreferenceKey: true,
+        });
         final prefs = await SharedPreferences.getInstance();
         final service = AppShellNavigationPreferencesService(
           preferences: prefs,
@@ -16,17 +18,19 @@ void main() {
 
         final snapshot = await service.loadShellNavigation();
 
-        expect(snapshot.showHome, isTrue);
         expect(snapshot.showBookshelf, isTrue);
         expect(snapshot.showDiscover, isFalse);
         expect(snapshot.showStats, isTrue);
+        expect(prefs.getBool(appShellNavigationHomePreferenceKey), isNull);
       },
     );
 
     test(
-      'saves to existing SharedPreferences keys for compatibility',
+      'saves to existing SharedPreferences keys and clears old home key',
       () async {
-        SharedPreferences.setMockInitialValues(<String, Object>{});
+        SharedPreferences.setMockInitialValues(<String, Object>{
+          appShellNavigationHomePreferenceKey: true,
+        });
         final prefs = await SharedPreferences.getInstance();
         final service = AppShellNavigationPreferencesService(
           preferences: prefs,
@@ -34,14 +38,13 @@ void main() {
 
         await service.saveShellNavigation(
           const AppShellNavigationSnapshot(
-            showHome: true,
             showBookshelf: false,
             showDiscover: true,
             showStats: false,
           ),
         );
 
-        expect(prefs.getBool(appShellNavigationHomePreferenceKey), isTrue);
+        expect(prefs.getBool(appShellNavigationHomePreferenceKey), isNull);
         expect(
           prefs.getBool(appShellNavigationBookshelfPreferenceKey),
           isFalse,

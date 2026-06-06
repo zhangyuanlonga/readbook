@@ -601,7 +601,7 @@ void main() {
         isEditable: true,
         isDeletable: true,
         items: const <BottomNavIconGalleryTab, BottomNavIconSet>{
-          BottomNavIconGalleryTab.home: BottomNavIconSet(
+          BottomNavIconGalleryTab.bookshelf: BottomNavIconSet(
             lightUnselected: BottomNavIconAssetRef(
               path: 'assets/test_icons/home_light.png',
               format: BottomNavIconAssetFormat.png,
@@ -642,13 +642,16 @@ void main() {
       expect(importedGallery!.name, gallery.name);
       expect(
         importedGallery
-            .items[BottomNavIconGalleryTab.home]
+            .items[BottomNavIconGalleryTab.bookshelf]
             ?.lightUnselected
             ?.path,
         'assets/test_icons/home_light.png',
       );
       expect(
-        importedGallery.items[BottomNavIconGalleryTab.home]?.darkSelected?.path,
+        importedGallery
+            .items[BottomNavIconGalleryTab.bookshelf]
+            ?.darkSelected
+            ?.path,
         'assets/test_icons/home_dark.png',
       );
     },
@@ -698,9 +701,8 @@ void main() {
     final archive = ZipDecoder().decodeBytes(await outputFile.readAsBytes());
     final manifestFile = archive.findFile('manifest.json');
     expect(manifestFile, isNotNull);
-    final manifest = jsonDecode(
-      utf8.decode(List<int>.from(manifestFile!.content)),
-    ) as Map;
+    final manifest =
+        jsonDecode(utf8.decode(List<int>.from(manifestFile!.content))) as Map;
     expect(manifest['type'], 'advanced_theme_batch_bundle');
     expect(manifest['version'], 1);
     expect(manifest['themes'], isA<List>());
@@ -717,7 +719,10 @@ void main() {
     expect(summary.successCount, 2);
     expect(summary.failureCount, 0);
     final importedThemes = await importService.loadThemes();
-    expect(importedThemes.map((theme) => theme.name), containsAll(['批量一', '批量二']));
+    expect(
+      importedThemes.map((theme) => theme.name),
+      containsAll(['批量一', '批量二']),
+    );
   });
 
   test('rejects batch bundle without manifest', () async {
@@ -740,7 +745,10 @@ void main() {
 
     expect(service.isBatchThemeBundleFile(path: file.path), isFalse);
     await expectLater(
-      service.importThemeBatchFile(path: file.path, mimeType: 'application/zip'),
+      service.importThemeBatchFile(
+        path: file.path,
+        mimeType: 'application/zip',
+      ),
       throwsA(isA<FormatException>()),
     );
   });
@@ -885,7 +893,7 @@ void main() {
     expect(importedGallery, isNotNull);
     expect(
       importedGallery!
-          .items[BottomNavIconGalleryTab.home]
+          .items[BottomNavIconGalleryTab.bookshelf]
           ?.lightUnselected
           ?.format,
       BottomNavIconAssetFormat.gif,
@@ -1032,10 +1040,6 @@ void main() {
             .items[BottomNavIconGalleryTab.bookshelf]
             ?.lightUnselected
             ?.format,
-        BottomNavIconAssetFormat.png,
-      );
-      expect(
-        navGallery.items[BottomNavIconGalleryTab.home]?.lightUnselected?.format,
         BottomNavIconAssetFormat.png,
       );
       expect(

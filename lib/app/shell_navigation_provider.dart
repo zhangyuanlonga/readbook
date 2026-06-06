@@ -7,7 +7,7 @@ import 'preferences/app_preferences_service.dart';
 
 part 'shell_navigation_provider.freezed.dart';
 
-enum AppShellTab { home, bookshelf, discover, stats, mine }
+enum AppShellTab { bookshelf, discover, stats, mine }
 
 class AppShellDestination {
   const AppShellDestination({
@@ -61,7 +61,6 @@ abstract class AppShellNavigationState with _$AppShellNavigationState {
   const AppShellNavigationState._();
 
   const factory AppShellNavigationState({
-    @Default(true) bool showHome,
     @Default(true) bool showBookshelf,
     @Default(true) bool showDiscover,
     @Default(true) bool showStats,
@@ -83,7 +82,6 @@ abstract class AppShellNavigationState with _$AppShellNavigationState {
 
   bool isTabVisible(AppShellTab tab) {
     return switch (tab) {
-      AppShellTab.home => false,
       AppShellTab.bookshelf => showBookshelf,
       AppShellTab.discover => showDiscover,
       AppShellTab.stats => showStats,
@@ -136,7 +134,6 @@ class AppShellNavigationNotifier extends Notifier<AppShellNavigationState> {
       return;
     }
     final loaded = AppShellNavigationState(
-      showHome: snapshot.showHome,
       showBookshelf: snapshot.showBookshelf,
       showDiscover: snapshot.showDiscover,
       showStats: snapshot.showStats,
@@ -157,15 +154,13 @@ class AppShellNavigationNotifier extends Notifier<AppShellNavigationState> {
   }
 
   Future<void> setTabVisible(AppShellTab tab, bool visible) async {
-    if (tab == AppShellTab.home ||
-        tab == AppShellTab.mine ||
+    if (tab == AppShellTab.mine ||
         (tab == AppShellTab.discover && !_isDiscoverEnabled)) {
       return;
     }
 
     final previous = state;
     final changed = switch (tab) {
-      AppShellTab.home => state.copyWith(showHome: visible),
       AppShellTab.bookshelf => state.copyWith(showBookshelf: visible),
       AppShellTab.discover => state.copyWith(showDiscover: visible),
       AppShellTab.stats => state.copyWith(showStats: visible),
@@ -192,9 +187,7 @@ class AppShellNavigationNotifier extends Notifier<AppShellNavigationState> {
   }
 
   AppShellNavigationState _normalizeState(AppShellNavigationState input) {
-    // 首页已经从主导航和路由中移除。这里统一压掉旧偏好里的 showHome，
-    // 防止历史配置在后续保存时又把首页入口带回外观设置或导航状态里。
-    var normalized = input.copyWith(showHome: false);
+    var normalized = input;
     if (!_isDiscoverEnabled && normalized.showDiscover) {
       normalized = normalized.copyWith(showDiscover: false);
     }
@@ -216,7 +209,6 @@ class AppShellNavigationNotifier extends Notifier<AppShellNavigationState> {
         .read(appShellNavigationPreferencesServiceProvider)
         .saveShellNavigation(
           AppShellNavigationSnapshot(
-            showHome: false,
             showBookshelf: state.showBookshelf,
             showDiscover: state.showDiscover,
             showStats: state.showStats,

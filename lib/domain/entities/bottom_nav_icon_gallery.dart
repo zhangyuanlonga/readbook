@@ -2,7 +2,7 @@ import 'package:json_annotation/json_annotation.dart';
 
 part 'bottom_nav_icon_gallery.g.dart';
 
-enum BottomNavIconGalleryTab { home, bookshelf, discover, stats, mine }
+enum BottomNavIconGalleryTab { bookshelf, discover, stats, mine }
 
 enum BottomNavIconAssetFormat { svg, png, gif }
 
@@ -268,8 +268,10 @@ class BottomNavIconGallery {
     }
     final items = <BottomNavIconGalleryTab, BottomNavIconSet>{};
     for (final entry in value.entries) {
-      final tab = switch (entry.key.toString().trim()) {
-        'home' => BottomNavIconGalleryTab.home,
+      final normalizedKey = entry.key.toString().trim();
+      final tab = switch (normalizedKey) {
+        // 旧版本图标包使用 home 表示首页槽位；首页已删除，导入时统一落到书架。
+        'home' => BottomNavIconGalleryTab.bookshelf,
         'bookshelf' => BottomNavIconGalleryTab.bookshelf,
         'discover' => BottomNavIconGalleryTab.discover,
         'stats' => BottomNavIconGalleryTab.stats,
@@ -277,6 +279,10 @@ class BottomNavIconGallery {
         _ => null,
       };
       if (tab == null || entry.value is! Map) {
+        continue;
+      }
+      if (normalizedKey == 'home' &&
+          items.containsKey(BottomNavIconGalleryTab.bookshelf)) {
         continue;
       }
       items[tab] = BottomNavIconSet.fromJson(

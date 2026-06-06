@@ -3,7 +3,6 @@ import '../shell_navigation_provider.dart';
 
 BottomNavIconGalleryTab bottomNavIconGalleryTabForShellTab(AppShellTab tab) {
   return switch (tab) {
-    AppShellTab.home => BottomNavIconGalleryTab.home,
     AppShellTab.bookshelf => BottomNavIconGalleryTab.bookshelf,
     AppShellTab.discover => BottomNavIconGalleryTab.discover,
     AppShellTab.stats => BottomNavIconGalleryTab.stats,
@@ -13,7 +12,6 @@ BottomNavIconGalleryTab bottomNavIconGalleryTabForShellTab(AppShellTab tab) {
 
 AppShellTab appShellTabForBottomNavIconGalleryTab(BottomNavIconGalleryTab tab) {
   return switch (tab) {
-    BottomNavIconGalleryTab.home => AppShellTab.home,
     BottomNavIconGalleryTab.bookshelf => AppShellTab.bookshelf,
     BottomNavIconGalleryTab.discover => AppShellTab.discover,
     BottomNavIconGalleryTab.stats => AppShellTab.stats,

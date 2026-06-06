@@ -14,7 +14,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$AppShellNavigationState {
 
- bool get showHome; bool get showBookshelf; bool get showDiscover; bool get showStats;
+ bool get showBookshelf; bool get showDiscover; bool get showStats;
 /// Create a copy of AppShellNavigationState
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -25,16 +25,16 @@ $AppShellNavigationStateCopyWith<AppShellNavigationState> get copyWith => _$AppS
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is AppShellNavigationState&&(identical(other.showHome, showHome) || other.showHome == showHome)&&(identical(other.showBookshelf, showBookshelf) || other.showBookshelf == showBookshelf)&&(identical(other.showDiscover, showDiscover) || other.showDiscover == showDiscover)&&(identical(other.showStats, showStats) || other.showStats == showStats));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is AppShellNavigationState&&(identical(other.showBookshelf, showBookshelf) || other.showBookshelf == showBookshelf)&&(identical(other.showDiscover, showDiscover) || other.showDiscover == showDiscover)&&(identical(other.showStats, showStats) || other.showStats == showStats));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,showHome,showBookshelf,showDiscover,showStats);
+int get hashCode => Object.hash(runtimeType,showBookshelf,showDiscover,showStats);
 
 @override
 String toString() {
-  return 'AppShellNavigationState(showHome: $showHome, showBookshelf: $showBookshelf, showDiscover: $showDiscover, showStats: $showStats)';
+  return 'AppShellNavigationState(showBookshelf: $showBookshelf, showDiscover: $showDiscover, showStats: $showStats)';
 }
 
 
@@ -45,7 +45,7 @@ abstract mixin class $AppShellNavigationStateCopyWith<$Res>  {
   factory $AppShellNavigationStateCopyWith(AppShellNavigationState value, $Res Function(AppShellNavigationState) _then) = _$AppShellNavigationStateCopyWithImpl;
 @useResult
 $Res call({
- bool showHome, bool showBookshelf, bool showDiscover, bool showStats
+ bool showBookshelf, bool showDiscover, bool showStats
 });
 
 
@@ -62,10 +62,9 @@ class _$AppShellNavigationStateCopyWithImpl<$Res>
 
 /// Create a copy of AppShellNavigationState
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? showHome = null,Object? showBookshelf = null,Object? showDiscover = null,Object? showStats = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? showBookshelf = null,Object? showDiscover = null,Object? showStats = null,}) {
   return _then(_self.copyWith(
-showHome: null == showHome ? _self.showHome : showHome // ignore: cast_nullable_to_non_nullable
-as bool,showBookshelf: null == showBookshelf ? _self.showBookshelf : showBookshelf // ignore: cast_nullable_to_non_nullable
+showBookshelf: null == showBookshelf ? _self.showBookshelf : showBookshelf // ignore: cast_nullable_to_non_nullable
 as bool,showDiscover: null == showDiscover ? _self.showDiscover : showDiscover // ignore: cast_nullable_to_non_nullable
 as bool,showStats: null == showStats ? _self.showStats : showStats // ignore: cast_nullable_to_non_nullable
 as bool,
@@ -153,10 +152,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( bool showHome,  bool showBookshelf,  bool showDiscover,  bool showStats)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( bool showBookshelf,  bool showDiscover,  bool showStats)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _AppShellNavigationState() when $default != null:
-return $default(_that.showHome,_that.showBookshelf,_that.showDiscover,_that.showStats);case _:
+return $default(_that.showBookshelf,_that.showDiscover,_that.showStats);case _:
   return orElse();
 
 }
@@ -174,10 +173,10 @@ return $default(_that.showHome,_that.showBookshelf,_that.showDiscover,_that.show
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( bool showHome,  bool showBookshelf,  bool showDiscover,  bool showStats)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( bool showBookshelf,  bool showDiscover,  bool showStats)  $default,) {final _that = this;
 switch (_that) {
 case _AppShellNavigationState():
-return $default(_that.showHome,_that.showBookshelf,_that.showDiscover,_that.showStats);case _:
+return $default(_that.showBookshelf,_that.showDiscover,_that.showStats);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -194,10 +193,10 @@ return $default(_that.showHome,_that.showBookshelf,_that.showDiscover,_that.show
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( bool showHome,  bool showBookshelf,  bool showDiscover,  bool showStats)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( bool showBookshelf,  bool showDiscover,  bool showStats)?  $default,) {final _that = this;
 switch (_that) {
 case _AppShellNavigationState() when $default != null:
-return $default(_that.showHome,_that.showBookshelf,_that.showDiscover,_that.showStats);case _:
+return $default(_that.showBookshelf,_that.showDiscover,_that.showStats);case _:
   return null;
 
 }
@@ -209,10 +208,9 @@ return $default(_that.showHome,_that.showBookshelf,_that.showDiscover,_that.show
 
 
 class _AppShellNavigationState extends AppShellNavigationState {
-  const _AppShellNavigationState({this.showHome = true, this.showBookshelf = true, this.showDiscover = true, this.showStats = true}): super._();
+  const _AppShellNavigationState({this.showBookshelf = true, this.showDiscover = true, this.showStats = true}): super._();
   
 
-@override@JsonKey() final  bool showHome;
 @override@JsonKey() final  bool showBookshelf;
 @override@JsonKey() final  bool showDiscover;
 @override@JsonKey() final  bool showStats;
@@ -227,16 +225,16 @@ _$AppShellNavigationStateCopyWith<_AppShellNavigationState> get copyWith => __$A
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _AppShellNavigationState&&(identical(other.showHome, showHome) || other.showHome == showHome)&&(identical(other.showBookshelf, showBookshelf) || other.showBookshelf == showBookshelf)&&(identical(other.showDiscover, showDiscover) || other.showDiscover == showDiscover)&&(identical(other.showStats, showStats) || other.showStats == showStats));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _AppShellNavigationState&&(identical(other.showBookshelf, showBookshelf) || other.showBookshelf == showBookshelf)&&(identical(other.showDiscover, showDiscover) || other.showDiscover == showDiscover)&&(identical(other.showStats, showStats) || other.showStats == showStats));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,showHome,showBookshelf,showDiscover,showStats);
+int get hashCode => Object.hash(runtimeType,showBookshelf,showDiscover,showStats);
 
 @override
 String toString() {
-  return 'AppShellNavigationState(showHome: $showHome, showBookshelf: $showBookshelf, showDiscover: $showDiscover, showStats: $showStats)';
+  return 'AppShellNavigationState(showBookshelf: $showBookshelf, showDiscover: $showDiscover, showStats: $showStats)';
 }
 
 
@@ -247,7 +245,7 @@ abstract mixin class _$AppShellNavigationStateCopyWith<$Res> implements $AppShel
   factory _$AppShellNavigationStateCopyWith(_AppShellNavigationState value, $Res Function(_AppShellNavigationState) _then) = __$AppShellNavigationStateCopyWithImpl;
 @override @useResult
 $Res call({
- bool showHome, bool showBookshelf, bool showDiscover, bool showStats
+ bool showBookshelf, bool showDiscover, bool showStats
 });
 
 
@@ -264,10 +262,9 @@ class __$AppShellNavigationStateCopyWithImpl<$Res>
 
 /// Create a copy of AppShellNavigationState
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? showHome = null,Object? showBookshelf = null,Object? showDiscover = null,Object? showStats = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? showBookshelf = null,Object? showDiscover = null,Object? showStats = null,}) {
   return _then(_AppShellNavigationState(
-showHome: null == showHome ? _self.showHome : showHome // ignore: cast_nullable_to_non_nullable
-as bool,showBookshelf: null == showBookshelf ? _self.showBookshelf : showBookshelf // ignore: cast_nullable_to_non_nullable
+showBookshelf: null == showBookshelf ? _self.showBookshelf : showBookshelf // ignore: cast_nullable_to_non_nullable
 as bool,showDiscover: null == showDiscover ? _self.showDiscover : showDiscover // ignore: cast_nullable_to_non_nullable
 as bool,showStats: null == showStats ? _self.showStats : showStats // ignore: cast_nullable_to_non_nullable
 as bool,

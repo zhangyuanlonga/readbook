@@ -23,7 +23,6 @@ const List<String> _allowedSharedPreferencesImportPrefixes = <String>[
   'lib/features/mine/providers.dart',
   'lib/features/announcement/application/',
   'lib/features/bookshelf/application/',
-  'lib/features/home/application/',
   'lib/features/mine/application/',
   'lib/features/reader/application/',
   'lib/features/search/application/',
