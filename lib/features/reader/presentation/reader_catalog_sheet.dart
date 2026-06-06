@@ -11,6 +11,7 @@ import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/chapter.dart';
 import '../../../domain/repositories/bookmark_repository.dart';
 import '../application/reader_mode_model.dart';
+import '../application/reader_catalog_search_presentation.dart';
 import '../application/reader_catalog_search_service.dart';
 import '../application/reader_logical_position.dart';
 import 'reader_layout_context.dart';
@@ -76,6 +77,7 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
   final isDesktopSurface =
       readerLayoutContext.catalogPanelPresentation ==
       ReaderPanelPresentation.sidePanel;
+  const catalogSearchPresenter = ReaderCatalogSearchPresenter();
   const itemExtent = 52.0;
   final anchorIndex =
       currentChapterIndex == null
@@ -334,16 +336,10 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
         builder: (context, searchState, _) {
           final isSearching = searchState.keyword.isNotEmpty;
           final orderedIndexes = orderedChapterIndexes();
-          final tocSearchEntries =
-              catalogDescending
-                  ? ([...searchState.tocEntries]
-                    ..sort((a, b) => b.chapterIndex.compareTo(a.chapterIndex)))
-                  : searchState.tocEntries;
-          final contentSearchEntries =
-              catalogDescending
-                  ? ([...searchState.contentEntries]
-                    ..sort((a, b) => b.chapterIndex.compareTo(a.chapterIndex)))
-                  : searchState.contentEntries;
+          final searchPresentation = catalogSearchPresenter.resolve(
+            entries: searchState.entries,
+            descending: catalogDescending,
+          );
 
           return Column(
             children: [
@@ -391,8 +387,8 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
                 Expanded(
                   child: _CatalogSearchResultList(
                     scrollController: scrollController,
-                    tocEntries: tocSearchEntries,
-                    contentEntries: contentSearchEntries,
+                    tocEntries: searchPresentation.tocEntries,
+                    contentEntries: searchPresentation.contentEntries,
                     onEntryTap: (entry) {
                       final targetChapterIndex =
                           resolveCatalogSearchEntryTargetIndex(entry);
@@ -774,18 +770,10 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
             builder: (context, searchState, _) {
               final isSearching = searchState.keyword.isNotEmpty;
               final orderedIndexes = orderedChapterIndexes();
-              final tocSearchEntries =
-                  catalogDescending
-                      ? ([...searchState.tocEntries]..sort(
-                        (a, b) => b.chapterIndex.compareTo(a.chapterIndex),
-                      ))
-                      : searchState.tocEntries;
-              final contentSearchEntries =
-                  catalogDescending
-                      ? ([...searchState.contentEntries]..sort(
-                        (a, b) => b.chapterIndex.compareTo(a.chapterIndex),
-                      ))
-                      : searchState.contentEntries;
+              final searchPresentation = catalogSearchPresenter.resolve(
+                entries: searchState.entries,
+                descending: catalogDescending,
+              );
 
               if (isSearching && searchState.isLoading) {
                 return buildCenteredMobileState(
@@ -824,8 +812,8 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
               }
               if (isSearching) {
                 final children = buildCatalogSearchResultChildren(
-                  tocEntries: tocSearchEntries,
-                  contentEntries: contentSearchEntries,
+                  tocEntries: searchPresentation.tocEntries,
+                  contentEntries: searchPresentation.contentEntries,
                   onEntryTap: (entry) {
                     final targetChapterIndex =
                         resolveCatalogSearchEntryTargetIndex(entry);
@@ -1099,22 +1087,25 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(22),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: readerModalTheme.colorScheme.surface,
-                    border: Border.all(
-                      color: readerModalTheme.colorScheme.outlineVariant
-                          .withValues(alpha: 0.35),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.16),
-                        blurRadius: 30,
-                        offset: const Offset(0, 14),
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: readerModalTheme.colorScheme.surface,
+                      border: Border.all(
+                        color: readerModalTheme.colorScheme.outlineVariant
+                            .withValues(alpha: 0.35),
                       ),
-                    ],
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.16),
+                          blurRadius: 30,
+                          offset: const Offset(0, 14),
+                        ),
+                      ],
+                    ),
+                    child: content,
                   ),
-                  child: content,
                 ),
               ),
             ),

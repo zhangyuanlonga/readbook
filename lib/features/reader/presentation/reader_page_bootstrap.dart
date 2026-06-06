@@ -115,7 +115,7 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
 
     int? batteryLevel;
     var batteryReadFailed = _readerBatteryReadFailed;
-    final shouldPollBattery = _runtimeWakePolicy.shouldPollBattery(
+    final shouldPollBattery = _readerPlatformFacade.shouldPollBattery(
       force: force,
       infoShowBattery: _settings.infoShowBattery,
       lastReadAt: _lastReaderBatteryRefreshAt,

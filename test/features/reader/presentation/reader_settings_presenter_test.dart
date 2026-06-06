@@ -45,5 +45,31 @@ void main() {
       expect(audio.title, '设备级听书偏好');
       expect(autoRead.title, '设备级 + 会话级');
     });
+
+    test('resolves section titles and optional capability sections', () {
+      expect(
+        presenter.sectionTitle(
+          groupKey: 'interaction',
+          showInterfaceSettings: true,
+        ),
+        '翻页与动画',
+      );
+
+      final plan = presenter.sectionPlan(
+        showInterfaceSettings: true,
+        supportsAutoRead: true,
+        supportsAudio: true,
+        supportsManga: false,
+      );
+
+      expect(plan.map((section) => section.groupKey), [
+        'typography',
+        'quick_margins',
+        'interaction',
+        'auto_read',
+        'audio',
+      ]);
+      expect(plan.last.title, '听书设置');
+    });
   });
 }

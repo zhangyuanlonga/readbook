@@ -13,7 +13,9 @@ class AuthSessionStore {
            preferences == null
                ? SharedPreferences.getInstance()
                : Future.value(preferences),
-       _secretStore = secretStore ?? FlutterSecureAuthSessionSecretStore();
+       _secretStore =
+           secretStore ??
+           createDefaultAuthSessionSecretStore(preferences: preferences);
 
   final Future<SharedPreferences> _preferencesFuture;
   final AuthSessionSecretStore _secretStore;

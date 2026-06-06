@@ -4093,18 +4093,10 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                         ],
                         _ => const <Widget>[],
                       };
-                      final sheetTitle = switch (activeSettingsGroupKey) {
-                        'quick_margins' => '信息排版',
-                        'info_layout' => '信息排版',
-                        'typography' => '字体',
-                        'interaction' => '翻页与动画',
-                        'info' => '信息排版',
-                        'behavior' => '阅读行为',
-                        'manga' => '漫画阅读',
-                        'audio' => '听书设置',
-                        'auto_read' => '自动阅读',
-                        _ => showInterfaceSettings ? '界面设置' : '设置',
-                      };
+                      final sheetTitle = _readerSettingsPresenter.sectionTitle(
+                        groupKey: activeSettingsGroupKey,
+                        showInterfaceSettings: showInterfaceSettings,
+                      );
                       final textSheetMaxWidth = min(
                         AppLayout.pageContentMaxWidth(context, maxWidth: 760),
                         metrics.bottomSheetMaxWidth,

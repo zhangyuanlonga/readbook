@@ -21,7 +21,6 @@ import '../../../app/widgets/adaptive_search_bar.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
 
 import '../../../core/auth/auth_event_bus.dart';
-import '../../../core/auth/auth_session_store.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/membership/membership_access_service.dart';
 import '../../../domain/entities/book.dart';
@@ -66,7 +65,6 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   late final BookPresentationQueryService _bookPresentationQueryService;
   late final SearchHistoryService _historyService;
   late final SearchSystemSettingsService _searchSystemSettingsService;
-  late final AuthSessionStore _sessionStore;
   late final MembershipAccessService _membershipAccessService;
 
   static const Duration _progressUiThrottleWindow = Duration(
@@ -279,10 +277,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     _searchSystemSettingsService = ref.read(
       searchSystemSettingsServiceProvider,
     );
-    _sessionStore = AuthSessionStore();
-    _membershipAccessService = MembershipAccessService(
-      sessionStore: _sessionStore,
-    );
+    _membershipAccessService = ref.read(searchMembershipAccessServiceProvider);
     _authEventSubscription = AuthEventBus.instance.stream.listen(
       _handleAuthEvent,
     );
@@ -824,7 +819,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     }
 
     try {
-      final session = await _sessionStore.getSession();
+      final session = await _membershipAccessService.getCurrentSession();
       if (!_isLatestOnlineSearchAccessRequest(requestId)) {
         return false;
       }

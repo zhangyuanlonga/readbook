@@ -84,11 +84,13 @@ class DesktopBookshelfToolbarActions {
     required this.hasBooks,
     required this.hasFilteredBooks,
     required this.useGridView,
+    required this.useListTwoColumnMode,
     required this.sortOptions,
     required this.gridSettingOptions,
     required this.listSettingOptions,
     required this.onSortModeSelected,
     required this.onViewModeSelected,
+    required this.onListTwoColumnModeSelected,
     required this.onSelectBooks,
     required this.onImportLocal,
   });
@@ -96,11 +98,13 @@ class DesktopBookshelfToolbarActions {
   final bool hasBooks;
   final bool hasFilteredBooks;
   final bool useGridView;
+  final bool useListTwoColumnMode;
   final List<DesktopBookshelfSortOption> sortOptions;
   final List<DesktopBookshelfDisplaySettingOption> gridSettingOptions;
   final List<DesktopBookshelfDisplaySettingOption> listSettingOptions;
   final ValueChanged<BookshelfSortMode> onSortModeSelected;
   final ValueChanged<bool> onViewModeSelected;
+  final ValueChanged<bool> onListTwoColumnModeSelected;
   final VoidCallback onSelectBooks;
   final VoidCallback onImportLocal;
 }

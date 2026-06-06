@@ -11,6 +11,16 @@ class ReaderSettingsOwnershipDescriptor {
   final String description;
 }
 
+class ReaderSettingsSectionDescriptor {
+  const ReaderSettingsSectionDescriptor({
+    required this.groupKey,
+    required this.title,
+  });
+
+  final String groupKey;
+  final String title;
+}
+
 class ReaderSettingsPresenter {
   const ReaderSettingsPresenter();
 
@@ -152,6 +162,73 @@ class ReaderSettingsPresenter {
         description: '该分组会按阅读器当前模式和设备偏好共同生效。',
       ),
     };
+  }
+
+  /// 设置面板分组标题的统一入口。
+  ///
+  /// 后续继续拆 `reader_page_settings_sheet.dart` 时，section widget 应优先消费这里
+  /// 的分组语义，避免移动端底部面板和桌面侧栏各自维护一份标题映射。
+  String sectionTitle({
+    required String? groupKey,
+    required bool showInterfaceSettings,
+  }) {
+    return switch (groupKey) {
+      'quick_margins' || 'info_layout' || 'info' => '信息排版',
+      'typography' => '字体',
+      'interaction' => '翻页与动画',
+      'behavior' => '阅读行为',
+      'manga' => '漫画阅读',
+      'audio' => '听书设置',
+      'auto_read' => '自动阅读',
+      _ => showInterfaceSettings ? '界面设置' : '设置',
+    };
+  }
+
+  List<ReaderSettingsSectionDescriptor> sectionPlan({
+    required bool showInterfaceSettings,
+    required bool supportsAutoRead,
+    required bool supportsAudio,
+    required bool supportsManga,
+  }) {
+    final groupKeys =
+        showInterfaceSettings
+            ? const <String>['typography', 'quick_margins', 'interaction']
+            : const <String>['behavior', 'info'];
+    final descriptors = <ReaderSettingsSectionDescriptor>[
+      for (final groupKey in groupKeys)
+        ReaderSettingsSectionDescriptor(
+          groupKey: groupKey,
+          title: sectionTitle(
+            groupKey: groupKey,
+            showInterfaceSettings: showInterfaceSettings,
+          ),
+        ),
+      if (supportsAutoRead)
+        ReaderSettingsSectionDescriptor(
+          groupKey: 'auto_read',
+          title: sectionTitle(
+            groupKey: 'auto_read',
+            showInterfaceSettings: showInterfaceSettings,
+          ),
+        ),
+      if (supportsAudio)
+        ReaderSettingsSectionDescriptor(
+          groupKey: 'audio',
+          title: sectionTitle(
+            groupKey: 'audio',
+            showInterfaceSettings: showInterfaceSettings,
+          ),
+        ),
+      if (supportsManga)
+        ReaderSettingsSectionDescriptor(
+          groupKey: 'manga',
+          title: sectionTitle(
+            groupKey: 'manga',
+            showInterfaceSettings: showInterfaceSettings,
+          ),
+        ),
+    ];
+    return List<ReaderSettingsSectionDescriptor>.unmodifiable(descriptors);
   }
 
   String _formatTypographyValue({

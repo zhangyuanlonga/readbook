@@ -34,6 +34,10 @@ class MembershipAccessService {
   final MembershipService _membershipService;
   final UserProfileService _userProfileService;
 
+  Future<AuthSession?> getCurrentSession() {
+    return _sessionStore.getSession();
+  }
+
   Future<MembershipAccessSnapshot> fetchCurrentAccess({
     AuthSession? session,
     bool allowProfileFallback = true,

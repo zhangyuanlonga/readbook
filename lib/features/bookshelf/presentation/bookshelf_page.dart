@@ -620,6 +620,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   bool _listShowTaxonomyBadges = BookshelfService.defaultListShowTaxonomyBadges;
   bool _listShowCover = BookshelfService.defaultListShowCover;
   bool _listCompactMode = BookshelfService.defaultListCompactMode;
+  bool _listTwoColumnMode = BookshelfService.defaultListTwoColumnMode;
   bool _listShowRecentReadTime = BookshelfService.defaultListShowRecentReadTime;
   bool _listAlwaysShowSearchBar =
       BookshelfService.defaultListAlwaysShowSearchBar;
@@ -1129,6 +1130,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       _books.length,
       filteredBooks.length,
       _useGridView,
+      _listTwoColumnMode,
       _sortMode,
       _gridShowTitle,
       _gridShowAuthor,
@@ -1158,6 +1160,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
               hasBooks: _books.isNotEmpty,
               hasFilteredBooks: filteredBooks.isNotEmpty,
               useGridView: _useGridView,
+              useListTwoColumnMode: _listTwoColumnMode,
               sortOptions: [
                 for (final mode in _BookshelfSortMode.values)
                   DesktopBookshelfSortOption(
@@ -1235,6 +1238,12 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                 ),
               ],
               listSettingOptions: [
+                DesktopBookshelfDisplaySettingOption(
+                  label: '桌面双列列表',
+                  selected: _listTwoColumnMode,
+                  onChanged:
+                      (value) => unawaited(_setDesktopListTwoColumnMode(value)),
+                ),
                 DesktopBookshelfDisplaySettingOption(
                   label: '显示封面',
                   selected: _listShowCover,
@@ -1319,6 +1328,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
               onViewModeSelected:
                   (useGridView) =>
                       unawaited(_setBookshelfViewMode(useGridView)),
+              onListTwoColumnModeSelected:
+                  (enabled) => unawaited(
+                    _setDesktopListTwoColumnMode(enabled, activateList: true),
+                  ),
               onSelectBooks: _startSelectionMode,
               onImportLocal: () => unawaited(_showImportLocalBooksSheet()),
             )
@@ -1514,6 +1527,41 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       applyValue: () => _listCompactMode = value,
       saveValue: _bookshelfService.saveListCompactMode,
     );
+  }
+
+  Future<void> _setDesktopListTwoColumnMode(
+    bool value, {
+    bool activateList = false,
+  }) async {
+    if (!mounted) {
+      return;
+    }
+    if (_listTwoColumnMode == value && (!activateList || !_useGridView)) {
+      return;
+    }
+
+    _updateBookshelfLayoutPreservingScroll(() {
+      _updateBookshelfState(() {
+        if (activateList) {
+          _useGridView = false;
+        }
+        _listTwoColumnMode = value;
+        _derivedBookshelfFingerprint = null;
+        _lastDesktopToolbarActionsFingerprint = null;
+      });
+    });
+
+    try {
+      if (activateList) {
+        await _bookshelfService.saveUseGridView(false);
+      }
+      await _bookshelfService.saveListTwoColumnMode(value);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage('书架设置保存失败，请重试。');
+    }
   }
 
   Future<void> _setDesktopListShowTitle(bool value) {
@@ -2975,16 +3023,23 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }
 
   Future<void> _setBookshelfViewMode(bool useGridView) async {
-    if (_useGridView == useGridView) {
+    if (_useGridView == useGridView && (useGridView || !_listTwoColumnMode)) {
       return;
     }
     _updateBookshelfLayoutPreservingScroll(() {
       _updateBookshelfState(() {
         _useGridView = useGridView;
+        if (!useGridView) {
+          _listTwoColumnMode = false;
+        }
+        _lastDesktopToolbarActionsFingerprint = null;
       });
     });
     try {
       await _bookshelfService.saveUseGridView(useGridView);
+      if (!useGridView) {
+        await _bookshelfService.saveListTwoColumnMode(false);
+      }
     } catch (_) {
       if (!mounted) {
         return;
@@ -5986,6 +6041,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         await _bookshelfService.loadListShowTaxonomyBadges();
     final showCover = await _bookshelfService.loadListShowCover();
     final compactMode = await _bookshelfService.loadListCompactMode();
+    final twoColumnMode = await _bookshelfService.loadListTwoColumnMode();
     final showRecentReadTime =
         await _bookshelfService.loadListShowRecentReadTime();
     final alwaysShowSearchBar =
@@ -6006,6 +6062,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         _listShowTaxonomyBadges == showTaxonomyBadges &&
         _listShowCover == showCover &&
         _listCompactMode == compactMode &&
+        _listTwoColumnMode == twoColumnMode &&
         _listShowRecentReadTime == showRecentReadTime &&
         _listAlwaysShowSearchBar == alwaysShowSearchBar &&
         _listPinSearchBar == pinSearchBar &&
@@ -6022,6 +6079,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       _listShowTaxonomyBadges = showTaxonomyBadges;
       _listShowCover = showCover;
       _listCompactMode = compactMode;
+      _listTwoColumnMode = twoColumnMode;
       _listShowRecentReadTime = showRecentReadTime;
       _listAlwaysShowSearchBar = alwaysShowSearchBar;
       _listPinSearchBar = pinSearchBar;

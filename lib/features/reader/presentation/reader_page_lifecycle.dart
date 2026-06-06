@@ -252,12 +252,16 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
   }
 
   Future<void> _applySystemReaderBrightnessImpl([double? brightness]) async {
-    if (_settings.followSystemBrightness) {
+    final decision = _readerPlatformFacade.resolveBrightness(
+      followSystemBrightness: _settings.followSystemBrightness,
+      configuredBrightness: brightness ?? _settings.brightness,
+    );
+    if (decision.action == ReaderBrightnessAction.restoreSystem) {
       await _restoreSystemReaderBrightness();
       return;
     }
     final applied = await _platformBridgeService.setReaderBrightness(
-      brightness ?? _settings.brightness,
+      decision.brightness ?? _settings.brightness,
     );
     if (!mounted) {
       _isSystemBrightnessOverrideActive = applied;

@@ -210,6 +210,7 @@ extension on _BookshelfPageState {
     var draftListShowTaxonomyBadges = _listShowTaxonomyBadges;
     var draftListShowCover = _listShowCover;
     var draftListCompactMode = _listCompactMode;
+    var draftListTwoColumnMode = _listTwoColumnMode;
     var draftListShowRecentReadTime = _listShowRecentReadTime;
     var draftListAlwaysShowSearchBar = _listAlwaysShowSearchBar;
     var draftListPinSearchBar = _listPinSearchBar;
@@ -299,6 +300,9 @@ extension on _BookshelfPageState {
                 await _bookshelfService.saveListShowCover(draftListShowCover);
                 await _bookshelfService.saveListCompactMode(
                   draftListCompactMode,
+                );
+                await _bookshelfService.saveListTwoColumnMode(
+                  draftListTwoColumnMode,
                 );
                 await _bookshelfService.saveListShowRecentReadTime(
                   draftListShowRecentReadTime,
@@ -453,6 +457,8 @@ extension on _BookshelfPageState {
                     BookshelfService.defaultListShowTaxonomyBadges;
                 draftListShowCover = BookshelfService.defaultListShowCover;
                 draftListCompactMode = BookshelfService.defaultListCompactMode;
+                draftListTwoColumnMode =
+                    BookshelfService.defaultListTwoColumnMode;
                 draftListShowRecentReadTime =
                     BookshelfService.defaultListShowRecentReadTime;
                 draftListAlwaysShowSearchBar =
@@ -475,6 +481,7 @@ extension on _BookshelfPageState {
                   _listShowTaxonomyBadges = draftListShowTaxonomyBadges;
                   _listShowCover = draftListShowCover;
                   _listCompactMode = draftListCompactMode;
+                  _listTwoColumnMode = draftListTwoColumnMode;
                   _listShowRecentReadTime = draftListShowRecentReadTime;
                   _listAlwaysShowSearchBar = draftListAlwaysShowSearchBar;
                   _listPinSearchBar = draftListPinSearchBar;
@@ -976,6 +983,26 @@ extension on _BookshelfPageState {
                     },
                   ),
                   buildCompactSwitchTile(
+                    value: draftListTwoColumnMode,
+                    title: '桌面双列列表',
+                    subtitle: '开启后桌面端列表会按两列展示，移动端仍保持单列。',
+                    onChanged: (value) {
+                      setSheetState(() {
+                        draftUseGridView = false;
+                        draftListTwoColumnMode = value;
+                      });
+                      _updateBookshelfLayoutPreservingScroll(() {
+                        _updateBookshelfState(() {
+                          _useGridView = false;
+                          _listTwoColumnMode = value;
+                          _lastDesktopToolbarActionsFingerprint = null;
+                        });
+                      });
+                      unawaited(_bookshelfService.saveUseGridView(false));
+                      unawaited(persistListSettings());
+                    },
+                  ),
+                  buildCompactSwitchTile(
                     value: draftListShowCover,
                     title: '显示封面图',
                     subtitle: '关闭后列表只显示书名、作者和其他文字信息。',
@@ -1213,9 +1240,40 @@ extension on _BookshelfPageState {
                             child: _BookshelfSettingsModeButton(
                               label: '列表',
                               icon: Icons.view_list_rounded,
-                              selected: !draftUseGridView,
-                              onTap:
-                                  () => unawaited(setBookshelfViewMode(false)),
+                              selected:
+                                  !draftUseGridView && !draftListTwoColumnMode,
+                              onTap: () {
+                                setSheetState(() {
+                                  draftListTwoColumnMode = false;
+                                });
+                                unawaited(
+                                  _bookshelfService.saveListTwoColumnMode(
+                                    false,
+                                  ),
+                                );
+                                unawaited(setBookshelfViewMode(false));
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: _BookshelfSettingsModeButton(
+                              label: '双列',
+                              icon: Icons.view_week_rounded,
+                              selected:
+                                  !draftUseGridView && draftListTwoColumnMode,
+                              onTap: () {
+                                setSheetState(() {
+                                  draftUseGridView = false;
+                                  draftListTwoColumnMode = true;
+                                });
+                                unawaited(
+                                  _setDesktopListTwoColumnMode(
+                                    true,
+                                    activateList: true,
+                                  ),
+                                );
+                              },
                             ),
                           ),
                           const SizedBox(width: 4),

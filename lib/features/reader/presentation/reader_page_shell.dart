@@ -4,19 +4,17 @@ part of 'reader_page.dart';
 
 extension _ReaderPageShellExtension on _ReaderPageState {
   bool get _shouldEnableVolumeKeyPageInterception {
-    if (!_platformBridgeService.isVolumeKeyPagingSupported) {
-      return false;
-    }
-    if (!_settings.volumeKeyPageEnabled) {
-      return false;
-    }
-    if (_showOverlayControls || _isTextSelectionActive) {
-      return false;
-    }
-    if (_isBootstrapping || _isLoadingContent || _errorText != null) {
-      return false;
-    }
-    return true;
+    return _readerPlatformFacade
+        .resolveVolumeKeyInterception(
+          platformSupported: _platformBridgeService.isVolumeKeyPagingSupported,
+          enabledInSettings: _settings.volumeKeyPageEnabled,
+          overlayVisible: _showOverlayControls,
+          textSelectionActive: _isTextSelectionActive,
+          bootstrapping: _isBootstrapping,
+          loadingContent: _isLoadingContent,
+          hasError: _errorText != null,
+        )
+        .shouldEnable;
   }
 
   String get _volumeKeyPageSupportDescription {
@@ -532,13 +530,16 @@ extension _ReaderPageShellExtension on _ReaderPageState {
     if (!mounted) {
       return;
     }
-    final shouldShow = visible ?? _showOverlayControls;
-    if (!force && _isSystemUiVisible == shouldShow) {
+    final decision = _readerPlatformFacade.resolveSystemUiVisibility(
+      overlayVisible: _showOverlayControls,
+      forcedVisible: visible,
+    );
+    if (!force && _isSystemUiVisible == decision.visible) {
       return;
     }
-    _isSystemUiVisible = shouldShow;
+    _isSystemUiVisible = decision.visible;
 
-    if (shouldShow) {
+    if (decision.chromeState == ReaderSystemUiChromeState.edgeToEdge) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
       return;
     }

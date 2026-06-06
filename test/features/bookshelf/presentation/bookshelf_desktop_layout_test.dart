@@ -81,7 +81,7 @@ void main() {
     await tester.pump(const Duration(seconds: 9));
   });
 
-  testWidgets('desktop list mode lays out bookshelf cards in two columns', (
+  testWidgets('desktop list mode lays out bookshelf cards in one column', (
     tester,
   ) async {
     driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
@@ -160,6 +160,95 @@ void main() {
       ),
     );
     await _pumpUntilFound(tester, find.text('桌面列表一'));
+
+    expect(find.byType(SliverList), findsWidgets);
+    expect(find.byType(SliverGrid), findsNothing);
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(seconds: 9));
+  });
+
+  testWidgets('desktop two-column list mode uses two grid columns', (
+    tester,
+  ) async {
+    driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+    addTearDown(() async {
+      driftRuntimeOptions.dontWarnAboutMultipleDatabases = false;
+      await tester.binding.setSurfaceSize(null);
+      tester.view.resetDevicePixelRatio();
+    });
+    tester.view.devicePixelRatio = 1;
+    await tester.binding.setSurfaceSize(const Size(1180, 820));
+
+    final prefs = await SharedPreferences.getInstance();
+    final database = AppDatabase(executor: NativeDatabase.memory());
+    addTearDown(database.close);
+    final bookshelfService = BookshelfService(
+      preferences: prefs,
+      database: database,
+    );
+    await bookshelfService.saveListTwoColumnMode(true);
+    final readerPreferencesService = ReaderPreferencesService(
+      preferences: prefs,
+      database: database,
+    );
+    final sourceHealthService = SourceHealthService(
+      persistenceService: SourceHealthPersistenceService(
+        preferences: prefs,
+        database: database,
+      ),
+    );
+
+    await bookshelfService.upsert(
+      BookshelfBook(
+        bookId: 'desktop_two_column_1',
+        sourceId: 'src_desktop',
+        title: '桌面双列一',
+        detailUrl: 'https://example.com/desktop/two-column/1',
+        addedAt: DateTime.parse('2026-06-01T12:00:00.000Z'),
+        author: '作者一',
+      ),
+    );
+    await bookshelfService.upsert(
+      BookshelfBook(
+        bookId: 'desktop_two_column_2',
+        sourceId: 'src_desktop',
+        title: '桌面双列二',
+        detailUrl: 'https://example.com/desktop/two-column/2',
+        addedAt: DateTime.parse('2026-06-02T12:00:00.000Z'),
+        author: '作者二',
+      ),
+    );
+
+    final router = GoRouter(
+      routes: [
+        GoRoute(
+          path: '/',
+          builder:
+              (context, state) =>
+                  const BookshelfPage(prefetchAnnouncementOnInit: false),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          appDatabaseProvider.overrideWithValue(database),
+          appSourceHealthServiceProvider.overrideWithValue(sourceHealthService),
+          bookshelfServiceProvider.overrideWithValue(bookshelfService),
+          bookshelfReaderPreferencesServiceProvider.overrideWithValue(
+            readerPreferencesService,
+          ),
+        ],
+        child: MaterialApp.router(
+          theme: ThemeData(platform: TargetPlatform.macOS),
+          routerConfig: router,
+        ),
+      ),
+    );
+    await _pumpUntilFound(tester, find.text('桌面双列一'));
 
     final sliverGrid = tester.widget<SliverGrid>(find.byType(SliverGrid).first);
     final gridDelegate =

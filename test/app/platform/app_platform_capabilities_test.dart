@@ -36,14 +36,38 @@ void main() {
 
       expect(capabilities.shouldUseFilePickerForProfileAvatar, isTrue);
     });
+
+    test(
+      'web local reading uses upload bytes instead of native path chain',
+      () {
+        final web = _capabilities(
+          platform: TargetPlatform.android,
+          isWeb: true,
+          localFileImportSupported: false,
+          managedFileStorageSupported: false,
+        );
+        final native = _capabilities(platform: TargetPlatform.macOS);
+
+        expect(web.supportsWebUploadedLocalReading, isTrue);
+        expect(web.supportsNativeLocalReading, isFalse);
+        expect(native.supportsWebUploadedLocalReading, isFalse);
+        expect(native.supportsNativeLocalReading, isTrue);
+      },
+    );
   });
 }
 
 AppPlatformCapabilities _capabilities({
   required TargetPlatform platform,
   bool isWeb = false,
+  bool localFileImportSupported = true,
+  bool managedFileStorageSupported = true,
 }) {
   const supported = AppCapabilityState.supported(label: 'test');
+  const unsupported = AppCapabilityState.unsupported(
+    label: 'test',
+    reason: 'unsupported',
+  );
   return AppPlatformCapabilities(
     platform: platform,
     isWeb: isWeb,
@@ -60,8 +84,8 @@ AppPlatformCapabilities _capabilities({
             },
     verificationStatus: AppPlatformVerificationStatus.stable,
     webFileUpload: supported,
-    localFileImport: supported,
-    managedFileStorage: supported,
+    localFileImport: localFileImportSupported ? supported : unsupported,
+    managedFileStorage: managedFileStorageSupported ? supported : unsupported,
     nativeSqlite: supported,
     driftWebStorage: supported,
     embeddedWebView: supported,

@@ -625,6 +625,28 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
                   menuChildren: [
                     MenuItemButton(
                       leadingIcon:
+                          !actions.useGridView && !actions.useListTwoColumnMode
+                              ? const Icon(Icons.check_rounded)
+                              : const SizedBox(width: 24),
+                      onPressed:
+                          !actions.useGridView && !actions.useListTwoColumnMode
+                              ? null
+                              : () => actions.onViewModeSelected(false),
+                      child: const Text('列表'),
+                    ),
+                    MenuItemButton(
+                      leadingIcon:
+                          !actions.useGridView && actions.useListTwoColumnMode
+                              ? const Icon(Icons.check_rounded)
+                              : const SizedBox(width: 24),
+                      onPressed:
+                          !actions.useGridView && actions.useListTwoColumnMode
+                              ? null
+                              : () => actions.onListTwoColumnModeSelected(true),
+                      child: const Text('双列'),
+                    ),
+                    MenuItemButton(
+                      leadingIcon:
                           actions.useGridView
                               ? const Icon(Icons.check_rounded)
                               : const SizedBox(width: 24),
@@ -633,17 +655,6 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
                               ? null
                               : () => actions.onViewModeSelected(true),
                       child: const Text('网格'),
-                    ),
-                    MenuItemButton(
-                      leadingIcon:
-                          !actions.useGridView
-                              ? const Icon(Icons.check_rounded)
-                              : const SizedBox(width: 24),
-                      onPressed:
-                          !actions.useGridView
-                              ? null
-                              : () => actions.onViewModeSelected(false),
-                      child: const Text('列表'),
                     ),
                   ],
                   child: const Text('显示模式'),

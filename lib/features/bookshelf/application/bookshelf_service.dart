@@ -82,6 +82,7 @@ class BookshelfService {
   static const String _listQuickFilterContentKey =
       'bookshelf.list.search.quickFilterContent';
   static const String _listCompactModeKey = 'bookshelf.list.compactMode';
+  static const String _listTwoColumnModeKey = 'bookshelf.list.twoColumnMode';
   static const String _listShowRecentReadTimeKey =
       'bookshelf.list.showRecentReadTime';
 
@@ -126,6 +127,7 @@ class BookshelfService {
   static const bool defaultListPinSearchBar = false;
   static const String defaultListQuickFilterContent = 'none';
   static const bool defaultListCompactMode = false;
+  static const bool defaultListTwoColumnMode = false;
   static const bool defaultListShowRecentReadTime = false;
   static const BookshelfTaxonomyService _taxonomyService =
       BookshelfTaxonomyService();
@@ -783,6 +785,16 @@ class BookshelfService {
   Future<void> saveListCompactMode(bool compact) async {
     final prefs = await _preferencesFuture;
     await prefs.setBool(_listCompactModeKey, compact);
+  }
+
+  Future<bool> loadListTwoColumnMode() async {
+    final prefs = await _preferencesFuture;
+    return prefs.getBool(_listTwoColumnModeKey) ?? defaultListTwoColumnMode;
+  }
+
+  Future<void> saveListTwoColumnMode(bool enabled) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setBool(_listTwoColumnModeKey, enabled);
   }
 
   Future<bool> loadListShowRecentReadTime() async {

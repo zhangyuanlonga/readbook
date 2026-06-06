@@ -106,10 +106,11 @@ extension on _BookshelfPageState {
       return _buildBookGridSliver(books);
     }
 
-    if (AppLayout.isDesktopLike(
-      context,
-      platform: Theme.of(context).platform,
-    )) {
+    if (_listTwoColumnMode &&
+        AppLayout.isDesktopLike(
+          context,
+          platform: Theme.of(context).platform,
+        )) {
       return SliverGrid(
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,

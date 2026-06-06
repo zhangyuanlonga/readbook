@@ -80,7 +80,6 @@ import '../application/reader_auto_read_coordinator.dart';
 import '../application/reader_cache_feedback_resolver.dart';
 import '../application/reader_content_session.dart';
 import '../application/reader_content_mode_resolver.dart';
-import '../application/reader_content_session_resolver.dart';
 import '../application/reader_desktop_input_resolver.dart';
 import '../application/reader_mode_capabilities.dart';
 import '../application/reader_mode_model.dart';
@@ -105,8 +104,10 @@ import '../application/reader_pagination_engine.dart';
 import '../application/reader_pagination_models.dart';
 import '../application/reader_pagination_spec.dart';
 import '../application/reader_platform_bridge_service.dart';
+import '../application/reader_platform_facade.dart';
 import '../application/reader_settings_groups.dart';
 import '../application/reader_settings_resolution_service.dart';
+import '../application/reader_session_presentation_facade.dart';
 import '../application/reader_surface_policy_resolver.dart';
 import '../application/reader_surface_metrics.dart';
 import '../application/reader_logical_position.dart';
@@ -133,7 +134,6 @@ import '../application/reader_theme_mode_service.dart';
 import '../application/reader_typography_resolver.dart';
 import '../application/reader_typography_metrics_resolver.dart';
 import '../application/reader_viewport_state.dart';
-import '../application/reader_viewport_state_resolver.dart';
 import '../application/text_reader_renderer.dart';
 import '../application/reader_volume_key_page_bridge.dart';
 import '../application/source_switch_score_service.dart';
@@ -231,8 +231,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   final ReaderPresentationResolver _presentationResolver =
       const ReaderPresentationResolver();
   final ReaderViewportBuilder _viewportBuilder = const ReaderViewportBuilder();
-  final ReaderModeCapabilitiesResolver _modeCapabilitiesResolver =
-      const ReaderModeCapabilitiesResolver();
   final ReaderModeResolver _readerModeResolver = const ReaderModeResolver();
   final ReaderChapterCacheDecoder _chapterCacheDecoder =
       const ReaderChapterCacheDecoder();
@@ -278,18 +276,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   final ReaderRuntimeController _readerRuntimeController =
       const ReaderRuntimeController();
   final ReaderRuntimeFacade _readerRuntimeFacade = const ReaderRuntimeFacade();
+  final ReaderPlatformFacade _readerPlatformFacade =
+      const ReaderPlatformFacade();
+  final ReaderSessionPresentationFacade _sessionPresentationFacade =
+      const ReaderSessionPresentationFacade();
   final ReaderPageLifecycleDelegate _lifecycleDelegate =
       const ReaderPageLifecycleDelegate();
   final ReaderSettingsPresenter _readerSettingsPresenter =
       const ReaderSettingsPresenter();
   final ReaderSettingsResolutionService _readerSettingsResolutionService =
       const ReaderSettingsResolutionService();
-  final ReaderContentSessionResolver _contentSessionResolver =
-      const ReaderContentSessionResolver();
   final ReaderSessionStateResolver _sessionStateResolver =
       const ReaderSessionStateResolver();
-  final ReaderViewportStateResolver _viewportStateResolver =
-      const ReaderViewportStateResolver();
   final ReaderDesktopInputResolver _desktopInputResolver =
       const ReaderDesktopInputResolver();
   late final ReaderSystemSettingsService _systemSettingsService;
@@ -701,8 +699,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final effectiveContentMode = contentMode ?? _currentContentMode;
     final effectiveCanUsePagedText =
         canUsePagedText ??
-        _modeCapabilitiesResolver
-            .resolve(
+        _sessionPresentationFacade
+            .resolveModeCapabilities(
               contentMode: effectiveContentMode,
               contentCapabilities: _contentCapabilities,
               hasInlineImageParagraphs:
@@ -984,7 +982,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       executionContext: _chapterExecutionContext,
       document: _document,
     );
-    return _contentSessionResolver.resolve(
+    return _sessionPresentationFacade.resolveContentSession(
       contentMode: contentMode,
       bookId: _activeBookId,
       sourceId: _sourceId,
@@ -1089,7 +1087,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final ratio = _currentScrollRatio();
     switch (_currentViewportKind) {
       case ReaderModeViewportKind.textPaged:
-        return _viewportStateResolver.resolve(
+        return _sessionPresentationFacade.resolveViewportState(
           contentMode: _currentContentMode,
           mode: _currentReaderMode,
           chapterPositionRatio: ratio,
@@ -1097,7 +1095,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           pageCount: _currentPagedPageCount,
         );
       case ReaderModeViewportKind.imagePaged:
-        return _viewportStateResolver.resolve(
+        return _sessionPresentationFacade.resolveViewportState(
           contentMode: _currentContentMode,
           mode: _currentReaderMode,
           chapterPositionRatio: ratio,
@@ -1105,7 +1103,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           pageCount: _chapterImageUrls.length,
         );
       case ReaderModeViewportKind.hybridPaged:
-        return _viewportStateResolver.resolve(
+        return _sessionPresentationFacade.resolveViewportState(
           contentMode: _currentContentMode,
           mode: _currentReaderMode,
           chapterPositionRatio: ratio,
@@ -1114,7 +1112,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         );
       case ReaderModeViewportKind.textScroll:
       case ReaderModeViewportKind.imageScroll:
-        return _viewportStateResolver.resolve(
+        return _sessionPresentationFacade.resolveViewportState(
           contentMode: _currentContentMode,
           mode: _currentReaderMode,
           chapterPositionRatio: ratio,
@@ -1126,7 +1124,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   : 0,
         );
       case ReaderModeViewportKind.audio:
-        return _viewportStateResolver.resolve(
+        return _sessionPresentationFacade.resolveViewportState(
           contentMode: _currentContentMode,
           mode: _currentReaderMode,
           chapterPositionRatio: ratio,
@@ -1371,7 +1369,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _currentViewportKind == ReaderModeViewportKind.imageScroll;
 
   ReaderModeCapabilities get _readerModeCapabilities =>
-      _modeCapabilitiesResolver.resolve(
+      _sessionPresentationFacade.resolveModeCapabilities(
         contentMode: _currentContentMode,
         contentCapabilities: _contentCapabilities,
         hasInlineImageParagraphs: _currentChapterHasInlineImageParagraphs(),

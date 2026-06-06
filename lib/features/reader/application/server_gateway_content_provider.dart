@@ -4,7 +4,6 @@ import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
 import '../../../domain/entities/book.dart';
-import '../../../domain/entities/chapter.dart';
 import '../../../domain/entities/reader_document.dart';
 import '../../book/application/book_detail_service.dart';
 import '../../search/application/server_book_gateway_service.dart';
@@ -15,15 +14,35 @@ import 'content_text_cleaner.dart';
 import 'content_provider.dart';
 
 class ServerGatewayContentProvider extends ContentProvider {
-  ServerGatewayContentProvider({
+  factory ServerGatewayContentProvider({
     ServerBookGatewayService? gatewayService,
+    BookDetailService? detailService,
     SearchSystemSettingsService? settingsService,
     ContentTextCleaner? cleaner,
-  }) : _gatewayService = gatewayService ?? ServerBookGatewayService(),
+  }) {
+    final resolvedGatewayService = gatewayService ?? ServerBookGatewayService();
+    return ServerGatewayContentProvider._(
+      gatewayService: resolvedGatewayService,
+      detailService: detailService,
+      settingsService: settingsService,
+      cleaner: cleaner,
+    );
+  }
+
+  ServerGatewayContentProvider._({
+    required ServerBookGatewayService gatewayService,
+    BookDetailService? detailService,
+    SearchSystemSettingsService? settingsService,
+    ContentTextCleaner? cleaner,
+  }) : _gatewayService = gatewayService,
+       _detailService =
+           detailService ??
+           BookDetailService(serverGatewayService: gatewayService),
        _settingsService = settingsService ?? SearchSystemSettingsService(),
        _cleaner = cleaner ?? const ContentTextCleaner();
 
   final ServerBookGatewayService _gatewayService;
+  final BookDetailService _detailService;
   final SearchSystemSettingsService _settingsService;
   final ContentTextCleaner _cleaner;
 
@@ -53,48 +72,15 @@ class ServerGatewayContentProvider extends ContentProvider {
     bool includeCatalog = true,
   }) async {
     await _ensureServerGatewayEnabled(ErrorStage.detail);
-    final detail = await _gatewayService.loadDetail(
+    return _detailService.load(
       sourceId: sourceId,
       bookId: bookId,
       detailUrl: detailUrl,
-      tocUrl: initialBook?.tocUrl,
-      executionContext: initialBook?.executionContext,
-      infoHtml: initialBook?.infoHtml,
-      tocHtml: initialBook?.tocHtml,
+      initialBook: initialBook,
       fallbackTitle: fallbackTitle,
       fallbackAuthor: fallbackAuthor,
-      coverUrl: initialBook?.coverUrl,
-      refresh: forceRefresh,
-    );
-    if (!includeCatalog) {
-      return BookDetailLoadResult(
-        detail: detail.detail,
-        chapters: const <Chapter>[],
-        sourceName: detail.sourceName,
-        tocFromCache: false,
-        executionContext: detail.executionContext,
-        catalogAvailable: true,
-        catalogLoaded: false,
-        catalogComplete: false,
-      );
-    }
-    final toc = await _gatewayService.loadTocComplete(
-      sourceId: detail.detail.sourceId,
-      bookId: detail.detail.id,
-      detailUrl: detail.detail.detailUrl,
-      tocUrl: detail.detail.tocUrl,
-      executionContext: detail.executionContext,
-      refresh: forceRefresh,
-    );
-    return BookDetailLoadResult(
-      detail: detail.detail,
-      chapters: toc.chapters,
-      sourceName: detail.sourceName,
-      tocFromCache: toc.cacheHit,
-      executionContext: toc.executionContext ?? detail.executionContext,
-      catalogAvailable: true,
-      catalogLoaded: true,
-      catalogComplete: toc.isComplete,
+      forceRefresh: forceRefresh,
+      includeCatalog: includeCatalog,
     );
   }
 

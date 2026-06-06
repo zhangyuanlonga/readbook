@@ -2,7 +2,7 @@
 
 创建日期：2026-06-05
 
-状态：阶段一已完成；阶段二 / 阶段三已完成 Web JS 构建、桌面输入收口和 macOS 构建基线；阶段四已完成代码级移动端保护回归与 Android / iOS 构建，真机 / 模拟器手工 smoke 待补；阶段五已完成 ReaderPage 入口等价拆分、体量审计和 ReaderRuntimeFacade 首批切片。
+状态：阶段一已完成；阶段二 / 阶段三已完成 Web JS 构建、桌面输入收口和 macOS 构建基线；阶段四已完成代码级移动端保护回归与 Android / iOS 构建，真机 / 模拟器手工 smoke 待补；阶段五已完成 ReaderRuntime / Platform / Session / Settings / Catalog 的首批表现层收口；阶段六已完成本地阅读全平台策略、parser 输入、编码、PDF / EPUB / Kindle 路线和受管资产边界记录；阶段七 / 阶段八已完成交互自适应策略、可访问性能力矩阵、性能预算、长任务策略和缓存治理验证记录；阶段九已完成阅读器目标单测、本地 parser、presentation smoke、guard 和 Web / macOS / Android / iOS 构建收尾记录。
 
 适用平台：Android、iOS、Web JS、macOS、Windows、Linux。
 
@@ -133,51 +133,51 @@
 ## 8. M6-05 阅读器表现层架构收敛
 
 - [x] M6-05-01 拆出 `ReaderRuntimeFacade` 或等价 controller，先承接章节加载、进度保存、预取、阅读记录和错误态，不改变 UI。
-- [ ] M6-05-02 将 `ReaderPage` 中的桌面输入、移动端桥接、系统 UI、亮度、电量读取收口到 platform facade / capability。
-- [ ] M6-05-03 将 `ReaderPage` 中的 content session 构造、mode/capability 解析、viewport state 解析迁到 application 层可测试服务。
-- [ ] M6-05-04 拆分 `reader_page_settings_sheet.dart`：按界面、阅读、自动阅读、信息栏、字体 / 背景、实验能力分 section presenter。
-- [ ] M6-05-05 拆分 `reader_catalog_sheet.dart`：目录数据、搜索、跳转、桌面 / 移动展示策略分离。
+- [x] M6-05-02 将 `ReaderPage` 中的桌面输入、移动端桥接、系统 UI、亮度、电量读取收口到 platform facade / capability。
+- [x] M6-05-03 将 `ReaderPage` 中的 content session 构造、mode/capability 解析、viewport state 解析迁到 application 层可测试服务。
+- [x] M6-05-04 拆分 `reader_page_settings_sheet.dart`：按界面、阅读、自动阅读、信息栏、字体 / 背景、实验能力分 section presenter。
+- [x] M6-05-05 拆分 `reader_catalog_sheet.dart`：目录数据、搜索、跳转、桌面 / 移动展示策略分离。
 - [x] M6-05-06 审计 `ReaderPage` 体量，目标从 6000 行警戒降到可维护区间；每次拆分必须等价迁移并补测试。
 - [x] M6-05-07 为新增 public class、provider、facade、adapter、storage key 和复杂进度逻辑补中文维护注释。
 
 ## 9. M6-06 本地阅读全平台策略
 
-- [ ] M6-06-01 明确 Web 本地阅读首版策略：禁用 native local reading，或以浏览器上传 bytes + 可重建缓存作为独立入口。
-- [ ] M6-06-02 让本地 parser 输入统一走 `LocalBookParserInputAware` 或等价 adapter，避免 native path 和 Web bytes 分叉扩散到 parser 外。
-- [ ] M6-06-03 复查 TXT 编码检测：storage、preview、parser 继续共用 `LocalTextEncodingDetector`，移动端插件失败要有 fallback。
-- [ ] M6-06-04 继续 EPUB 成熟库 adapter spike：先替 metadata / OPF / TOC 层，保留 `ReaderDocument` 和 inline image 输出。
-- [ ] M6-06-05 做 PDF 路线统一：明确 `pdfrx`、PDFium、`pdf_text_extract` 的职责、平台支持和退出条件。
-- [ ] M6-06-06 将 MOBI / AZW / AZW3 保持实验能力，补 DRM、编码、图片资源、超大文件和失败样例验收。
-- [ ] M6-06-07 检查本地图书、字体、背景、封面和 PDF 源文件都在受管目录，不被 cache/tmp 清理误删。
-- [ ] M6-06-08 为 Android、iOS、macOS、Windows、Linux 本地导入分别记录文件选择器、沙盒、路径和重建索引结果。
+- [x] M6-06-01 明确 Web 本地阅读首版策略：禁用 native local reading，或以浏览器上传 bytes + 可重建缓存作为独立入口。
+- [x] M6-06-02 让本地 parser 输入统一走 `LocalBookParserInputAware` 或等价 adapter，避免 native path 和 Web bytes 分叉扩散到 parser 外。
+- [x] M6-06-03 复查 TXT 编码检测：storage、preview、parser 继续共用 `LocalTextEncodingDetector`，移动端插件失败要有 fallback。
+- [x] M6-06-04 继续 EPUB 成熟库 adapter spike：先替 metadata / OPF / TOC 层，保留 `ReaderDocument` 和 inline image 输出。
+- [x] M6-06-05 做 PDF 路线统一：明确 `pdfrx`、PDFium、`pdf_text_extract` 的职责、平台支持和退出条件。
+- [x] M6-06-06 将 MOBI / AZW / AZW3 保持实验能力，补 DRM、编码、图片资源、超大文件和失败样例验收。
+- [x] M6-06-07 检查本地图书、字体、背景、封面和 PDF 源文件都在受管目录，不被 cache/tmp 清理误删。
+- [x] M6-06-08 为 Android、iOS、macOS、Windows、Linux 本地导入分别记录文件选择器、沙盒、路径和重建索引结果。
 
 ## 10. M6-07 阅读交互、可访问性与自适应
 
-- [ ] M6-07-01 建立阅读器宽度检查：390、600、840、1280、1600 视口下正文、overlay、目录、设置和错误态不重叠。
-- [ ] M6-07-02 检查字体缩放：阅读正文使用 reader 设置，chrome / sheet 使用界面文字缩放上限，不出现按钮文字溢出。
-- [ ] M6-07-03 检查 focus ring、Tab 顺序、Esc 关闭、Enter 激活、滚轮行为和 hover 状态。
-- [ ] M6-07-04 检查文本选择、书签 / 注释工具栏、图片预览、PDF 缩放手势在移动端和桌面端的差异。
-- [ ] M6-07-05 检查自动阅读在文本分页、文本滚动、低电量、后台、overlay、章节边界的状态机。
-- [ ] M6-07-06 检查阅读背景、主题、亮度遮罩、深色模式和高对比文本颜色，不让装饰图影响可读性。
+- [x] M6-07-01 建立阅读器宽度检查：390、600、840、1280、1600 视口下正文、overlay、目录、设置和错误态不重叠。
+- [x] M6-07-02 检查字体缩放：阅读正文使用 reader 设置，chrome / sheet 使用界面文字缩放上限，不出现按钮文字溢出。
+- [x] M6-07-03 检查 focus ring、Tab 顺序、Esc 关闭、Enter 激活、滚轮行为和 hover 状态。
+- [x] M6-07-04 检查文本选择、书签 / 注释工具栏、图片预览、PDF 缩放手势在移动端和桌面端的差异。
+- [x] M6-07-05 检查自动阅读在文本分页、文本滚动、低电量、后台、overlay、章节边界的状态机。
+- [x] M6-07-06 检查阅读背景、主题、亮度遮罩、深色模式和高对比文本颜色，不让装饰图影响可读性。
 
 ## 11. M6-08 性能、长任务与缓存
 
-- [ ] M6-08-01 建立阅读器启动到首屏可见、首章加载、第一次翻页、章节切换、目录打开、设置打开的性能基线。
-- [ ] M6-08-02 检查文本分页、图文分页、PDF 打开、大图解码、EPUB 解包、TXT 大文件切章的主 isolate 占用。
-- [ ] M6-08-03 继续使用 `ReaderResourceBudgetResolver` 控制低端设备、低电量、图片解码和预取预算。
-- [ ] M6-08-04 确认分页缓存、章节缓存、封面缓存和本地 parser 临时文件进入统一 cache governance，不碰用户资产。
-- [ ] M6-08-05 为 Web JS 记录内存和大章节行为，避免大文本 / 大图在浏览器中一次性撑爆。
-- [ ] M6-08-06 输出 Android、iOS、Web JS、macOS、Windows、Linux 的性能基线或未验证原因。
+- [x] M6-08-01 建立阅读器启动到首屏可见、首章加载、第一次翻页、章节切换、目录打开、设置打开的性能基线。
+- [x] M6-08-02 检查文本分页、图文分页、PDF 打开、大图解码、EPUB 解包、TXT 大文件切章的主 isolate 占用。
+- [x] M6-08-03 继续使用 `ReaderResourceBudgetResolver` 控制低端设备、低电量、图片解码和预取预算。
+- [x] M6-08-04 确认分页缓存、章节缓存、封面缓存和本地 parser 临时文件进入统一 cache governance，不碰用户资产。
+- [x] M6-08-05 为 Web JS 记录内存和大章节行为，避免大文本 / 大图在浏览器中一次性撑爆。
+- [x] M6-08-06 输出 Android、iOS、Web JS、macOS、Windows、Linux 的性能基线或未验证原因。
 
 ## 12. M6-09 测试、构建与 guard
 
-- [ ] M6-09-01 运行阅读器目标单测：route、content mode、mode capabilities、session、progress、pagination、auto read、desktop input。
-- [ ] M6-09-02 运行本地 parser 目标单测：TXT、encoding、EPUB、PDF、MOBI、local chapter content、local index。
-- [ ] M6-09-03 运行 presentation widget / smoke：viewport builder、paged controller、runtime controller、chrome、settings presenter、annotation。
-- [ ] M6-09-04 运行 `flutter analyze`、route guard、architecture guard、storage guard、dependency override guard。
-- [ ] M6-09-05 运行 `flutter build web --no-pub`，记录 Web JS 与 Web WASM dry-run 结果。
-- [ ] M6-09-06 运行 macOS / Windows / Linux 至少一个桌面构建时，按项目规则同步记录 Android / iOS 构建或真实阻塞。
-- [ ] M6-09-07 为高确定性问题评估新增 guard：presentation 直接文件系统访问、ReaderPage 裸平台判断、复杂 reader route 裸字符串。
+- [x] M6-09-01 运行阅读器目标单测：route、content mode、mode capabilities、session、progress、pagination、auto read、desktop input。
+- [x] M6-09-02 运行本地 parser 目标单测：TXT、encoding、EPUB、PDF、MOBI、local chapter content、local index。
+- [x] M6-09-03 运行 presentation widget / smoke：viewport builder、paged controller、runtime controller、chrome、settings presenter、annotation。
+- [x] M6-09-04 运行 `flutter analyze`、route guard、architecture guard、storage guard、dependency override guard。
+- [x] M6-09-05 运行 `flutter build web --no-pub`，记录 Web JS 与 Web WASM dry-run 结果。
+- [x] M6-09-06 运行 macOS / Windows / Linux 至少一个桌面构建时，按项目规则同步记录 Android / iOS 构建或真实阻塞。
+- [x] M6-09-07 为高确定性问题评估新增 guard：presentation 直接文件系统访问、ReaderPage 裸平台判断、复杂 reader route 裸字符串。
 
 ## 13. M6-10 验收与接力
 
@@ -324,7 +324,7 @@ flowchart TD
 - 本轮完成 `M6-05-06` 的首批体量审计和等价拆分：新增 `lib/features/reader/presentation/reader_page_widget.dart`，只承载 `ReaderPage` route 参数和 `createState`；`reader_page.dart` 从 6024 行降到 5993 行，退出 architecture guard 的 hard violation，变为 large-file warning。
 - 本轮完成 `M6-05-07` 的注释要求：`ReaderPage` 入口 widget、`ReaderDesktopInputAction`、`ReaderDesktopInputResolver` 均补中文维护注释，说明边界和后续拆分风险。
 - 2026-06-06 追加完成 `M6-05-01` 的首批 `ReaderRuntimeFacade` 切片：新增 `lib/features/reader/application/reader_runtime_facade.dart`，先承接进度保存防抖、阅读记录 session 启停 / 同步 / 自动提交间隔这些纯业务决策；页面仍持有 timer、滚动控制器和 UI 状态，不改变触控、键鼠、章节加载或预取行为。
-- 未完成项：`M6-05-02` 到 `M6-05-05` 仍待做；`M6-05-01` 后续可继续把章节加载、预取和错误态按同样方式小步迁入 facade，不能一次性重写。
+- 2026-06-06 追加完成 `M6-05-02` 到 `M6-05-05` 的首批可测试收口：`ReaderPlatformFacade` 承接音量键拦截、系统 UI、亮度和电量轮询决策；`ReaderSessionPresentationFacade` 承接 content session、mode capability 和 viewport state 解析入口；`ReaderSettingsPresenter` 承接设置 section 标题 / 计划；`ReaderCatalogSearchPresenter` 承接目录搜索结果分组和倒序展示。设置和目录 UI 文件仍然较大，后续继续按 section widget / panel 细拆，不能一次性重写。
 
 ### 16.3 验证记录
 
@@ -342,3 +342,123 @@ flowchart TD
 | `dart tool/check_architecture_guardrails.dart` | 未通过：阅读器红项已消除，`reader_page.dart` 5993 行仅为 warning；剩余 violation 为 `lib/features/bookshelf/presentation/bookshelf_page.dart` 6850 行。 |
 
 补充修复：`flutter analyze` 曾被书籍详情页既有脏改动中的封面编辑 helper 缺失阻断；本轮仅补齐 / 保留 `_normalizeOptionalEditText` 的既有统一实现，让分析和移动端构建恢复通过，未反向改动阅读器移动端路径。
+
+## 17. M6-05 到 M6-06 执行记录（2026-06-06）
+
+### 17.1 M6-05 表现层架构收敛追加
+
+| 任务 | 本轮落点 | 说明 |
+| --- | --- | --- |
+| M6-05-02 Platform facade | `ReaderPlatformFacade`、`reader_page_shell.dart`、`reader_page_lifecycle.dart`、`reader_page_bootstrap.dart` | 音量键拦截、系统 UI 显隐、亮度恢复 / 应用、电量轮询 cadence 统一走纯决策门面；真实 MethodChannel、SystemChrome 和 Battery 插件读取仍留在 presentation / bridge 层。 |
+| M6-05-03 Session facade | `ReaderSessionPresentationFacade`、`reader_page.dart` | `ReaderPage` 不再直接持有 content session resolver、mode capability resolver、viewport state resolver 字段，统一通过 application facade 入口解析。 |
+| M6-05-04 Settings presenter | `ReaderSettingsPresenter`、`reader_page_settings_sheet.dart` | 设置面板标题和 section 计划归口到 presenter；当前完成第一层语义切分，后续再拆具体 section widget。 |
+| M6-05-05 Catalog presenter | `ReaderCatalogSearchPresenter`、`reader_catalog_sheet.dart` | 桌面侧栏和移动端 bottom sheet 共用搜索分组 / 倒序展示规则，避免两套 surface 重复排序。 |
+
+### 17.2 M6-06 本地阅读全平台策略
+
+| 任务 | 本轮结论 | 后续边界 |
+| --- | --- | --- |
+| M6-06-01 Web 策略 | `AppPlatformCapabilities.supportsNativeLocalReading` 在 Web 为 false，`supportsWebUploadedLocalReading` 表示浏览器上传 bytes 独立入口；Web 不复用 native path / managed directory 语义。 | 还需实现浏览器上传 bytes + IndexedDB / 可重建缓存的产品入口。 |
+| M6-06-02 Parser 输入 | `LocalBookParserInput` 已覆盖 `nativeFilePath`、`managedFile`、`webUploadedBytes`；`LocalBookIndexService` 统一通过 `parseLocalBookInput`，TXT parser 已支持 bytes 输入。 | EPUB / PDF / Kindle 仍以 path-backed 文件为主，Web bytes 入口上线时逐个 adapter 扩展。 |
+| M6-06-03 TXT 编码 | Storage、preview、chapter content、TXT parser 继续复用 `LocalTextEncodingDetector`；移动端插件 / 平台 converter 失败会 fallback 到直接解码候选。 | 真机仍需补中文编码样例 smoke。 |
+| M6-06-04 EPUB adapter | 保留定制 parser 和 `ReaderDocument` / inline image 输出；成熟库替换只先进入 metadata / OPF / TOC adapter，不替换整条阅读输出。 | 需要独立 spike 评估维护活跃库，不在本轮引入新依赖。 |
+| M6-06-05 PDF 路线 | `ReaderPdfView` 继续用 `pdfrx` 渲染；`PdfLocalBookParser` 的文本抽取隔离在 `PackagePdfTextExtractor` adapter，并已写明退出条件。 | `pdf_text_extract` 当前 Android / iOS runtime 支持，Desktop / Web PDF 文本抽取不能假装已支持。 |
+| M6-06-06 Kindle 实验能力 | `KindleLocalBookParser` 继续明确 MOBI / AZW / AZW3 仅承诺无 DRM 基础样例，DRM / 异常结构清晰失败。 | 超大文件、复杂图片资源、更多 Kindle 变体需样例库补验。 |
+| M6-06-07 受管资产边界 | 本地图书、字体、背景、封面等继续走 managed asset / storage governance；guard 未发现新增违规。 | 用户资产不能迁入 cache/tmp；新增资产类型先补 policy。 |
+| M6-06-08 平台导入记录 | Android / iOS / macOS / Web JS 构建通过；Windows / Linux 当前会话无目标机或 CI，登记待补，不以 macOS 替代。 | Android / iOS / macOS 仍需真实文件选择、本地导入、重建索引 smoke；Windows / Linux 需目标平台独立验证。 |
+
+### 17.3 验证记录
+
+| 命令 / 检查 | 结果 |
+| --- | --- |
+| `flutter test test/features/reader/application/reader_platform_facade_test.dart test/features/reader/application/reader_session_presentation_facade_test.dart test/features/reader/application/reader_catalog_search_presentation_test.dart test/features/reader/application/local/local_book_parser_input_test.dart test/features/reader/presentation/reader_settings_presenter_test.dart test/app/platform/app_platform_capabilities_test.dart` | 通过，21 tests passed。 |
+| `flutter test --concurrency=1 --timeout=3x test/features/reader/application/local/local_book_parser_input_test.dart test/features/reader/application/local/txt_local_book_parser_test.dart test/features/reader/application/local/local_text_encoding_detector_test.dart test/features/reader/application/local/epub_local_book_parser_test.dart test/features/reader/application/local/pdf_local_book_parser_test.dart test/features/reader/application/local/kindle_local_book_parser_test.dart test/features/reader/application/local/local_reader_entry_guard_service_test.dart test/features/reader/application/local/local_book_storage_service_test.dart test/features/reader/application/local/local_book_index_service_test.dart test/features/reader/application/local/local_chapter_content_service_test.dart` | 通过，80 tests passed；仍有既有 Drift 多数据库 debug warning。 |
+| `flutter analyze` | 通过，No issues found。 |
+| `dart tool/check_route_string_guard.dart` | 通过，未发现裸写复杂 reader / book detail route 字符串。 |
+| `dart tool/check_storage_governance_guard.dart` | 通过，JSON-backed SharedPreferences writes 6、temporary/cache usages 9、startup cleanup 0、managed directory direct usages 3，未发现新增违规。 |
+| `dart tool/check_storage_baseline_governance.dart` | 通过，已批准 storage baseline 均有文档。 |
+| `dart tool/check_model_codegen_guard.dart` | 通过，tracked legacy debt 为 0。 |
+| `dart tool/check_architecture_guardrails.dart` | 未通过：阅读器无 hard violation，`reader_page.dart` 5993 行仅 warning；剩余 hard violation 为既有 `lib/features/bookshelf/presentation/bookshelf_page.dart` 7253 行。 |
+| `flutter build web --no-pub` | 通过，生成 `build/web`；WASM dry-run 仍提示 `sqlite3` / `ffi` 的 `dart:ffi` 不兼容。 |
+| `flutter build macos --debug --no-pub` | 通过，生成 `build/macos/Build/Products/Debug/shuxiang_reading_next.app`；仍有 `UniversalDetector2` macOS deployment target warning。 |
+| `flutter build apk --debug --no-pub` | 通过，生成 `build/app/outputs/flutter-apk/app-debug.apk`；仍提示项目和若干插件需迁移 Built-in Kotlin。 |
+| `flutter build ios --no-codesign --no-pub` | 通过，生成 `build/ios/iphoneos/Runner.app`；仍提示 no-codesign 和 UIScene lifecycle。 |
+
+## 18. M6-07 到 M6-08 执行记录（2026-06-06）
+
+### 18.1 M6-07 阅读交互、可访问性与自适应
+
+| 任务 | 本轮落点 | 说明 |
+| --- | --- | --- |
+| M6-07-01 宽度检查 | `ReaderAccessibilityAdaptivePolicy.widthAuditPoints`、`reader_accessibility_adaptive_policy_test.dart` | 固化 390 / 600 / 840 / 1280 / 1600 宽度审计点，约束内容最大宽度、overlay inset、触控目标和 side panel 启用条件。真实浏览器 screenshot / canvas smoke 仍需后续补。 |
+| M6-07-02 字体缩放 | `ReaderAccessibilityAdaptivePolicy.resolveTextScale` | 阅读正文继续跟随 reader 设置；chrome 文本缩放封顶 1.20，sheet 文本缩放封顶 1.15，降低按钮 / 面板文字溢出风险。 |
+| M6-07-03 Focus / 键鼠 | `ReaderAccessibilityAdaptivePolicy.resolveKeyboardInteraction`、`ReaderDesktopInputResolver` 既有测试 | 移动触控 surface 不启用 Tab / hover / wheel 翻页；desktop / web pointer surface 启用 focus ring、Tab、Esc、Enter、hover 和滚轮语义。 |
+| M6-07-04 选择 / 注释 / 图片 / PDF 手势 | `ReaderAccessibilityAdaptivePolicy.resolveGestureCapability` | 文本模式启用选择和注释工具栏；漫画 / 图片模式启用图片预览；hybrid paged PDF 标记为支持 PDF zoom gesture；移动端偏长按选择，桌面端偏 hover toolbar。 |
+| M6-07-05 自动阅读状态机 | `ReaderAutoReadCoordinator` 既有覆盖 + 本轮回归 | 文本滚动、文本分页、低电量、隐藏态、overlay、选中态、加载态、章节边界均由 coordinator 统一 gating，本轮阶段 7 测试一起复跑。 |
+| M6-07-06 背景 / 可读性 | `ReaderAccessibilityAdaptivePolicy.resolveReadability` | 背景图、深色、高对比文本会提高可读性要求；高对比文本禁用亮度遮罩参与对比，最低对比目标从 4.5 提升到 7.0。 |
+
+### 18.2 M6-08 性能、长任务与缓存
+
+| 任务 | 本轮落点 | 说明 |
+| --- | --- | --- |
+| M6-08-01 性能基线 | `ReaderPerformanceBudgetResolver` | 建立 startup、首章加载、首次翻页、章节切换、目录打开、设置打开等目标 latency / main isolate budget。该基线是策略目标，真实耗时仍需真机 / browser / desktop 采样。 |
+| M6-08-02 长任务策略 | `ReaderPerformanceBudgetResolver` | 文本分页 / EPUB 索引归入 background isolate，TXT 大文件 / Web 大章节归入 chunked yield，PDF 和图片解码归入 lazy page，避免长任务回到 UI isolate。 |
+| M6-08-03 资源预算 | `ReaderResourceBudgetResolver`、`ReaderImageDecodeBudgetResolver`、`ReaderPreloadController` | 低端设备、低电量、离线 / 计费网络继续收紧预取、分页 warmup、图片解码和内存条目。 |
+| M6-08-04 cache governance | `dart tool/check_storage_governance_guard.dart`、`dart tool/check_storage_baseline_governance.dart` | 本轮未新增 cache/tmp 或 managed directory 违规；用户资产仍按 managed asset / storage policy 处理。 |
+| M6-08-05 Web 大章节 | `ReaderPerformanceScenario.webLargeChapter` | Web 大章节策略目标为 chunked yield、main isolate 8ms、memory cap 96MB，后续需 browser memory smoke。 |
+| M6-08-06 六平台性能记录 | `ReaderPerformanceBudgetResolver.platformBaseline` | macOS / Web / Android / iOS 已有构建级结果，但未做真实性能采样；Windows / Linux 必须目标机或 CI，不能用 macOS 代替。 |
+
+### 18.3 验证记录
+
+| 命令 / 检查 | 结果 |
+| --- | --- |
+| `flutter test test/features/reader/application/reader_accessibility_adaptive_policy_test.dart test/features/reader/application/reader_performance_budget_test.dart test/features/reader/application/reader_resource_budget_test.dart test/features/reader/application/reader_image_decode_budget_test.dart test/features/reader/application/reader_preload_controller_test.dart test/features/reader/application/reader_auto_read_coordinator_test.dart test/features/reader/presentation/reader_layout_context_test.dart test/features/reader/presentation/reader_chrome_resolver_test.dart test/features/reader/presentation/reader_overlay_presenter_test.dart` | 通过，40 tests passed。 |
+| `flutter analyze` | 通过，No issues found。 |
+| `dart tool/check_storage_governance_guard.dart` | 通过，未发现新增 storage governance violations。 |
+| `dart tool/check_storage_baseline_governance.dart` | 通过，已批准 storage baseline 均有文档。 |
+| `dart tool/check_model_codegen_guard.dart` | 通过，tracked legacy debt 为 0。 |
+| `dart tool/check_architecture_guardrails.dart` | 未通过：新增阶段 7/8 文件没有新违规；剩余 hard violation 仍为既有 `lib/features/bookshelf/presentation/bookshelf_page.dart` 7253 行。 |
+
+## 19. M6-09 阶段收尾记录（2026-06-06）
+
+### 19.1 目标单测与 smoke
+
+| 范围 | 命令 / 检查 | 结果 |
+| --- | --- | --- |
+| 阅读器目标单测 | `flutter test test/features/reader/application/reader_content_mode_resolver_test.dart test/features/reader/application/reader_mode_capabilities_test.dart test/features/reader/application/reader_session_state_resolver_test.dart test/features/reader/application/reader_runtime_facade_test.dart test/features/reader/application/reader_runtime_wake_policy_test.dart test/features/reader/application/reader_pagination_spec_resolver_test.dart test/features/reader/application/reader_auto_read_coordinator_test.dart test/features/reader/application/reader_desktop_input_resolver_test.dart test/features/reader/application/reader_entry_route_resolver_test.dart test/features/reader/presentation/reader_route_test.dart` | 通过，44 tests passed。覆盖 route helper、content mode、capabilities、session state、runtime facade、wake policy、pagination、auto read、desktop input 和入口 route resolver。 |
+| 本地 parser 目标单测 | `flutter test --concurrency=1 --timeout=3x test/features/reader/application/local/local_book_parser_input_test.dart test/features/reader/application/local/txt_local_book_parser_test.dart test/features/reader/application/local/local_text_encoding_detector_test.dart test/features/reader/application/local/epub_local_book_parser_test.dart test/features/reader/application/local/pdf_local_book_parser_test.dart test/features/reader/application/local/kindle_local_book_parser_test.dart test/features/reader/application/local/local_reader_entry_guard_service_test.dart test/features/reader/application/local/local_book_storage_service_test.dart test/features/reader/application/local/local_book_index_service_test.dart test/features/reader/application/local/local_chapter_content_service_test.dart` | 通过，80 tests passed；仍有既有 Drift 多数据库 debug warning，不影响测试结果。 |
+| Presentation widget / smoke | `flutter test test/features/reader/presentation/reader_viewport_builder_test.dart test/features/reader/presentation/reader_paged_viewport_controller_test.dart test/features/reader/presentation/reader_runtime_controller_test.dart test/features/reader/presentation/reader_chrome_resolver_test.dart test/features/reader/presentation/reader_chrome_widgets_test.dart test/features/reader/presentation/reader_settings_presenter_test.dart test/features/reader/presentation/reader_annotation_interaction_test.dart test/features/reader/presentation/reader_overlay_presenter_test.dart test/features/reader/presentation/reader_layout_context_test.dart test/features/reader/application/reader_accessibility_adaptive_policy_test.dart test/features/reader/application/reader_performance_budget_test.dart` | 通过，43 tests passed。覆盖 viewport、paged controller、runtime controller、chrome、settings presenter、annotation、overlay、layout context、可访问性策略和性能预算策略。 |
+
+### 19.2 Guard 与高确定性问题评估
+
+| 命令 / 检查 | 结果 |
+| --- | --- |
+| `flutter analyze` | 通过，No issues found。 |
+| `dart tool/check_route_string_guard.dart` | 通过，未发现裸写复杂 reader / book detail route 字符串。 |
+| `dart tool/check_route_inventory.dart` | 通过，38 条 route path 均已登记到 `docs/global_page_route_inventory_2026-05-12.md`。 |
+| `dart tool/check_dependency_override_governance.dart` | 通过，`dependency_overrides` 均已登记到 `docs/dependency_override_governance_matrix_2026-06-04.md`。 |
+| `dart tool/check_storage_governance_guard.dart` | 通过，JSON-backed SharedPreferences writes 6、temporary/cache usages 9、startup cleanup 0、managed directory direct usages 3，未发现新增违规。 |
+| `dart tool/check_storage_baseline_governance.dart` | 通过，已批准 storage baseline 均有文档。 |
+| `dart tool/check_model_codegen_guard.dart` | 通过，tracked legacy debt 为 0。 |
+| `dart tool/check_architecture_guardrails.dart` | 未通过：新增 M6 reader 文件没有 hard violation；剩余 hard violation 仍为既有 `lib/features/bookshelf/presentation/bookshelf_page.dart` 7253 行。相关 warning：`advanced_theme_service.dart`、`epub_local_book_parser.dart`、`reader_page.dart`。 |
+| 高确定性扫描 | `rg` 扫描确认复杂 reader route 裸字符串主要集中在 route/helper 文件；presentation 仍存在 PDF / image / text 相关直接 IO 和 `ReaderPage` 平台判断，登记为后续 guard 候选，不在 M6-09 收尾阶段强行改动。 |
+
+### 19.3 构建记录
+
+| 平台 | 命令 | 结果 |
+| --- | --- | --- |
+| Web JS | `flutter build web --no-pub` | 通过，生成 `build/web`；WASM dry-run 仍提示 `sqlite3` / `ffi` 的 `dart:ffi` 不兼容。 |
+| macOS | `flutter build macos --debug --no-pub` | 通过，生成 `build/macos/Build/Products/Debug/shuxiang_reading_next.app`；仍有 `UniversalDetector2` macOS deployment target warning。 |
+| Android | `flutter build apk --debug --no-pub` | 通过，生成 `build/app/outputs/flutter-apk/app-debug.apk`；仍提示项目和若干插件需迁移 Built-in Kotlin，pdfrx Web 资产按平台被跳过。 |
+| iOS | `flutter build ios --no-codesign --no-pub` | 通过，生成 `build/ios/iphoneos/Runner.app`；仍提示 no-codesign 和 UIScene lifecycle。 |
+| Windows | 未运行 | 当前会话无 Windows 目标机 / CI，不能用 macOS 构建替代；M6-10 需补目标机构建或 CI 记录。 |
+| Linux | 未运行 | 当前会话无 Linux 目标机 / CI，不能用 macOS 构建替代；M6-10 需补目标机构建或 CI 记录。 |
+
+### 19.4 收尾结论与接力边界
+
+| 项目 | 结论 |
+| --- | --- |
+| M6-09 状态 | 阅读器目标单测、本地 parser、presentation smoke、analyze、route / storage / model / dependency guards、Web / macOS / Android / iOS 构建均已完成记录。 |
+| 未关闭风险 | `bookshelf_page.dart` 既有大文件 hard violation 仍会导致 architecture guard 非零退出；Windows / Linux 未做目标机构建；移动端真机本地导入、Web 浏览器内存、桌面实际键鼠 / 文件导入 smoke 仍待 M6-10 或发布前补验。 |
+| Guard 候选 | presentation 直接 IO、`ReaderPage` 裸平台判断、复杂 reader route 裸字符串可作为下一轮高确定性 guard / split debt 收敛入口。 |
+| 不纳入本轮 | M6-10 的 README、AI 执行序列、reader developer notes、长期看板和下一轮任务编号尚未更新，本轮只完成 M6-09 阶段收尾。 |

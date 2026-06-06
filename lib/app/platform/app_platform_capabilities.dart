@@ -185,6 +185,16 @@ class AppPlatformCapabilities {
       supportsLocalFileImport &&
       supportsManagedFileStorage &&
       (supportsNativeSqlite || supportsDriftWebStorage);
+
+  /// 首版本地阅读是否允许走 native 文件路径 + 受管目录链路。
+  ///
+  /// Web 即使具备文件上传能力，也不能复用 native path 语义；后续浏览器上传 bytes
+  /// 与 IndexedDB 缓存会作为独立入口推进，避免 parser / storage 层到处判断平台。
+  bool get supportsNativeLocalReading =>
+      !isWeb && supportsLocalFileImport && supportsManagedFileStorage;
+
+  /// Web 本地阅读首版策略：只允许浏览器上传 bytes 的独立链路，不启用 native 路径。
+  bool get supportsWebUploadedLocalReading => isWeb && supportsWebFileUpload;
 }
 
 AppPlatformBuildTarget _resolveBuildTarget({
