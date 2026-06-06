@@ -115,6 +115,7 @@ import '../application/reader_session_controller.dart';
 import '../application/reader_preferences_service.dart';
 import '../application/reader_preload_controller.dart';
 import '../application/reader_resource_budget.dart';
+import '../application/reader_runtime_facade.dart';
 import '../application/reader_runtime_wake_policy.dart';
 import '../application/reader_visual_overrides_service.dart';
 import '../application/reader_session_state.dart';
@@ -276,6 +277,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const ReaderThemeModeService();
   final ReaderRuntimeController _readerRuntimeController =
       const ReaderRuntimeController();
+  final ReaderRuntimeFacade _readerRuntimeFacade = const ReaderRuntimeFacade();
   final ReaderPageLifecycleDelegate _lifecycleDelegate =
       const ReaderPageLifecycleDelegate();
   final ReaderSettingsPresenter _readerSettingsPresenter =

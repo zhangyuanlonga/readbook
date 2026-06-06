@@ -2,7 +2,7 @@
 
 创建日期：2026-06-05
 
-状态：阶段一已完成；阶段二 / 阶段三已完成 Web JS 构建、桌面输入收口和 macOS 构建基线；阶段四已完成代码级移动端保护回归与 Android / iOS 构建，真机 / 模拟器手工 smoke 待补；阶段五已完成 ReaderPage 入口等价拆分和体量审计。
+状态：阶段一已完成；阶段二 / 阶段三已完成 Web JS 构建、桌面输入收口和 macOS 构建基线；阶段四已完成代码级移动端保护回归与 Android / iOS 构建，真机 / 模拟器手工 smoke 待补；阶段五已完成 ReaderPage 入口等价拆分、体量审计和 ReaderRuntimeFacade 首批切片。
 
 适用平台：Android、iOS、Web JS、macOS、Windows、Linux。
 
@@ -132,7 +132,7 @@
 
 ## 8. M6-05 阅读器表现层架构收敛
 
-- [ ] M6-05-01 拆出 `ReaderRuntimeFacade` 或等价 controller，先承接章节加载、进度保存、预取、阅读记录和错误态，不改变 UI。
+- [x] M6-05-01 拆出 `ReaderRuntimeFacade` 或等价 controller，先承接章节加载、进度保存、预取、阅读记录和错误态，不改变 UI。
 - [ ] M6-05-02 将 `ReaderPage` 中的桌面输入、移动端桥接、系统 UI、亮度、电量读取收口到 platform facade / capability。
 - [ ] M6-05-03 将 `ReaderPage` 中的 content session 构造、mode/capability 解析、viewport state 解析迁到 application 层可测试服务。
 - [ ] M6-05-04 拆分 `reader_page_settings_sheet.dart`：按界面、阅读、自动阅读、信息栏、字体 / 背景、实验能力分 section presenter。
@@ -323,7 +323,8 @@ flowchart TD
 
 - 本轮完成 `M6-05-06` 的首批体量审计和等价拆分：新增 `lib/features/reader/presentation/reader_page_widget.dart`，只承载 `ReaderPage` route 参数和 `createState`；`reader_page.dart` 从 6024 行降到 5993 行，退出 architecture guard 的 hard violation，变为 large-file warning。
 - 本轮完成 `M6-05-07` 的注释要求：`ReaderPage` 入口 widget、`ReaderDesktopInputAction`、`ReaderDesktopInputResolver` 均补中文维护注释，说明边界和后续拆分风险。
-- 未完成项：`M6-05-01` 到 `M6-05-05` 仍待做，不应一次性重写；下一步建议从 `M6-05-01` 的 `ReaderRuntimeFacade` 或 `M6-05-02` 平台 facade 小步等价迁移开始。
+- 2026-06-06 追加完成 `M6-05-01` 的首批 `ReaderRuntimeFacade` 切片：新增 `lib/features/reader/application/reader_runtime_facade.dart`，先承接进度保存防抖、阅读记录 session 启停 / 同步 / 自动提交间隔这些纯业务决策；页面仍持有 timer、滚动控制器和 UI 状态，不改变触控、键鼠、章节加载或预取行为。
+- 未完成项：`M6-05-02` 到 `M6-05-05` 仍待做；`M6-05-01` 后续可继续把章节加载、预取和错误态按同样方式小步迁入 facade，不能一次性重写。
 
 ### 16.3 验证记录
 
@@ -332,6 +333,7 @@ flowchart TD
 | `flutter test test/features/reader/presentation/reader_layout_context_test.dart test/features/reader/presentation/reader_page_lifecycle_delegate_test.dart test/features/reader/presentation/reader_runtime_controller_test.dart test/features/reader/presentation/reader_paged_viewport_controller_test.dart test/features/reader/presentation/reader_paged_viewport_support_test.dart test/features/reader/presentation/reader_annotation_interaction_test.dart test/features/reader/presentation/reader_settings_presenter_test.dart test/features/reader/presentation/reader_navigation_presenter_test.dart test/features/reader/presentation/reader_viewport_builder_test.dart test/features/reader/presentation/reader_route_test.dart test/features/reader/application/reader_runtime_wake_policy_test.dart test/features/reader/application/reader_auto_read_coordinator_test.dart test/features/reader/application/reader_chapter_navigation_test.dart test/features/reader/application/reader_entry_route_resolver_test.dart test/features/book/application/book_detail_read_route_service_test.dart` | 通过，69 tests passed。 |
 | `flutter test --concurrency=1 --timeout=3x test/features/reader/application/local/local_reader_entry_guard_service_test.dart test/features/reader/application/local/local_book_storage_service_test.dart test/features/reader/application/local/local_book_index_service_test.dart test/features/reader/application/local/local_chapter_content_service_test.dart test/features/reader/application/local/txt_local_book_parser_test.dart test/features/reader/application/local/local_text_encoding_detector_test.dart test/features/reader/application/local/epub_local_book_parser_test.dart test/features/reader/application/local/pdf_local_book_parser_test.dart test/features/reader/application/local/kindle_local_book_parser_test.dart test/features/bookshelf/presentation/local_book_import_feedback_smoke_test.dart` | 通过，79 tests passed；测试输出仍有 Drift 多数据库 debug warning。 |
 | `flutter test test/features/reader/presentation/reader_route_test.dart test/features/reader/presentation/reader_layout_context_test.dart test/features/reader/presentation/reader_viewport_builder_test.dart test/features/reader/presentation/reader_runtime_controller_test.dart test/features/reader/application/reader_desktop_input_resolver_test.dart test/features/reader/application/reader_entry_route_resolver_test.dart` | 通过，26 tests passed。 |
+| `flutter test test/features/reader/application/reader_runtime_facade_test.dart test/features/reader/presentation/reader_runtime_controller_test.dart test/features/reader/application/reader_reading_record_coordinator_test.dart test/features/reader/application/reader_runtime_wake_policy_test.dart` | 通过，21 tests passed。 |
 | `flutter analyze` | 通过，No issues found。 |
 | `flutter build apk --debug --no-pub` | 通过，生成 `build/app/outputs/flutter-apk/app-debug.apk`；仍提示项目和若干插件需迁移 Built-in Kotlin。 |
 | `flutter build ios --no-codesign --no-pub` | 通过，生成 `build/ios/iphoneos/Runner.app`；仍提示 no-codesign 和 UIScene lifecycle。 |

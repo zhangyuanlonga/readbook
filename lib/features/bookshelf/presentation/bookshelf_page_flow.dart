@@ -1338,6 +1338,7 @@ extension on _BookshelfPageState {
     required WidgetBuilder builder,
     bool isScrollControlled = false,
     bool useAdaptiveSurface = true,
+    double? maxWidth,
   }) {
     if (!useAdaptiveSurface) {
       return showAdaptiveRawSurface<T>(
@@ -1351,7 +1352,7 @@ extension on _BookshelfPageState {
     return showAdaptiveActionSurface<T>(
       context: context,
       useRootNavigator: true,
-      maxWidth: 720,
+      maxWidth: maxWidth ?? 720,
       maxHeightFactor: isScrollControlled ? 0.88 : 0.72,
       padding: EdgeInsets.zero,
       builder: builder,

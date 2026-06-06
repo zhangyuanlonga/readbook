@@ -1207,16 +1207,15 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
 
   void _scheduleProgressSave() {
     _progressDebounceTimer?.cancel();
-    // 阅读器会被滚动、翻页、目录跳转和窗口恢复频繁触发保存；统一防抖可以减少存储写入，同时保留退出前 flush 的即时恢复能力。
-    final delay = _runtimeWakePolicy.progressSaveDelay(
+    final decision = _readerRuntimeFacade.resolveProgressSaveDecision(
       lastSavedAt: _lastProgressSavedAt,
       now: DateTime.now(),
     );
-    if (delay <= Duration.zero) {
+    if (decision.flushImmediately) {
       _flushProgressSave();
       return;
     }
-    _progressDebounceTimer = Timer(delay, _flushProgressSave);
+    _progressDebounceTimer = Timer(decision.debounce, _flushProgressSave);
   }
 
   void _flushProgressSave() {
@@ -1227,7 +1226,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
   }
 
   void _maybeStartReadingRecordSession({double? initialRatio}) {
-    final result = _readingRecordCoordinator.startOrUpdateSession(
+    final result = _readerRuntimeFacade.startOrUpdateReadingRecordSession(
       readingRecordEnabled: _readingRecordEnabled,
       isBootstrapping: _isBootstrapping,
       isLoadingContent: _isLoadingContent,
@@ -1259,14 +1258,11 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
   }
 
   void _syncActiveReadingRecordSessionProgress({double? ratio}) {
-    final session = _activeReadingRecordSession;
-    if (session == null) {
-      return;
-    }
-    _activeReadingRecordSession = _readingRecordCoordinator.syncProgress(
-      session: session,
-      ratio: ratio ?? _currentScrollRatio(),
-    );
+    _activeReadingRecordSession = _readerRuntimeFacade
+        .syncReadingRecordSessionProgress(
+          session: _activeReadingRecordSession,
+          ratio: ratio ?? _currentScrollRatio(),
+        );
   }
 
   void _scheduleReadingRecordAutoCommit() {
@@ -1275,8 +1271,8 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       _readingRecordAutoCommitTimer = null;
       return;
     }
-    final interval = _readingRecordCoordinator.autoCommitInterval(
-      hasActiveSession: _activeReadingRecordSession != null,
+    final interval = _readerRuntimeFacade.autoCommitInterval(
+      session: _activeReadingRecordSession,
     );
     if (interval <= Duration.zero) {
       _readingRecordAutoCommitTimer = null;

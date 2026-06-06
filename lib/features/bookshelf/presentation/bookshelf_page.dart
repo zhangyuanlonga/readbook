@@ -1685,6 +1685,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     try {
       result = await _showBookshelfBottomSheet<_BookTagEditorResult>(
         isScrollControlled: true,
+        maxWidth: 560,
         builder: (sheetContext) {
           return StatefulBuilder(
             builder: (sheetContext, setSheetState) {
@@ -1822,6 +1823,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     try {
       result = await _showBookshelfBottomSheet<_BookCategoryEditorResult>(
         isScrollControlled: true,
+        maxWidth: 560,
         builder: (sheetContext) {
           return StatefulBuilder(
             builder: (sheetContext, setSheetState) {
@@ -1967,61 +1969,190 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       platform: theme.platform,
     );
     final contentMaxHeight = math.max(
-      180.0,
-      MediaQuery.sizeOf(context).height * (desktopLike ? 0.46 : 0.52),
+      desktopLike ? 120.0 : 180.0,
+      MediaQuery.sizeOf(context).height * (desktopLike ? 0.38 : 0.52),
+    );
+    final padding =
+        desktopLike
+            ? const EdgeInsets.fromLTRB(18, 16, 18, 14)
+            : const EdgeInsets.fromLTRB(16, 14, 16, 16);
+    final compactButtonStyle = TextButton.styleFrom(
+      minimumSize: const Size(0, 32),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      textStyle: theme.textTheme.labelMedium?.copyWith(
+        fontWeight: FontWeight.w700,
+      ),
+    );
+    final saveButtonStyle = FilledButton.styleFrom(
+      minimumSize: const Size(0, 34),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      textStyle: theme.textTheme.labelMedium?.copyWith(
+        fontWeight: FontWeight.w700,
+      ),
     );
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Icon(icon, size: 22, color: colorScheme.primary),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                title,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
+    return Padding(
+      padding: padding,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: colorScheme.primaryContainer.withValues(alpha: 0.62),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, size: 17, color: colorScheme.primary),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
                 ),
               ),
+              const SizedBox(width: 10),
+              TextButton.icon(
+                style: compactButtonStyle,
+                onPressed: onCreate,
+                icon: const Icon(Icons.add_rounded, size: 17),
+                label: Text(createLabel),
+              ),
+            ],
+          ),
+          if (createPanel != null) ...[const SizedBox(height: 12), createPanel],
+          const SizedBox(height: 12),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerLowest.withValues(alpha: 0.7),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: colorScheme.outlineVariant.withValues(alpha: 0.58),
+              ),
             ),
-            FilledButton.tonalIcon(
-              onPressed: onCreate,
-              icon: const Icon(Icons.add_rounded, size: 18),
-              label: Text(createLabel),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: contentMaxHeight),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(10),
+                child: child,
+              ),
             ),
-          ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                style: compactButtonStyle,
+                onPressed: onCancel,
+                child: const Text('取消'),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                style: saveButtonStyle,
+                onPressed: onSave,
+                icon: const Icon(Icons.check_rounded, size: 17),
+                label: const Text('保存'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBookTaxonomyOptionChip({
+    required BuildContext context,
+    required Widget avatar,
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Material(
+      color:
+          selected
+              ? colorScheme.primaryContainer.withValues(alpha: 0.72)
+              : colorScheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(
+          color:
+              selected
+                  ? colorScheme.primary.withValues(alpha: 0.38)
+                  : colorScheme.outlineVariant.withValues(alpha: 0.72),
         ),
-        Text(
-          subtitle,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: colorScheme.onSurfaceVariant,
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconTheme.merge(
+                data: IconThemeData(
+                  size: 15,
+                  color:
+                      selected
+                          ? colorScheme.primary
+                          : colorScheme.onSurfaceVariant,
+                ),
+                child: avatar,
+              ),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color:
+                        selected
+                            ? colorScheme.onPrimaryContainer
+                            : colorScheme.onSurface,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
-        if (createPanel != null) ...[const SizedBox(height: 14), createPanel],
-        const SizedBox(height: 12),
-        ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: contentMaxHeight),
-          child: SingleChildScrollView(child: child),
-        ),
-        const SizedBox(height: 18),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            TextButton(onPressed: onCancel, child: const Text('取消')),
-            const SizedBox(width: 8),
-            FilledButton.icon(
-              onPressed: onSave,
-              icon: const Icon(Icons.check_rounded, size: 18),
-              label: const Text('保存'),
-            ),
-          ],
-        ),
-      ],
+      ),
+    );
+  }
+
+  Widget _buildBookTaxonomyOptionsWrap({required List<Widget> children}) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Wrap(spacing: 8, runSpacing: 8, children: children),
     );
   }
 
@@ -2173,38 +2304,34 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     required List<String> selectedTags,
     required ValueChanged<List<String>> onChanged,
   }) {
-    final theme = Theme.of(context);
-    return Theme(
-      data: theme.copyWith(visualDensity: VisualDensity.compact),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          FilterChip(
-            avatar: const Icon(Icons.block_rounded, size: 16),
-            label: const Text('未打标签'),
-            selected: selectedTags.isEmpty,
-            onSelected: (_) => onChanged(const <String>[]),
+    return _buildBookTaxonomyOptionsWrap(
+      children: [
+        _buildBookTaxonomyOptionChip(
+          context: context,
+          avatar: const Icon(Icons.block_rounded),
+          label: '未打标签',
+          selected: selectedTags.isEmpty,
+          onTap: () => onChanged(const <String>[]),
+        ),
+        for (final item in items)
+          _buildBookTaxonomyOptionChip(
+            context: context,
+            avatar: _buildTaxonomyColorDot(item.colorValue),
+            label: item.name,
+            selected: selectedTags.contains(item.name),
+            onTap: () {
+              if (!selectedTags.contains(item.name)) {
+                onChanged(_normalizeTags([...selectedTags, item.name]));
+                return;
+              }
+              onChanged(
+                selectedTags
+                    .where((tag) => tag != item.name)
+                    .toList(growable: false),
+              );
+            },
           ),
-          for (final item in items)
-            FilterChip(
-              avatar: _buildTaxonomyColorDot(item.colorValue),
-              label: Text(item.name),
-              selected: selectedTags.contains(item.name),
-              onSelected: (selected) {
-                if (selected) {
-                  onChanged(_normalizeTags([...selectedTags, item.name]));
-                  return;
-                }
-                onChanged(
-                  selectedTags
-                      .where((tag) => tag != item.name)
-                      .toList(growable: false),
-                );
-              },
-            ),
-        ],
-      ),
+      ],
     );
   }
 
@@ -2214,28 +2341,26 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     required String? selectedCategory,
     required ValueChanged<String?> onChanged,
   }) {
-    final theme = Theme.of(context);
-    return Theme(
-      data: theme.copyWith(visualDensity: VisualDensity.compact),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          ChoiceChip(
-            avatar: const Icon(Icons.block_rounded, size: 16),
-            label: const Text('未分类'),
-            selected: selectedCategory == null || selectedCategory.isEmpty,
-            onSelected: (_) => onChanged(null),
+    return _buildBookTaxonomyOptionsWrap(
+      children: [
+        _buildBookTaxonomyOptionChip(
+          context: context,
+          avatar: const Icon(Icons.block_rounded),
+          label: '未分类',
+          selected: selectedCategory == null || selectedCategory.isEmpty,
+          onTap: () => onChanged(null),
+        ),
+        for (final item in items)
+          _buildBookTaxonomyOptionChip(
+            context: context,
+            avatar: _buildTaxonomyColorDot(item.colorValue),
+            label: item.name,
+            selected: selectedCategory == item.name,
+            onTap:
+                () =>
+                    onChanged(selectedCategory == item.name ? null : item.name),
           ),
-          for (final item in items)
-            ChoiceChip(
-              avatar: _buildTaxonomyColorDot(item.colorValue),
-              label: Text(item.name),
-              selected: selectedCategory == item.name,
-              onSelected: (selected) => onChanged(selected ? item.name : null),
-            ),
-        ],
-      ),
+      ],
     );
   }
 
@@ -3913,7 +4038,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
           _listShowProgressBar,
           _listShowRecentReadTime && progress != null,
         ].where((visible) => visible).length;
-    final coverHeight =
+    final fallbackCoverHeight =
         _listCompactMode
             ? (visibleDetailCount >= 3
                 ? 90.0
@@ -3925,15 +4050,14 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                 : visibleDetailCount >= 2
                 ? 108.0
                 : 96.0);
-    final coverWidth = coverHeight * 68 / 96;
     final cardPadding =
         _listCompactMode
             ? const EdgeInsets.fromLTRB(12, 9, 12, 9)
             : const EdgeInsets.fromLTRB(14, 12, 14, 12);
     final minCardHeight =
         _listCompactMode
-            ? (_listShowCover ? coverHeight + 18 : 72.0)
-            : (_listShowCover ? coverHeight + 24 : 88.0);
+            ? (_listShowCover ? fallbackCoverHeight + 18 : 72.0)
+            : (_listShowCover ? fallbackCoverHeight + 24 : 88.0);
     final recentReadLine =
         _listShowRecentReadTime && progress != null
             ? '最近阅读: ${_formatRelativeReadTime(progress.updatedAt)}'
@@ -3981,204 +4105,232 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                     await _openFromBookshelf(book, progress: progress);
                   },
           borderRadius: BorderRadius.circular(14),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: minCardHeight),
-            child: Padding(
-              padding: cardPadding,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (_isSelectionMode)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8, top: 2),
-                      child: _buildListSelectionIndicator(
-                        selected: isSelected,
-                        onTap: () => _toggleBookSelection(book),
-                      ),
-                    ),
-                  if (_listShowCover) ...[
-                    InkResponse(
-                      onLongPress:
-                          _isBatchDeleting
-                              ? null
-                              : () async {
-                                _setPressedBookKey(null);
-                                if (_isSelectionMode) {
-                                  _toggleBookSelection(book);
-                                  return;
-                                }
-                                await _openBookDetailFromLongPress(
-                                  book,
-                                  pressedKey: bookKey,
-                                );
-                              },
-                      containedInkWell: true,
-                      borderRadius: BorderRadius.circular(12),
-                      child: SizedBox(
-                        width: coverWidth,
-                        height: coverHeight,
-                        child: Stack(
-                          children: [
-                            Positioned.fill(
-                              child: _buildCover(
-                                realCoverUrl: book.coverUrl,
-                                title: displayTitle,
-                                author: displayAuthor,
-                                bookId: book.bookId,
-                                sourceId: book.sourceId,
-                                detailUrl: book.detailUrl,
-                                heroTag: coverHeroTag,
-                                presentation: presentation,
-                                width: coverWidth,
-                                height: coverHeight,
-                              ),
-                            ),
-                            if (_listShowSourceBadge)
-                              Positioned(
-                                top: 4,
-                                right: 4,
-                                child: _buildSourceBadge(book, compact: true),
-                              ),
-                            if (_isCoverRefreshActive)
-                              Positioned(
-                                left: 7,
-                                right: 7,
-                                bottom: 6,
-                                child: _buildCoverRefreshIndicator(),
-                              ),
-                          ],
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final constrainedHeight =
+                  constraints.maxHeight.isFinite
+                      ? constraints.maxHeight
+                      : minCardHeight;
+              final coverHeight =
+                  constraints.maxHeight.isFinite && _listShowCover
+                      ? math
+                          .max(0, constrainedHeight - cardPadding.vertical)
+                          .clamp(
+                            fallbackCoverHeight,
+                            _listCompactMode ? 118.0 : 144.0,
+                          )
+                          .toDouble()
+                      : fallbackCoverHeight;
+              final coverWidth = coverHeight * 68 / 96;
+
+              return ConstrainedBox(
+                constraints: BoxConstraints(minHeight: minCardHeight),
+                child: Padding(
+                  padding: cardPadding,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (_isSelectionMode)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8, top: 2),
+                          child: _buildListSelectionIndicator(
+                            selected: isSelected,
+                            onTap: () => _toggleBookSelection(book),
+                          ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                  ],
-                  Expanded(
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onLongPress:
-                          _isBatchDeleting
-                              ? null
-                              : () async {
-                                if (_isSelectionMode) {
-                                  _toggleBookSelection(book);
-                                  return;
-                                }
-                                await _openBookDetailFromLongPress(
-                                  book,
-                                  pressedKey: bookKey,
-                                );
-                              },
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              if (_listShowTitle)
-                                Expanded(
-                                  child: Hero(
-                                    tag: titleHeroTag,
-                                    child: Text(
-                                      titleText,
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.titleMedium?.copyWith(
-                                        fontWeight: FontWeight.w700,
-                                        color: palette.cardTextColor,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
+                      if (_listShowCover) ...[
+                        InkResponse(
+                          onLongPress:
+                              _isBatchDeleting
+                                  ? null
+                                  : () async {
+                                    _setPressedBookKey(null);
+                                    if (_isSelectionMode) {
+                                      _toggleBookSelection(book);
+                                      return;
+                                    }
+                                    await _openBookDetailFromLongPress(
+                                      book,
+                                      pressedKey: bookKey,
+                                    );
+                                  },
+                          containedInkWell: true,
+                          borderRadius: BorderRadius.circular(12),
+                          child: SizedBox(
+                            width: coverWidth,
+                            height: coverHeight,
+                            child: Stack(
+                              children: [
+                                Positioned.fill(
+                                  child: _buildCover(
+                                    realCoverUrl: book.coverUrl,
+                                    title: displayTitle,
+                                    author: displayAuthor,
+                                    bookId: book.bookId,
+                                    sourceId: book.sourceId,
+                                    detailUrl: book.detailUrl,
+                                    heroTag: coverHeroTag,
+                                    presentation: presentation,
+                                    width: coverWidth,
+                                    height: coverHeight,
+                                  ),
+                                ),
+                                if (_listShowSourceBadge)
+                                  Positioned(
+                                    top: 4,
+                                    right: 4,
+                                    child: _buildSourceBadge(
+                                      book,
+                                      compact: true,
                                     ),
                                   ),
-                                )
-                              else
-                                const Spacer(),
-                              if (!_isSelectionMode) ...[
-                                const SizedBox(width: 8),
-                                if (isOpening)
-                                  const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 1.9,
+                                if (_isCoverRefreshActive)
+                                  Positioned(
+                                    left: 7,
+                                    right: 7,
+                                    bottom: 6,
+                                    child: _buildCoverRefreshIndicator(),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                      ],
+                      Expanded(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onLongPress:
+                              _isBatchDeleting
+                                  ? null
+                                  : () async {
+                                    if (_isSelectionMode) {
+                                      _toggleBookSelection(book);
+                                      return;
+                                    }
+                                    await _openBookDetailFromLongPress(
+                                      book,
+                                      pressedKey: bookKey,
+                                    );
+                                  },
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  if (_listShowTitle)
+                                    Expanded(
+                                      child: Hero(
+                                        tag: titleHeroTag,
+                                        child: Text(
+                                          titleText,
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.titleMedium?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                            color: palette.cardTextColor,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    )
+                                  else
+                                    const Spacer(),
+                                  if (!_isSelectionMode) ...[
+                                    const SizedBox(width: 8),
+                                    if (isOpening)
+                                      const SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 1.9,
+                                        ),
+                                      )
+                                    else
+                                      _buildBookMoreButton(
+                                        book,
+                                        compact: false,
+                                      ),
+                                  ],
+                                ],
+                              ),
+                              if (_listShowAuthor) ...[
+                                SizedBox(height: _listCompactMode ? 3 : 6),
+                                Hero(
+                                  tag: metaHeroTag,
+                                  child: Text(
+                                    authorLine,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodySmall?.copyWith(
+                                      color: palette.textSecondaryColor,
+                                      fontWeight: FontWeight.w500,
                                     ),
-                                  )
-                                else
-                                  _buildBookMoreButton(book, compact: false),
+                                  ),
+                                ),
+                              ],
+                              if (_listShowLatestChapter) ...[
+                                SizedBox(
+                                  height:
+                                      _listCompactMode
+                                          ? 2
+                                          : (_listShowAuthor ? 3 : 5),
+                                ),
+                                Text(
+                                  latestLine,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.labelSmall?.copyWith(
+                                    color: palette.textSecondaryColor
+                                        .withValues(alpha: 0.82),
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                ),
+                              ],
+                              if (recentReadLine != null) ...[
+                                SizedBox(height: _listCompactMode ? 3 : 4),
+                                Text(
+                                  recentReadLine,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.bodySmall?.copyWith(
+                                    color: palette.textSecondaryColor,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                              if (_listShowTaxonomyBadges) ...[
+                                SizedBox(height: _listCompactMode ? 5 : 7),
+                                _buildBookTaxonomyStrip(
+                                  book,
+                                  compact: _listCompactMode,
+                                  maxTags: _listCompactMode ? 1 : 2,
+                                ),
+                              ],
+                              if (_listShowProgressBar) ...[
+                                SizedBox(height: _listCompactMode ? 5 : 7),
+                                _buildListProgressInfo(
+                                  progressDisplay,
+                                  bookKey,
+                                ),
                               ],
                             ],
                           ),
-                          if (_listShowAuthor) ...[
-                            SizedBox(height: _listCompactMode ? 3 : 6),
-                            Hero(
-                              tag: metaHeroTag,
-                              child: Text(
-                                authorLine,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.bodySmall?.copyWith(
-                                  color: palette.textSecondaryColor,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ],
-                          if (_listShowLatestChapter) ...[
-                            SizedBox(
-                              height:
-                                  _listCompactMode
-                                      ? 2
-                                      : (_listShowAuthor ? 3 : 5),
-                            ),
-                            Text(
-                              latestLine,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(
-                                context,
-                              ).textTheme.labelSmall?.copyWith(
-                                color: palette.textSecondaryColor.withValues(
-                                  alpha: 0.82,
-                                ),
-                                fontWeight: FontWeight.w400,
-                              ),
-                            ),
-                          ],
-                          if (recentReadLine != null) ...[
-                            SizedBox(height: _listCompactMode ? 3 : 4),
-                            Text(
-                              recentReadLine,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(
-                                context,
-                              ).textTheme.bodySmall?.copyWith(
-                                color: palette.textSecondaryColor,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                          if (_listShowTaxonomyBadges) ...[
-                            SizedBox(height: _listCompactMode ? 5 : 7),
-                            _buildBookTaxonomyStrip(
-                              book,
-                              compact: _listCompactMode,
-                              maxTags: _listCompactMode ? 1 : 2,
-                            ),
-                          ],
-                          if (_listShowProgressBar) ...[
-                            SizedBox(height: _listCompactMode ? 5 : 7),
-                            _buildListProgressInfo(progressDisplay, bookKey),
-                          ],
-                        ],
+                        ),
                       ),
-                    ),
+                    ],
                   ),
-                ],
-              ),
-            ),
+                ),
+              );
+            },
           ),
         ),
       ),
