@@ -254,7 +254,7 @@
 
 #### U5-BS：`bookshelf_page.dart`
 
-当前约 `7253` 行。拆分顺序先纯 UI / mapper，再 controller，最后动异步加载链。
+当前约 `5784` 行。拆分顺序先纯 UI / mapper，再 controller，最后动异步加载链。
 
 - [x] U5-BS-01 迁移书架私有 enum、展示模型、常量到 `bookshelf_page_models.dart`，不改行为。
 - [x] U5-BS-02 迁移排序、视图模式、进度显示、网格样式等字符串映射到 `bookshelf_preference_mappers.dart`，补 mapper 单测。
@@ -266,14 +266,14 @@
 - [x] U5-BS-08 抽封面尺寸、占位和自适应策略到 `bookshelf_cover_layout_resolver.dart`，补尺寸测试。
 - [x] U5-BS-09 抽进度条 / 未读章节数展示到 `widgets/bookshelf_progress_indicator.dart`，网格和列表共用。
 - [x] U5-BS-10 抽书籍更多菜单 action 和 UI 到 `widgets/bookshelf_book_more_menu.dart`，移动端 bottom sheet、桌面 popover 入口保持原样。
-- [ ] U5-BS-11 抽标签 / 分类选择弹层 UI 到 `widgets/bookshelf_taxonomy_picker_surface.dart`，复用现有服务。
-- [ ] U5-BS-12 抽删除、待读清单、阅读状态标记、编辑入口 dispatcher 到 `bookshelf_book_action_controller.dart`，补最小单测。
-- [ ] U5-BS-13 抽列表 / 网格 / 排序偏好恢复到 `bookshelf_preference_restore_controller.dart`，不改持久化 key。
-- [ ] U5-BS-14 抽首屏加载和即时元数据加载到 `bookshelf_initial_load_controller.dart`，保留超时和错误文案。
-- [ ] U5-BS-15 抽封面、元数据、本地书信息批量加载到 `bookshelf_presentation_metadata_loader.dart`，补 dispose 后不更新 UI 的防护测试。
-- [ ] U5-BS-16 抽在线书籍最新章节后台刷新到 `bookshelf_latest_info_refresh_controller.dart`，保留冲突取消和 TOC snapshot 保存。
-- [ ] U5-BS-17 抽阅读入口解析、fallback、退出后进度刷新到 `bookshelf_reader_entry_controller.dart`。
-- [ ] U5-BS-18 清理已迁移 helper，跑书架目标 analyze 和相关 widget / provider tests。
+- [x] U5-BS-11 抽标签 / 分类选择弹层 UI 到 `widgets/bookshelf_taxonomy_picker_surface.dart`，复用现有服务。
+- [x] U5-BS-12 抽删除、待读清单、阅读状态标记、编辑入口 dispatcher 到 `bookshelf_book_action_controller.dart`，补最小单测。
+- [x] U5-BS-13 抽列表 / 网格 / 排序偏好恢复到 `bookshelf_preference_restore_controller.dart`，不改持久化 key。
+- [x] U5-BS-14 抽首屏加载和即时元数据加载到 `bookshelf_initial_load_controller.dart`，保留超时和错误文案。
+- [x] U5-BS-15 抽封面、元数据、本地书信息批量加载到 `bookshelf_presentation_metadata_loader.dart`，补 dispose 后不更新 UI 的防护测试。
+- [x] U5-BS-16 抽在线书籍最新章节后台刷新到 `bookshelf_latest_info_refresh_controller.dart`，保留冲突取消和 TOC snapshot 保存。
+- [x] U5-BS-17 抽阅读入口解析、fallback、退出后进度刷新到 `bookshelf_reader_entry_controller.dart`。
+- [x] U5-BS-18 清理已迁移 helper，跑书架目标 analyze 和相关 widget / provider tests。
 
 #### U5-RD：`reader_page.dart`
 
@@ -398,7 +398,7 @@
 - [x] BL-01-01 先执行 `U5-BS-01` 到 `U5-BS-04`：迁移书架模型、mapper、状态组件和工具条，不改业务行为。
 - [ ] BL-01-02 抽阅读状态展示 mapper：未读 / 阅读中 / 已读完的 label、icon、筛选语义共用，对应 `U4-FIX-03`。
 - [ ] BL-01-03 抽待读清单展示 mapper：明确它是书架收藏状态，不混入阅读状态，对应 `U4-FIX-04`。
-- [ ] BL-01-04 拆书架网格 / 列表 / 双列卡片、封面自适应、进度展示和更多菜单，对应 `U2-FIX-01` 与 `U5-BS-06` 到 `U5-BS-12`。
+- [x] BL-01-04 拆书架网格 / 列表 / 双列卡片、封面自适应、进度展示和更多菜单，对应 `U2-FIX-01` 与 `U5-BS-06` 到 `U5-BS-12`。
 - [ ] BL-01-05 为书架卡片补移动端宽度和桌面宽度 widget smoke，对应 `U6-FIX-09`。
 
 ### BL-02 在线搜索与详情域
@@ -496,6 +496,7 @@
 - [x] 2026-06-07：执行 `WIN-U5-01` / `BL-01-01`；书架页私有模型迁移到 `bookshelf_page_models.dart`，偏好字符串映射迁移到 `bookshelf_preference_mappers.dart` 并补 mapper 单测，书架状态卡与继续阅读提示显隐壳层拆到 `widgets/bookshelf_status_widgets.dart`，搜索/筛选/设置工具条拆到 `widgets/bookshelf_toolbar_widgets.dart`，旧 `widgets/bookshelf_page_sections.dart` 改为兼容出口；本轮只拆代码边界，不改业务行为。验证：`flutter analyze lib/features/bookshelf/presentation/bookshelf_page.dart lib/features/bookshelf/presentation/bookshelf_page_models.dart lib/features/bookshelf/presentation/bookshelf_preference_mappers.dart lib/features/bookshelf/presentation/widgets/bookshelf_status_widgets.dart lib/features/bookshelf/presentation/widgets/bookshelf_toolbar_widgets.dart test/features/bookshelf/presentation/bookshelf_preference_mappers_test.dart` 通过；`flutter test test/features/bookshelf/presentation/bookshelf_preference_mappers_test.dart test/features/bookshelf/presentation/bookshelf_taxonomy_merge_test.dart` 通过。未验证：Android / iOS / Web / macOS / Windows / Linux 手工 smoke，本轮未改交互路径，发布前按书架页面回归矩阵补验。
 - [x] 2026-06-07：执行 `WIN-U5-02`；高级主题列表页补拆分索引，action / delete decision 迁移到 `advanced_theme_list_actions.dart`，查询排序筛选和选择裁剪迁移到 `advanced_theme_list_query_controller.dart` 并补单测，会员权限加载和 AuthEvent 刷新迁移到 `advanced_theme_access_controller.dart`，主题卡片、状态展示和搜索筛选工具条分别迁移到 `widgets/advanced_theme_summary_card.dart`、`widgets/advanced_theme_list_status_widgets.dart`、`widgets/advanced_theme_list_toolbar.dart`；本轮未接入 `U5-ATL-07` route topbar，因此 `BL-05-02` 暂不整体勾选。验证：`flutter analyze lib/features/mine/presentation/advanced_theme_list_page.dart lib/features/mine/presentation/advanced_theme_list_actions.dart lib/features/mine/application/advanced_theme_list_query_controller.dart lib/features/mine/application/advanced_theme_access_controller.dart lib/features/mine/presentation/widgets/advanced_theme_list_status_widgets.dart lib/features/mine/presentation/widgets/advanced_theme_list_toolbar.dart lib/features/mine/presentation/widgets/advanced_theme_summary_card.dart test/features/mine/application/advanced_theme_list_query_controller_test.dart` 通过；`flutter test test/features/mine/application/advanced_theme_list_query_controller_test.dart test/features/mine/application/advanced_theme_page_state_test.dart` 通过。未验证：Android / iOS / Web / macOS / Windows / Linux 手工 smoke，本轮未改业务行为和平台入口，发布前按高级主题列表回归矩阵补验。
 - [x] 2026-06-07：执行 `U5-BS-05` 到 `U5-BS-10`；桌面书架侧栏 action 组装迁移到 `widgets/bookshelf_library_sidebar.dart`，网格和列表卡片外层壳层分别迁移到 `widgets/bookshelf_grid_book_card.dart`、`widgets/bookshelf_list_book_card.dart`，封面尺寸和列表卡高度策略迁移到 `bookshelf_cover_layout_resolver.dart` 并补尺寸测试，进度条展示迁移到 `widgets/bookshelf_progress_indicator.dart`，书籍更多菜单壳层迁移到 `widgets/bookshelf_book_more_menu.dart`；本轮未执行 `U5-BS-11` / `U5-BS-12`，因此 `BL-01-04` 暂不整体勾选。验证：`flutter analyze lib/features/bookshelf/presentation/bookshelf_page.dart lib/features/bookshelf/presentation/bookshelf_cover_layout_resolver.dart lib/features/bookshelf/presentation/widgets/bookshelf_progress_indicator.dart lib/features/bookshelf/presentation/widgets/bookshelf_library_sidebar.dart lib/features/bookshelf/presentation/widgets/bookshelf_book_more_menu.dart lib/features/bookshelf/presentation/widgets/bookshelf_grid_book_card.dart lib/features/bookshelf/presentation/widgets/bookshelf_list_book_card.dart test/features/bookshelf/presentation/bookshelf_cover_layout_resolver_test.dart` 通过；`flutter test test/features/bookshelf/presentation/bookshelf_cover_layout_resolver_test.dart test/features/bookshelf/presentation/bookshelf_preference_mappers_test.dart test/features/bookshelf/presentation/bookshelf_taxonomy_merge_test.dart` 通过。未验证：Android / iOS / Web / macOS / Windows / Linux 手工 smoke，本轮保持点击、长按、移动端 bottom sheet 和桌面 popover 入口语义不变，发布前按书架页面回归矩阵补验。
+- [x] 2026-06-07：执行 `U5-BS-11` 到 `U5-BS-18`；标签 / 分类弹层 UI 迁移到 `widgets/bookshelf_taxonomy_picker_surface.dart`，更多菜单分发迁移到 `bookshelf_book_action_controller.dart` 并补单测，偏好恢复迁移到 `bookshelf_preference_restore_controller.dart`，首屏加载 in-flight / cooldown 控制迁移到 `bookshelf_initial_load_controller.dart` 并补 mounted 防护测试，展示元数据查询迁移到 `bookshelf_presentation_metadata_loader.dart`，最新章节后台刷新取消 / conflict helper 迁移到 `bookshelf_latest_info_refresh_controller.dart`，阅读入口 resolve / fallback 迁移到 `bookshelf_reader_entry_controller.dart`；`bookshelf_page.dart` 从 `6316` 行降至 `5784` 行，本轮新增拆分文件合计约 `939` 行，`BL-01-04` 已覆盖 `U5-BS-06` 到 `U5-BS-12` 后整体勾选。验证：`flutter analyze lib/features/bookshelf/presentation/bookshelf_page.dart lib/features/bookshelf/presentation/bookshelf_page_flow.dart lib/features/bookshelf/presentation/widgets/bookshelf_taxonomy_picker_surface.dart lib/features/bookshelf/presentation/bookshelf_book_action_controller.dart lib/features/bookshelf/presentation/bookshelf_preference_restore_controller.dart lib/features/bookshelf/presentation/bookshelf_initial_load_controller.dart lib/features/bookshelf/presentation/bookshelf_presentation_metadata_loader.dart lib/features/bookshelf/presentation/bookshelf_latest_info_refresh_controller.dart lib/features/bookshelf/presentation/bookshelf_reader_entry_controller.dart test/features/bookshelf/presentation/bookshelf_book_action_controller_test.dart test/features/bookshelf/presentation/bookshelf_initial_load_controller_test.dart` 通过；`flutter test test/features/bookshelf/presentation/bookshelf_book_action_controller_test.dart test/features/bookshelf/presentation/bookshelf_initial_load_controller_test.dart test/features/bookshelf/presentation/bookshelf_cover_layout_resolver_test.dart test/features/bookshelf/presentation/bookshelf_preference_mappers_test.dart test/features/bookshelf/presentation/bookshelf_taxonomy_merge_test.dart` 通过。未验证：Android / iOS / Web / macOS / Windows / Linux 手工 smoke，本轮保持书架菜单、标签分类弹层、后台刷新、阅读入口和删除路径语义不变，发布前按书架页面回归矩阵补验。
 - [x] 2026-06-07：执行 `BL-04-01-A`；新增 app 级统一会员 access provider，在线搜索和阅读器书源切换改为复用同一 access service，并补永久会员 session/profile 回退测试。
 - [x] 2026-06-07：执行 `BL-04-01-B1` / `BL-04-01-B2`；Mine 模块会话来源并入 auth provider，高级主题列表会员 gate 改为复用 app 级 access service，并补 provider 同源测试。
 - [x] 2026-06-07：执行 `BL-04-01-B3` / `BL-04-04`；新增 `MembershipAccessPresentation`，收口我的页、高级主题、在线搜索和阅读器切书源的会员状态标签、权益文案和 gate 提示，并补展示 adapter 单测。

@@ -61,9 +61,15 @@ import '../../source/application/external_import_catalog.dart';
 import '../../source/application/external_import_diagnostics.dart';
 import '../../source/application/external_source_import_bridge.dart';
 import '../../source/application/remote_content_task_conflict_service.dart';
+import 'bookshelf_book_action_controller.dart';
 import 'bookshelf_cover_layout_resolver.dart';
+import 'bookshelf_initial_load_controller.dart';
+import 'bookshelf_latest_info_refresh_controller.dart';
 import 'bookshelf_page_models.dart';
 import 'bookshelf_preference_mappers.dart';
+import 'bookshelf_preference_restore_controller.dart';
+import 'bookshelf_presentation_metadata_loader.dart';
+import 'bookshelf_reader_entry_controller.dart';
 import 'widgets/bookshelf_book_more_menu.dart';
 import 'widgets/bookshelf_grid_sliver.dart';
 import 'widgets/bookshelf_grid_book_card.dart';
@@ -72,6 +78,7 @@ import 'widgets/bookshelf_list_book_card.dart';
 import 'widgets/bookshelf_page_sections.dart';
 import 'widgets/bookshelf_progress_indicator.dart';
 import 'widgets/bookshelf_settings_switch_tile.dart';
+import 'widgets/bookshelf_taxonomy_picker_surface.dart';
 
 part 'bookshelf_page_sections.dart';
 part 'bookshelf_page_flow.dart';
@@ -175,6 +182,8 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   late final BookDetailService _bookDetailService;
   late final BookReadingStatusService _bookReadingStatusService;
   late final BookshelfReaderOpenService _readerOpenService;
+  late final BookshelfPreferenceRestoreController _preferenceRestoreController;
+  late final BookshelfReaderEntryController _readerEntryController;
   late final AppLogger _logger;
   final TextEditingController _bookshelfSearchController =
       TextEditingController();
@@ -182,11 +191,16 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   final ScrollController _bookshelfScrollController = ScrollController();
   final BookshelfCoverLayoutResolver _coverLayoutResolver =
       const BookshelfCoverLayoutResolver();
+  final BookshelfBookActionController _bookActionController =
+      const BookshelfBookActionController();
+  final BookshelfInitialLoadController _initialLoadController =
+      BookshelfInitialLoadController();
   late final LocalBookImportService _localBookImportService;
   late final LocalBookRepository _localBookRepository;
   late final BookMetadataOverrideRepository _bookMetadataOverrideRepository;
   late final BookshelfPresentationQueryService
   _bookshelfPresentationQueryService;
+  late final BookshelfPresentationMetadataLoader _presentationMetadataLoader;
   late final BookshelfExternalImportCoordinator _externalImportCoordinator;
   late final BookshelfFlowCoordinator _flowCoordinator;
   late final ImageSelectionService _imageSelectionService;
@@ -194,6 +208,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   late final AnnouncementService _announcementService;
   late final AnnouncementReadStateService _announcementReadStateService;
   late final RemoteContentTaskConflictService _taskConflictService;
+  late final BookshelfLatestInfoRefreshController _latestInfoRefreshController;
   StreamSubscription<BookshelfTaxonomyChange>? _taxonomyChangeSub;
   StreamSubscription<BookshelfCollectionChange>? _collectionChangeSub;
   StreamSubscription<List<LocalBook>>? _localBooksChangeSub;
@@ -287,9 +302,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   RouteInformationProvider? _routeInformationProvider;
   String _lastKnownRouteLocation = '';
   DateTime? _lastAutoRefreshAt;
-  DateTime? _lastBookshelfLoadRequestedAt;
-  Future<void>? _activeBookshelfLoad;
-  bool _reloadAfterActiveLoad = false;
   bool? _lastKnownAutoRefreshOnTabActiveEnabled;
   Object? _lastDesktopToolbarActionsFingerprint;
   Object? _lastDesktopLibraryActionsFingerprint;
@@ -301,7 +313,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   bool _hasLoggedBookshelfFirstVisible = false;
   bool _hasShownContinueReadingPrompt = false;
   ReadingRecord? _continueReadingRecord;
-  int _latestInfoRefreshEpoch = 0;
   bool _skipNextBackgroundLatestInfoRefresh = false;
 
   static const String _kLocalBookSourceId =
@@ -381,6 +392,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     );
     final dependencies = ref.read(bookshelfPageDependenciesProvider);
     _bookshelfService = dependencies.bookshelfService;
+    _preferenceRestoreController = BookshelfPreferenceRestoreController(
+      _bookshelfService,
+    );
     _bookshelfSystemSettingsService = dependencies.systemSettingsService;
     _readerPreferencesService = dependencies.readerPreferencesService;
     _pageRouteService = dependencies.pageRouteService;
@@ -388,6 +402,11 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     _bookDetailService = dependencies.bookDetailService;
     _bookReadingStatusService = dependencies.readingStatusService;
     _readerOpenService = dependencies.readerOpenService;
+    _readerEntryController = BookshelfReaderEntryController(
+      readerOpenService: _readerOpenService,
+      pageRouteService: _pageRouteService,
+      localBookSourceId: _kLocalBookSourceId,
+    );
     _logger = dependencies.logger;
     _localBookImportService = dependencies.localBookImportService;
     _imageSelectionService = dependencies.imageSelectionService;
@@ -401,10 +420,17 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     _bookshelfPresentationQueryService = ref.read(
       bookshelfPresentationQueryServiceProvider,
     );
+    _presentationMetadataLoader = BookshelfPresentationMetadataLoader(
+      queryService: _bookshelfPresentationQueryService,
+      localBookSourceId: _kLocalBookSourceId,
+    );
     _externalImportCoordinator =
         ref.read(bookshelfExternalImportCoordinatorFactoryProvider)();
     _flowCoordinator = dependencies.flowCoordinator;
     _taskConflictService = ref.read(bookshelfTaskConflictServiceProvider);
+    _latestInfoRefreshController = BookshelfLatestInfoRefreshController(
+      _taskConflictService,
+    );
     _bookshelfSearchFocusNode.addListener(_handleBookshelfSearchFocusChanged);
     _externalImportCoordinator.initialize(
       onPendingImportAvailable: () {
@@ -1334,22 +1360,26 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     BookshelfBook book,
     _BookshelfBookMoreAction action,
   ) {
-    if (_isBatchDeleting || _isBatchUpdatingCovers) {
+    final intent = _bookActionController.resolve(
+      action: action,
+      actionsLocked: _isBatchDeleting || _isBatchUpdatingCovers,
+    );
+    if (intent == null) {
       return;
     }
 
-    switch (action) {
-      case _BookshelfBookMoreAction.detail:
+    switch (intent) {
+      case BookshelfBookActionIntent.openDetail:
         _openBookDetail(book);
-      case _BookshelfBookMoreAction.edit:
+      case BookshelfBookActionIntent.openEdit:
         _openBookDetail(book, initialEditMode: true);
-      case _BookshelfBookMoreAction.tags:
+      case BookshelfBookActionIntent.editTags:
         unawaited(_showBookTagEditor(book));
-      case _BookshelfBookMoreAction.category:
+      case BookshelfBookActionIntent.editCategory:
         unawaited(_showBookCategoryEditor(book));
-      case _BookshelfBookMoreAction.readingQueue:
+      case BookshelfBookActionIntent.toggleReadingQueue:
         unawaited(_setBookReadingQueue(book, !book.inReadingQueue));
-      case _BookshelfBookMoreAction.select:
+      case BookshelfBookActionIntent.select:
         final key = _bookKey(book);
         if (key.isEmpty) {
           return;
@@ -1357,7 +1387,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         _updateBookshelfState(
           () => _setSelectionEnabled(true, selectedKeys: <String>{key}),
         );
-      case _BookshelfBookMoreAction.delete:
+      case BookshelfBookActionIntent.delete:
         unawaited(_confirmAndRemoveBook(book));
     }
   }
@@ -1420,8 +1450,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                 createdItems: createdItems,
               );
 
-              return _buildBookTaxonomyEditSurface(
-                context: sheetContext,
+              return BookshelfTaxonomyPickerSurface(
                 icon: Icons.sell_rounded,
                 title: '编辑标签',
                 subtitle: _displayBookTitle(book),
@@ -1446,12 +1475,12 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                 },
                 createPanel:
                     isCreating
-                        ? _buildInlineTaxonomyCreatePanel(
-                          context: sheetContext,
+                        ? BookshelfInlineTaxonomyCreatePanel(
                           kind: BookshelfTaxonomyKind.tag,
                           nameController: createNameController,
                           color: createColor,
                           errorText: createErrorText,
+                          formatColorLabel: _formatTaxonomyHex,
                           onColorChanged:
                               (color) => setSheetState(() {
                                 createColor = color;
@@ -1469,10 +1498,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                               }),
                         )
                         : null,
-                child: _buildBookTagPicker(
-                  context: sheetContext,
+                child: BookshelfTagPicker(
                   items: availableItems,
                   selectedTags: selectedTags,
+                  normalizeTags: _normalizeTags,
                   onChanged: (tags) {
                     setSheetState(() {
                       selectedTags = _normalizeTags(tags);
@@ -1555,8 +1584,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                 createdItems: createdItems,
               );
 
-              return _buildBookTaxonomyEditSurface(
-                context: sheetContext,
+              return BookshelfTaxonomyPickerSurface(
                 icon: Icons.folder_rounded,
                 title: '编辑分类',
                 subtitle: _displayBookTitle(book),
@@ -1583,12 +1611,12 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                 },
                 createPanel:
                     isCreating
-                        ? _buildInlineTaxonomyCreatePanel(
-                          context: sheetContext,
+                        ? BookshelfInlineTaxonomyCreatePanel(
                           kind: BookshelfTaxonomyKind.category,
                           nameController: createNameController,
                           color: createColor,
                           errorText: createErrorText,
+                          formatColorLabel: _formatTaxonomyHex,
                           onColorChanged:
                               (color) => setSheetState(() {
                                 createColor = color;
@@ -1606,8 +1634,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                               }),
                         )
                         : null,
-                child: _buildBookCategoryPicker(
-                  context: sheetContext,
+                child: BookshelfCategoryPicker(
                   items: availableItems,
                   selectedCategory: selectedCategory,
                   onChanged: (category) {
@@ -1642,431 +1669,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   String? _firstNormalizedTaxonomyName(Iterable<String> values) {
     final normalized = _normalizeTags(values);
     return normalized.isEmpty ? null : normalized.first;
-  }
-
-  Widget _buildBookTaxonomyEditSurface({
-    required BuildContext context,
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required String createLabel,
-    required VoidCallback onCancel,
-    required VoidCallback onSave,
-    required VoidCallback onCreate,
-    Widget? createPanel,
-    required Widget child,
-  }) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final desktopLike = AppLayout.isDesktopLike(
-      context,
-      platform: theme.platform,
-    );
-    final contentMaxHeight = math.max(
-      desktopLike ? 120.0 : 180.0,
-      MediaQuery.sizeOf(context).height * (desktopLike ? 0.38 : 0.52),
-    );
-    final padding =
-        desktopLike
-            ? const EdgeInsets.fromLTRB(18, 16, 18, 14)
-            : const EdgeInsets.fromLTRB(16, 14, 16, 16);
-    final compactButtonStyle = TextButton.styleFrom(
-      minimumSize: const Size(0, 32),
-      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      textStyle: theme.textTheme.labelMedium?.copyWith(
-        fontWeight: FontWeight.w700,
-      ),
-    );
-    final saveButtonStyle = FilledButton.styleFrom(
-      minimumSize: const Size(0, 34),
-      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      textStyle: theme.textTheme.labelMedium?.copyWith(
-        fontWeight: FontWeight.w700,
-      ),
-    );
-
-    return Padding(
-      padding: padding,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: colorScheme.primaryContainer.withValues(alpha: 0.62),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(icon, size: 17, color: colorScheme.primary),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              TextButton.icon(
-                style: compactButtonStyle,
-                onPressed: onCreate,
-                icon: const Icon(Icons.add_rounded, size: 17),
-                label: Text(createLabel),
-              ),
-            ],
-          ),
-          if (createPanel != null) ...[const SizedBox(height: 12), createPanel],
-          const SizedBox(height: 12),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerLowest.withValues(alpha: 0.7),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: colorScheme.outlineVariant.withValues(alpha: 0.58),
-              ),
-            ),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxHeight: contentMaxHeight),
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(10),
-                child: child,
-              ),
-            ),
-          ),
-          const SizedBox(height: 14),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              TextButton(
-                style: compactButtonStyle,
-                onPressed: onCancel,
-                child: const Text('取消'),
-              ),
-              const SizedBox(width: 8),
-              FilledButton.icon(
-                style: saveButtonStyle,
-                onPressed: onSave,
-                icon: const Icon(Icons.check_rounded, size: 17),
-                label: const Text('保存'),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBookTaxonomyOptionChip({
-    required BuildContext context,
-    required Widget avatar,
-    required String label,
-    required bool selected,
-    required VoidCallback onTap,
-  }) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    return Material(
-      color:
-          selected
-              ? colorScheme.primaryContainer.withValues(alpha: 0.72)
-              : colorScheme.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(
-          color:
-              selected
-                  ? colorScheme.primary.withValues(alpha: 0.38)
-                  : colorScheme.outlineVariant.withValues(alpha: 0.72),
-        ),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconTheme.merge(
-                data: IconThemeData(
-                  size: 15,
-                  color:
-                      selected
-                          ? colorScheme.primary
-                          : colorScheme.onSurfaceVariant,
-                ),
-                child: avatar,
-              ),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color:
-                        selected
-                            ? colorScheme.onPrimaryContainer
-                            : colorScheme.onSurface,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBookTaxonomyOptionsWrap({required List<Widget> children}) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Wrap(spacing: 8, runSpacing: 8, children: children),
-    );
-  }
-
-  Widget _buildInlineTaxonomyCreatePanel({
-    required BuildContext context,
-    required BookshelfTaxonomyKind kind,
-    required TextEditingController nameController,
-    required Color color,
-    required String? errorText,
-    required ValueChanged<Color> onColorChanged,
-    required ValueChanged<String> onNameChanged,
-    required VoidCallback onSubmit,
-    required VoidCallback onCancel,
-  }) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final isTag = kind == BookshelfTaxonomyKind.tag;
-    final swatches = _taxonomyCreateColorSwatches(
-      fallbackColor: color,
-      fallbackName: isTag ? '新标签' : '新分类',
-    );
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.72),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.72),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            TextField(
-              controller: nameController,
-              autofocus: true,
-              decoration: InputDecoration(
-                labelText: isTag ? '标签名称' : '分类名称',
-                errorText: errorText,
-                isDense: true,
-                filled: true,
-                fillColor: colorScheme.surface,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              textInputAction: TextInputAction.done,
-              onChanged: onNameChanged,
-              onSubmitted: (_) => onSubmit(),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              '选择颜色',
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final swatch in swatches)
-                  _buildTaxonomyCreateColorButton(
-                    color: swatch,
-                    selected: swatch.toARGB32() == color.toARGB32(),
-                    onTap: () => onColorChanged(swatch),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(onPressed: onCancel, child: const Text('取消')),
-                const SizedBox(width: 8),
-                FilledButton(onPressed: onSubmit, child: const Text('添加')),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  List<Color> _taxonomyCreateColorSwatches({
-    required Color fallbackColor,
-    required String fallbackName,
-  }) {
-    final colors = <Color>[
-      fallbackColor,
-      Color(BookshelfTaxonomyItem.defaultColorForName(fallbackName)),
-      const Color(0xFF2563EB),
-      const Color(0xFF059669),
-      const Color(0xFFDC2626),
-      const Color(0xFF7C3AED),
-      const Color(0xFFEA580C),
-      const Color(0xFF0891B2),
-    ];
-    final seen = <int>{};
-    return <Color>[
-      for (final color in colors)
-        if (seen.add(color.toARGB32())) color,
-    ];
-  }
-
-  Widget _buildTaxonomyCreateColorButton({
-    required Color color,
-    required bool selected,
-    required VoidCallback onTap,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final foregroundColor =
-        ThemeData.estimateBrightnessForColor(color) == Brightness.dark
-            ? Colors.white
-            : Colors.black;
-    return Tooltip(
-      message: _formatTaxonomyHex(color.toARGB32()),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(999),
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          width: 28,
-          height: 28,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: selected ? colorScheme.onSurface : colorScheme.outline,
-              width: selected ? 2 : 1,
-            ),
-          ),
-          child:
-              selected
-                  ? Icon(Icons.check_rounded, size: 16, color: foregroundColor)
-                  : null,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBookTagPicker({
-    required BuildContext context,
-    required List<BookshelfTaxonomyItem> items,
-    required List<String> selectedTags,
-    required ValueChanged<List<String>> onChanged,
-  }) {
-    return _buildBookTaxonomyOptionsWrap(
-      children: [
-        _buildBookTaxonomyOptionChip(
-          context: context,
-          avatar: const Icon(Icons.block_rounded),
-          label: '未打标签',
-          selected: selectedTags.isEmpty,
-          onTap: () => onChanged(const <String>[]),
-        ),
-        for (final item in items)
-          _buildBookTaxonomyOptionChip(
-            context: context,
-            avatar: _buildTaxonomyColorDot(item.colorValue),
-            label: item.name,
-            selected: selectedTags.contains(item.name),
-            onTap: () {
-              if (!selectedTags.contains(item.name)) {
-                onChanged(_normalizeTags([...selectedTags, item.name]));
-                return;
-              }
-              onChanged(
-                selectedTags
-                    .where((tag) => tag != item.name)
-                    .toList(growable: false),
-              );
-            },
-          ),
-      ],
-    );
-  }
-
-  Widget _buildBookCategoryPicker({
-    required BuildContext context,
-    required List<BookshelfTaxonomyItem> items,
-    required String? selectedCategory,
-    required ValueChanged<String?> onChanged,
-  }) {
-    return _buildBookTaxonomyOptionsWrap(
-      children: [
-        _buildBookTaxonomyOptionChip(
-          context: context,
-          avatar: const Icon(Icons.block_rounded),
-          label: '未分类',
-          selected: selectedCategory == null || selectedCategory.isEmpty,
-          onTap: () => onChanged(null),
-        ),
-        for (final item in items)
-          _buildBookTaxonomyOptionChip(
-            context: context,
-            avatar: _buildTaxonomyColorDot(item.colorValue),
-            label: item.name,
-            selected: selectedCategory == item.name,
-            onTap:
-                () =>
-                    onChanged(selectedCategory == item.name ? null : item.name),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildTaxonomyColorDot(int colorValue) {
-    return Container(
-      width: 10,
-      height: 10,
-      decoration: BoxDecoration(
-        color: Color(colorValue),
-        shape: BoxShape.circle,
-      ),
-    );
   }
 
   List<BookshelfTaxonomyItem> _availableBookTagItems({
@@ -2855,30 +2457,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }
 
   Future<void> _restoreViewSelection() async {
-    final stored = await _bookshelfService.loadViewSelection();
-    if (!mounted || stored == null) {
+    final next = await _preferenceRestoreController.loadViewSelection();
+    if (!mounted || next == null) {
       return;
     }
-
-    final kind = (stored['kind'] ?? '').trim();
-    final value = (stored['value'] ?? '').trim();
-    final next = switch (kind) {
-      'tag' when value.isNotEmpty => _BookshelfViewSelection.tag(value),
-      'category' =>
-        value.isEmpty
-            ? const _BookshelfViewSelection.category(null)
-            : _BookshelfViewSelection.category(value),
-      'todo' => const _BookshelfViewSelection.base(_BookshelfFilter.todo),
-      'unread' => const _BookshelfViewSelection.base(_BookshelfFilter.unread),
-      'reading' => const _BookshelfViewSelection.base(_BookshelfFilter.reading),
-      'finished' => const _BookshelfViewSelection.base(
-        _BookshelfFilter.finished,
-      ),
-      'local' => const _BookshelfViewSelection.base(_BookshelfFilter.local),
-      'novel' => const _BookshelfViewSelection.base(_BookshelfFilter.novel),
-      'manga' => const _BookshelfViewSelection.base(_BookshelfFilter.manga),
-      _ => const _BookshelfViewSelection.base(_BookshelfFilter.all),
-    };
 
     if (next == _activeView) {
       return;
@@ -4875,57 +4457,18 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }
 
   Future<void> _loadBookshelf({bool force = false}) {
-    final inFlight = _activeBookshelfLoad;
-    if (inFlight != null) {
-      if (!force) {
-        return inFlight;
-      }
-      _reloadAfterActiveLoad = true;
-      return inFlight.whenComplete(() async {
-        if (!_reloadAfterActiveLoad) {
-          return;
-        }
-        _reloadAfterActiveLoad = false;
-        if (!mounted) {
-          return;
-        }
-        await _loadBookshelf(force: true);
-      });
-    }
-
-    if (!mounted) {
-      return Future<void>.value();
-    }
-
-    final now = DateTime.now();
-    if (!force) {
-      final lastRequestAt = _lastBookshelfLoadRequestedAt;
-      if (lastRequestAt != null &&
-          now.difference(lastRequestAt) < _kDuplicateLoadCooldown) {
-        return Future<void>.value();
-      }
-    }
-    _lastBookshelfLoadRequestedAt = now;
-
-    final showCoverRefresh = force && _books.isNotEmpty;
-    if (showCoverRefresh) {
-      setState(() {
-        _isCoverRefreshActive = true;
-      });
-    }
-
-    final task = _loadBookshelfCore();
-    _activeBookshelfLoad = task;
-    return task.whenComplete(() {
-      if (identical(_activeBookshelfLoad, task)) {
-        _activeBookshelfLoad = null;
-      }
-      if (showCoverRefresh && mounted) {
+    return _initialLoadController.load(
+      force: force,
+      isMounted: () => mounted,
+      hasVisibleBooks: _books.isNotEmpty,
+      duplicateLoadCooldown: _kDuplicateLoadCooldown,
+      runCore: _loadBookshelfCore,
+      setCoverRefreshActive: (value) {
         setState(() {
-          _isCoverRefreshActive = false;
+          _isCoverRefreshActive = value;
         });
-      }
-    });
+      },
+    );
   }
 
   Future<void> _loadBookshelfCore() async {
@@ -5140,7 +4683,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     if (_skipNextBackgroundLatestInfoRefresh) {
       _skipNextBackgroundLatestInfoRefresh = false;
     } else {
-      final refreshEpoch = ++_latestInfoRefreshEpoch;
+      final refreshEpoch = _latestInfoRefreshController.startRefresh();
       unawaited(
         _refreshOnlineBookshelfLatestInfo(
           books,
@@ -5155,21 +4698,18 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     List<BookshelfBook> books, {
     required int ticket,
   }) async {
-    final localBooksFuture = _loadLocalBookMap(books);
-    final metadataOverridesFuture = _loadBookMetadataOverrideMap(books);
-
-    try {
-      await Future.wait<dynamic>([localBooksFuture, metadataOverridesFuture]);
-    } catch (_) {
+    final metadata = await _presentationMetadataLoader.loadPresentationMetadata(
+      books,
+    );
+    if (metadata == null) {
       return;
     }
-
     if (!mounted || ticket != _loadTicket) {
       return;
     }
 
-    final localBooksById = await localBooksFuture;
-    final metadataOverridesByTargetKey = await metadataOverridesFuture;
+    final localBooksById = metadata.localBooksById;
+    final metadataOverridesByTargetKey = metadata.metadataOverridesByTargetKey;
     final bookPresentationByKey = _bookshelfPresentationQueryService
         .buildBookshelfPresentationMap(
           books: books,
@@ -5194,34 +4734,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     );
   }
 
-  Future<Map<String, BookMetadataOverride>> _loadBookMetadataOverrideMap(
-    List<BookshelfBook> books,
-  ) async {
-    if (books.isEmpty) {
-      return const <String, BookMetadataOverride>{};
-    }
-    try {
-      return await _bookshelfPresentationQueryService
-          .loadBookMetadataOverrideMap(books);
-    } catch (_) {
-      return const <String, BookMetadataOverride>{};
-    }
-  }
-
-  Future<Map<String, LocalBook>> _loadLocalBookMap(
-    List<BookshelfBook> books,
-  ) async {
-    if (!books.any((book) => book.sourceId == _kLocalBookSourceId)) {
-      return const <String, LocalBook>{};
-    }
-
-    try {
-      return await _bookshelfPresentationQueryService.loadLocalBookMap(books);
-    } catch (_) {
-      return const <String, LocalBook>{};
-    }
-  }
-
   Future<void> _loadLatestCachedChapterMap(
     List<BookshelfBook> books, {
     required int ticket,
@@ -5235,7 +4747,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       return;
     }
 
-    final latestByBookSource = await _bookshelfPresentationQueryService
+    final latestByBookSource = await _presentationMetadataLoader
         .loadLatestCachedChapterTitles(pairs);
 
     if (!mounted || ticket != _loadTicket) {
@@ -5284,7 +4796,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       return;
     }
 
-    final countByBookSource = await _bookshelfPresentationQueryService
+    final countByBookSource = await _presentationMetadataLoader
         .loadCachedChapterCounts(pairs);
 
     if (!mounted || ticket != _loadTicket) {
@@ -5494,17 +5006,20 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }
 
   void _cancelBackgroundLatestInfoRefresh() {
-    _latestInfoRefreshEpoch += 1;
+    _latestInfoRefreshController.cancel();
   }
 
   bool _isLatestInfoRefreshCancelled({
     required int ticket,
     required int refreshEpoch,
   }) {
-    return !mounted ||
-        ticket != _loadTicket ||
-        refreshEpoch != _latestInfoRefreshEpoch ||
-        !_isBookshelfRoute(_lastKnownRouteLocation);
+    return _latestInfoRefreshController.isCancelled(
+      ticket: ticket,
+      loadTicket: _loadTicket,
+      refreshEpoch: refreshEpoch,
+      mounted: mounted,
+      isBookshelfRoute: _isBookshelfRoute(_lastKnownRouteLocation),
+    );
   }
 
   String _bookConflictKey({
@@ -5512,7 +5027,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     required String detailUrl,
     required String bookId,
   }) {
-    return _taskConflictService.conflictKeyForBook(
+    return _latestInfoRefreshController.bookConflictKey(
       sourceId: sourceId,
       detailUrl: detailUrl,
       bookId: bookId,
@@ -5525,22 +5040,16 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     required String bookId,
     required RemoteContentConflictScene byScene,
   }) {
-    final conflictKey = _bookConflictKey(
+    _latestInfoRefreshController.cancelBackgroundRefreshForBook(
       sourceId: sourceId,
       detailUrl: detailUrl,
       bookId: bookId,
-    );
-    if (conflictKey.isEmpty) {
-      return;
-    }
-    _taskConflictService.cancelBackgroundWorkFor(
-      conflictKey: conflictKey,
       byScene: byScene,
     );
   }
 
   Future<void> _restoreViewModePreference() async {
-    final useGrid = await _bookshelfService.loadUseGridView();
+    final useGrid = await _preferenceRestoreController.loadUseGridView();
     if (!mounted || _useGridView == useGrid) {
       return;
     }
@@ -5550,69 +5059,46 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }
 
   Future<void> _restoreListPreferences() async {
-    final showTitle = await _bookshelfService.loadListShowTitle();
-    final showAuthor = await _bookshelfService.loadListShowAuthor();
-    final showLatestChapter =
-        await _bookshelfService.loadListShowLatestChapter();
-    final showProgressBar = await _bookshelfService.loadListShowProgressBar();
-    final progressInfoMode = _progressInfoModeFromStorageValue(
-      await _bookshelfService.loadListProgressInfoMode(),
-    );
-    final showSourceBadge = await _bookshelfService.loadListShowSourceBadge();
-    final showTaxonomyBadges =
-        await _bookshelfService.loadListShowTaxonomyBadges();
-    final showCover = await _bookshelfService.loadListShowCover();
-    final compactMode = await _bookshelfService.loadListCompactMode();
-    final twoColumnMode = await _bookshelfService.loadListTwoColumnMode();
-    final showRecentReadTime =
-        await _bookshelfService.loadListShowRecentReadTime();
-    final alwaysShowSearchBar =
-        await _bookshelfService.loadListAlwaysShowSearchBar();
-    final pinSearchBar = await _bookshelfService.loadListPinSearchBar();
-    final quickFilterContent = _searchQuickFilterContentFromStorageValue(
-      await _bookshelfService.loadListQuickFilterContent(),
-    );
+    final loaded = await _preferenceRestoreController.loadListPreferences();
     if (!mounted) {
       return;
     }
-    if (_listShowTitle == showTitle &&
-        _listShowAuthor == showAuthor &&
-        _listShowLatestChapter == showLatestChapter &&
-        _listShowProgressBar == showProgressBar &&
-        _listProgressInfoMode == progressInfoMode &&
-        _listShowSourceBadge == showSourceBadge &&
-        _listShowTaxonomyBadges == showTaxonomyBadges &&
-        _listShowCover == showCover &&
-        _listCompactMode == compactMode &&
-        _listTwoColumnMode == twoColumnMode &&
-        _listShowRecentReadTime == showRecentReadTime &&
-        _listAlwaysShowSearchBar == alwaysShowSearchBar &&
-        _listPinSearchBar == pinSearchBar &&
-        _listQuickFilterContent == quickFilterContent) {
+    if (_listShowTitle == loaded.showTitle &&
+        _listShowAuthor == loaded.showAuthor &&
+        _listShowLatestChapter == loaded.showLatestChapter &&
+        _listShowProgressBar == loaded.showProgressBar &&
+        _listProgressInfoMode == loaded.progressInfoMode &&
+        _listShowSourceBadge == loaded.showSourceBadge &&
+        _listShowTaxonomyBadges == loaded.showTaxonomyBadges &&
+        _listShowCover == loaded.showCover &&
+        _listCompactMode == loaded.compactMode &&
+        _listTwoColumnMode == loaded.twoColumnMode &&
+        _listShowRecentReadTime == loaded.showRecentReadTime &&
+        _listAlwaysShowSearchBar == loaded.alwaysShowSearchBar &&
+        _listPinSearchBar == loaded.pinSearchBar &&
+        _listQuickFilterContent == loaded.quickFilterContent) {
       return;
     }
     setState(() {
-      _listShowTitle = showTitle;
-      _listShowAuthor = showAuthor;
-      _listShowLatestChapter = showLatestChapter;
-      _listShowProgressBar = showProgressBar;
-      _listProgressInfoMode = progressInfoMode;
-      _listShowSourceBadge = showSourceBadge;
-      _listShowTaxonomyBadges = showTaxonomyBadges;
-      _listShowCover = showCover;
-      _listCompactMode = compactMode;
-      _listTwoColumnMode = twoColumnMode;
-      _listShowRecentReadTime = showRecentReadTime;
-      _listAlwaysShowSearchBar = alwaysShowSearchBar;
-      _listPinSearchBar = pinSearchBar;
-      _listQuickFilterContent = quickFilterContent;
+      _listShowTitle = loaded.showTitle;
+      _listShowAuthor = loaded.showAuthor;
+      _listShowLatestChapter = loaded.showLatestChapter;
+      _listShowProgressBar = loaded.showProgressBar;
+      _listProgressInfoMode = loaded.progressInfoMode;
+      _listShowSourceBadge = loaded.showSourceBadge;
+      _listShowTaxonomyBadges = loaded.showTaxonomyBadges;
+      _listShowCover = loaded.showCover;
+      _listCompactMode = loaded.compactMode;
+      _listTwoColumnMode = loaded.twoColumnMode;
+      _listShowRecentReadTime = loaded.showRecentReadTime;
+      _listAlwaysShowSearchBar = loaded.alwaysShowSearchBar;
+      _listPinSearchBar = loaded.pinSearchBar;
+      _listQuickFilterContent = loaded.quickFilterContent;
     });
   }
 
   Future<void> _restoreSortModePreference() async {
-    final loaded = _sortModeFromStorageValue(
-      await _bookshelfService.loadSortMode(),
-    );
+    final loaded = await _preferenceRestoreController.loadSortMode();
     if (!mounted || _sortMode == loaded) {
       return;
     }
@@ -5622,96 +5108,66 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }
 
   Future<void> _restoreGridPreferences() async {
-    final adaptive = await _bookshelfService.loadGridAdaptiveColumns();
-    final columns = await _bookshelfService.loadGridColumnCount();
-    final crossSpacing = await _bookshelfService.loadGridCrossSpacing();
-    final mainSpacing = await _bookshelfService.loadGridMainSpacing();
-    final visualStyle = _gridVisualStyleFromStorageValue(
-      await _bookshelfService.loadGridVisualStyle(),
-    );
-    final showTitle = await _bookshelfService.loadGridShowTitle();
-    final titleCenter = await _bookshelfService.loadGridTitleCenter();
-    final titleMaxLines = await _bookshelfService.loadGridTitleMaxLines();
-    final coverShadow = await _bookshelfService.loadGridCoverShadow();
-    final showAuthor = await _bookshelfService.loadGridShowAuthor();
-    final showLatestChapter =
-        await _bookshelfService.loadGridShowLatestChapter();
-    final showProgressBar = await _bookshelfService.loadGridShowProgressBar();
-    final progressInfoMode = _progressInfoModeFromStorageValue(
-      await _bookshelfService.loadGridProgressInfoMode(),
-    );
-    final showSourceBadge = await _bookshelfService.loadGridShowSourceBadge();
-    final showTaxonomyBadges =
-        await _bookshelfService.loadGridShowTaxonomyBadges();
-    final alwaysShowSearchBar =
-        await _bookshelfService.loadGridAlwaysShowSearchBar();
-    final pinSearchBar = await _bookshelfService.loadGridPinSearchBar();
-    final quickFilterContent = _searchQuickFilterContentFromStorageValue(
-      await _bookshelfService.loadGridQuickFilterContent(),
-    );
+    final loaded = await _preferenceRestoreController.loadGridPreferences();
     if (!mounted) {
       return;
     }
-    if (_gridAdaptiveColumns == adaptive &&
-        _gridColumnCount == columns &&
-        _gridCrossSpacing == crossSpacing &&
-        _gridMainSpacing == mainSpacing &&
-        _gridVisualStyle == visualStyle &&
-        _gridShowTitle == showTitle &&
-        _gridTitleCenter == titleCenter &&
-        _gridTitleMaxLines == titleMaxLines &&
-        _gridCoverShadow == coverShadow &&
-        _gridShowAuthor == showAuthor &&
-        _gridShowLatestChapter == showLatestChapter &&
-        _gridShowProgressBar == showProgressBar &&
-        _gridProgressInfoMode == progressInfoMode &&
-        _gridShowSourceBadge == showSourceBadge &&
-        _gridShowTaxonomyBadges == showTaxonomyBadges &&
-        _gridAlwaysShowSearchBar == alwaysShowSearchBar &&
-        _gridPinSearchBar == pinSearchBar &&
-        _gridQuickFilterContent == quickFilterContent) {
+    if (_gridAdaptiveColumns == loaded.adaptiveColumns &&
+        _gridColumnCount == loaded.columnCount &&
+        _gridCrossSpacing == loaded.crossSpacing &&
+        _gridMainSpacing == loaded.mainSpacing &&
+        _gridVisualStyle == loaded.visualStyle &&
+        _gridShowTitle == loaded.showTitle &&
+        _gridTitleCenter == loaded.titleCenter &&
+        _gridTitleMaxLines == loaded.titleMaxLines &&
+        _gridCoverShadow == loaded.coverShadow &&
+        _gridShowAuthor == loaded.showAuthor &&
+        _gridShowLatestChapter == loaded.showLatestChapter &&
+        _gridShowProgressBar == loaded.showProgressBar &&
+        _gridProgressInfoMode == loaded.progressInfoMode &&
+        _gridShowSourceBadge == loaded.showSourceBadge &&
+        _gridShowTaxonomyBadges == loaded.showTaxonomyBadges &&
+        _gridAlwaysShowSearchBar == loaded.alwaysShowSearchBar &&
+        _gridPinSearchBar == loaded.pinSearchBar &&
+        _gridQuickFilterContent == loaded.quickFilterContent) {
       return;
     }
     setState(() {
-      _gridAdaptiveColumns = adaptive;
-      _gridColumnCount = columns;
-      _gridCrossSpacing = crossSpacing;
-      _gridMainSpacing = mainSpacing;
-      _gridVisualStyle = visualStyle;
-      _gridShowTitle = showTitle;
-      _gridTitleCenter = titleCenter;
-      _gridTitleMaxLines = titleMaxLines;
-      _gridCoverShadow = coverShadow;
-      _gridShowAuthor = showAuthor;
-      _gridShowLatestChapter = showLatestChapter;
-      _gridShowProgressBar = showProgressBar;
-      _gridProgressInfoMode = progressInfoMode;
-      _gridShowSourceBadge = showSourceBadge;
-      _gridShowTaxonomyBadges = showTaxonomyBadges;
-      _gridAlwaysShowSearchBar = alwaysShowSearchBar;
-      _gridPinSearchBar = pinSearchBar;
-      _gridQuickFilterContent = quickFilterContent;
+      _gridAdaptiveColumns = loaded.adaptiveColumns;
+      _gridColumnCount = loaded.columnCount;
+      _gridCrossSpacing = loaded.crossSpacing;
+      _gridMainSpacing = loaded.mainSpacing;
+      _gridVisualStyle = loaded.visualStyle;
+      _gridShowTitle = loaded.showTitle;
+      _gridTitleCenter = loaded.titleCenter;
+      _gridTitleMaxLines = loaded.titleMaxLines;
+      _gridCoverShadow = loaded.coverShadow;
+      _gridShowAuthor = loaded.showAuthor;
+      _gridShowLatestChapter = loaded.showLatestChapter;
+      _gridShowProgressBar = loaded.showProgressBar;
+      _gridProgressInfoMode = loaded.progressInfoMode;
+      _gridShowSourceBadge = loaded.showSourceBadge;
+      _gridShowTaxonomyBadges = loaded.showTaxonomyBadges;
+      _gridAlwaysShowSearchBar = loaded.alwaysShowSearchBar;
+      _gridPinSearchBar = loaded.pinSearchBar;
+      _gridQuickFilterContent = loaded.quickFilterContent;
     });
-  }
-
-  _BookshelfSortMode _sortModeFromStorageValue(String value) {
-    return sortModeFromStorageValue(value);
-  }
-
-  _BookshelfGridVisualStyle _gridVisualStyleFromStorageValue(String value) {
-    return gridVisualStyleFromStorageValue(value);
   }
 
   String _gridVisualStyleStorageValue(_BookshelfGridVisualStyle value) {
     return gridVisualStyleStorageValue(value);
   }
 
-  _BookshelfProgressInfoMode _progressInfoModeFromStorageValue(String value) {
-    return progressInfoModeFromStorageValue(value);
+  _BookshelfGridVisualStyle _gridVisualStyleFromStorageValue(String value) {
+    return gridVisualStyleFromStorageValue(value);
   }
 
   String _progressInfoModeStorageValue(_BookshelfProgressInfoMode value) {
     return progressInfoModeStorageValue(value);
+  }
+
+  _BookshelfProgressInfoMode _progressInfoModeFromStorageValue(String value) {
+    return progressInfoModeFromStorageValue(value);
   }
 
   String _progressInfoModeLabel(_BookshelfProgressInfoMode value) {
@@ -5734,16 +5190,16 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     return sortModeDescription(mode);
   }
 
-  _BookshelfSearchQuickFilterContent _searchQuickFilterContentFromStorageValue(
-    String value,
-  ) {
-    return searchQuickFilterContentFromStorageValue(value);
-  }
-
   String _searchQuickFilterContentStorageValue(
     _BookshelfSearchQuickFilterContent value,
   ) {
     return searchQuickFilterContentStorageValue(value);
+  }
+
+  _BookshelfSearchQuickFilterContent _searchQuickFilterContentFromStorageValue(
+    String value,
+  ) {
+    return searchQuickFilterContentFromStorageValue(value);
   }
 
   String _searchQuickFilterContentLabel(
@@ -5813,8 +5269,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         batch.map((book) async {
           final bookKey = _bookKey(book);
           try {
-            final progress = await _readerPreferencesService
-                .loadProgress(book.bookId)
+            final progress = await _presentationMetadataLoader
+                .loadProgress(
+                  () => _readerPreferencesService.loadProgress(book.bookId),
+                )
                 .timeout(_kProgressLoadTimeout);
             return (
               book: book,
@@ -6407,10 +5865,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       return;
     }
     final bookKey = _bookKey(book);
-    final matchedProgress =
-        latestProgress != null && _isProgressMatchingBook(latestProgress, book)
-            ? latestProgress
-            : null;
+    final matchedProgress = _readerEntryController.matchingProgressAfterExit(
+      latestProgress: latestProgress,
+      book: book,
+    );
     final previousProgress = _progressByBookKey[bookKey];
     if (previousProgress == matchedProgress) {
       return;
@@ -6460,38 +5918,26 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                   await _localBookRepository.getBookById(book.bookId.trim()))
               : null;
       final bookKey = _bookKey(book);
-      final resolveFuture = _readerOpenService.resolve(
+      final plan = await _readerEntryController.resolveOpenPlan(
         book: book,
         openRequestedAtMs: openRequestedAtMs,
         progressHint: progress,
         localBookHint: localBook,
+        onlinePlanTimeout: const Duration(milliseconds: 220),
+        onOnlinePlanTimeout: () {
+          _logger.info(
+            'Bookshelf reader open plan timed out, using reader fallback route',
+            context: <String, Object?>{
+              'chain': 'reader_open',
+              'step': 'plan_timeout',
+              'bookId': book.bookId,
+              'sourceId': book.sourceId,
+              'detailUrl': book.detailUrl,
+              'tapToTimeoutMs': openStopwatch.elapsedMilliseconds,
+            },
+          );
+        },
       );
-      final plan =
-          book.sourceId == _kLocalBookSourceId
-              ? await resolveFuture
-              : await resolveFuture.timeout(
-                const Duration(milliseconds: 220),
-                onTimeout: () {
-                  _logger.info(
-                    'Bookshelf reader open plan timed out, using reader fallback route',
-                    context: <String, Object?>{
-                      'chain': 'reader_open',
-                      'step': 'plan_timeout',
-                      'bookId': book.bookId,
-                      'sourceId': book.sourceId,
-                      'detailUrl': book.detailUrl,
-                      'tapToTimeoutMs': openStopwatch.elapsedMilliseconds,
-                    },
-                  );
-                  return BookshelfReaderOpenPlan(
-                    action: BookshelfReaderOpenAction.openReader,
-                    kind: BookshelfReaderOpenKind.readerFallback,
-                    readerRoute: _pageRouteService.resolveReaderFallbackRoute(
-                      book,
-                    ),
-                  );
-                },
-              );
 
       final latestProgress = plan.latestProgress;
       if (mounted &&
