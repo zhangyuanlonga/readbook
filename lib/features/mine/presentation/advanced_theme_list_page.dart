@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:circular_theme_reveal/circular_theme_reveal.dart';
 import 'package:file_selector/file_selector.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -20,6 +19,8 @@ import '../../../app/theme/app_border_tokens.dart';
 import '../../../app/composition/app_providers.dart' as app_providers;
 import '../../../app/widgets/app_task_status.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/adaptive_overflow_toolbar.dart';
+import '../../../app/widgets/adaptive_route_top_bar.dart';
 import '../../../app/widgets/app_task_bottom_sheet.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/import_export_task_sheet.dart';
@@ -31,7 +32,6 @@ import '../application/advanced_theme_access_controller.dart';
 import '../application/advanced_theme_export_error_formatter.dart';
 import '../application/advanced_theme_list_page_state.dart';
 import '../application/advanced_theme_list_query_controller.dart';
-import '../application/advanced_theme_resource_reference_service.dart';
 import '../application/advanced_theme_service.dart';
 import '../../source/application/external_import_diagnostics.dart';
 import '../../source/application/external_import_catalog.dart';
@@ -39,7 +39,13 @@ import '../../source/application/external_source_import_bridge.dart';
 import '../application/advanced_theme_page_flow_coordinator.dart';
 import '../application/advanced_theme_provider.dart';
 import '../providers.dart';
+import 'advanced_theme_batch_action_controller.dart';
+import 'advanced_theme_batch_import_controller.dart';
+import 'advanced_theme_delete_decision_surface.dart';
+import 'advanced_theme_export_controller.dart';
+import 'advanced_theme_import_controller.dart';
 import 'advanced_theme_list_actions.dart';
+import 'advanced_theme_preview_image_cache.dart';
 import 'widgets/advanced_theme_list_status_widgets.dart';
 import 'widgets/advanced_theme_list_toolbar.dart';
 import 'widgets/advanced_theme_summary_card.dart';
@@ -60,74 +66,20 @@ typedef _AdvancedThemeSortMode = AdvancedThemeSortMode;
 
 typedef _AdvancedThemeExportDispatchResult = AdvancedThemeExportDispatchResult;
 
-typedef _AdvancedThemeDeleteDecision = AdvancedThemeDeleteDecision;
-
 typedef _AdvancedThemeBatchImportSummary = AdvancedThemeBatchImportSummary;
 
-enum _AdvancedThemeImportQueueItemStatus {
-  pending,
-  reading,
-  parsing,
-  importing,
-  success,
-  failure,
-}
+typedef _AdvancedThemeImportQueueItemStatus =
+    AdvancedThemeImportQueueItemStatus;
 
 enum _AdvancedThemeSingleTaskMode { prepare, processing, completed }
 
-extension on _AdvancedThemeImportQueueItemStatus {
-  String get label => switch (this) {
-    _AdvancedThemeImportQueueItemStatus.pending => '待处理',
-    _AdvancedThemeImportQueueItemStatus.reading => '读取文件',
-    _AdvancedThemeImportQueueItemStatus.parsing => '解析内容',
-    _AdvancedThemeImportQueueItemStatus.importing => '导入主题',
-    _AdvancedThemeImportQueueItemStatus.success => '导入完成',
-    _AdvancedThemeImportQueueItemStatus.failure => '导入失败',
-  };
-}
-
-class _AdvancedThemeImportQueueItem {
-  const _AdvancedThemeImportQueueItem({
-    required this.path,
-    required this.fileName,
-    required this.sizeBytes,
-    this.mimeType,
-    this.status = _AdvancedThemeImportQueueItemStatus.pending,
-    this.detail,
-  });
-
-  final String path;
-  final String fileName;
-  final int sizeBytes;
-  final String? mimeType;
-  final _AdvancedThemeImportQueueItemStatus status;
-  final String? detail;
-
-  _AdvancedThemeImportQueueItem copyWith({
-    _AdvancedThemeImportQueueItemStatus? status,
-    String? detail,
-    bool clearDetail = false,
-  }) {
-    return _AdvancedThemeImportQueueItem(
-      path: path,
-      fileName: fileName,
-      sizeBytes: sizeBytes,
-      mimeType: mimeType,
-      status: status ?? this.status,
-      detail: clearDetail ? null : (detail ?? this.detail),
-    );
-  }
-}
+typedef _AdvancedThemeImportQueueItem = AdvancedThemeImportQueueItem;
 
 typedef _AdvancedThemeBatchImportProgressCallback =
-    void Function(_AdvancedThemeImportQueueItemStatus status, String message);
+    AdvancedThemeQueueImportProgressCallback;
 
 typedef _AdvancedThemeBatchFileImportRunner =
-    Future<_AdvancedThemeBatchImportSummary> Function({
-      required String path,
-      String? mimeType,
-      _AdvancedThemeBatchImportProgressCallback? onProgress,
-    });
+    AdvancedThemeBatchFileImportRunner;
 
 /// 高级主题列表页拆分索引：
 /// actions / delete decision 在 `advanced_theme_list_actions.dart`；
@@ -138,11 +90,19 @@ typedef _AdvancedThemeBatchFileImportRunner =
 class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   late final AdvancedThemeAccessController _accessController;
   late final AdvancedThemePageFlowCoordinator _pageFlowCoordinator;
+  final AdvancedThemeBatchActionController _batchActionController =
+      const AdvancedThemeBatchActionController();
+  final AdvancedThemeBatchImportController _batchImportController =
+      const AdvancedThemeBatchImportController();
+  final AdvancedThemeExportController _exportController =
+      const AdvancedThemeExportController();
+  final AdvancedThemeImportController _importController =
+      const AdvancedThemeImportController();
   final AdvancedThemeListQueryController _queryController =
       const AdvancedThemeListQueryController();
   final TextEditingController _searchController = TextEditingController();
-  final Map<String, ImageProvider<Object>> _previewWallpaperImageProviders =
-      <String, ImageProvider<Object>>{};
+  final AdvancedThemePreviewImageCache _previewImageCache =
+      AdvancedThemePreviewImageCache();
 
   AdvancedThemeListPageState get _pageState =>
       ref.read(advancedThemeListPageStateProvider);
@@ -283,6 +243,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   @override
   void dispose() {
     _searchController.dispose();
+    _previewImageCache.clear();
     unawaited(_pageFlowCoordinator.dispose());
     super.dispose();
   }
@@ -642,13 +603,6 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     );
   }
 
-  bool get _shouldUseSaveLocationPicker {
-    return kIsWeb ||
-        defaultTargetPlatform == TargetPlatform.macOS ||
-        defaultTargetPlatform == TargetPlatform.windows ||
-        defaultTargetPlatform == TargetPlatform.linux;
-  }
-
   Future<_AdvancedThemeExportDispatchResult> _shareExportedThemeFile({
     required File file,
     required String text,
@@ -728,46 +682,18 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       _isSaving = true;
     });
     try {
-      onProgress?.call('正在准备导出主题包…');
       final service = ref.read(advancedThemeServiceProvider);
-      final fileName = service.themeBundleExportFileName(theme);
-      String? successMessage;
-      if (_shouldUseSaveLocationPicker) {
-        final location = await getSaveLocation(
-          acceptedTypeGroups: const <XTypeGroup>[
-            ExternalImportCatalog.advancedThemeZipTypeGroup,
-          ],
-          suggestedName: fileName,
-          confirmButtonText: '导出',
-        );
-        if (location == null) {
-          _showMessage('已取消导出主题包');
-          return false;
-        }
-        final file = File(location.path);
-        await service.writeThemeBundleZipFile(theme: theme, outputFile: file);
-      } else {
-        final file = await service.writeThemeBundleZipToTemporaryFile(theme);
-        final shareResult = await _shareExportedThemeFile(
-          file: file,
-          text: '分享主题包：${theme.name}',
-          subject: theme.name,
-          onProgress: onProgress,
-        );
-        if (!mounted) {
-          return false;
-        }
-        if (!shareResult.isCompleted) {
-          _showMessage(shareResult.message ?? '已取消导出主题包');
-          return false;
-        }
-        successMessage = shareResult.message;
-      }
+      final result = await _exportController.exportThemeBundle(
+        service: service,
+        theme: theme,
+        shareExportedThemeFile: _shareExportedThemeFile,
+        onProgress: onProgress,
+      );
       if (!mounted) {
         return false;
       }
-      _showMessage(successMessage ?? '已导出主题包「${theme.name}」');
-      return true;
+      _showMessage(result.message);
+      return result.isCompleted;
     } catch (error) {
       if (!mounted) {
         return false;
@@ -796,18 +722,15 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   }
 
   Future<void> _consumePendingExternalImportPayloads() async {
-    if (_isConsumingExternalImportPayloads || !mounted) {
-      return;
-    }
-
-    _isConsumingExternalImportPayloads = true;
-    try {
-      await _pageFlowCoordinator.consumePendingPayloads(
-        _importFromExternalPayload,
-      );
-    } finally {
-      _isConsumingExternalImportPayloads = false;
-    }
+    await _importController.consumePendingExternalImportPayloads(
+      isConsuming: _isConsumingExternalImportPayloads,
+      mounted: mounted,
+      setConsuming: (value) {
+        _isConsumingExternalImportPayloads = value;
+      },
+      flowCoordinator: _pageFlowCoordinator,
+      importPayload: _importFromExternalPayload,
+    );
   }
 
   Future<void> _importFromExternalPayload(
@@ -1076,23 +999,16 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     _AdvancedThemeBatchImportProgressCallback? onProgress,
   }) async {
     final service = ref.read(advancedThemeServiceProvider);
-    return service.importThemeBatchFile(
+    return _batchImportController.importThemeBatchFile(
+      service: service,
       path: path,
       mimeType: mimeType,
-      onProgress: (stage, message) {
-        final status = switch (stage) {
-          AdvancedThemeImportProgressStage.reading =>
-            _AdvancedThemeImportQueueItemStatus.reading,
-          AdvancedThemeImportProgressStage.parsing =>
-            _AdvancedThemeImportQueueItemStatus.parsing,
-          AdvancedThemeImportProgressStage.importing =>
-            _AdvancedThemeImportQueueItemStatus.importing,
-        };
-        onProgress?.call(
-          status,
-          message == '正在准备导入...' ? ImportExportCopy.importPreparing : message,
-        );
-      },
+      onProgress: onProgress,
+      normalizeProgressMessage:
+          (message) =>
+              message == '正在准备导入...'
+                  ? ImportExportCopy.importPreparing
+                  : message,
     );
   }
 
@@ -1101,7 +1017,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       return;
     }
     final targetThemes = _selectedVisibleThemes;
-    if (targetThemes.isEmpty) {
+    if (!_batchActionController.hasSelection(targetThemes)) {
       _showMessage('请先选择要导出的主题。');
       return;
     }
@@ -1121,53 +1037,16 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     });
     try {
       final service = ref.read(advancedThemeServiceProvider);
-      final fileName = service.themeBatchBundleExportFileName();
-      File? outputFile;
-      String? successMessage;
-      if (_shouldUseSaveLocationPicker) {
-        final location = await getSaveLocation(
-          acceptedTypeGroups: const <XTypeGroup>[
-            ExternalImportCatalog.advancedThemeZipTypeGroup,
-          ],
-          suggestedName: fileName,
-          confirmButtonText: '导出',
-        );
-        if (location == null) {
-          if (mounted) {
-            _showMessage('已取消批量导出');
-          }
-          return;
-        }
-        outputFile = File(location.path);
-        await service.writeThemeBatchBundleFile(
-          summaries: targetThemes,
-          outputFile: outputFile,
-          onProgress: _updateSavingStatus,
-        );
-      } else {
-        outputFile = await service.writeThemeBatchBundleToTemporaryFile(
-          summaries: targetThemes,
-          onProgress: _updateSavingStatus,
-        );
-        _updateSavingStatus('正在打开系统分享...');
-        final shareResult = await _shareExportedThemeFile(
-          file: outputFile,
-          text: '分享高级主题包，共 ${targetThemes.length} 个主题',
-          subject: '高级主题批量导出',
-        );
-        if (!mounted) {
-          return;
-        }
-        if (!shareResult.isCompleted) {
-          _showMessage(shareResult.message ?? '已取消批量导出');
-          return;
-        }
-        successMessage = shareResult.message;
-      }
+      final result = await _exportController.exportThemeSummaries(
+        service: service,
+        summaries: targetThemes,
+        shareExportedThemeFile: _shareExportedThemeFile,
+        onProgress: _updateSavingStatus,
+      );
       if (!mounted) {
         return;
       }
-      _showMessage(successMessage ?? '已导出 ${targetThemes.length} 个主题');
+      _showMessage(result.message);
     } catch (error) {
       if (!mounted) {
         return;
@@ -1197,7 +1076,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       return;
     }
     final selectedThemes = _selectedVisibleThemes;
-    if (selectedThemes.isEmpty) {
+    if (!_batchActionController.hasSelection(selectedThemes)) {
       _showMessage('请先选择要删除的主题。');
       return;
     }
@@ -1240,15 +1119,12 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       if (!mounted) {
         return;
       }
-      if (successCount == 0) {
-        _showMessage('批量删除失败，请稍后重试。');
-        return;
-      }
-      if (failureCount > 0) {
-        _showMessage('已删除 $successCount 个主题，失败 $failureCount 个。');
-      } else {
-        _showMessage('已删除 $successCount 个主题。');
-      }
+      _showMessage(
+        _batchActionController.deleteCompletedMessage(
+          successCount: successCount,
+          failureCount: failureCount,
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -1306,7 +1182,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       return;
     }
     final selectedThemes = _selectedVisibleThemes;
-    if (selectedThemes.isEmpty) {
+    if (!_batchActionController.hasSelection(selectedThemes)) {
       _showMessage('请先选择要分类的主题。');
       return;
     }
@@ -1323,17 +1199,11 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
 
     try {
       final service = ref.read(advancedThemeServiceProvider);
-      final selectedIds = selectedThemes.map((theme) => theme.id).toSet();
-      final updatedThemes = (await service.loadThemes())
-          .map((theme) {
-            if (!selectedIds.contains(theme.id)) {
-              return theme;
-            }
-            return nextCategory == null
-                ? theme.copyWith(clearCategory: true)
-                : theme.copyWith(category: nextCategory);
-          })
-          .toList(growable: false);
+      final updatedThemes = _batchActionController.applyCategory(
+        themes: await service.loadThemes(),
+        selectedIds: _batchActionController.selectedIds(selectedThemes),
+        category: nextCategory,
+      );
       await service.saveThemes(updatedThemes);
       ref.read(advancedThemeRevisionProvider.notifier).markChanged();
       await _load();
@@ -1341,9 +1211,10 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
         return;
       }
       _showMessage(
-        nextCategory == null
-            ? '已清空 ${selectedThemes.length} 个主题的分类'
-            : '已将 ${selectedThemes.length} 个主题归类到「$nextCategory」',
+        _batchActionController.categoryUpdatedMessage(
+          count: selectedThemes.length,
+          category: nextCategory,
+        ),
       );
     } finally {
       if (mounted) {
@@ -1507,7 +1378,8 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     if (!mounted) {
       return;
     }
-    final decision = await _showDeleteThemeSheet(
+    final decision = await showAdvancedThemeDeleteDecisionSurface(
+      context: context,
       theme: theme,
       preview: preview,
     );
@@ -1555,150 +1427,6 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       return;
     }
     await _deleteTheme(theme);
-  }
-
-  Future<_AdvancedThemeDeleteDecision?> _showDeleteThemeSheet({
-    required AppAdvancedTheme theme,
-    required AdvancedThemeDeletePreview preview,
-  }) {
-    return showAdaptiveActionSurface<_AdvancedThemeDeleteDecision>(
-      context: context,
-      maxWidth: 640,
-      maxHeightFactor: 0.86,
-      builder: (sheetContext) {
-        final colorScheme = Theme.of(sheetContext).colorScheme;
-        final selections = <AdvancedThemeDeleteOptionKind, bool>{
-          for (final section in preview.sections)
-            section.kind: section.defaultSelected,
-        };
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            return Padding(
-              padding: EdgeInsets.fromLTRB(
-                0,
-                0,
-                0,
-                MediaQuery.viewInsetsOf(context).bottom,
-              ),
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '删除高级主题',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '即将删除「${theme.name}」。',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                    if (preview.sections.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      for (final section in preview.sections) ...[
-                        Container(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          decoration: BoxDecoration(
-                            color: colorScheme.surfaceContainerLow,
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(
-                              color: colorScheme.outlineVariant.withValues(
-                                alpha: 0.45,
-                              ),
-                            ),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            child: CheckboxListTile(
-                              value: selections[section.kind] ?? false,
-                              dense: true,
-                              contentPadding: EdgeInsets.zero,
-                              controlAffinity: ListTileControlAffinity.leading,
-                              title: Text(
-                                section.title,
-                                style: Theme.of(context).textTheme.titleSmall
-                                    ?.copyWith(fontWeight: FontWeight.w700),
-                              ),
-                              onChanged: (value) {
-                                setSheetState(() {
-                                  selections[section.kind] = value ?? false;
-                                });
-                              },
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed:
-                                () => Navigator.of(sheetContext).pop(
-                                  const _AdvancedThemeDeleteDecision(
-                                    confirmed: false,
-                                    deleteOptions:
-                                        AdvancedThemeDeleteOptions.none(),
-                                  ),
-                                ),
-                            child: const Text('取消'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: FilledButton(
-                            onPressed: () {
-                              Navigator.of(sheetContext).pop(
-                                _AdvancedThemeDeleteDecision(
-                                  confirmed: true,
-                                  deleteOptions: AdvancedThemeDeleteOptions(
-                                    deleteAppearanceWallpapers:
-                                        selections[AdvancedThemeDeleteOptionKind
-                                            .appearanceWallpapers] ??
-                                        false,
-                                    deleteReaderWallpapers:
-                                        selections[AdvancedThemeDeleteOptionKind
-                                            .readerWallpapers] ??
-                                        false,
-                                    deleteCoverGalleries:
-                                        selections[AdvancedThemeDeleteOptionKind
-                                            .coverGalleries] ??
-                                        false,
-                                    deleteLaunchImageGallery:
-                                        selections[AdvancedThemeDeleteOptionKind
-                                            .launchImageGallery] ??
-                                        false,
-                                    deleteBottomNavGallery:
-                                        selections[AdvancedThemeDeleteOptionKind
-                                            .bottomNavGallery] ??
-                                        false,
-                                    deleteFonts:
-                                        selections[AdvancedThemeDeleteOptionKind
-                                            .fonts] ??
-                                        false,
-                                  ),
-                                ),
-                              );
-                            },
-                            child: const Text('删除'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
   }
 
   Future<void> _applyTheme(AppAdvancedTheme theme) async {
@@ -1764,12 +1492,197 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  PreferredSizeWidget _buildRouteTopBar(BuildContext context) {
+    final title =
+        _isSelectionMode
+            ? _selectedThemeIds.isEmpty
+                ? '选择主题'
+                : '已选 ${_selectedThemeIds.length} 个主题'
+            : '高级主题';
+    final subtitle =
+        _isSelectionMode
+            ? '批量操作'
+            : _canUseAdvancedThemes
+            ? '搜索、导入、排序和管理主题'
+            : null;
+    return AdaptiveRouteTopBar(
+      title: title,
+      subtitle: subtitle,
+      leading: _buildRouteLeading(context),
+      middle:
+          !_isSelectionMode && _canUseAdvancedThemes
+              ? _buildSearchBar(context)
+              : null,
+      actions: _buildDesktopTopBarActions(),
+      mobileActions: _buildMobileTopBarActions(),
+      backgroundColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      shadowColor: Colors.transparent,
+      dividerColor: Colors.transparent,
+    );
+  }
+
+  Widget _buildRouteLeading(BuildContext context) {
+    return IconButton(
+      tooltip: _isSelectionMode ? '取消选择' : '返回',
+      onPressed: () {
+        if (_isSelectionMode) {
+          _exitSelectionMode();
+          return;
+        }
+        if (context.canPop()) {
+          context.pop();
+          return;
+        }
+        context.go('/mine');
+      },
+      icon: Icon(
+        _isSelectionMode
+            ? Icons.close_rounded
+            : Icons.arrow_back_ios_new_rounded,
+      ),
+    );
+  }
+
+  List<Widget> _buildMobileTopBarActions() {
+    if (_isSelectionMode) {
+      return const <Widget>[];
+    }
+    return <Widget>[
+      IconButton(
+        tooltip: '新建高级主题',
+        onPressed: _isLoading || _isSaving ? null : () => _openEditor(),
+        icon: const Icon(Icons.add_rounded),
+      ),
+      PopupMenuButton<_AdvancedThemeListMoreAction>(
+        enabled: !_isLoading && !_isSaving,
+        tooltip: '更多',
+        onSelected: _handleMoreAction,
+        itemBuilder:
+            (context) => <PopupMenuEntry<_AdvancedThemeListMoreAction>>[
+              const PopupMenuItem(
+                value: _AdvancedThemeListMoreAction.importBatch,
+                child: Text('批量导入'),
+              ),
+              const PopupMenuItem(
+                value: _AdvancedThemeListMoreAction.sortThemes,
+                child: Text('排序主题'),
+              ),
+              PopupMenuItem(
+                value: _AdvancedThemeListMoreAction.floatingEdit,
+                child: Row(
+                  children: [
+                    Icon(
+                      _floatingEditEnabled
+                          ? Icons.check_box_rounded
+                          : Icons.check_box_outline_blank_rounded,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 10),
+                    const Text('悬浮编辑按钮'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: _AdvancedThemeListMoreAction.selectThemes,
+                child: Text('选择主题'),
+              ),
+            ],
+      ),
+    ];
+  }
+
+  List<AdaptiveOverflowToolbarItem> _buildDesktopTopBarActions() {
+    if (_isSelectionMode) {
+      final hasSelection = _selectedThemeIds.isNotEmpty;
+      return <AdaptiveOverflowToolbarItem>[
+        AdaptiveOverflowToolbarItem(
+          icon:
+              _allVisibleThemesSelected
+                  ? Icons.deselect_outlined
+                  : Icons.select_all_rounded,
+          label: _allVisibleThemesSelected ? '取消全选' : '全选',
+          enabled: !_isSaving && _visibleThemes.isNotEmpty,
+          priority: 6,
+          onPressed: _toggleSelectAllVisibleThemes,
+        ),
+        AdaptiveOverflowToolbarItem(
+          icon: Icons.ios_share_outlined,
+          label: '导出',
+          enabled: !_isSaving && hasSelection,
+          priority: 5,
+          onPressed: () => unawaited(_exportSelectedThemes()),
+        ),
+        AdaptiveOverflowToolbarItem(
+          icon: Icons.category_outlined,
+          label: '分类',
+          enabled: !_isSaving && hasSelection,
+          priority: 4,
+          onPressed: () => unawaited(_updateSelectedThemesCategory()),
+        ),
+        AdaptiveOverflowToolbarItem(
+          icon: Icons.delete_outline_rounded,
+          label: '删除',
+          enabled: !_isSaving && hasSelection,
+          priority: 3,
+          onPressed: () => unawaited(_deleteSelectedThemes()),
+        ),
+      ];
+    }
+    return <AdaptiveOverflowToolbarItem>[
+      AdaptiveOverflowToolbarItem(
+        icon: Icons.add_rounded,
+        label: '新建',
+        enabled: !_isLoading && !_isSaving,
+        priority: 8,
+        onPressed: () => _openEditor(),
+      ),
+      AdaptiveOverflowToolbarItem(
+        icon: Icons.upload_file_rounded,
+        label: '批量导入',
+        enabled: !_isLoading && !_isSaving,
+        priority: 7,
+        onPressed: () => unawaited(_openBatchImportSheet()),
+      ),
+      AdaptiveOverflowToolbarItem(
+        icon: Icons.sort_rounded,
+        label: '排序',
+        enabled: !_isLoading && !_isSaving,
+        priority: 6,
+        onPressed: () => unawaited(_showThemeSortDialog()),
+      ),
+      AdaptiveOverflowToolbarItem(
+        icon:
+            _floatingEditEnabled
+                ? Icons.check_box_rounded
+                : Icons.check_box_outline_blank_rounded,
+        label: '悬浮编辑',
+        enabled: !_isLoading && !_isSaving,
+        priority: 2,
+        onPressed: () {
+          setState(() {
+            _floatingEditEnabled = !_floatingEditEnabled;
+          });
+        },
+      ),
+      AdaptiveOverflowToolbarItem(
+        icon: Icons.checklist_rtl_rounded,
+        label: '选择主题',
+        enabled: !_isLoading && !_isSaving,
+        priority: 1,
+        onPressed: _enterSelectionMode,
+      ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     ref.watch(advancedThemeListPageStateProvider);
+    final metrics = AppAdaptiveMetrics.of(context);
     final horizontal = AppSpacing.pageHorizontal(context);
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
-    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
+    final topBarHeight = metrics.isMediumUpWindow ? 64.0 : kToolbarHeight;
+    final topInset = MediaQuery.paddingOf(context).top + topBarHeight;
     final activeThemeId = ref.watch(activeAdvancedThemeIdProvider);
     final activeThemeAsync = ref.watch(activeAdvancedThemeProvider);
     final backdrop = resolveAdvancedThemeBackdrop(
@@ -1791,81 +1704,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       },
       child: Scaffold(
         extendBodyBehindAppBar: true,
-        appBar: AppBar(
-          leading: IconButton(
-            tooltip: _isSelectionMode ? '取消选择' : '返回',
-            onPressed: () {
-              if (_isSelectionMode) {
-                _exitSelectionMode();
-                return;
-              }
-              if (context.canPop()) {
-                context.pop();
-                return;
-              }
-              context.go('/mine');
-            },
-            icon: Icon(
-              _isSelectionMode
-                  ? Icons.close_rounded
-                  : Icons.arrow_back_ios_new_rounded,
-            ),
-          ),
-          title: Text(
-            _isSelectionMode
-                ? _selectedThemeIds.isEmpty
-                    ? '选择主题'
-                    : '已选 ${_selectedThemeIds.length} 个主题'
-                : '高级主题',
-          ),
-          backgroundColor: Colors.transparent,
-          surfaceTintColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-          actions: [
-            if (!_isSelectionMode) ...[
-              IconButton(
-                tooltip: '新建高级主题',
-                onPressed: _isLoading || _isSaving ? null : () => _openEditor(),
-                icon: const Icon(Icons.add_rounded),
-              ),
-              PopupMenuButton<_AdvancedThemeListMoreAction>(
-                enabled: !_isLoading && !_isSaving,
-                tooltip: '更多',
-                onSelected: _handleMoreAction,
-                itemBuilder:
-                    (context) => <PopupMenuEntry<_AdvancedThemeListMoreAction>>[
-                      const PopupMenuItem(
-                        value: _AdvancedThemeListMoreAction.importBatch,
-                        child: Text('批量导入'),
-                      ),
-                      const PopupMenuItem(
-                        value: _AdvancedThemeListMoreAction.sortThemes,
-                        child: Text('排序主题'),
-                      ),
-                      PopupMenuItem(
-                        value: _AdvancedThemeListMoreAction.floatingEdit,
-                        child: Row(
-                          children: [
-                            Icon(
-                              _floatingEditEnabled
-                                  ? Icons.check_box_rounded
-                                  : Icons.check_box_outline_blank_rounded,
-                              size: 18,
-                            ),
-                            const SizedBox(width: 10),
-                            const Text('悬浮编辑按钮'),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: _AdvancedThemeListMoreAction.selectThemes,
-                        child: Text('选择主题'),
-                      ),
-                    ],
-              ),
-            ],
-          ],
-        ),
+        appBar: _buildRouteTopBar(context),
         floatingActionButton:
             !_isSelectionMode &&
                     _floatingEditEnabled &&
@@ -1879,7 +1718,8 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                 )
                 : null,
         bottomNavigationBar:
-            _isSelectionMode &&
+            !metrics.isMediumUpWindow &&
+                    _isSelectionMode &&
                     !_isAccessLoading &&
                     !_isLoading &&
                     _canUseAdvancedThemes
@@ -1889,7 +1729,6 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
           children: [
             LayoutBuilder(
               builder: (context, _) {
-                final metrics = AppAdaptiveMetrics.of(context);
                 final maxWidth = AppLayout.pageContentMaxWidth(
                   context,
                   maxWidth:
@@ -1960,6 +1799,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     required double topInset,
   }) {
     final visibleThemes = _visibleThemes;
+    final showInlineToolbar = !AppAdaptiveMetrics.of(context).isMediumUpWindow;
     return CustomScrollView(
       slivers: [
         SliverPadding(
@@ -1972,8 +1812,10 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
           sliver: SliverToBoxAdapter(
             child: Column(
               children: [
-                _buildSearchBar(context),
-                const SizedBox(height: 10),
+                if (showInlineToolbar) ...[
+                  _buildSearchBar(context),
+                  const SizedBox(height: 10),
+                ],
                 _buildListStatusRow(
                   context,
                   activeThemeAsync: activeThemeAsync,
@@ -2438,10 +2280,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   }
 
   ImageProvider<Object> _previewWallpaperImageProvider(String wallpaperPath) {
-    return _previewWallpaperImageProviders.putIfAbsent(
-      wallpaperPath,
-      () => ResizeImage(FileImage(File(wallpaperPath)), width: 640),
-    );
+    return _previewImageCache.providerFor(wallpaperPath);
   }
 
   AppAdvancedThemeModeConfig _summaryToPreviewModeConfig(
