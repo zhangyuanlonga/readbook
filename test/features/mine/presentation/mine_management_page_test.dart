@@ -106,6 +106,33 @@ void main() {
     expect(find.text('在读'), findsOneWidget);
     expect(find.text('收藏'), findsOneWidget);
   });
+
+  testWidgets('标签管理页在桌面端使用 dialog 方式新增标签', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(840, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      _buildApp(
+        MineManagementPage(
+          section: MineManagementSection.tagManagement,
+          bookshelfService: BookshelfService(database: database),
+        ),
+        platform: TargetPlatform.macOS,
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    await tester.tap(find.byIcon(Icons.add_rounded));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byType(Dialog), findsOneWidget);
+    expect(find.text('新增标签'), findsOneWidget);
+    expect(find.text('标签名称'), findsOneWidget);
+  });
 }
 
 class _HangingBookshelfService extends BookshelfService {
@@ -120,7 +147,7 @@ class _HangingBookshelfService extends BookshelfService {
   Future<List<String>> getTagOrder() => Completer<List<String>>().future;
 }
 
-Widget _buildApp(Widget child) {
+Widget _buildApp(Widget child, {TargetPlatform? platform}) {
   final router = GoRouter(
     initialLocation: '/',
     routes: [
@@ -132,5 +159,10 @@ Widget _buildApp(Widget child) {
     ],
   );
 
-  return ProviderScope(child: MaterialApp.router(routerConfig: router));
+  return ProviderScope(
+    child: MaterialApp.router(
+      theme: platform == null ? null : ThemeData(platform: platform),
+      routerConfig: router,
+    ),
+  );
 }

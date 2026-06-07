@@ -8,6 +8,7 @@ import 'package:shuxiang_reading_next/app/widgets/adaptive_content_container.dar
 import 'package:shuxiang_reading_next/app/widgets/adaptive_filter_bar.dart';
 import 'package:shuxiang_reading_next/app/widgets/adaptive_list_tile.dart';
 import 'package:shuxiang_reading_next/app/widgets/adaptive_overflow_toolbar.dart';
+import 'package:shuxiang_reading_next/app/widgets/adaptive_route_top_bar.dart';
 import 'package:shuxiang_reading_next/app/widgets/adaptive_search_bar.dart';
 import 'package:shuxiang_reading_next/app/widgets/adaptive_setting_tile.dart';
 import 'package:shuxiang_reading_next/app/widgets/adaptive_split_body.dart';
@@ -330,6 +331,114 @@ void main() {
     await tester.tap(find.text('收起项'));
     expect(thirdTapped, isTrue);
   });
+
+  testWidgets('AdaptiveRouteTopBar keeps compact route app bar simple', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      AdaptiveTestHarness(
+        width: 390,
+        height: 844,
+        wrapWithMaterialApp: true,
+        child: Scaffold(
+          appBar: AdaptiveRouteTopBar(
+            title: '搜索',
+            leading: const IconButton(
+              onPressed: null,
+              icon: Icon(Icons.arrow_back),
+            ),
+            middle: const TextField(
+              key: ValueKey<String>('desktop_route_middle'),
+            ),
+            actions: [
+              AdaptiveOverflowToolbarItem(
+                icon: Icons.tune_rounded,
+                label: '筛选',
+                onPressed: () {},
+              ),
+            ],
+          ),
+          body: const SizedBox.shrink(),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('搜索'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('desktop_route_middle')),
+      findsNothing,
+    );
+    expect(find.byIcon(Icons.tune_rounded), findsNothing);
+  });
+
+  testWidgets(
+    'AdaptiveRouteTopBar exposes desktop middle and overflow actions',
+    (tester) async {
+      var primaryTapped = false;
+      var hiddenTapped = false;
+      await tester.pumpWidget(
+        AdaptiveTestHarness(
+          width: 840,
+          height: 900,
+          wrapWithMaterialApp: true,
+          child: Scaffold(
+            appBar: AdaptiveRouteTopBar(
+              title: '在线搜索',
+              subtitle: '聚合结果',
+              leading: const IconButton(
+                onPressed: null,
+                icon: Icon(Icons.arrow_back),
+              ),
+              middle: const TextField(
+                key: ValueKey<String>('desktop_route_middle'),
+              ),
+              actions: [
+                AdaptiveOverflowToolbarItem(
+                  icon: Icons.search_rounded,
+                  label: '搜索',
+                  priority: 10,
+                  onPressed: () {
+                    primaryTapped = true;
+                  },
+                ),
+                AdaptiveOverflowToolbarItem(
+                  icon: Icons.tune_rounded,
+                  label: '筛选',
+                  onPressed: () {},
+                ),
+                AdaptiveOverflowToolbarItem(
+                  icon: Icons.clear_all_rounded,
+                  label: '清空筛选',
+                  onPressed: () {
+                    hiddenTapped = true;
+                  },
+                ),
+              ],
+            ),
+            body: const SizedBox.shrink(),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('在线搜索'), findsOneWidget);
+      expect(find.text('聚合结果'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('desktop_route_middle')),
+        findsOneWidget,
+      );
+      expect(find.byIcon(Icons.more_horiz_rounded), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.more_horiz_rounded));
+      await tester.pumpAndSettle();
+      expect(find.text('搜索'), findsOneWidget);
+      expect(find.text('清空筛选'), findsOneWidget);
+      await tester.tap(find.text('清空筛选'));
+      expect(hiddenTapped, isTrue);
+      expect(primaryTapped, isFalse);
+    },
+  );
 
   testWidgets('AdaptiveSettingTile exposes tap path when enabled', (
     tester,

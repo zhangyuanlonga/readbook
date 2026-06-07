@@ -7,7 +7,9 @@ import 'package:window_manager/window_manager.dart';
 class DesktopWindowBootstrap {
   const DesktopWindowBootstrap._();
 
-  static const Size minimumSize = Size(1024, 680);
+  /// 桌面原生窗口最小宽度必须低于 600dp，确保 macOS / Windows / Linux
+  /// 真机调试时也能拖到移动壳层与窄桌面断点，避免响应式分支只在测试里可达。
+  static const Size minimumSize = Size(520, 620);
   static const Size initialSize = Size(1280, 820);
   static const String windowTitle = 'Selune';
 

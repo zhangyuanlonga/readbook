@@ -6,6 +6,7 @@ import 'package:shuxiang_reading_next/app/layout/app_adaptive.dart';
 import 'package:shuxiang_reading_next/app/layout/app_layout.dart';
 import 'package:shuxiang_reading_next/app/layout/app_spacing.dart';
 import 'package:shuxiang_reading_next/app/navigation/app_navigation_style_provider.dart';
+import 'package:shuxiang_reading_next/app/shell_page_toolbar_provider.dart';
 import 'package:shuxiang_reading_next/app/shell_navigation_provider.dart';
 import 'package:shuxiang_reading_next/app/shell_scaffold.dart';
 import 'package:shuxiang_reading_next/app/widgets/bottom_nav_icon_view.dart';
@@ -693,10 +694,84 @@ void main() {
     expect(find.byKey(const ValueKey('desktop_shell_sidebar')), findsOneWidget);
     expect(
       tester.getSize(find.byKey(const ValueKey('desktop_shell_sidebar'))).width,
-      216,
+      184,
     );
     expect(find.text('Selune'), findsOneWidget);
     expect(find.text('书架'), findsOneWidget);
+  });
+
+  testWidgets('ShellScaffold 桌面侧边栏按窗口宽度分档', (tester) async {
+    const cases = <({double width, double sidebarWidth})>[
+      (width: 600, sidebarWidth: 184),
+      (width: 840, sidebarWidth: 216),
+      (width: 1200, sidebarWidth: 244),
+      (width: 1600, sidebarWidth: 260),
+    ];
+
+    for (final entry in cases) {
+      await _pumpShellScaffold(tester, width: entry.width);
+
+      expect(
+        tester
+            .getSize(find.byKey(const ValueKey('desktop_shell_sidebar')))
+            .width,
+        entry.sidebarWidth,
+        reason: 'sidebar width at ${entry.width}px',
+      );
+    }
+  });
+
+  testWidgets('ShellScaffold 窄桌面顶栏收起低优先级全局入口', (tester) async {
+    await _pumpShellScaffold(tester, width: 600);
+
+    expect(
+      find.byKey(const ValueKey<String>('desktop_top_bar_notification_button')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('desktop_top_bar_settings_button')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('desktop_top_bar_global_more_button')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('desktop_bookshelf_local_search')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('ShellScaffold 支持非书架页面注册桌面顶栏动作', (tester) async {
+    var tapped = false;
+    await tester.pumpWidget(
+      AdaptiveTestHarness(
+        width: 1280,
+        wrapWithMaterialApp: true,
+        overrides: [
+          appShellNavigationProvider.overrideWith(
+            _AllTabsNavigationNotifier.new,
+          ),
+          desktopShellPageToolbarActionsProvider.overrideWith(
+            (ref) => DesktopShellPageToolbarActions(
+              actions: [
+                DesktopShellPageToolbarAction(
+                  icon: Icons.refresh_rounded,
+                  label: '刷新',
+                  onPressed: () => tapped = true,
+                ),
+              ],
+            ),
+          ),
+        ],
+        child: const ShellScaffold(location: '/discover', child: SizedBox()),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('刷新'));
+
+    expect(tapped, isTrue);
   });
 
   testWidgets('ShellScaffold 桌面顶部栏显示轻量账号入口', (tester) async {
@@ -1049,6 +1124,8 @@ Future<void> _pumpShellScaffold(
   WidgetTester tester, {
   required double width,
 }) async {
+  await tester.binding.setSurfaceSize(Size(width, 844));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(
     AdaptiveTestHarness(
       width: width,

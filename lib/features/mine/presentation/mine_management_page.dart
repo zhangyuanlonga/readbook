@@ -11,6 +11,7 @@ import '../../../app/layout/app_spacing.dart';
 import '../../../app/platform/app_input_focus_behavior.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
 import '../../../app/widgets/app_status_state_card.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
@@ -303,11 +304,9 @@ class _BookshelfTaxonomyManagementPageState
   }
 
   Future<bool?> _showDeleteConfirmDialog(_BookshelfTaxonomyItem item) async {
-    return showModalBottomSheet<bool>(
+    return showAdaptiveActionSurface<bool>(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      maxWidth: 420,
       builder: (context) {
         final colorScheme = Theme.of(context).colorScheme;
         return Padding(
@@ -315,15 +314,6 @@ class _BookshelfTaxonomyManagementPageState
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: colorScheme.outlineVariant,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 20),
               Icon(
                 Icons.warning_amber_rounded,
                 size: 48,
@@ -385,13 +375,9 @@ class _BookshelfTaxonomyManagementPageState
         item?.colorValue ??
         BookshelfTaxonomyItem.defaultColorForName('新$_entityName');
     final existingNames = _items.map((entry) => entry.name).toSet();
-    final result = await showModalBottomSheet<_TaxonomyEditResult>(
+    final result = await showAdaptiveActionSurface<_TaxonomyEditResult>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      maxWidth: 520,
       builder: (surfaceContext) {
         return _TaxonomyEditorPanel(
           entityName: _entityName,
@@ -1027,17 +1013,6 @@ class _TaxonomyEditorPanelState extends State<_TaxonomyEditorPanel> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: colorScheme.outlineVariant,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 14),
             Row(
               children: [
                 Expanded(

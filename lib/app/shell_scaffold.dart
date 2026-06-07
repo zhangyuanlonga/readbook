@@ -25,7 +25,9 @@ import 'layout/app_layout.dart';
 import 'navigation/bottom_nav_icon_gallery_provider.dart';
 import 'navigation/bottom_nav_icon_resolver.dart';
 import 'navigation/app_navigation_style_provider.dart';
+import 'shell_page_toolbar_provider.dart';
 import 'shell_navigation_provider.dart';
+import 'widgets/adaptive_overflow_toolbar.dart';
 import 'widgets/bottom_nav_icon_view.dart';
 import 'widgets/cupertino_dock_navigation_bar.dart';
 import 'widgets/app_task_queue_surface.dart';
@@ -55,6 +57,10 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
   static const double _kSwipeVelocityThreshold = 420;
   static const bool _kEnableMobileTabSwitchAnimation = true;
   static const Duration _kTabSwitchDuration = Duration(milliseconds: 240);
+  static const double _kDesktopSidebarNarrowWidth = 184;
+  static const double _kDesktopSidebarRegularWidth = 216;
+  static const double _kDesktopSidebarStandardWidth = 244;
+  static const double _kDesktopSidebarWideWidth = 260;
 
   late int _currentOrderIndex;
   bool _isForward = true;
@@ -377,8 +383,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     final width = AppLayout.screenWidth(context);
-    final sidebarWidth =
-        width >= AppLayout.expandedBreakpointWidth ? 244.0 : 216.0;
+    final sidebarWidth = _desktopSidebarWidthFor(width);
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
@@ -429,6 +434,10 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
         currentTab == AppShellTab.bookshelf
             ? ref.watch(desktopBookshelfLibraryActionsProvider)
             : null;
+    final pageToolbarActions =
+        currentTab == AppShellTab.bookshelf
+            ? null
+            : ref.watch(desktopShellPageToolbarActionsProvider);
     if (_desktopBookshelfSearchController.text != bookshelfSearchKeyword) {
       _desktopBookshelfSearchController.value = TextEditingValue(
         text: bookshelfSearchKeyword,
@@ -460,37 +469,114 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
               metrics.pagePadding,
               12,
             ),
-            child: Row(
-              children: [
-                if (currentTab == AppShellTab.bookshelf) ...[
-                  _buildDesktopBookshelfViewSelector(
-                    context,
-                    actions: bookshelfLibraryActions,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(child: _buildDesktopTopBarBookshelfSearch(context)),
-                ] else
-                  const Expanded(child: SizedBox.shrink()),
-                const SizedBox(width: 18),
-                if (currentTab == AppShellTab.bookshelf) ...[
-                  _buildDesktopBookshelfViewOptionsButton(
-                    context,
-                    actions: bookshelfToolbarActions,
-                  ),
-                  const SizedBox(width: 10),
-                ],
-                _buildDesktopTopBarNotificationButton(context),
-                const SizedBox(width: 10),
-                _buildDesktopTopBarThemeModeButton(context),
-                const SizedBox(width: 10),
-                _buildDesktopTopBarSettingsButton(context),
-                const SizedBox(width: 14),
-                _buildDesktopTopBarDivider(context),
-                const SizedBox(width: 14),
-                _buildDesktopTopBarAccountEntry(context),
-              ],
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final availableWidth = constraints.maxWidth;
+                final isNarrowTopBar =
+                    availableWidth < AppLayout.expandedBreakpointWidth;
+                final hideBookshelfSearch = availableWidth < 640;
+                final showLowPriorityGlobalActions = availableWidth >= 760;
+                final showAccountName = availableWidth >= 820;
+                final middleSpacing = isNarrowTopBar ? 10.0 : 18.0;
+                final itemSpacing = isNarrowTopBar ? 6.0 : 10.0;
+
+                return Row(
+                  children: [
+                    if (currentTab == AppShellTab.bookshelf) ...[
+                      _buildDesktopBookshelfViewSelector(
+                        context,
+                        actions: bookshelfLibraryActions,
+                      ),
+                      if (!hideBookshelfSearch) ...[
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildDesktopTopBarBookshelfSearch(context),
+                        ),
+                      ] else
+                        const Spacer(),
+                    ] else
+                      Expanded(
+                        child: _buildDesktopRegisteredPageToolbar(
+                          context,
+                          actions: pageToolbarActions,
+                        ),
+                      ),
+                    SizedBox(width: middleSpacing),
+                    if (currentTab == AppShellTab.bookshelf) ...[
+                      _buildDesktopBookshelfViewOptionsButton(
+                        context,
+                        actions: bookshelfToolbarActions,
+                      ),
+                      SizedBox(width: itemSpacing),
+                    ],
+                    if (showLowPriorityGlobalActions) ...[
+                      _buildDesktopTopBarNotificationButton(context),
+                      SizedBox(width: itemSpacing),
+                    ],
+                    _buildDesktopTopBarThemeModeButton(context),
+                    SizedBox(width: itemSpacing),
+                    if (showLowPriorityGlobalActions)
+                      _buildDesktopTopBarSettingsButton(context)
+                    else
+                      _buildDesktopTopBarGlobalMoreButton(context),
+                    if (!isNarrowTopBar) ...[
+                      const SizedBox(width: 14),
+                      _buildDesktopTopBarDivider(context),
+                    ],
+                    SizedBox(width: isNarrowTopBar ? 8 : 14),
+                    _buildDesktopTopBarAccountEntry(
+                      context,
+                      showName: showAccountName,
+                    ),
+                  ],
+                );
+              },
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  double _desktopSidebarWidthFor(double width) {
+    if (width >= AppLayout.wideDesktopBreakpointWidth) {
+      return _kDesktopSidebarWideWidth;
+    }
+    if (width >= AppLayout.desktopBreakpointWidth) {
+      return _kDesktopSidebarStandardWidth;
+    }
+    if (width >= AppLayout.expandedBreakpointWidth) {
+      return _kDesktopSidebarRegularWidth;
+    }
+    return _kDesktopSidebarNarrowWidth;
+  }
+
+  Widget _buildDesktopRegisteredPageToolbar(
+    BuildContext context, {
+    required DesktopShellPageToolbarActions? actions,
+  }) {
+    final items = actions?.actions ?? const <DesktopShellPageToolbarAction>[];
+    if (items.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Align(
+      alignment: Alignment.centerRight,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 320),
+        child: AdaptiveOverflowToolbar(
+          itemWidth: 44,
+          spacing: 4,
+          items: [
+            for (final item in items)
+              AdaptiveOverflowToolbarItem(
+                icon: item.icon,
+                label: item.label,
+                tooltip: item.tooltip,
+                priority: item.priority,
+                enabled: item.enabled,
+                onPressed: item.onPressed,
+              ),
+          ],
         ),
       ),
     );
@@ -805,6 +891,42 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     );
   }
 
+  Widget _buildDesktopTopBarGlobalMoreButton(BuildContext context) {
+    return MenuAnchor(
+      menuChildren: [
+        MenuItemButton(
+          leadingIcon: const Icon(Icons.notifications_none_outlined),
+          onPressed: () {
+            unawaited(context.push('/announcements'));
+          },
+          child: const Text('通知'),
+        ),
+        MenuItemButton(
+          leadingIcon: const Icon(Icons.settings_outlined),
+          onPressed: () {
+            unawaited(context.push('/system-settings'));
+          },
+          child: const Text('设置'),
+        ),
+      ],
+      builder: (menuContext, controller, child) {
+        return _buildDesktopTopBarIconButton(
+          context,
+          key: const ValueKey<String>('desktop_top_bar_global_more_button'),
+          icon: Icons.more_horiz_rounded,
+          tooltip: '更多',
+          onTap: () {
+            if (controller.isOpen) {
+              controller.close();
+            } else {
+              controller.open();
+            }
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildDesktopTopBarIconButton(
     BuildContext context, {
     required Key key,
@@ -871,7 +993,10 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     );
   }
 
-  Widget _buildDesktopTopBarAccountEntry(BuildContext context) {
+  Widget _buildDesktopTopBarAccountEntry(
+    BuildContext context, {
+    bool showName = true,
+  }) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final session = _topBarSession;
@@ -974,19 +1099,21 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
                               ),
                             ),
                   ),
-                  const SizedBox(width: 8),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 88),
-                    child: Text(
-                      displayName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: textTheme.labelLarge?.copyWith(
-                        color: colorScheme.onSurface,
-                        fontWeight: FontWeight.w800,
+                  if (showName) ...[
+                    const SizedBox(width: 8),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 88),
+                      child: Text(
+                        displayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: textTheme.labelLarge?.copyWith(
+                          color: colorScheme.onSurface,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                   const SizedBox(width: 2),
                   Icon(
                     controller.isOpen
