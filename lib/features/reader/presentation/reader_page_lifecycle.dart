@@ -68,20 +68,30 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
           }
           _coverGalleries = next.valueOrNull ?? const [];
         });
-    _chapterId = widget.chapterId;
-    _chapterUrl = widget.chapterUrl?.trim();
-    _chapterTitle = widget.chapterTitle?.trim();
-    _sourceId = widget.sourceId?.trim();
-    _detailUrl = widget.detailUrl?.trim();
-    _activeBookId = widget.bookId.trim();
+    final seed = _pageBootstrapController.resolveSeed(
+      bookId: widget.bookId,
+      chapterId: widget.chapterId,
+      chapterUrl: widget.chapterUrl,
+      chapterTitle: widget.chapterTitle,
+      sourceId: widget.sourceId,
+      detailUrl: widget.detailUrl,
+      chapterIndex: widget.chapterIndex,
+      bookmarkId: widget.bookmarkId,
+    );
+    _chapterId = seed.chapterId;
+    _chapterUrl = seed.chapterUrl;
+    _chapterTitle = seed.chapterTitle;
+    _sourceId = seed.sourceId;
+    _detailUrl = seed.detailUrl;
+    _activeBookId = seed.bookId;
     _cancelBackgroundRefreshConflictForCurrentBook();
-    _bookTitle = widget.chapterTitle?.trim() ?? '';
-    _currentIndex = widget.chapterIndex;
+    _bookTitle = seed.chapterTitle ?? '';
+    _currentIndex = seed.chapterIndex;
     _readerInteractionUnlockAt = DateTime.now().add(
       _ReaderPageState._kInitialReaderInteractionCooldown,
     );
-    final incomingBookmarkId = widget.bookmarkId?.trim() ?? '';
-    if (incomingBookmarkId.isNotEmpty) {
+    final incomingBookmarkId = seed.pendingBookmarkId;
+    if (incomingBookmarkId != null) {
       _pendingBookmarkId = incomingBookmarkId;
     }
     _overlayControlsController = AnimationController(
@@ -221,7 +231,8 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
   }
 
   void _handleReaderAppLifecycleState(AppLifecycleState state) {
-    if (_lifecycleDelegate.shouldPauseReaderRuntime(state)) {
+    final decision = _runtimeLifecycleController.resolve(state);
+    if (decision.pauseRuntime) {
       _isReaderRuntimeVisible = false;
       _pauseAutoReadForRuntime();
       _flushProgressSave();
@@ -234,7 +245,7 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
       return;
     }
 
-    if (_lifecycleDelegate.shouldResumeReaderRuntime(state)) {
+    if (decision.resumeRuntime) {
       _isReaderRuntimeVisible = true;
       unawaited(_refreshReaderInfoSnapshot(force: true));
       _scheduleReaderInfoMinuteTick();

@@ -6,10 +6,16 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
     String? initialSettingsGroupKey,
     bool startAutoReadAfterApplyInitially = false,
   }) async {
-    _stopAutoReadSession();
-    _suspendOverlayAutoHide();
-    final shouldRestoreOverlay = _showOverlayControls;
-    if (shouldRestoreOverlay) {
+    final entryPlan = _settingsEntryController.buildOpenPlan(
+      overlayVisible: _showOverlayControls,
+    );
+    if (entryPlan.shouldStopAutoRead) {
+      _stopAutoReadSession();
+    }
+    if (entryPlan.shouldSuspendOverlayAutoHide) {
+      _suspendOverlayAutoHide();
+    }
+    if (entryPlan.shouldRestoreOverlayAfterClose) {
       _hideOverlayControls(resumeAutoRead: false, syncSystemUi: false);
     }
 
@@ -4243,7 +4249,7 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
       return;
     }
 
-    if (shouldRestoreOverlay) {
+    if (entryPlan.shouldRestoreOverlayAfterClose) {
       _setOverlayControlsVisibility(true);
     }
 

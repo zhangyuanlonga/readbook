@@ -1386,7 +1386,15 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     _blockingLoadingCardTimer = null;
     _showBlockingLoadingCard = false;
 
-    if (!_needsBlockingLoadingUi) {
+    final decision = _contentLoadController.resolveDelayedUi(
+      needsBlockingLoadingUi: _needsBlockingLoadingUi,
+      isBootstrapping: _isBootstrapping,
+      isSwitchSourceLoading: _isSwitchSourceLoading,
+      hasVisibleReaderContent: _hasVisibleReaderContent,
+      isLoadingContent: _isLoadingContent,
+      shouldShowBlockingReaderLoading: _shouldShowBlockingReaderLoading,
+    );
+    if (!decision.showBlockingLoadingCard) {
       return;
     }
 
@@ -1408,7 +1416,15 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     _hiddenLoadingPlaceholderTimer = null;
     _showHiddenLoadingPlaceholder = false;
 
-    if (!_needsBlockingLoadingUi) {
+    final decision = _contentLoadController.resolveDelayedUi(
+      needsBlockingLoadingUi: _needsBlockingLoadingUi,
+      isBootstrapping: _isBootstrapping,
+      isSwitchSourceLoading: _isSwitchSourceLoading,
+      hasVisibleReaderContent: _hasVisibleReaderContent,
+      isLoadingContent: _isLoadingContent,
+      shouldShowBlockingReaderLoading: _shouldShowBlockingReaderLoading,
+    );
+    if (!decision.showHiddenLoadingPlaceholder) {
       return;
     }
 
@@ -1442,9 +1458,15 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     _chapterLoadingIndicatorTimer = null;
     _showChapterLoadingIndicator = false;
 
-    if (_isBootstrapping ||
-        _isSwitchSourceLoading ||
-        !_hasVisibleReaderContent) {
+    final decision = _contentLoadController.resolveDelayedUi(
+      needsBlockingLoadingUi: _needsBlockingLoadingUi,
+      isBootstrapping: _isBootstrapping,
+      isSwitchSourceLoading: _isSwitchSourceLoading,
+      hasVisibleReaderContent: _hasVisibleReaderContent,
+      isLoadingContent: _isLoadingContent,
+      shouldShowBlockingReaderLoading: _shouldShowBlockingReaderLoading,
+    );
+    if (!decision.showChapterLoadingIndicator) {
       return;
     }
 
@@ -1464,67 +1486,29 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
   }
 
   Future<void> _saveProgress() async {
-    final sourceId = _sourceId;
-    final detailUrl = _detailUrl;
-    final chapterUrl = _chapterUrl;
-    final chapterTitle = _chapterTitle;
-    final currentIndex = _currentIndex;
-
-    if (sourceId == null ||
-        detailUrl == null ||
-        chapterUrl == null ||
-        chapterTitle == null ||
-        currentIndex == null) {
-      return;
-    }
-
-    // 保存前统一转换本地图书 scheme，保证 Android/iOS/Web/Desktop 继续阅读都能通过同一套 route helper 恢复章节位置。
-    final normalizedDetailUrl = _normalizeLocalDetailUrlForProgress(detailUrl);
-    final normalizedChapterUrl = _normalizeLocalChapterUrlForProgress(
-      chapterUrl,
-    );
-    final logicalPosition = _currentLogicalPosition();
-    final viewportState = _currentViewportState();
-    final positionRatio = _currentLogicalPositionRatio();
-
-    await _preferencesService.saveProgress(
-      ReadingProgress(
+    final progress = _progressCommitController.buildProgress(
+      ReaderProgressCommitInput(
         bookId: _currentBookId,
-        sourceId: sourceId,
-        detailUrl: normalizedDetailUrl,
+        sourceId: _sourceId,
+        detailUrl: _detailUrl,
         chapterId: _chapterId,
-        chapterUrl: normalizedChapterUrl,
-        chapterTitle: chapterTitle,
-        chapterIndex: currentIndex,
+        chapterUrl: _chapterUrl,
+        chapterTitle: _chapterTitle,
+        chapterIndex: _currentIndex,
+        positionRatio: _currentLogicalPositionRatio(),
+        viewportState: _currentViewportState(),
+        contentMode: _currentContentMode,
+        logicalPosition: _currentLogicalPosition(),
+        audioPlaybackPosition: _audioPlaybackPosition,
+        audioPlaybackDuration: _audioPlaybackDuration,
+        audioPlaybackSpeed: _audioPlaybackSpeed,
         updatedAt: DateTime.now(),
-        chapterPositionRatio: positionRatio,
-        logicalPosition: logicalPosition?.copyWith(
-          chapterPositionRatio: positionRatio,
-          pageIndex: viewportState.pageIndex,
-          totalPageCount: viewportState.pageCount,
-          viewportMode: viewportState.kind.name,
-        ),
-        positionSnapshot: ReaderPositionSnapshot(
-          viewportMode: viewportState.kind.name,
-          pageIndex: viewportState.pageIndex,
-          pageCount: viewportState.pageCount,
-          scrollOffset: viewportState.scrollOffset,
-          maxScrollExtent: viewportState.maxScrollExtent,
-          audioPositionMs:
-              _currentContentMode == ReaderContentMode.audio
-                  ? _audioPlaybackPosition.inMilliseconds
-                  : null,
-          audioDurationMs:
-              _currentContentMode == ReaderContentMode.audio
-                  ? _audioPlaybackDuration.inMilliseconds
-                  : null,
-          audioSpeed:
-              _currentContentMode == ReaderContentMode.audio
-                  ? _audioPlaybackSpeed
-                  : null,
-        ),
       ),
     );
+    if (progress == null) {
+      return;
+    }
+    await _preferencesService.saveProgress(progress);
   }
 
   Future<void> _turnPagedTextPage({required int direction}) async {

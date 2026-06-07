@@ -245,7 +245,7 @@
 - [x] WIN-U5-01 执行 `U5-BS-01` 到 `U5-BS-04`：书架模型、mapper、状态组件、工具条拆分；对应 `BL-01-01`。
 - [x] WIN-U5-02 执行 `U5-ATL-01` 到 `U5-ATL-06`：高级主题列表 action 盘点、查询 controller、权限 controller、卡片、状态组件、toolbar；对应 `BL-05-02`。
 - [ ] WIN-U5-03 执行 `U5-ATE-01` 到 `U5-ATE-05`：高级主题编辑器字段盘点、状态 facade、基础信息、颜色组件、壁纸分区；对应 `BL-05-03`。
-- [ ] WIN-U5-04 执行 `U5-RD-01` 到 `U5-RD-04`：阅读器拆分索引、bootstrap、lifecycle、content load；对应 `BL-03-01`。
+- [x] MAC-U5-01 执行 `U5-RD-01` 到 `U5-RD-15`：阅读器拆分索引、bootstrap、lifecycle、content load、进度保存、分页触发、触控、桌面输入、chrome、目录、设置、选区、反馈和内容模式 surface；对应 `BL-03-01` / `BL-03-02`。
 - [ ] WIN-U5-05 如果 Windows 已占用 `bookshelf_page.dart`，Mac 暂停 `BL-01`；如果 Windows 已占用高级主题列表或编辑器，Mac 暂停对应 `BL-05-02` / `BL-05-03`。
 
 ### U5 最大维护债细拆
@@ -279,21 +279,21 @@
 
 当前约 `5993` 行。拆分必须跟 M6 阅读器专项一致，先拆生命周期和加载 glue，后拆手势、分页和选择。
 
-- [ ] U5-RD-01 盘点 `reader_page.dart` 与现有 part 文件职责，补拆分索引注释，不改行为。
-- [ ] U5-RD-02 抽 route 参数解析与入口初始化 glue 到 `reader_page_bootstrap_controller.dart`。
-- [ ] U5-RD-03 抽 App lifecycle、wakelock、系统 UI 恢复到 `reader_runtime_lifecycle_controller.dart`。
-- [ ] U5-RD-04 抽章节加载状态、错误恢复、重试入口到 `reader_content_load_controller.dart`。
-- [ ] U5-RD-05 抽本地 / 在线进度保存与阅读记录写入到 `reader_progress_commit_controller.dart`，补保存测试。
-- [ ] U5-RD-06 抽分页触发、分页缓存 key、字体变化重分页到 `reader_pagination_controller.dart`，复用现有 resolver。
-- [ ] U5-RD-07 抽触控手势区域和 tap zone 判断到 `reader_touch_navigation_layer.dart`，移动端手势必须回归。
-- [ ] U5-RD-08 抽桌面键盘、滚轮、hover / focus glue 到 `reader_desktop_input_layer.dart`，继续复用 `ReaderDesktopInputResolver`。
-- [ ] U5-RD-09 抽阅读器顶部 / 底部 chrome 到 `reader_chrome_surface.dart`，不改沉浸式显示时机。
-- [ ] U5-RD-10 抽目录入口和目录弹层调用到 `reader_catalog_entry_controller.dart`。
-- [ ] U5-RD-11 抽设置入口和设置弹层调用到 `reader_settings_entry_controller.dart`。
-- [ ] U5-RD-12 抽选择文本、复制、划线 / 书签入口 glue 到 `reader_selection_controller.dart`。
-- [ ] U5-RD-13 抽错误卡片、离线提示、能力缺失提示到 `reader_feedback_widgets.dart`。
-- [ ] U5-RD-14 抽本地图文 / 漫画 / 文本模式切换 UI glue 到 `reader_content_mode_surface.dart`。
-- [ ] U5-RD-15 清理已迁移 helper，跑 M6 现有 reader application / route tests。
+- [x] U5-RD-01 盘点 `reader_page.dart` 与现有 part 文件职责，补拆分索引注释，不改行为。
+- [x] U5-RD-02 抽 route 参数解析与入口初始化 glue 到 `reader_page_bootstrap_controller.dart`。
+- [x] U5-RD-03 抽 App lifecycle、wakelock、系统 UI 恢复到 `reader_runtime_lifecycle_controller.dart`。
+- [x] U5-RD-04 抽章节加载状态、错误恢复、重试入口到 `reader_content_load_controller.dart`。
+- [x] U5-RD-05 抽本地 / 在线进度保存与阅读记录写入到 `reader_progress_commit_controller.dart`，补保存测试。
+- [x] U5-RD-06 抽分页触发、分页缓存 key、字体变化重分页到 `reader_pagination_controller.dart`，复用现有 resolver。
+- [x] U5-RD-07 抽触控手势区域和 tap zone 判断到 `reader_touch_navigation_layer.dart`，移动端手势必须回归。
+- [x] U5-RD-08 抽桌面键盘、滚轮、hover / focus glue 到 `reader_desktop_input_layer.dart`，继续复用 `ReaderDesktopInputResolver`。
+- [x] U5-RD-09 抽阅读器顶部 / 底部 chrome 到 `reader_chrome_surface.dart`，不改沉浸式显示时机。
+- [x] U5-RD-10 抽目录入口和目录弹层调用到 `reader_catalog_entry_controller.dart`。
+- [x] U5-RD-11 抽设置入口和设置弹层调用到 `reader_settings_entry_controller.dart`。
+- [x] U5-RD-12 抽选择文本、复制、划线 / 书签入口 glue 到 `reader_selection_controller.dart`。
+- [x] U5-RD-13 抽错误卡片、离线提示、能力缺失提示到 `reader_feedback_widgets.dart`。
+- [x] U5-RD-14 抽本地图文 / 漫画 / 文本模式切换 UI glue 到 `reader_content_mode_surface.dart`。
+- [x] U5-RD-15 清理已迁移 helper，跑 M6 现有 reader application / route tests。
 
 #### U5-ATE：`advanced_theme_editor_page.dart`
 
@@ -338,7 +338,7 @@
 - [x] U5-SEQ-01 先做 `U5-BS-01` 到 `U5-BS-04`，先拆书架纯模型、mapper、状态组件和工具条。
 - [x] U5-SEQ-02 再做 `U5-ATL-01` 到 `U5-ATL-06`，先把高级主题列表查询、卡片、状态和 toolbar 拆出来。
 - [ ] U5-SEQ-03 再做 `U5-ATE-01` 到 `U5-ATE-05`，先拆高级主题编辑器状态 facade 和前半表单分区。
-- [ ] U5-SEQ-04 阅读器从 `U5-RD-01` 到 `U5-RD-04` 开始，只拆 bootstrap、lifecycle、content load。
+- [x] U5-SEQ-04 阅读器从 `U5-RD-01` 到 `U5-RD-04` 开始，只拆 bootstrap、lifecycle、content load。
 - [ ] U5-SEQ-05 每完成一个文件分组前四项，记录文件行数变化、目标 analyze、相关测试和未验证平台。
 
 ## 8. U6：统一组件与设计 token 审计
@@ -414,8 +414,8 @@
 
 来源：`U2-FIX-05`、`U4-FIX-06`、`U5-RD-*`、`U7-04` 到 `U7-07`。
 
-- [ ] BL-03-01 先执行 `U5-RD-01` 到 `U5-RD-04`：阅读器拆 bootstrap、lifecycle、content load 和错误恢复入口。
-- [ ] BL-03-02 继续拆目录、设置、选择、分页缓存、触控手势和桌面键鼠输入，对应 `U2-FIX-05` 与 `U5-RD-05` 到 `U5-RD-14`。
+- [x] BL-03-01 先执行 `U5-RD-01` 到 `U5-RD-04`：阅读器拆 bootstrap、lifecycle、content load 和错误恢复入口。
+- [x] BL-03-02 继续拆目录、设置、选择、分页缓存、触控手势和桌面键鼠输入，对应 `U2-FIX-05` 与 `U5-RD-05` 到 `U5-RD-14`。
 - [ ] BL-03-03 补本地内容导入到阅读 smoke 清单：导入、本地详情、智能分段、阅读、删除、缓存清理按 Desktop / Web / Mobile 记录，对应 `U4-FIX-06`。
 - [ ] BL-03-04 阅读器相关整改必须记录移动端小屏、桌面拖拽、Web 能力降级或真实阻塞原因。
 
@@ -500,3 +500,5 @@
 - [x] 2026-06-07：执行 `BL-04-01-B1` / `BL-04-01-B2`；Mine 模块会话来源并入 auth provider，高级主题列表会员 gate 改为复用 app 级 access service，并补 provider 同源测试。
 - [x] 2026-06-07：执行 `BL-04-01-B3` / `BL-04-04`；新增 `MembershipAccessPresentation`，收口我的页、高级主题、在线搜索和阅读器切书源的会员状态标签、权益文案和 gate 提示，并补展示 adapter 单测。
 - [x] 2026-06-07：执行 `BL-04-02` / `BL-04-03`；统一会员快照订阅账号事件并自动失效，补 profile / session 永久会员同时放行在线搜索和高级主题 gate 的 smoke test，补登录、注册、退出、session restore、过期事件 smoke。该链路为平台无关底座，Desktop / Web / Mobile 共享。
+- [x] 2026-06-07：执行 `U5-RD-01` 到 `U5-RD-06`；阅读器主文件补拆分索引，route seed、运行时生命周期、延迟加载 UI、进度保存 payload、分页签名 / 触发计划分别下沉到 application controller。本轮只拆边界，不改阅读器业务行为；保留 `reader_page.dart` / part 文件作为现有 glue。验证：`dart analyze lib/features/reader/application/reader_page_bootstrap_controller.dart lib/features/reader/application/reader_runtime_lifecycle_controller.dart lib/features/reader/application/reader_content_load_controller.dart lib/features/reader/application/reader_progress_commit_controller.dart lib/features/reader/application/reader_pagination_controller.dart lib/features/reader/presentation/reader_page.dart lib/features/reader/presentation/reader_page_lifecycle.dart lib/features/reader/presentation/reader_page_runtime.dart test/features/reader/application/reader_page_bootstrap_controller_test.dart test/features/reader/application/reader_runtime_lifecycle_controller_test.dart test/features/reader/application/reader_content_load_controller_test.dart test/features/reader/application/reader_progress_commit_controller_test.dart test/features/reader/application/reader_pagination_controller_test.dart` 通过；`flutter test` 串行执行 5 个新增 reader controller 测试均通过。未验证：Android / iOS / Web / macOS / Windows / Linux 手工 smoke，本轮未改交互路径，后续阅读器专项按多端矩阵补验。
+- [x] 2026-06-07：执行 `U5-RD-07` 到 `U5-RD-15`；触控 tap zone / 长按入口迁移到 `reader_touch_navigation_layer.dart`，桌面键盘 / 滚轮 glue 迁移到 `reader_desktop_input_layer.dart`，overlay chrome / 系统 UI / 自动隐藏迁移到 `reader_chrome_surface.dart`，目录、设置、选区、内容模式分别新增 `reader_catalog_entry_controller.dart`、`reader_settings_entry_controller.dart`、`reader_selection_controller.dart`、`reader_content_mode_surface_controller.dart`，内容模式 presentation 出口为 `reader_content_mode_surface.dart`，漫画图片错误占位接入 `reader_feedback_widgets.dart`。本轮继续只拆边界，不重写阅读器交互。验证：目标 `dart analyze` 通过；新增测试 `reader_catalog_entry_controller_test.dart`、`reader_settings_entry_controller_test.dart`、`reader_selection_controller_test.dart`、`reader_content_mode_surface_controller_test.dart`、`reader_feedback_widgets_test.dart` 全部通过；既有相关测试 `reader_desktop_input_resolver_test.dart`、`reader_navigation_entry_resolver_test.dart`、`reader_feedback_service_test.dart`、`reader_mode_capabilities_test.dart` 通过；并复跑 `U5-RD-01` 到 `U5-RD-06` 的 5 个 controller 测试通过。未验证：Android / iOS / Web / macOS / Windows / Linux 手工 smoke；由于触控和桌面输入 glue 已拆，后续手工回归需重点覆盖移动端点击分区 / 长按、桌面键盘 / 滚轮、目录、设置、选区复制和图片重试。

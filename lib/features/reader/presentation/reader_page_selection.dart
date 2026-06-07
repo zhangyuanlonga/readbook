@@ -794,7 +794,13 @@ extension _ReaderPageSelectionExtension on _ReaderPageState {
     SelectableRegionState? clearSelectionState,
   }) async {
     final snippet = _selectedSnippet.trim();
-    if (snippet.isEmpty) {
+    final decision = _selectionController.resolveAction(
+      action: ReaderSelectionAction.copy,
+      textSelectionActive: _isTextSelectionActive,
+      hasSnippet: snippet.isNotEmpty,
+      hasExistingBookmark: false,
+    );
+    if (!decision.canExecute) {
       return;
     }
     await Clipboard.setData(ClipboardData(text: snippet));
@@ -824,15 +830,20 @@ extension _ReaderPageSelectionExtension on _ReaderPageState {
   Future<void> _onSaveBookmarkPressed({
     SelectableRegionState? clearSelectionState,
   }) async {
-    if (!_isTextSelectionActive || _selectedSnippet.isEmpty) {
-      return;
-    }
-
     final existing = _currentSelectionBookmark();
-    if (existing != null) {
-      _showMessage('灵感已存在');
-      _clearSelectionState();
-      clearSelectionState?.clearSelection();
+    final decision = _selectionController.resolveAction(
+      action: ReaderSelectionAction.saveBookmark,
+      textSelectionActive: _isTextSelectionActive,
+      hasSnippet: _selectedSnippet.isNotEmpty,
+      hasExistingBookmark: existing != null,
+    );
+    if (!decision.canExecute) {
+      final message = decision.message;
+      if (message != null) {
+        _showMessage(message);
+        _clearSelectionState();
+        clearSelectionState?.clearSelection();
+      }
       return;
     }
 

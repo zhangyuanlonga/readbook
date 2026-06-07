@@ -269,12 +269,22 @@ extension _ReaderPageNavigationExtension on _ReaderPageState {
   }
 
   Future<void> _showCatalogSheet() async {
-    if (!_readerModeCapabilities.supportsCatalogNavigation) {
-      _showMessage('当前内容暂不支持目录操作。');
+    final beforeLoadDecision = _catalogEntryController.resolveOpenDecision(
+      capabilities: _readerModeCapabilities,
+      hasCatalog: _chapters.isNotEmpty,
+      catalogComplete: _catalogComplete,
+    );
+    if (!beforeLoadDecision.canOpen) {
+      _showMessage(beforeLoadDecision.message ?? '当前内容暂不支持目录操作。');
       return;
     }
     if (!await _ensureCatalogLoadedForOverlay()) {
-      _showMessage('当前书籍暂无目录。');
+      final afterLoadDecision = _catalogEntryController.resolveOpenDecision(
+        capabilities: _readerModeCapabilities,
+        hasCatalog: _chapters.isNotEmpty,
+        catalogComplete: true,
+      );
+      _showMessage(afterLoadDecision.message ?? '当前书籍暂无目录。');
       return;
     }
     _stopAutoReadSession();

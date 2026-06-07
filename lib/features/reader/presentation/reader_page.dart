@@ -84,12 +84,15 @@ import '../application/reader_mode_capabilities.dart';
 import '../application/reader_mode_model.dart';
 import '../application/reader_mode_resolver.dart';
 import '../application/reader_entry_route_resolver.dart';
+import '../application/reader_catalog_entry_controller.dart';
 import '../application/reader_catalog_search_service.dart';
 import '../application/reader_chapter_cache_decoder.dart';
 import '../application/reader_chapter_load_planner.dart';
 import '../application/reader_chapter_window_controller.dart';
 import '../application/reader_chapter_flow.dart';
 import '../application/reader_chapter_navigation.dart';
+import '../application/reader_content_load_controller.dart';
+import '../application/reader_content_mode_surface_controller.dart';
 import '../application/reader_document_render_model.dart';
 import '../application/reader_font_registry_service.dart';
 import '../application/reader_image_decode_budget.dart';
@@ -98,14 +101,19 @@ import '../application/reader_jump_facade.dart';
 import '../application/reader_jump_planner.dart';
 import '../application/reader_layout_resolver.dart';
 import '../application/reader_navigation_entry_resolver.dart';
+import '../application/reader_page_bootstrap_controller.dart';
+import '../application/reader_pagination_controller.dart';
 import '../application/reader_pagination_cache_service.dart';
 import '../application/reader_pagination_engine.dart';
 import '../application/reader_pagination_models.dart';
 import '../application/reader_pagination_spec.dart';
 import '../application/reader_platform_bridge_service.dart';
 import '../application/reader_platform_facade.dart';
+import '../application/reader_progress_commit_controller.dart';
 import '../application/reader_settings_groups.dart';
+import '../application/reader_settings_entry_controller.dart';
 import '../application/reader_settings_resolution_service.dart';
+import '../application/reader_selection_controller.dart';
 import '../application/reader_session_presentation_facade.dart';
 import '../application/reader_surface_policy_resolver.dart';
 import '../application/reader_surface_metrics.dart';
@@ -116,6 +124,7 @@ import '../application/reader_preferences_service.dart';
 import '../application/reader_preload_controller.dart';
 import '../application/reader_resource_budget.dart';
 import '../application/reader_runtime_facade.dart';
+import '../application/reader_runtime_lifecycle_controller.dart';
 import '../application/reader_runtime_wake_policy.dart';
 import '../application/reader_visual_overrides_service.dart';
 import '../application/reader_session_state.dart';
@@ -150,6 +159,7 @@ import 'reader_body_region.dart';
 import 'reader_chrome_widgets.dart';
 import 'reader_content_loading_controller.dart';
 import 'reader_content_loading_presenter.dart';
+import 'reader_feedback_widgets.dart';
 import 'reader_layout_context.dart';
 import 'paged_animation/curl_paged_animation_renderer.dart';
 import 'reader_pdf_view.dart';
@@ -179,11 +189,15 @@ part 'reader_page_content_rendering.dart';
 part 'reader_page_lifecycle.dart';
 part 'reader_page_navigation.dart';
 part 'reader_page_runtime.dart';
+part 'reader_desktop_input_layer.dart';
+part 'reader_touch_navigation_layer.dart';
+part 'reader_chrome_surface.dart';
 part 'reader_page_shell.dart';
 part 'reader_page_settings_panel.dart';
 part 'reader_page_settings_sheet.dart';
 part 'reader_page_source_switch.dart';
 part 'reader_page_viewport.dart';
+part 'reader_content_mode_surface.dart';
 
 enum _ReaderSettingsTab { interface, reading }
 
@@ -203,6 +217,13 @@ enum ReaderAutoReadSessionState {
   finished,
 }
 
+// 阅读器拆分索引：
+// 1. 路由入口与初始参数归一化放在 reader_page_widget.dart 与 ReaderPageBootstrapController。
+// 2. 启动加载流程继续放在 reader_page_bootstrap.dart，后续只搬独立业务决策。
+// 3. 应用生命周期、运行时暂停恢复放在 reader_page_lifecycle.dart 与 ReaderRuntimeLifecycleController。
+// 4. 内容加载延迟 UI 决策放在 reader_page_content_loading.dart / runtime part 与 ReaderContentLoadController。
+// 5. 阅读进度、分页签名和分页触发由 ReaderProgressCommitController / ReaderPaginationController 承接。
+// 6. 壳层、设置、换源、选区、视口渲染继续由现有 part 文件隔离，避免再次塞回主文件。
 class _ReaderPageState extends ConsumerState<ReaderPage>
     with TickerProviderStateMixin, WidgetsBindingObserver {
   static const String _kBookmarkNoHighlightToken = '__none__';
@@ -227,6 +248,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const ReaderContentLoadingPresenter();
   final ReaderContentModeResolver _contentModeResolver =
       const ReaderContentModeResolver();
+  final ReaderContentModeSurfaceController _contentModeSurfaceController =
+      const ReaderContentModeSurfaceController();
   final ReaderPresentationResolver _presentationResolver =
       const ReaderPresentationResolver();
   final ReaderViewportBuilder _viewportBuilder = const ReaderViewportBuilder();
@@ -240,6 +263,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const ReaderChapterNavigation();
   final ReaderChapterWindowController _chapterWindowController =
       const ReaderChapterWindowController();
+  final ReaderPageBootstrapController _pageBootstrapController =
+      const ReaderPageBootstrapController();
+  final ReaderContentLoadController _contentLoadController =
+      const ReaderContentLoadController();
   final ReaderJumpFacade _jumpFacade = const ReaderJumpFacade();
   final ReaderJumpPlanner _jumpPlanner = const ReaderJumpPlanner();
   final ReaderNavigationEntryResolver _navigationEntryResolver =
@@ -247,6 +274,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   final ReaderLayoutResolver _layoutResolver = const ReaderLayoutResolver();
   final ReaderPaginationEngine _paginationEngine =
       const ReaderPaginationEngine();
+  final ReaderPaginationController _paginationController =
+      const ReaderPaginationController();
   final ReaderStreamingPaginationController _streamingPaginationController =
       const ReaderStreamingPaginationController();
   final ReaderImageDecodeBudgetResolver _imageDecodeBudgetResolver =
@@ -264,10 +293,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const ReaderPagedViewportTransitionResolver();
   final ReaderCatalogSearchService _catalogSearchService =
       const ReaderCatalogSearchService();
+  final ReaderCatalogEntryController _catalogEntryController =
+      const ReaderCatalogEntryController();
   final ReaderReadingRecordCoordinator _readingRecordCoordinator =
       const ReaderReadingRecordCoordinator();
   final ReaderRuntimeWakePolicy _runtimeWakePolicy =
       const ReaderRuntimeWakePolicy();
+  final ReaderRuntimeLifecycleController _runtimeLifecycleController =
+      const ReaderRuntimeLifecycleController();
   final ReaderFeedbackService _readerFeedbackService =
       const ReaderFeedbackService();
   final ReaderThemeModeService _readerThemeModeService =
@@ -285,6 +318,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const ReaderSettingsPresenter();
   final ReaderSettingsResolutionService _readerSettingsResolutionService =
       const ReaderSettingsResolutionService();
+  final ReaderSettingsEntryController _settingsEntryController =
+      const ReaderSettingsEntryController();
+  final ReaderSelectionController _selectionController =
+      const ReaderSelectionController();
   final ReaderSessionStateResolver _sessionStateResolver =
       const ReaderSessionStateResolver();
   final ReaderDesktopInputResolver _desktopInputResolver =
@@ -312,6 +349,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const ReaderSourceSwitchCoordinator();
   final ReaderSourceSwitchTargetResolver _sourceSwitchTargetResolver =
       const ReaderSourceSwitchTargetResolver();
+  final ReaderProgressCommitController _progressCommitController =
+      const ReaderProgressCommitController();
   final ScrollTextReaderRenderer _scrollTextRenderer =
       const ScrollTextReaderRenderer();
   final PagedTextReaderRenderer _pagedTextRenderer =
@@ -2950,14 +2989,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (!mounted || !_isTextPagedViewport) {
       return;
     }
-    final plan = _paginationEngine.buildEnsurePlan(
-      ReaderPaginationEnsureRequest(
-        spec: spec,
-        signature: _buildPaginationSignature(spec: spec),
-        currentState: _pagedPaginationState,
-        hasExistingPages: _pagedPages.isNotEmpty || _pagedBlockPages.isNotEmpty,
-        currentProgressRatio: _currentScrollRatio(),
-      ),
+    final plan = _paginationController.buildEnsurePlan(
+      spec: spec,
+      chapterId: _chapterId,
+      currentState: _pagedPaginationState,
+      hasExistingPages: _pagedPages.isNotEmpty || _pagedBlockPages.isNotEmpty,
+      currentProgressRatio: _currentScrollRatio(),
     );
     if (!plan.shouldPaginate) {
       return;
@@ -3071,7 +3108,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required ReaderPaginationSpec spec,
     String? chapterIdOverride,
   }) {
-    return _paginationSpecResolver.buildSignature(
+    return _paginationController.buildSignature(
       chapterId: chapterIdOverride ?? _chapterId,
       spec: spec,
     );
@@ -5221,33 +5258,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   String _normalizeLocalDetailUrlForProgress(String detailUrl) {
-    if (!_isLocalSource) {
-      return detailUrl;
-    }
-    final normalized = detailUrl.trim();
-    if (LocalReaderIdentity.isLocalSchemeUrl(normalized)) {
-      return normalized;
-    }
-    final bookId = _currentBookId;
-    if (bookId.isEmpty) {
-      return normalized;
-    }
-    return LocalReaderIdentity.buildBookDetailUrl(bookId);
+    return _progressCommitController.normalizeLocalDetailUrlForProgress(
+      sourceId: _sourceId ?? '',
+      bookId: _currentBookId,
+      detailUrl: detailUrl,
+    );
   }
 
   String _normalizeLocalChapterUrlForProgress(String chapterUrl) {
-    if (!_isLocalSource) {
-      return chapterUrl;
-    }
-    final normalized = chapterUrl.trim();
-    if (LocalReaderIdentity.isLocalSchemeUrl(normalized)) {
-      return normalized;
-    }
-    final chapterId = _chapterId.trim();
-    if (chapterId.isEmpty || _isPlaceholderChapterId(chapterId)) {
-      return normalized;
-    }
-    return LocalReaderIdentity.buildChapterUrl(chapterId);
+    return _progressCommitController.normalizeLocalChapterUrlForProgress(
+      sourceId: _sourceId ?? '',
+      chapterId: _chapterId,
+      chapterUrl: chapterUrl,
+    );
   }
 
   bool _isPlaceholderChapterId(String chapterId) {

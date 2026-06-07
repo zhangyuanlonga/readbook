@@ -600,25 +600,14 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
     String imageUrl,
     int retryNonce,
   ) {
-    return AspectRatio(
-      aspectRatio: 3 / 4,
-      child: InkWell(
-        onTap: () {
-          _updateReaderState(() {
-            _mangaImageRetryNonce[imageUrl] = retryNonce + 1;
-          });
-        },
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Text(
-              '图片加载失败，点击重试',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: colors.meta),
-            ),
-          ),
-        ),
-      ),
+    return ReaderInlineFeedback(
+      message: '图片加载失败，点击重试',
+      textColor: colors.meta,
+      onTap: () {
+        _updateReaderState(() {
+          _mangaImageRetryNonce[imageUrl] = retryNonce + 1;
+        });
+      },
     );
   }
 

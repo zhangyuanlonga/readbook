@@ -132,7 +132,8 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
   }
 
   Widget _buildReaderViewportContent(_ReaderThemeColors colors) {
-    if (_currentContentMode == ReaderContentMode.audio) {
+    final surfaceModel = _currentContentModeSurfaceModel;
+    if (surfaceModel.mode == ReaderContentMode.audio) {
       return _buildAudioReader(colors);
     }
     if (_shouldUseContinuousTextFlow && _continuousTextChapters.isNotEmpty) {
