@@ -195,6 +195,52 @@ void main() {
       expect(access.hasOnlineService, isTrue);
     },
   );
+
+  test('session lifetime membership grants default paid features', () {
+    final access = MembershipAccessResolver.fromSession(
+      const AuthSession(
+        accessToken: 'token',
+        membershipActive: true,
+        vipLevel: 'pro',
+        vipStatus: 'active',
+        planType: 'lifetime',
+      ),
+    );
+
+    expect(access.hasMembership, isTrue);
+    expect(access.hasOnlineService, isTrue);
+    expect(access.hasThemeCustom, isTrue);
+    expect(access.planType, 'lifetime');
+  });
+
+  test(
+    'access service keeps lifetime profile access when entitlement fails',
+    () async {
+      final service = MembershipAccessService(
+        sessionStore: await _sessionStore(),
+        membershipService: _FakeMembershipService(
+          error: _membershipCheckFailed,
+        ),
+        userProfileService: _FakeUserProfileService(
+          profile: _profile(
+            membershipActive: true,
+            vipLevel: 'pro',
+            vipStatus: 'active',
+            planType: 'lifetime',
+          ),
+        ),
+      );
+
+      final access = await service.fetchCurrentAccess(
+        session: const AuthSession(accessToken: 'token'),
+      );
+
+      expect(access.hasMembership, isTrue);
+      expect(access.hasOnlineService, isTrue);
+      expect(access.hasThemeCustom, isTrue);
+      expect(access.planType, 'lifetime');
+    },
+  );
 }
 
 const _membershipCheckFailed = AppException(

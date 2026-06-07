@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/composition/app_providers.dart' as app_providers;
 import '../../../core/logging/app_logger.dart';
 import '../../../core/media/image_selection_service.dart';
+import '../../../core/membership/membership_access_service.dart';
 import '../../../domain/repositories/book_metadata_override_repository.dart';
 import '../../../domain/repositories/bookmark_repository.dart';
 import '../../../domain/repositories/local_book_repository.dart';
@@ -49,6 +50,7 @@ class ReaderFeatureDependencies {
     required this.readingRecordService,
     required this.imageSelectionService,
     required this.bookshelfService,
+    required this.membershipAccessService,
     required this.switchSourceSearchService,
     required this.searchHitCacheService,
     required this.sourceHealthService,
@@ -77,6 +79,7 @@ class ReaderFeatureDependencies {
   final ReadingRecordService readingRecordService;
   final ImageSelectionService imageSelectionService;
   final BookshelfService bookshelfService;
+  final MembershipAccessService membershipAccessService;
   final SearchService switchSourceSearchService;
   final SearchHitCacheService searchHitCacheService;
   final SourceHealthService sourceHealthService;
@@ -174,6 +177,9 @@ final readerFeatureDependenciesFactoryProvider =
           readingRecordService: readingRecordService,
           imageSelectionService: ImageSelectionService(),
           bookshelfService: bookshelfService,
+          membershipAccessService: ref.watch(
+            app_providers.appMembershipAccessServiceProvider,
+          ),
           switchSourceSearchService: SearchService(),
           searchHitCacheService: SearchHitCacheService(),
           sourceHealthService: ref.watch(

@@ -40,8 +40,6 @@ import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
 import '../../../core/logging/app_logger.dart';
 import '../../../core/media/image_selection_service.dart';
-import '../../../core/auth/auth_session.dart';
-import '../../../core/auth/auth_session_store.dart';
 import '../../../core/membership/membership_access_service.dart';
 import '../../../core/storage/local_file_stat.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
@@ -297,6 +295,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   late final ReadingRecordService _readingRecordService;
   late final ImageSelectionService _imageSelectionService;
   late final BookshelfService _bookshelfService;
+  late final MembershipAccessService _membershipAccessService;
   late final SearchService _switchSourceSearchService;
   late final SearchHitCacheService _searchHitCacheService;
   final SourceSwitchScoreService _switchSourceScoreService =

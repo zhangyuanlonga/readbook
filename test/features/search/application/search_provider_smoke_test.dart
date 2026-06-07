@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shuxiang_reading_next/core/auth/auth_session.dart';
 import 'package:shuxiang_reading_next/core/auth/auth_session_store.dart';
 import 'package:shuxiang_reading_next/core/membership/membership_access_service.dart';
+import 'package:shuxiang_reading_next/app/composition/app_providers.dart';
 import 'package:shuxiang_reading_next/features/auth/providers.dart';
 import 'package:shuxiang_reading_next/features/book/application/book_presentation_query_service.dart';
 import 'package:shuxiang_reading_next/features/search/application/search_history_service.dart';
@@ -43,6 +44,10 @@ void main() {
     expect(
       container.read(searchMembershipAccessServiceProvider),
       isA<MembershipAccessService>(),
+    );
+    expect(
+      container.read(searchMembershipAccessServiceProvider),
+      same(container.read(appMembershipAccessServiceProvider)),
     );
   });
 

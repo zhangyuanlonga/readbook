@@ -119,8 +119,7 @@ extension _ReaderPageSourceSwitchExtension on _ReaderPageState {
 
   Future<bool> _ensureSwitchSourceMembership() async {
     try {
-      final sessionStore = AuthSessionStore();
-      final session = await sessionStore.getSession();
+      final session = await _membershipAccessService.getCurrentSession();
       if (session == null) {
         _showMessage('切换书源为会员服务，请先登录并开通会员。');
         if (mounted) {
@@ -129,8 +128,7 @@ extension _ReaderPageSourceSwitchExtension on _ReaderPageState {
         return false;
       }
 
-      final hasAccess = await _loadSwitchSourceMembershipAccess(
-        sessionStore,
+      final hasAccess = await _membershipAccessService.fetchOnlineServiceAccess(
         session: session,
       );
       if (!hasAccess) {
@@ -147,14 +145,6 @@ extension _ReaderPageSourceSwitchExtension on _ReaderPageState {
       );
       return false;
     }
-  }
-
-  Future<bool> _loadSwitchSourceMembershipAccess(
-    AuthSessionStore sessionStore, {
-    required AuthSession session,
-  }) async {
-    final accessService = MembershipAccessService(sessionStore: sessionStore);
-    return accessService.fetchOnlineServiceAccess(session: session);
   }
 
   Future<ReaderSwitchSourceScopePlan> _buildSwitchSourceScope({

@@ -5,6 +5,8 @@ import '../../core/auth/auth_event_bus.dart';
 import '../../core/cache/cover_image_disk_cache.dart';
 import '../../core/logging/app_logger.dart';
 import '../../core/logging/source_log_store.dart';
+import '../../core/membership/membership_access_resolver.dart';
+import '../../core/membership/membership_access_service.dart';
 import '../../data/datasources/local/app_database.dart';
 import '../../data/repositories/book_metadata_override_repository_impl.dart';
 import '../../data/repositories/bookmark_repository_impl.dart';
@@ -12,6 +14,7 @@ import '../../data/repositories/local_book_repository_impl.dart';
 import '../../domain/repositories/book_metadata_override_repository.dart';
 import '../../domain/repositories/bookmark_repository.dart';
 import '../../domain/repositories/local_book_repository.dart';
+import '../../features/auth/providers.dart' as auth_providers;
 import '../../features/source/application/external_source_import_bridge.dart';
 import '../../features/source/application/source_health_service.dart';
 import '../../features/book/application/book_presentation_query_service.dart';
@@ -80,6 +83,22 @@ final appExternalImportBridgeProvider = Provider<ExternalImportBridge>((ref) {
 final appAuthEventStreamProvider = Provider<Stream<AuthEvent>>((ref) {
   return AuthEventBus.instance.stream;
 });
+
+final appMembershipAccessServiceProvider = Provider<MembershipAccessService>((
+  ref,
+) {
+  // 全平台会员能力统一从登录会话、用户资料和会员 entitlement 三层解析，
+  // 避免搜索、阅读器、高级主题各自 new service 后出现权益判断不一致。
+  return MembershipAccessService(
+    sessionStore: ref.watch(auth_providers.authSessionStoreProvider),
+    userProfileService: ref.watch(auth_providers.userProfileServiceProvider),
+  );
+});
+
+final appMembershipAccessSnapshotProvider =
+    FutureProvider<MembershipAccessSnapshot>((ref) {
+      return ref.watch(appMembershipAccessServiceProvider).fetchCurrentAccess();
+    });
 
 final appAuthAccountLifecycleCoordinatorProvider =
     Provider<AuthAccountLifecycleCoordinator>((ref) {

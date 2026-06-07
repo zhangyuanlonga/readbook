@@ -423,10 +423,14 @@
 
 来源：`U2-FIX-06`、`U4-FIX-01`、`U4-FIX-02`、`U4-FIX-07`。
 
-- [ ] BL-04-01 抽统一会员 access snapshot provider / display adapter：我的页、在线搜索、高级主题、阅读器书源切换只读取同一快照。
-- [ ] BL-04-02 为“profile 或 session 显示永久会员”的账号补会员 smoke test，覆盖在线搜索和高级主题 gate。
-- [ ] BL-04-03 补账号会话事件 smoke：登录、注册、退出、session restore、过期事件覆盖 Desktop / Web / Mobile。
-- [ ] BL-04-04 收口会员文案：我的页、高级主题、在线搜索和阅读器能力提示使用同一 display adapter。
+- [x] BL-04-01 抽统一会员 access snapshot provider / display adapter：我的页、在线搜索、高级主题、阅读器书源切换只读取同一快照。
+- [x] BL-04-01-A 建立统一会员 access provider 底座：新增 app 级 `appMembershipAccessServiceProvider` / `appMembershipAccessSnapshotProvider`，在线搜索和阅读器书源切换已接入同一 access service。
+- [x] BL-04-01-B1 合并 Mine 模块会话来源：`mineAuthSessionStoreProvider`、`mineAuthSessionSecretStoreProvider`、`mineUserProfileServiceProvider` 默认复用 auth 模块 provider，避免我的页 / 会员中心 / 高级主题列表读取不同 session store。
+- [x] BL-04-01-B2 高级主题列表 gate 接入统一会员 access：高级主题列表不再通过 `MinePageSessionService` 自行加载会员 gate，而是复用 app 级 `MembershipAccessService`。
+- [x] BL-04-01-B3 迁移我的页 / 高级主题列表 display adapter：会员显示、主题权益和 gate 文案改为读取统一 access snapshot。
+- [x] BL-04-02 为“profile 或 session 显示永久会员”的账号补会员 smoke test，覆盖在线搜索和高级主题 gate。
+- [x] BL-04-03 补账号会话事件 smoke：登录、注册、退出、session restore、过期事件覆盖 Desktop / Web / Mobile。
+- [x] BL-04-04 收口会员文案：我的页、高级主题、在线搜索和阅读器能力提示使用同一 display adapter。
 
 ### BL-05 设置、资源管理与高级主题域
 
@@ -491,3 +495,7 @@
 - [x] 2026-06-07：执行 U5 代码可维护性与成熟库替换审计；补充超大文件排序、成熟库现状、替换候选和 `WIN-U5-*` Windows 优先分发清单。
 - [x] 2026-06-07：执行 `WIN-U5-01` / `BL-01-01`；书架页私有模型迁移到 `bookshelf_page_models.dart`，偏好字符串映射迁移到 `bookshelf_preference_mappers.dart` 并补 mapper 单测，书架状态卡与继续阅读提示显隐壳层拆到 `widgets/bookshelf_status_widgets.dart`，搜索/筛选/设置工具条拆到 `widgets/bookshelf_toolbar_widgets.dart`，旧 `widgets/bookshelf_page_sections.dart` 改为兼容出口；本轮只拆代码边界，不改业务行为。验证：`flutter analyze lib/features/bookshelf/presentation/bookshelf_page.dart lib/features/bookshelf/presentation/bookshelf_page_models.dart lib/features/bookshelf/presentation/bookshelf_preference_mappers.dart lib/features/bookshelf/presentation/widgets/bookshelf_status_widgets.dart lib/features/bookshelf/presentation/widgets/bookshelf_toolbar_widgets.dart test/features/bookshelf/presentation/bookshelf_preference_mappers_test.dart` 通过；`flutter test test/features/bookshelf/presentation/bookshelf_preference_mappers_test.dart test/features/bookshelf/presentation/bookshelf_taxonomy_merge_test.dart` 通过。未验证：Android / iOS / Web / macOS / Windows / Linux 手工 smoke，本轮未改交互路径，发布前按书架页面回归矩阵补验。
 - [x] 2026-06-07：执行 `WIN-U5-02`；高级主题列表页补拆分索引，action / delete decision 迁移到 `advanced_theme_list_actions.dart`，查询排序筛选和选择裁剪迁移到 `advanced_theme_list_query_controller.dart` 并补单测，会员权限加载和 AuthEvent 刷新迁移到 `advanced_theme_access_controller.dart`，主题卡片、状态展示和搜索筛选工具条分别迁移到 `widgets/advanced_theme_summary_card.dart`、`widgets/advanced_theme_list_status_widgets.dart`、`widgets/advanced_theme_list_toolbar.dart`；本轮未接入 `U5-ATL-07` route topbar，因此 `BL-05-02` 暂不整体勾选。验证：`flutter analyze lib/features/mine/presentation/advanced_theme_list_page.dart lib/features/mine/presentation/advanced_theme_list_actions.dart lib/features/mine/application/advanced_theme_list_query_controller.dart lib/features/mine/application/advanced_theme_access_controller.dart lib/features/mine/presentation/widgets/advanced_theme_list_status_widgets.dart lib/features/mine/presentation/widgets/advanced_theme_list_toolbar.dart lib/features/mine/presentation/widgets/advanced_theme_summary_card.dart test/features/mine/application/advanced_theme_list_query_controller_test.dart` 通过；`flutter test test/features/mine/application/advanced_theme_list_query_controller_test.dart test/features/mine/application/advanced_theme_page_state_test.dart` 通过。未验证：Android / iOS / Web / macOS / Windows / Linux 手工 smoke，本轮未改业务行为和平台入口，发布前按高级主题列表回归矩阵补验。
+- [x] 2026-06-07：执行 `BL-04-01-A`；新增 app 级统一会员 access provider，在线搜索和阅读器书源切换改为复用同一 access service，并补永久会员 session/profile 回退测试。
+- [x] 2026-06-07：执行 `BL-04-01-B1` / `BL-04-01-B2`；Mine 模块会话来源并入 auth provider，高级主题列表会员 gate 改为复用 app 级 access service，并补 provider 同源测试。
+- [x] 2026-06-07：执行 `BL-04-01-B3` / `BL-04-04`；新增 `MembershipAccessPresentation`，收口我的页、高级主题、在线搜索和阅读器切书源的会员状态标签、权益文案和 gate 提示，并补展示 adapter 单测。
+- [x] 2026-06-07：执行 `BL-04-02` / `BL-04-03`；统一会员快照订阅账号事件并自动失效，补 profile / session 永久会员同时放行在线搜索和高级主题 gate 的 smoke test，补登录、注册、退出、session restore、过期事件 smoke。该链路为平台无关底座，Desktop / Web / Mobile 共享。

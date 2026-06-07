@@ -17,6 +17,7 @@ class _ReaderPageDependencyBinder {
     state._readingRecordService = dependencies.readingRecordService;
     state._imageSelectionService = dependencies.imageSelectionService;
     state._bookshelfService = dependencies.bookshelfService;
+    state._membershipAccessService = dependencies.membershipAccessService;
     state._switchSourceSearchService = dependencies.switchSourceSearchService;
     state._searchHitCacheService = dependencies.searchHitCacheService;
     state._sourceHealthService = dependencies.sourceHealthService;
