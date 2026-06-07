@@ -28,6 +28,7 @@ import 'navigation/app_navigation_style_provider.dart';
 import 'shell_page_toolbar_provider.dart';
 import 'shell_navigation_provider.dart';
 import 'widgets/adaptive_overflow_toolbar.dart';
+import 'widgets/adaptive_bottom_sheet.dart';
 import 'widgets/bottom_nav_icon_view.dart';
 import 'widgets/cupertino_dock_navigation_bar.dart';
 import 'widgets/app_task_queue_surface.dart';
@@ -184,22 +185,52 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     if (_isShellLoggingOut || _topBarSession == null) {
       return;
     }
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAdaptiveActionSurface<bool>(
       context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('退出登录'),
-          content: const Text('确定要退出当前账号吗？'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('退出'),
-            ),
-          ],
+      maxWidth: 420,
+      builder: (surfaceContext) {
+        final colorScheme = Theme.of(surfaceContext).colorScheme;
+        final textTheme = Theme.of(surfaceContext).textTheme;
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.logout_rounded, color: colorScheme.primary),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      '退出登录',
+                      style: textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text('确定要退出当前账号吗？', style: textTheme.bodyMedium),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.of(surfaceContext).pop(false),
+                    child: const Text('取消'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: () => Navigator.of(surfaceContext).pop(true),
+                    child: const Text('退出'),
+                  ),
+                ],
+              ),
+            ],
+          ),
         );
       },
     );

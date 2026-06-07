@@ -9,6 +9,8 @@ import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/adaptive_bottom_sheet.dart';
+import '../../../app/widgets/app_empty_state_card.dart';
 import '../../../app/widgets/app_status_state_card.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../domain/entities/bookmark.dart';
@@ -197,26 +199,10 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
   }
 
   Future<void> _deleteSelectedBookmarks() async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showBookmarkDeleteConfirmSurface(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('确认删除'),
-            content: Text('确定要删除选中的 ${_selectedBookmarkIds.length} 条灵感吗？'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('取消'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                style: TextButton.styleFrom(
-                  foregroundColor: Theme.of(context).colorScheme.error,
-                ),
-                child: const Text('删除'),
-              ),
-            ],
-          ),
+      title: '确认删除',
+      message: '确定要删除选中的 ${_selectedBookmarkIds.length} 条灵感吗？',
     );
 
     if (confirmed != true) return;
@@ -368,37 +354,7 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
         24 + bottomSafe,
       ),
       children: [
-        Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.auto_awesome_outlined,
-              size: 64,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              '灵感空空如也',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '阅读时选中喜欢的段落，点击「保存灵感」',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 24),
-            FilledButton.icon(
-              onPressed: () => context.go('/bookshelf'),
-              icon: const Icon(Icons.menu_book_outlined),
-              label: const Text('去阅读一本书'),
-            ),
-          ],
-        ),
+        BookmarksEmptyStateCard(onAction: () => context.go('/bookshelf')),
       ],
     );
   }
@@ -530,14 +486,9 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
           24 + bottomSafe,
         ),
         children: [
-          AppStatusStateCard(
-            icon: Icons.bookmarks_outlined,
+          BookmarksStatusStateCard(
             title: title,
             message: message,
-            tone:
-                title == '加载失败'
-                    ? AppStatusStateTone.error
-                    : AppStatusStateTone.neutral,
             actionLabel: actionLabel,
             onAction: onAction,
           ),
@@ -920,26 +871,10 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
   }
 
   Future<void> _deleteBookmark(Bookmark bookmark) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showBookmarkDeleteConfirmSurface(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('删除灵感'),
-            content: const Text('确定要删除这条灵感吗？'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('取消'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                style: TextButton.styleFrom(
-                  foregroundColor: Theme.of(context).colorScheme.error,
-                ),
-                child: const Text('删除'),
-              ),
-            ],
-          ),
+      title: '删除灵感',
+      message: '确定要删除这条灵感吗？',
     );
 
     if (confirmed != true) return;
@@ -1014,6 +949,112 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
 }
 
 // ==================== 辅助组件 ====================
+
+Future<bool?> showBookmarkDeleteConfirmSurface({
+  required BuildContext context,
+  required String title,
+  required String message,
+}) {
+  return showAdaptiveActionSurface<bool>(
+    context: context,
+    maxWidth: 420,
+    builder: (surfaceContext) {
+      final colorScheme = Theme.of(surfaceContext).colorScheme;
+      final textTheme = Theme.of(surfaceContext).textTheme;
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.warning_amber_rounded, color: colorScheme.error),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(message, style: textTheme.bodyMedium),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(surfaceContext).pop(false),
+                  child: const Text('取消'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.tonal(
+                  onPressed: () => Navigator.of(surfaceContext).pop(true),
+                  style: FilledButton.styleFrom(
+                    foregroundColor: colorScheme.error,
+                  ),
+                  child: const Text('删除'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}
+
+class BookmarksEmptyStateCard extends StatelessWidget {
+  const BookmarksEmptyStateCard({super.key, required this.onAction});
+
+  final VoidCallback onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppEmptyStateCard(
+      icon: Icons.auto_awesome_outlined,
+      title: '灵感空空如也',
+      description: '阅读时选中喜欢的段落，点击「保存灵感」',
+      actionLabel: '去阅读一本书',
+      onAction: onAction,
+    );
+  }
+}
+
+class BookmarksStatusStateCard extends StatelessWidget {
+  const BookmarksStatusStateCard({
+    super.key,
+    required this.title,
+    required this.message,
+    required this.actionLabel,
+    required this.onAction,
+  });
+
+  final String title;
+  final String message;
+  final String actionLabel;
+  final VoidCallback onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppStatusStateCard(
+      icon: Icons.bookmarks_outlined,
+      title: title,
+      message: message,
+      tone:
+          title == '加载失败'
+              ? AppStatusStateTone.error
+              : AppStatusStateTone.neutral,
+      actionLabel: actionLabel,
+      onAction: onAction,
+    );
+  }
+}
 
 class _StatItem extends StatelessWidget {
   const _StatItem({
@@ -1292,26 +1333,10 @@ class _BookmarkBookDetailPageState extends State<_BookmarkBookDetailPage> {
   }
 
   Future<void> _deleteAllBookmarks() async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showBookmarkDeleteConfirmSurface(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('删除所有灵感'),
-            content: Text('确定要删除本书的所有 ${_bookmarks.length} 条灵感吗？'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('取消'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                style: TextButton.styleFrom(
-                  foregroundColor: Theme.of(context).colorScheme.error,
-                ),
-                child: const Text('删除'),
-              ),
-            ],
-          ),
+      title: '删除所有灵感',
+      message: '确定要删除本书的所有 ${_bookmarks.length} 条灵感吗？',
     );
 
     if (confirmed != true) return;

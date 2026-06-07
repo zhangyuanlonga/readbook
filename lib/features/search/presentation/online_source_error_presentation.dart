@@ -48,6 +48,33 @@ class OnlineSourceErrorPresentationAdapter {
     );
   }
 
+  String forReaderContentException(AppException error) {
+    final gatewayFailure = error.gatewayFailure;
+    if (gatewayFailure != null) {
+      final message = gatewayFailure.message.trim();
+      if (message.isNotEmpty) {
+        return message;
+      }
+    }
+
+    final message = error.briefMessage.trim();
+    return switch (error.code) {
+      ErrorCode.network when message.contains('状态码：403') =>
+        '章节被源站拦截（403），请在书源配置 Referer/Origin/User-Agent 后重试。',
+      ErrorCode.network when message.contains('状态码：404') =>
+        '章节地址已失效（404），请刷新目录后重试。',
+      ErrorCode.network when message.contains('超时') => '请求超时，请稍后重试或切换书源。',
+      ErrorCode.validation
+          when message.contains('正文') && message.contains('缺少') =>
+        '书源缺少正文解析配置，无法读取该章节。',
+      ErrorCode.validation => '书源配置不完整，无法继续阅读。',
+      ErrorCode.ruleMatchEmpty when message.contains('解析为空') =>
+        '正文解析未命中，当前章节暂无可读内容。',
+      ErrorCode.ruleMatchEmpty => '当前章节没有可读取内容，请切换章节或书源。',
+      _ => _contentMessageFor(error.code, message),
+    };
+  }
+
   String? tocWarningFor(AppException? error) {
     if (error == null) {
       return null;

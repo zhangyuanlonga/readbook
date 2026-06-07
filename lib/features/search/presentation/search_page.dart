@@ -10,6 +10,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/layout/app_adaptive.dart';
+import '../../../app/lifecycle/async_ownership_controller.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/navigation/search_entry_transition.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
@@ -73,6 +74,8 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   late final MembershipAccessService _membershipAccessService;
   final OnlineSourceErrorPresentationAdapter _onlineSourceErrorAdapter =
       const OnlineSourceErrorPresentationAdapter();
+  final AsyncOwnershipController _onlineSearchAccessOwnership =
+      AsyncOwnershipController();
 
   static const Duration _progressUiThrottleWindow = Duration(
     milliseconds: 1500,
@@ -247,8 +250,6 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     );
   }
 
-  int get _onlineSearchAccessRequestId =>
-      _pageState.onlineSearchAccessRequestId;
   set _onlineSearchAccessRequestId(int value) {
     _pageStateNotifier.update(
       (state) => state.copyWith(onlineSearchAccessRequestId: value),
@@ -298,6 +299,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
 
   @override
   void dispose() {
+    _onlineSearchAccessOwnership.dispose();
     _activeSearchToken?.cancel();
     // ConsumerState 进入 dispose 后不能再通过 ref 读写 provider。
     // 这里仅释放本地计时器/控制器，autoDispose provider 会自行回收页面状态。
@@ -949,7 +951,8 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   }
 
   Future<bool> _refreshOnlineSearchAccess({required bool showChecking}) async {
-    final requestId = ++_onlineSearchAccessRequestId;
+    final requestId = _onlineSearchAccessOwnership.begin();
+    _onlineSearchAccessRequestId = requestId;
     if (showChecking && mounted) {
       setState(() {
         _isCheckingOnlineSearchAccess = true;
@@ -1034,7 +1037,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   }
 
   bool _isLatestOnlineSearchAccessRequest(int requestId) {
-    return mounted && requestId == _onlineSearchAccessRequestId;
+    return _onlineSearchAccessOwnership.isActive(requestId, mounted: mounted);
   }
 
   void _handleAuthEvent(AuthEvent event) {
@@ -1075,7 +1078,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     if (!mounted) {
       return;
     }
-    _onlineSearchAccessRequestId++;
+    _onlineSearchAccessRequestId = _onlineSearchAccessOwnership.cancel();
     if (cancelActiveSearch) {
       _activeSearchToken?.cancel();
     }

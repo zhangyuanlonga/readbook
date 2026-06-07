@@ -96,6 +96,7 @@
 ## 业务与专项规则
 
 - [全项目页面统一化审计与整改任务](full_project_page_unification_audit_plan_2026-06-06.md)
+- [U5-LIB 成熟库与统一组件替换执行计划](u5_lib_mature_component_replacement_plan_2026-06-07.md)
 - [页面 UI 组件治理任务计划](page_ui_component_governance_plan_2026-05-12.md)
 - [存储治理定版规范](storage_governance_spec_2026-05-21.md)
 - [存储升级验证清单](storage_upgrade_validation_2026-05-21.md)

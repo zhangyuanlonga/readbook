@@ -42,4 +42,47 @@ void main() {
       '该书源需要登录。',
     );
   });
+
+  test('maps reader content failures through shared online adapter', () {
+    expect(
+      adapter.forReaderContentException(
+        const AppException(
+          code: ErrorCode.network,
+          stage: ErrorStage.content,
+          briefMessage: '状态码：403',
+        ),
+      ),
+      '章节被源站拦截（403），请在书源配置 Referer/Origin/User-Agent 后重试。',
+    );
+    expect(
+      adapter.forReaderContentException(
+        const AppException(
+          code: ErrorCode.validation,
+          stage: ErrorStage.content,
+          briefMessage: '正文选择器缺少',
+        ),
+      ),
+      '书源缺少正文解析配置，无法读取该章节。',
+    );
+    expect(
+      adapter.forReaderContentException(
+        const AppException(
+          code: ErrorCode.ruleMatchEmpty,
+          stage: ErrorStage.content,
+          briefMessage: '解析为空',
+        ),
+      ),
+      '正文解析未命中，当前章节暂无可读内容。',
+    );
+    expect(
+      adapter.forReaderContentException(
+        const AppException(
+          code: ErrorCode.decode,
+          stage: ErrorStage.content,
+          briefMessage: 'bad bytes',
+        ),
+      ),
+      '章节响应解析失败，可能是编码或格式不兼容。',
+    );
+  });
 }

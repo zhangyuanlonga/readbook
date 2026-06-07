@@ -61,6 +61,22 @@ void main() {
       );
     });
 
+    test('rapid chapter switches discard stale chapter load tokens', () {
+      final controller = ReaderSessionController();
+
+      final first =
+          controller
+              .beginIntent(const ReaderSessionIntent.previous())
+              .chapterContentToken!;
+      final second =
+          controller
+              .beginIntent(const ReaderSessionIntent.next())
+              .chapterContentToken!;
+
+      expect(controller.isActiveChapterContentToken(first), isFalse);
+      expect(controller.isActiveChapterContentToken(second), isTrue);
+    });
+
     test('settings intents cancel preload and issue pagination token', () {
       final controller = ReaderSessionController();
       final preload = controller.nextPreloadTaskToken();

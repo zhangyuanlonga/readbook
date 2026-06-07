@@ -8,9 +8,9 @@ import 'package:uuid/uuid.dart';
 import '../images/file_image_cache.dart';
 import '../../core/storage/managed_asset_store.dart';
 import 'bottom_nav_icon_gallery_defaults.dart';
-import 'bottom_nav_icon_gallery_tab_mapper.dart';
 import '../../domain/entities/bottom_nav_icon_gallery.dart';
 import '../../domain/entities/managed_asset.dart';
+import '../../features/mine/application/gallery_index_models.dart';
 
 class BottomNavIconGalleryService {
   static const Uuid _uuid = Uuid();
@@ -404,44 +404,4 @@ class BottomNavIconGalleryService {
         assetRef.path;
     return assetRef.copyWith(path: persisted);
   }
-}
-
-class BottomNavIconGalleryIndexItem {
-  const BottomNavIconGalleryIndexItem({
-    required this.id,
-    required this.name,
-    required this.updatedAt,
-    required this.isBuiltIn,
-    required this.isEditable,
-    required this.isDeletable,
-    required this.previewItems,
-  });
-
-  factory BottomNavIconGalleryIndexItem.fromGallery(
-    BottomNavIconGallery gallery,
-  ) {
-    final previewItems = <BottomNavIconGalleryTab, BottomNavIconSet>{};
-    for (final tab in bottomNavIconGalleryTabs) {
-      previewItems[tab] = gallery.items[tab] ?? const BottomNavIconSet();
-    }
-    return BottomNavIconGalleryIndexItem(
-      id: gallery.id,
-      name: gallery.name,
-      updatedAt: gallery.updatedAt,
-      isBuiltIn: gallery.isBuiltIn,
-      isEditable: gallery.isEditable,
-      isDeletable: gallery.isDeletable,
-      previewItems: Map<BottomNavIconGalleryTab, BottomNavIconSet>.unmodifiable(
-        previewItems,
-      ),
-    );
-  }
-
-  final String id;
-  final String name;
-  final DateTime updatedAt;
-  final bool isBuiltIn;
-  final bool isEditable;
-  final bool isDeletable;
-  final Map<BottomNavIconGalleryTab, BottomNavIconSet> previewItems;
 }

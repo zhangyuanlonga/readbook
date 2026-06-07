@@ -67,6 +67,7 @@ import '../../mine/application/cover_gallery_provider.dart';
 import '../../mine/application/reader_background_service.dart';
 import '../../search/application/search_hit_cache_service.dart';
 import '../../search/application/search_service.dart';
+import '../../search/presentation/online_source_error_presentation.dart';
 import '../../source/application/source_health_service.dart';
 import '../../source/application/remote_content_task_conflict_service.dart';
 import '../../source/application/remote_content_task_scheduler_service.dart';
@@ -258,6 +259,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const ReaderChapterCacheDecoder();
   final ReaderChapterLoadPlanner _chapterLoadPlanner =
       const ReaderChapterLoadPlanner();
+  final OnlineSourceErrorPresentationAdapter _onlineSourceErrorAdapter =
+      const OnlineSourceErrorPresentationAdapter();
   final ReaderChapterFlow _chapterFlow = const ReaderChapterFlow();
   final ReaderChapterNavigation _chapterNavigation =
       const ReaderChapterNavigation();
@@ -4777,25 +4780,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return LocalBookWorkflowPolicy.readerLoadError(message);
     }
 
-    return switch (error.code) {
-      ErrorCode.network when message.contains('状态码：403') =>
-        '章节被源站拦截（403），请在书源配置 Referer/Origin/User-Agent 后重试。',
-      ErrorCode.network when message.contains('状态码：404') =>
-        '章节地址已失效（404），请刷新目录后重试。',
-      ErrorCode.network when message.contains('超时') => '请求超时，请稍后重试或切换书源。',
-      ErrorCode.network => '网络请求失败，请检查网络或更换书源。',
-      ErrorCode.validation
-          when message.contains('正文') && message.contains('缺少') =>
-        '书源缺少正文解析配置，无法读取该章节。',
-      ErrorCode.validation => '书源配置不完整，无法继续阅读。',
-      ErrorCode.ruleParse => '服务器书源解析规则异常，正文加载失败。',
-      ErrorCode.ruleMatchEmpty when message.contains('解析为空') =>
-        '正文解析未命中，当前章节暂无可读内容。',
-      ErrorCode.ruleMatchEmpty => '当前章节没有可读取内容，请切换章节或书源。',
-      ErrorCode.decode => '正文解析失败，可能是编码或数据格式不兼容。',
-      ErrorCode.unknownSource => '书源不存在或已被删除。',
-      ErrorCode.unknown => '加载失败，请稍后重试。',
-    };
+    return _onlineSourceErrorAdapter.forReaderContentException(error);
   }
 
   bool _isBookmarkInCurrentChapter(Bookmark bookmark) {

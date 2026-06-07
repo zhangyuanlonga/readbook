@@ -11,11 +11,13 @@ import '../../../app/navigation/bottom_nav_icon_gallery_tab_mapper.dart';
 import '../../../app/navigation/bottom_nav_icon_resolver.dart';
 import '../../../app/shell_navigation_provider.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/adaptive_grid_sliver.dart';
 import '../../../app/widgets/adaptive_overflow_toolbar.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/bottom_nav_icon_view.dart';
 import '../../../domain/entities/bottom_nav_icon_gallery.dart';
 import '../application/advanced_theme_provider.dart';
+import '../application/gallery_index_models.dart';
 import 'widgets/image_resource_collection_widgets.dart';
 import 'widgets/mine_route_top_bar.dart';
 
@@ -566,14 +568,13 @@ class _BottomNavIconGalleryPageState
             horizontal,
             metrics.sectionGap + bottomSafe,
           ),
-          sliver: SliverGrid.builder(
+          sliver: AdaptiveGridSliver(
             itemCount: visible.length,
-            gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: metrics.isExpandedWindow ? 320 : 280,
-              mainAxisExtent: 150,
-              mainAxisSpacing: metrics.contentGap,
-              crossAxisSpacing: metrics.contentGap,
-            ),
+            minItemWidth: metrics.isExpandedWindow ? 240 : 220,
+            maxColumns: 3,
+            crossSpacing: metrics.contentGap,
+            mainSpacing: metrics.contentGap,
+            childAspectRatio: 1.61,
             itemBuilder:
                 (context, index) =>
                     _buildGalleryCard(context, gallery: visible[index]),

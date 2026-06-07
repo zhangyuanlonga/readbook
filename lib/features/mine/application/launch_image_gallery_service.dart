@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
@@ -11,6 +10,8 @@ import '../../../core/storage/managed_asset_store.dart';
 import '../../../domain/entities/launch_image_gallery.dart';
 import '../../../domain/entities/managed_asset.dart';
 import 'advanced_theme_service.dart';
+import 'gallery_index_file_store.dart';
+import 'gallery_index_models.dart';
 
 const String defaultLaunchImageGalleryId = 'system_default';
 
@@ -43,18 +44,25 @@ class LaunchImageGalleryService {
   LaunchImageGalleryService({
     SharedPreferences? preferences,
     ManagedAssetStore? assetStore,
+    GalleryIndexFileStore? indexFileStore,
   }) : _preferencesFuture =
            preferences == null
                ? SharedPreferences.getInstance()
                : Future.value(preferences),
-       _assetStore = assetStore ?? ManagedAssetStore();
+       _assetStore = assetStore ?? ManagedAssetStore(),
+       _indexFileStore =
+           indexFileStore ??
+           const GalleryIndexFileStore(
+             directoryName: 'launch_image_galleries',
+             legacyPreferencesKey: _galleriesKey,
+           );
 
   final Future<SharedPreferences> _preferencesFuture;
   final ManagedAssetStore _assetStore;
+  final GalleryIndexFileStore _indexFileStore;
 
   static const Uuid _uuid = Uuid();
   static const String _galleriesKey = 'launchImageGallery.galleries';
-  static const String _indexFileName = 'index.json';
   static const String _activeGalleryIdKey = 'launchImageGallery.activeId';
   static const String _startupEnabledKey = 'launchImageGallery.startupEnabled';
   static const String _startupSnapshotPathKey =
@@ -357,42 +365,17 @@ class LaunchImageGalleryService {
     );
   }
 
-  Future<File> _indexFile() async {
-    final documents = await getApplicationDocumentsDirectory();
-    final root = Directory(p.join(documents.path, 'launch_image_galleries'));
-    if (!await root.exists()) {
-      await root.create(recursive: true);
-    }
-    return File(p.join(root.path, _indexFileName));
-  }
-
   Future<String?> _loadPersistedGalleriesRaw() async {
-    final indexFile = await _indexFile();
-    if (await indexFile.exists()) {
-      final raw = await indexFile.readAsString();
-      return raw.trim().isEmpty ? null : raw;
-    }
-
     final prefs = await _preferencesFuture;
-    final legacyRaw = prefs.getString(_galleriesKey);
-    if (legacyRaw == null || legacyRaw.trim().isEmpty) {
-      return null;
-    }
-    await _writeIndexFile(legacyRaw);
-    await prefs.remove(_galleriesKey);
-    return legacyRaw;
+    return _indexFileStore.loadRaw(preferences: prefs);
   }
 
   Future<void> _writeIndexFile(String raw) async {
-    final indexFile = await _indexFile();
-    await indexFile.writeAsString(raw, flush: true);
+    await _indexFileStore.writeRaw(raw);
   }
 
   Future<void> _deleteIndexFile() async {
-    final indexFile = await _indexFile();
-    if (await indexFile.exists()) {
-      await indexFile.delete();
-    }
+    await _indexFileStore.delete();
   }
 
   Future<LaunchImageGallery> createGallery({String name = '未命名图集'}) async {
@@ -597,26 +580,4 @@ class LaunchImageGalleryService {
     }
     return extension.toLowerCase();
   }
-}
-
-class LaunchImageGalleryIndexItem {
-  const LaunchImageGalleryIndexItem({
-    required this.id,
-    required this.name,
-    required this.updatedAt,
-    required this.imageCount,
-    required this.isBuiltIn,
-    required this.isEditable,
-    required this.isDeletable,
-    this.previewPath,
-  });
-
-  final String id;
-  final String name;
-  final DateTime updatedAt;
-  final int imageCount;
-  final bool isBuiltIn;
-  final bool isEditable;
-  final bool isDeletable;
-  final String? previewPath;
 }

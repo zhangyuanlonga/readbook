@@ -6,11 +6,13 @@ import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/adaptive_grid_sliver.dart';
 import '../../../app/widgets/adaptive_overflow_toolbar.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../application/advanced_theme_provider.dart';
 import '../application/cover_gallery_provider.dart';
 import '../application/cover_gallery_service.dart';
+import '../application/gallery_index_models.dart';
 import 'widgets/image_resource_collection_widgets.dart';
 import 'widgets/mine_route_top_bar.dart';
 
@@ -379,14 +381,13 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
             horizontal,
             metrics.sectionGap + bottomSafe,
           ),
-          sliver: SliverGrid.builder(
+          sliver: AdaptiveGridSliver(
             itemCount: visible.length,
-            gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: metrics.isExpandedWindow ? 320 : 280,
-              mainAxisExtent: 176,
-              mainAxisSpacing: metrics.contentGap,
-              crossAxisSpacing: metrics.contentGap,
-            ),
+            minItemWidth: metrics.isExpandedWindow ? 240 : 220,
+            maxColumns: 3,
+            crossSpacing: metrics.contentGap,
+            mainSpacing: metrics.contentGap,
+            childAspectRatio: 1.38,
             itemBuilder:
                 (context, index) => _buildGalleryCard(context, visible[index]),
           ),
