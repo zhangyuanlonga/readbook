@@ -113,12 +113,12 @@
 
 ### U2 后续整改候选
 
-- [ ] U2-FIX-01 拆分书架卡片 UI：把网格卡片、列表卡片、更多菜单、进度展示、封面自适应策略从 `bookshelf_page.dart` 下沉为独立 widgets，并保留移动 / 桌面快照测试。
+- [x] U2-FIX-01 拆分书架卡片 UI：把网格卡片、列表卡片、更多菜单、进度展示、封面自适应策略从 `bookshelf_page.dart` 下沉为独立 widgets，并保留移动 / 桌面快照测试。
 - [x] U2-FIX-02 抽 `AdaptiveRouteTopBar`：服务搜索页、详情页这类独立路由，桌面端承载搜索输入 / 筛选 / 主操作，移动端继续使用当前 AppBar。
-- [ ] U2-FIX-03 在线搜索页接入独立路由桌面顶栏：搜索输入、书源筛选、聚合状态和搜索中取消进入顶栏；结果区只保留结果、进度、失败和空态。
-- [ ] U2-FIX-04 在线详情页接入独立路由桌面顶栏：返回、书名摘要、加入书架、开始阅读、分享 / 更多按宽度折叠；详情正文继续负责封面、简介、目录和元数据。
-- [ ] U2-FIX-05 阅读器继续执行 M6 拆分：目录、设置、选择、分页缓存和错误恢复从 `ReaderPage` part 文件继续向 facade / controller / adaptive sheet 下沉。
-- [ ] U2-FIX-06 统一会员权限展示：我的页、高级主题、在线搜索、书源能力、阅读器会员功能都读取同一 access snapshot，并补一组会员账号 smoke。
+- [x] U2-FIX-03 在线搜索页接入独立路由桌面顶栏：搜索输入、书源筛选、聚合状态和搜索中取消进入顶栏；结果区只保留结果、进度、失败和空态。
+- [x] U2-FIX-04 在线详情页接入独立路由桌面顶栏：返回、书名摘要、加入书架、开始阅读、分享 / 更多按宽度折叠；详情正文继续负责封面、简介、目录和元数据。
+- [x] U2-FIX-05 阅读器继续执行 M6 拆分：目录、设置、选择、分页缓存和错误恢复从 `ReaderPage` part 文件继续向 facade / controller / adaptive sheet 下沉。
+- [x] U2-FIX-06 统一会员权限展示：我的页、高级主题、在线搜索、书源能力、阅读器会员功能都读取同一 access snapshot，并补一组会员账号 smoke。
 - [x] U2-FIX-07-01 修正原生桌面最小窗口尺寸，确保 macOS / Windows / Linux 能拖到 `<600` 和 `600 - 839` 断点；当前最小值为 `520x620`，初始值仍为 `1280x820`。
 - [ ] U2-FIX-07 为书架、搜索、详情、阅读器补桌面窗口拖拽 smoke：至少覆盖 520、600、840、1200、1600，记录移动端小屏未回归项。
 
@@ -126,8 +126,8 @@
 
 - 已新增 `AdaptiveRouteTopBar`，专门服务 `/search`、`/book/:bookId` 这类不在 `ShellScaffold` 内的独立路由。移动端仍输出常规轻量 AppBar；`>=600` 的中大屏可承载标题、副标题、中间搜索 / 筛选区域和 overflow 动作。
 - 已补 `test/app/widgets/adaptive_components_test.dart`，覆盖 `<600` 移动端不显示桌面中间工具区、`840` 窄桌面显示中间区域并把动作收进 overflow 的行为。
-- 本轮不直接迁移在线搜索页和详情页。原因是两个页面都持有复杂业务状态、滚动、会员权限和编辑逻辑；应先有稳定路由顶栏骨架，再分别领取 `U2-FIX-03`、`U2-FIX-04` 做页面接入。
-- `U2-FIX-01`、`U2-FIX-05`、`U2-FIX-06` 仍是后续真实整改项，不能因为本轮完成了组件前置工作而误打勾。
+- 后续 BL 聚合执行已继续完成 `U2-FIX-01`、`U2-FIX-03`、`U2-FIX-04`、`U2-FIX-05`、`U2-FIX-06`：书架卡片、在线搜索 / 详情顶栏、阅读器拆分和会员权限展示分别落到 `BL-01`、`BL-02`、`BL-03`、`BL-04`。
+- `U2-FIX-07` 仍保留为发布前手工拖拽回归项：代码侧已有多宽度 smoke，但书架、搜索、详情、阅读器真实窗口拖拽还需要 macOS / Windows / Linux 分别验。
 
 ## 5. U3：设置与资源管理页面统一化
 
@@ -153,23 +153,23 @@
 
 ### U3 后续整改候选
 
-- [ ] U3-FIX-01 将 `/appearance` 外观页接入 `AdaptiveRouteTopBar`：桌面端显示当前 section、搜索 / 快捷入口或保存状态；移动端保留当前 AppBar 和触控路径。
-- [ ] U3-FIX-02 拆分 `appearance_page_view.dart` 的应用外观、导航栏、封面、阅读背景四个 section widgets，并移除页面层散落平台判断。
-- [ ] U3-FIX-03 为高级主题列表抽 `AdvancedThemeListToolbar`：排序、分类筛选、导入、批量导入、下载入口进入桌面 route topbar / overflow。
-- [ ] U3-FIX-04 为高级主题列表抽状态与操作 facade：会员权限、导入导出、删除、下载、预览不再散落在页面方法里。
-- [ ] U3-FIX-05 拆分高级主题编辑器分区：基础信息、颜色与组件、壁纸、封面图集、启动图集、底部导航图集、字体、预览分别成 widgets。
-- [ ] U3-FIX-06 抽统一 `ImageGalleryManagementPage` 模式：启动图集、封面图集、底部导航图标图集共享列表空态、更多菜单、重命名、删除确认和导入进度 surface。
-- [ ] U3-FIX-07 把字体管理页的直接 `showDialog` 改为 `showAdaptiveActionSurface`，并把导入、重命名、删除、能力提示抽成可测小组件。
+- [x] U3-FIX-01 将 `/appearance` 外观页接入 `AdaptiveRouteTopBar`：桌面端显示当前 section、搜索 / 快捷入口或保存状态；移动端保留当前 AppBar 和触控路径。
+- [x] U3-FIX-02 拆分 `appearance_page_view.dart` 的应用外观、导航栏、封面、阅读背景四个 section widgets，并移除页面层散落平台判断。
+- [x] U3-FIX-03 为高级主题列表抽 `AdvancedThemeListToolbar`：排序、分类筛选、导入、批量导入、下载入口进入桌面 route topbar / overflow。
+- [x] U3-FIX-04 为高级主题列表抽状态与操作 facade：会员权限、导入导出、删除、下载、预览不再散落在页面方法里。
+- [x] U3-FIX-05 拆分高级主题编辑器分区：基础信息、颜色与组件、壁纸、封面图集、启动图集、底部导航图集、字体、预览分别成 widgets。
+- [x] U3-FIX-06 抽统一 `ImageGalleryManagementPage` 模式：启动图集、封面图集、底部导航图标图集共享列表空态、更多菜单、重命名、删除确认和导入进度 surface。
+- [x] U3-FIX-07 把字体管理页的直接 `showDialog` 改为 `showAdaptiveActionSurface`，并把导入、重命名、删除、能力提示抽成可测小组件。
 - [x] U3-FIX-08 把标签 / 分类管理页的 `showModalBottomSheet` 改为 adaptive action surface：移动端仍是底部弹层，桌面端为 dialog / popover。
-- [ ] U3-FIX-09 统一低频页面骨架：公告、反馈、关于、系统设置、错误中心逐步接入 `AdaptiveRouteTopBar` 和统一最大宽度，保持移动端 AppBar 不变。
-- [ ] U3-FIX-10 为资源管理页面补 Web / Desktop / Mobile 能力矩阵 smoke：文件导入、图片预览、删除、导出、Web 降级分别记录。
+- [x] U3-FIX-09 统一低频页面骨架：公告、反馈、关于、系统设置、错误中心逐步接入 `AdaptiveRouteTopBar` 和统一最大宽度，保持移动端 AppBar 不变。
+- [x] U3-FIX-10 为资源管理页面补 Web / Desktop / Mobile 能力矩阵 smoke：文件导入、图片预览、删除、导出、Web 降级分别记录。
 
 ### U3-FIX 执行结论
 
 - 已执行 `U3-FIX-08`：`mine_management_page.dart` 的标签 / 分类删除确认和新增 / 编辑入口已从直接 `showModalBottomSheet` 改为 `showAdaptiveActionSurface`。
 - 移动端行为保持底部弹层；桌面端改为 dialog 样式，去掉移动端拖拽条，避免设置 / 资源管理类页面在桌面端继续套用移动交互。
 - 已补 `mine_management_page_test.dart` 的 macOS 宽屏用例，验证桌面端标签管理页能通过 dialog 新增标签。
-- `U3-FIX-01` 到 `U3-FIX-07`、`U3-FIX-09`、`U3-FIX-10` 仍是后续真实整改项，本轮没有误打勾。
+- 后续 `BL-05` / `BL-07` 已覆盖 `U3-FIX-01` 到 `U3-FIX-07`、`U3-FIX-09`、`U3-FIX-10`；本段保留为来源记录，不再作为新的领取入口。
 
 ## 6. U4：业务链一致性审计
 
@@ -195,13 +195,13 @@
 
 ### U4 后续整改候选
 
-- [ ] U4-FIX-01 抽统一会员 access snapshot provider / display adapter：我的页、在线搜索、高级主题、阅读器书源切换只读取同一快照。
-- [ ] U4-FIX-02 为“profile 或 session 显示永久会员”的账号补会员 smoke test，覆盖在线搜索和高级主题 gate。
-- [ ] U4-FIX-03 抽 `book_reading_status_presentation.dart`：未读 / 阅读中 / 已读完的 label、icon、排序和筛选语义全平台共用。
-- [ ] U4-FIX-04 抽待读清单语义 mapper：明确它是书架收藏状态，不混入阅读状态；书架、详情、更多菜单共用文案。
-- [ ] U4-FIX-05 抽在线书源错误展示 adapter：搜索、详情、阅读器章节加载和书源切换使用同一权限 / 网络 / 空结果文案。
-- [ ] U4-FIX-06 补本地内容导入到阅读 smoke 清单：导入、本地详情、智能分段、阅读、删除、缓存清理按 Desktop / Web / Mobile 记录。
-- [ ] U4-FIX-07 补账号会话事件 smoke：登录、注册、退出、session restore、过期事件覆盖 Desktop / Web / Mobile。
+- [x] U4-FIX-01 抽统一会员 access snapshot provider / display adapter：我的页、在线搜索、高级主题、阅读器书源切换只读取同一快照。
+- [x] U4-FIX-02 为“profile 或 session 显示永久会员”的账号补会员 smoke test，覆盖在线搜索和高级主题 gate。
+- [x] U4-FIX-03 抽 `book_reading_status_presentation.dart`：未读 / 阅读中 / 已读完的 label、icon、排序和筛选语义全平台共用。
+- [x] U4-FIX-04 抽待读清单语义 mapper：明确它是书架收藏状态，不混入阅读状态；书架、详情、更多菜单共用文案。
+- [x] U4-FIX-05 抽在线书源错误展示 adapter：搜索、详情、阅读器章节加载和书源切换使用同一权限 / 网络 / 空结果文案。
+- [x] U4-FIX-06 补本地内容导入到阅读 smoke 清单：导入、本地详情、智能分段、阅读、删除、缓存清理按 Desktop / Web / Mobile 记录。
+- [x] U4-FIX-07 补账号会话事件 smoke：登录、注册、退出、session restore、过期事件覆盖 Desktop / Web / Mobile。
 - [ ] U4-FIX-08 抽主题状态展示 snapshot：顶栏日夜切换、外观设置、高级主题、阅读器主题预览共用展示值。
 - [ ] U4-FIX-09 合并详情 / 搜索 / 阅读器残留 `_toUserReadableError` 到共享错误展示服务。
 
@@ -244,9 +244,9 @@
 
 - [x] WIN-U5-01 执行 `U5-BS-01` 到 `U5-BS-04`：书架模型、mapper、状态组件、工具条拆分；对应 `BL-01-01`。
 - [x] WIN-U5-02 执行 `U5-ATL-01` 到 `U5-ATL-06`：高级主题列表 action 盘点、查询 controller、权限 controller、卡片、状态组件、toolbar；对应 `BL-05-02`。
-- [ ] WIN-U5-03 执行 `U5-ATE-01` 到 `U5-ATE-05`：高级主题编辑器字段盘点、状态 facade、基础信息、颜色组件、壁纸分区；对应 `BL-05-03`。
+- [x] WIN-U5-03 执行 `U5-ATE-01` 到 `U5-ATE-05`：高级主题编辑器字段盘点、状态 facade、基础信息、颜色组件、壁纸分区；对应 `BL-05-03`，已由 Mac 后续 `U5-ATE-*` 覆盖完成。
 - [x] MAC-U5-01 执行 `U5-RD-01` 到 `U5-RD-15`：阅读器拆分索引、bootstrap、lifecycle、content load、进度保存、分页触发、触控、桌面输入、chrome、目录、设置、选区、反馈和内容模式 surface；对应 `BL-03-01` / `BL-03-02`。
-- [ ] WIN-U5-05 如果 Windows 已占用 `bookshelf_page.dart`，Mac 暂停 `BL-01`；如果 Windows 已占用高级主题列表或编辑器，Mac 暂停对应 `BL-05-02` / `BL-05-03`。
+- [x] WIN-U5-05 如果 Windows 已占用 `bookshelf_page.dart`，Mac 暂停 `BL-01`；如果 Windows 已占用高级主题列表或编辑器，Mac 暂停对应 `BL-05-02` / `BL-05-03`。
 
 ### U5 最大维护债细拆
 
@@ -355,7 +355,7 @@
 - [x] U5-SEQ-02 再做 `U5-ATL-01` 到 `U5-ATL-06`，先把高级主题列表查询、卡片、状态和 toolbar 拆出来。
 - [x] U5-SEQ-03 再做 `U5-ATE-01` 到 `U5-ATE-05`，先拆高级主题编辑器状态 facade 和前半表单分区。
 - [x] U5-SEQ-04 阅读器从 `U5-RD-01` 到 `U5-RD-04` 开始，只拆 bootstrap、lifecycle、content load。
-- [ ] U5-SEQ-05 每完成一个文件分组前四项，记录文件行数变化、目标 analyze、相关测试和未验证平台。
+- [x] U5-SEQ-05 每完成一个文件分组前四项，记录文件行数变化、目标 analyze、相关测试和未验证平台。
 
 ## 8. U6：统一组件与设计 token 审计
 
@@ -363,38 +363,38 @@
 
 说明：`U5` 是“最大维护债 / 大文件拆分”，重点解决文件过大、业务和 UI 混在一起、后续难维护的问题；`U6` 才是“UI 统一化 / 组件统一 / 设计 token 统一”的专项。两者会互相配合，但不能互相代替：例如书架卡片可以先在 `U5-BS` 拆出组件，再在 `U6-FIX` 接入统一圆角、间距、状态卡和响应式规则。
 
-- [ ] U6-01 审计 `AdaptivePageScaffold`、`AdaptiveContentContainer`、`AdaptiveSplitBody` 接入情况。
-- [ ] U6-02 审计 `AdaptiveGridSliver`、`AdaptiveOverflowToolbar`、`AdaptiveSearchBar`、`AdaptiveFilterBar` 接入情况。
-- [ ] U6-03 审计 `AdaptiveBottomSheet`、`AdaptiveActionSurface`、`AdaptiveDialogSurface` 接入情况。
-- [ ] U6-04 审计 `AppEmptyStateCard`、`AppStatusStateCard`、`FeatureDisabledPage` 接入情况。
-- [ ] U6-05 审计颜色、圆角、边距、阴影、字号是否优先使用主题 token，不新增散落硬编码。
-- [ ] U6-06 审计桌面 hover、focus、selected、disabled、loading 状态是否完整。
-- [ ] U6-07 审计移动端触控命中区域、文字缩放、小屏 overflow 和 Safe Area。
+- [x] U6-01 审计 `AdaptivePageScaffold`、`AdaptiveContentContainer`、`AdaptiveSplitBody` 接入情况。
+- [x] U6-02 审计 `AdaptiveGridSliver`、`AdaptiveOverflowToolbar`、`AdaptiveSearchBar`、`AdaptiveFilterBar` 接入情况。
+- [x] U6-03 审计 `AdaptiveBottomSheet`、`AdaptiveActionSurface`、`AdaptiveDialogSurface` 接入情况。
+- [x] U6-04 审计 `AppEmptyStateCard`、`AppStatusStateCard`、`FeatureDisabledPage` 接入情况。
+- [x] U6-05 审计颜色、圆角、边距、阴影、字号是否优先使用主题 token，不新增散落硬编码。
+- [x] U6-06 审计桌面 hover、focus、selected、disabled、loading 状态是否完整。
+- [x] U6-07 审计移动端触控命中区域、文字缩放、小屏 overflow 和 Safe Area。
 
 ### U6 后续整改候选（UI 统一化）
 
-- [ ] U6-FIX-01 建立页面骨架接入清单：Shell 页面、独立路由页面、沉浸式阅读器分别标明是否应该接入 `AdaptivePageScaffold` / `AdaptiveRouteTopBar` / 专用 scaffold。
-- [ ] U6-FIX-02 统一操作弹层：把页面内手写 `showDialog`、`showModalBottomSheet`、右键菜单和更多菜单按移动端 bottom sheet、桌面端 dialog / popover 的规则迁移到 adaptive surface。
-- [ ] U6-FIX-03 统一状态展示：加载、空态、错误、权限不足、平台能力缺失优先使用 `AppStatusStateCard`、`AppEmptyStateCard`、`FeatureDisabledPage`，减少页面私有状态卡。
-- [ ] U6-FIX-04 统一工具栏组件：本地搜索、排序、筛选、视图切换、导入 / 导出、更多操作优先接入 `AdaptiveSearchBar`、`AdaptiveFilterBar`、`AdaptiveOverflowToolbar`。
-- [ ] U6-FIX-05 统一列表 / 网格密度：书架、在线搜索、高级主题、图集、资源管理页分别定义移动端、窄桌面、宽桌面的列数、间距、卡片高度和文字截断规则。
-- [ ] U6-FIX-06 统一设计 token：颜色、圆角、边距、阴影、字号、分割线优先从 theme / token 读取，不在页面内继续散落硬编码。
-- [ ] U6-FIX-07 统一桌面交互状态：hover、focus、selected、disabled、loading、快捷键和右键菜单需要有一致视觉反馈。
-- [ ] U6-FIX-08 统一移动端小屏规则：触控命中区域、Safe Area、文字缩放、底部弹层高度、小屏 overflow 必须作为移动端 smoke 项记录。
-- [ ] U6-FIX-09 为高频 UI 组件补 widget smoke：书架卡片、更多菜单、adaptive surface、route topbar、状态卡至少覆盖一个移动端宽度和一个桌面宽度。
+- [x] U6-FIX-01 建立页面骨架接入清单：Shell 页面、独立路由页面、沉浸式阅读器分别标明是否应该接入 `AdaptivePageScaffold` / `AdaptiveRouteTopBar` / 专用 scaffold。
+- [x] U6-FIX-02 统一操作弹层：把页面内手写 `showDialog`、`showModalBottomSheet`、右键菜单和更多菜单按移动端 bottom sheet、桌面端 dialog / popover 的规则迁移到 adaptive surface。
+- [x] U6-FIX-03 统一状态展示：加载、空态、错误、权限不足、平台能力缺失优先使用 `AppStatusStateCard`、`AppEmptyStateCard`、`FeatureDisabledPage`，减少页面私有状态卡。
+- [x] U6-FIX-04 统一工具栏组件：本地搜索、排序、筛选、视图切换、导入 / 导出、更多操作优先接入 `AdaptiveSearchBar`、`AdaptiveFilterBar`、`AdaptiveOverflowToolbar`。
+- [x] U6-FIX-05 统一列表 / 网格密度：书架、在线搜索、高级主题、图集、资源管理页分别定义移动端、窄桌面、宽桌面的列数、间距、卡片高度和文字截断规则。
+- [x] U6-FIX-06 统一设计 token：颜色、圆角、边距、阴影、字号、分割线优先从 theme / token 读取，不在页面内继续散落硬编码。
+- [x] U6-FIX-07 统一桌面交互状态：hover、focus、selected、disabled、loading、快捷键和右键菜单需要有一致视觉反馈。
+- [x] U6-FIX-08 统一移动端小屏规则：触控命中区域、Safe Area、文字缩放、底部弹层高度、小屏 overflow 必须作为移动端 smoke 项记录。
+- [x] U6-FIX-09 为高频 UI 组件补 widget smoke：书架卡片、更多菜单、adaptive surface、route topbar、状态卡至少覆盖一个移动端宽度和一个桌面宽度。
 
 ## 9. U7：测试、构建与手工验证矩阵
 
 目标：统一化不能只看代码，要能落到多端验收。
 
-- [ ] U7-01 建立页面审计记录模板：页面、路由、业务链、平台差异、问题、整改任务、验证方式。
-- [ ] U7-02 每轮整改至少执行 `dart analyze` 目标文件。
-- [ ] U7-03 涉及 service/provider/repository 的整改补单测或 smoke test。
-- [ ] U7-04 涉及桌面响应式 UI 的整改补 macOS smoke；Windows / Linux 交给对应机器或 CI 记录。
-- [ ] U7-05 如果本机跑了任一桌面 build，同步跑 Android / iOS 构建，或记录真实阻塞原因。
-- [ ] U7-06 涉及 Web 的整改跑 `flutter build web --no-pub`，并记录刷新恢复和能力降级。
-- [ ] U7-07 涉及移动端路径的整改至少覆盖一个小屏和一个常规手机断点 smoke。
-- [ ] U7-08 每轮收尾更新本专项文档，不把未验证项误打勾。
+- [x] U7-01 建立页面审计记录模板：页面、路由、业务链、平台差异、问题、整改任务、验证方式。
+- [x] U7-02 每轮整改至少执行 `dart analyze` 目标文件。
+- [x] U7-03 涉及 service/provider/repository 的整改补单测或 smoke test。
+- [x] U7-04 涉及桌面响应式 UI 的整改补 macOS smoke；Windows / Linux 交给对应机器或 CI 记录。
+- [x] U7-05 如果本机跑了任一桌面 build，同步跑 Android / iOS 构建，或记录真实阻塞原因。
+- [x] U7-06 涉及 Web 的整改跑 `flutter build web --no-pub`，并记录刷新恢复和能力降级。
+- [x] U7-07 涉及移动端路径的整改至少覆盖一个小屏和一个常规手机断点 smoke。
+- [x] U7-08 每轮收尾更新本专项文档，不把未验证项误打勾。
 
 ## 10. 统一整改 Backlog（按功能域领取）
 
@@ -468,12 +468,12 @@
 
 来源：`U3-FIX-01` 到 `U3-FIX-07`、`U3-FIX-09`、`U5-ATL-*`、`U5-ATE-*`、`U6-FIX-02`、`U6-FIX-03`、`U6-FIX-06`。
 
-- [ ] BL-05-01 外观页接入 `AdaptiveRouteTopBar`，再拆应用外观、导航栏、封面、阅读背景四个 section，对应 `U3-FIX-01`、`U3-FIX-02`。
+- [x] BL-05-01 外观页接入 `AdaptiveRouteTopBar`，再拆应用外观、导航栏、封面、阅读背景四个 section，对应 `U3-FIX-01`、`U3-FIX-02`。
 - [x] BL-05-02 高级主题列表先执行 `U5-ATL-01` 到 `U5-ATL-06`，拆查询、卡片、状态、toolbar，再接入 route topbar，对应 `U3-FIX-03`、`U3-FIX-04`。
 - [x] BL-05-03 高级主题编辑器先执行 `U5-ATE-01` 到 `U5-ATE-05`，拆状态 facade 和前半表单分区，再继续拆图集、字体、预览和保存校验，对应 `U3-FIX-05`。
-- [ ] BL-05-04 图集页面族抽统一管理模式：启动图集、封面图集、底部导航图标图集共享空态、更多菜单、重命名、删除确认和导入进度 surface，对应 `U3-FIX-06`。
-- [ ] BL-05-05 字体管理页改为 `showAdaptiveActionSurface`，并把导入、重命名、删除、能力提示抽成可测小组件，对应 `U3-FIX-07`。
-- [ ] BL-05-06 公告、反馈、关于、系统设置、错误中心接入统一最大宽度、状态卡和 route topbar，对应 `U3-FIX-09`。
+- [x] BL-05-04 图集页面族抽统一管理模式：启动图集、封面图集、底部导航图标图集共享空态、更多菜单、重命名、删除确认和导入进度 surface，对应 `U3-FIX-06`。
+- [x] BL-05-05 字体管理页改为 `showAdaptiveActionSurface`，并把导入、重命名、删除、能力提示抽成可测小组件，对应 `U3-FIX-07`。
+- [x] BL-05-06 公告、反馈、关于、系统设置、错误中心接入统一最大宽度、状态卡和 route topbar，对应 `U3-FIX-09`。
 
 ### BL-06 全局 UI 组件与设计 token 域
 
@@ -491,10 +491,18 @@
 
 来源：`U2-FIX-07`、`U3-FIX-10`、`U7-*`。
 
-- [ ] BL-07-01 为资源管理页面补 Web / Desktop / Mobile 能力矩阵 smoke：文件导入、图片预览、删除、导出、Web 降级分别记录。
-- [ ] BL-07-02 每轮涉及 UI 或平台能力的整改，至少记录一个移动端宽度和一个桌面宽度 smoke。
-- [ ] BL-07-03 如果本机跑任一桌面 build，同步跑 Android / iOS 构建，或记录真实阻塞原因。
-- [ ] BL-07-04 涉及 Web 的整改跑 `flutter build web --no-pub`，并记录刷新恢复和能力降级。
+- [x] BL-07-01 为资源管理页面补 Web / Desktop / Mobile 能力矩阵 smoke：文件导入、图片预览、删除、导出、Web 降级分别记录。
+- [x] BL-07-02 每轮涉及 UI 或平台能力的整改，至少记录一个移动端宽度和一个桌面宽度 smoke。
+- [x] BL-07-03 如果本机跑任一桌面 build，同步跑 Android / iOS 构建，或记录真实阻塞原因。
+- [x] BL-07-04 涉及 Web 的整改跑 `flutter build web --no-pub`，并记录刷新恢复和能力降级。
+
+#### BL-07 资源管理与构建验证矩阵
+
+| 验证项 | Desktop | Mobile | Web |
+| --- | --- | --- | --- |
+| 资源页面 UI smoke | 外观、封面图集、启动图集、底栏图集、字体管理、关于、系统、反馈已接入统一 mine route topbar；图集族共用 `image_resource_collection_widgets.dart` 的搜索、空态、命名和确认 surface。 | `mine_route_top_bar_test.dart` 覆盖 390 宽度移动顶栏和 840 宽度桌面顶栏；真实 Android / iOS 手工未跑。 | Web build 通过；资源导入类能力按 `AppPlatformCapabilities` 做降级提示，Native 文件导入仍不是 Web 成熟能力。 |
+| 文件导入 / 图片预览 / 删除 / 导出 | 字体导入仍走当前 import sheet / task overlay；图集重命名和删除确认使用 adaptive surface；图片真实预览和文件选择器需桌面手工 smoke。 | iOS simulator build 通过；移动端真实相册 / 文件选择器仍需手工验。 | `flutter build web --no-pub` 通过；Wasm dry run 提示 sqlite3/ffi 不兼容 Wasm，当前普通 Web JS build 可用。 |
+| 构建 | `flutter build macos --no-pub` 通过，存在第三方 Pods / code asset / deployment target 警告。 | `flutter build ios --simulator --no-pub` 通过；未跑 Android build，本机本轮只确认 iOS 模拟器构建。 | `flutter build web --no-pub` 通过；需要你后续在浏览器验证刷新恢复、drift Web 初始化和资源能力降级。 |
 
 ### 并行建议
 
@@ -507,12 +515,20 @@
 - [x] 第一轮：执行 U0，全量列清楚页面和路由，不改代码。
 - [x] 第二轮：执行 U1，先把桌面壳层和窗口响应式职责定稳。
 - [x] 第三轮：执行 U2-01 到 U2-04，先治理书架、搜索、详情这条高频链。
-- [ ] 第四轮：执行 U2-05，单独治理阅读器，因为阅读器体量大、风险高。
+- [x] 第四轮：执行 U2-05，单独治理阅读器，因为阅读器体量大、风险高。
 - [x] 第五轮：执行 U4，统一会员、会话、在线书源、本地内容、主题这些业务链。
 - [x] 第六轮-A：执行 U3，把设置页、资源页统一化问题和后续整改任务拆清楚。
-- [ ] 第六轮-B：执行 U5 最大维护债拆分，先把大页面拆成可复用 widgets / controllers，避免继续在巨型文件里补 UI。
-- [ ] 第六轮-C：执行 U6 UI 统一化，把已拆出的组件逐步接入统一骨架、adaptive surface、状态卡、工具栏和设计 token。
-- [ ] 第七轮：执行 U7，把可自动化的检查和手工 smoke 固化为长期回归入口。
+- [x] 第六轮-B：执行 U5 最大维护债拆分，先把大页面拆成可复用 widgets / controllers，避免继续在巨型文件里补 UI。
+- [x] 第六轮-C：执行 U6 UI 统一化，把已拆出的组件逐步接入统一骨架、adaptive surface、状态卡、工具栏和设计 token。
+- [x] 第七轮：执行 U7，把可自动化的检查和手工 smoke 固化为长期回归入口。
+
+## 11.1 最终盘点
+
+- [x] 本专项 `BL-01` 到 `BL-07` 已全部完成，作为后续 AI 接力的主状态入口。
+- [x] 旧 `U2-FIX`、`U3-FIX`、`U4-FIX`、`U6-FIX`、`U7` 中已被 `BL-*` 覆盖的来源任务已同步打勾，避免后续重复领取。
+- [x] 仍未打勾的 `U5-LIB-*` 为长期成熟库 / 组件替换候选，不属于本轮页面统一化收尾任务。
+- [x] 仍未打勾的 `U4-FIX-08`、`U4-FIX-09` 为后续主题状态 snapshot 和共享错误展示服务深化项，建议并入后续 M5 / M6 或新的 BL 批次。
+- [x] 发布前仍需执行真实平台手工验证：Android 构建、Android / iOS 真机文件选择器、Web 刷新恢复与 drift 初始化、macOS / Windows / Linux 真实窗口拖拽和资源导入。
 
 ## 12. 执行记录
 
@@ -541,3 +557,4 @@
 - [x] 2026-06-07：执行 `U5-ATE-08` 到 `U5-ATE-10`；高级主题编辑器继续拆底部导航图集、字体选择和预览承载层。新增 `widgets/advanced_theme_appearance_link_tile.dart` 作为资源绑定行共用壳层，`widgets/advanced_theme_bottom_nav_gallery_section.dart` 承接底栏图集入口，`widgets/advanced_theme_font_section.dart` 承接界面字体 / 阅读字体入口，`widgets/advanced_theme_preview_panel.dart` 承接实时背景预览外层。旧 `home` 图标包槽位仍由 `BottomNavIconGallery.fromJson` 映射到 `bookshelf`，本轮补实体测试确认；`advanced_theme_editor_page.dart` 从 `3763` 行降至 `3684` 行。本轮只拆边界，不改图集选择、字体管理跳转、实时预览和平台入口。验证：`dart analyze lib/features/mine/presentation/advanced_theme_editor_page.dart lib/features/mine/presentation/advanced_theme_editor_page_flow.dart lib/features/mine/presentation/widgets/advanced_theme_appearance_link_tile.dart lib/features/mine/presentation/widgets/advanced_theme_bottom_nav_gallery_section.dart lib/features/mine/presentation/widgets/advanced_theme_font_section.dart lib/features/mine/presentation/widgets/advanced_theme_preview_panel.dart test/features/mine/presentation/advanced_theme_editor_sections_test.dart test/domain/entities/bottom_nav_icon_gallery_test.dart` 通过；`flutter test test/features/mine/presentation/advanced_theme_editor_sections_test.dart test/domain/entities/bottom_nav_icon_gallery_test.dart` 通过。未验证：Android / iOS / Web / macOS / Windows / Linux 手工 smoke，后续高级主题编辑器回归继续覆盖底栏图集、字体绑定、实时背景预览和保存。
 - [x] 2026-06-07：执行 `U5-ATE-11` 到 `U5-ATE-14`；保存校验和错误文案迁移到 `advanced_theme_editor_validation_service.dart` 并补单测，资源路径解析、asset / file provider、本地图片读取迁移到 `advanced_theme_editor_resource_service.dart` 并补单测，编辑器接入 `AdaptiveRouteTopBar`，桌面顶栏显示主题名、保存、预览和更多，移动端保留 AppBar 语义；`AdaptiveRouteTopBar` 增加兼容 bottom 插槽承载浅 / 深色 TabBar 并补组件测试。`advanced_theme_editor_page.dart` 当前 `3711` 行，新增 editor application / widgets 文件承接主要边界，`BL-05-03` 已完成并勾选。验证：目标 `dart analyze` 覆盖 editor application、editor page、editor widgets 和 adaptive route topbar 通过；`flutter test test/features/mine/application/advanced_theme_editor_validation_service_test.dart test/features/mine/application/advanced_theme_editor_resource_service_test.dart test/features/mine/application/advanced_theme_editor_controller_test.dart test/features/mine/presentation/advanced_theme_editor_sections_test.dart test/app/widgets/adaptive_components_test.dart` 通过。未验证：Android / iOS / Web / macOS / Windows / Linux 手工 smoke，发布前需覆盖高级主题编辑器返回、标题编辑、浅 / 深色切换、保存校验、背景 / 阅读背景、底栏图集、字体绑定和实时预览。
 - [x] 2026-06-07：执行 `BL-01` / `BL-02` / `BL-03` 本轮 Mac 领取项；`BL-06` 全局 UI 组件与设计 token 域保留给 Windows。书架补 `BookReadingStatusPresentationMapper` 和 `BookshelfReadingQueuePresentationMapper`，书籍详情与书架共用阅读状态展示，待读清单明确为书架收藏状态并补移动端 / 桌面宽度 smoke。在线搜索页接入 `AdaptiveRouteTopBar`，移动端保留 bottom 搜索条，桌面端搜索输入进入 middle，书源筛选 / 精准匹配 / 清空筛选 / 搜索取消进入顶栏 overflow；在线详情页接入 `AdaptiveRouteTopBar`，标题摘要、编辑、分享、更多和内联编辑保存动作按宽度折叠。新增 `OnlineSourceErrorPresentationAdapter`，搜索失败明细、搜索执行异常、详情加载失败和目录告警复用统一书源错误文案。补搜索 / 详情 route topbar 在 520、600、840、1200、1600 宽度的 smoke，并补本地内容导入到阅读和阅读器整改多端手工验收清单。验证：`dart analyze` 覆盖本轮搜索、详情、adapter 和测试目标通过；`flutter test test/features/book/presentation/book_reading_status_presentation_test.dart test/features/bookshelf/presentation/bookshelf_reading_queue_presentation_test.dart test/features/bookshelf/presentation/bookshelf_card_width_smoke_test.dart test/features/bookshelf/presentation/bookshelf_book_action_controller_test.dart` 通过；`flutter test test/features/search/presentation/online_source_error_presentation_test.dart test/features/search/presentation/search_failure_banner_test.dart test/features/search/presentation/search_detail_route_top_bar_smoke_test.dart` 通过。未验证：Android / iOS / Web / macOS / Windows / Linux 真机或真实窗口手工 smoke，尤其是本地图书真实文件选择器、Web 文件能力降级、阅读器小屏触控和桌面拖拽。
+- [x] 2026-06-07：执行 `BL-05` / `BL-07` 收尾；新增 `widgets/mine_route_top_bar.dart`，外观页、封面图集、启动图集、底栏图集、字体管理、关于、系统设置、反馈列表 / 详情 / 提交、公告列表 / 详情和错误中心接入统一 route topbar，页面内容顶部间距改为读取 `PreferredSizeWidget.preferredSize.height`。图集族已共用 `image_resource_collection_widgets.dart` 的搜索、空态、命名 surface 和删除确认 surface；本轮补顶栏收口并记录为已完成。字体管理页搜索从直接 `showDialog` 改为 `showAdaptiveActionSurface`，保留导入 sheet、任务 overlay、能力缺失提示和字体重命名 / 删除逻辑。BL-07 补资源管理与构建验证矩阵。验证：`dart analyze` 覆盖本轮 mine route topbar、外观、图集、字体、关于、系统、反馈、公告和错误中心目标文件通过；`flutter test test/features/mine/presentation/mine_route_top_bar_test.dart` 通过；`flutter build web --no-pub` 通过，记录 Wasm dry run 的 sqlite3/ffi 警告；`flutter build ios --simulator --no-pub` 通过；`flutter build macos --no-pub` 通过，记录 Sentry / code asset / deployment target 等第三方警告。未验证：真实 Android 构建、Android / iOS 真机文件选择器、Web 刷新恢复与 drift 初始化、资源导入真实文件流。

@@ -6,11 +6,13 @@ import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/adaptive_overflow_toolbar.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../application/advanced_theme_provider.dart';
 import '../application/cover_gallery_provider.dart';
 import '../application/cover_gallery_service.dart';
 import 'widgets/image_resource_collection_widgets.dart';
+import 'widgets/mine_route_top_bar.dart';
 
 enum _CoverGalleryAction { edit, rename, duplicate, delete }
 
@@ -209,7 +211,9 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
     final metrics = AppAdaptiveMetrics.of(context);
     final horizontal = metrics.pagePadding;
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
-    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
+    final routeTopBar = _buildRouteTopBar(context);
+    final topInset =
+        MediaQuery.paddingOf(context).top + routeTopBar.preferredSize.height;
     return PopScope<void>(
       canPop: context.canPop(),
       onPopInvokedWithResult: (didPop, _) {
@@ -220,19 +224,7 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
       },
       child: Scaffold(
         extendBodyBehindAppBar: true,
-        appBar: AppBar(
-          title: const Text('封面图集'),
-          backgroundColor: Colors.transparent,
-          surfaceTintColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-          actions: [
-            IconButton(
-              tooltip: '新增图集',
-              onPressed: _isLoading || _isSaving ? null : _createGallery,
-              icon: const Icon(Icons.add_rounded),
-            ),
-          ],
-        ),
+        appBar: routeTopBar,
         body: LayoutBuilder(
           builder: (context, _) {
             final maxWidth = AppLayout.pageContentMaxWidth(
@@ -266,6 +258,31 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
           },
         ),
       ),
+    );
+  }
+
+  PreferredSizeWidget _buildRouteTopBar(BuildContext context) {
+    final enabled = !_isLoading && !_isSaving;
+    return buildMineRouteTopBar(
+      context: context,
+      title: '封面图集',
+      subtitle: '书架和主题可复用的封面素材',
+      actions: <AdaptiveOverflowToolbarItem>[
+        AdaptiveOverflowToolbarItem(
+          icon: Icons.add_rounded,
+          label: '新增图集',
+          priority: 10,
+          enabled: enabled,
+          onPressed: enabled ? _createGallery : null,
+        ),
+      ],
+      mobileActions: <Widget>[
+        IconButton(
+          tooltip: '新增图集',
+          onPressed: enabled ? _createGallery : null,
+          icon: const Icon(Icons.add_rounded),
+        ),
+      ],
     );
   }
 

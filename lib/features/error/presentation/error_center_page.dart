@@ -8,10 +8,12 @@ import '../../../app/layout/app_layout.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/platform/app_platform_capabilities.dart';
 import '../../../app/composition/app_providers.dart';
+import '../../../app/widgets/adaptive_overflow_toolbar.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
 import '../../../app/widgets/import_export_task_overlay.dart';
 import '../../../core/logging/diagnostic_log_export_service.dart';
 import '../../../core/logging/source_log_store.dart';
+import '../../mine/presentation/widgets/mine_route_top_bar.dart';
 
 class ErrorCenterPage extends ConsumerStatefulWidget {
   const ErrorCenterPage({super.key});
@@ -41,37 +43,61 @@ class _ErrorCenterPageState extends ConsumerState<ErrorCenterPage> {
     final horizontal = metrics.pagePadding;
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     final capabilities = ref.watch(appPlatformCapabilitiesProvider);
+    final routeTopBar = buildMineRouteTopBar(
+      context: context,
+      title: '诊断日志',
+      subtitle: '错误、导出与复制',
+      actions: <AdaptiveOverflowToolbarItem>[
+        AdaptiveOverflowToolbarItem(
+          icon: Icons.ios_share_outlined,
+          label: '导出日志',
+          priority: 12,
+          enabled: !_isExporting,
+          onPressed: _isExporting ? null : _shareLogs,
+        ),
+        AdaptiveOverflowToolbarItem(
+          icon: Icons.copy_all_outlined,
+          label: '复制日志',
+          priority: 10,
+          onPressed: _copyLogs,
+        ),
+        AdaptiveOverflowToolbarItem(
+          icon: Icons.delete_sweep_outlined,
+          label: '清空日志',
+          priority: 8,
+          onPressed: _clearLogs,
+        ),
+      ],
+      mobileActions: <Widget>[
+        IconButton(
+          onPressed: _isExporting ? null : _shareLogs,
+          tooltip: '导出日志',
+          icon:
+              _isExporting
+                  ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                  : const Icon(Icons.ios_share_outlined),
+        ),
+        IconButton(
+          onPressed: _copyLogs,
+          tooltip: '复制日志',
+          icon: const Icon(Icons.copy_all_outlined),
+        ),
+        IconButton(
+          onPressed: _clearLogs,
+          tooltip: '清空日志',
+          icon: const Icon(Icons.delete_sweep_outlined),
+        ),
+      ],
+    );
 
     return ImportExportTaskOverlay(
       status: _taskStatus,
       child: Scaffold(
-        appBar: AppBar(
-          title: const Text('诊断日志'),
-          actions: [
-            IconButton(
-              onPressed: _isExporting ? null : _shareLogs,
-              tooltip: '导出日志',
-              icon:
-                  _isExporting
-                      ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                      : const Icon(Icons.ios_share_outlined),
-            ),
-            IconButton(
-              onPressed: _copyLogs,
-              tooltip: '复制日志',
-              icon: const Icon(Icons.copy_all_outlined),
-            ),
-            IconButton(
-              onPressed: _clearLogs,
-              tooltip: '清空日志',
-              icon: const Icon(Icons.delete_sweep_outlined),
-            ),
-          ],
-        ),
+        appBar: routeTopBar,
         body: LayoutBuilder(
           builder: (context, _) {
             final maxWidth = AppLayout.pageContentMaxWidth(

@@ -16,6 +16,7 @@ import '../../bookshelf/application/bookshelf_system_settings_service.dart';
 import '../application/advanced_theme_provider.dart';
 import '../../reader/application/reader_preferences_service.dart';
 import '../../search/application/search_system_settings_service.dart';
+import 'widgets/mine_route_top_bar.dart';
 
 class SystemSettingsPage extends StatelessWidget {
   const SystemSettingsPage({super.key});
@@ -33,7 +34,14 @@ class SystemSettingsPage extends StatelessWidget {
         final horizontal = AppSpacing.pageHorizontal(context);
         final metrics = AppAdaptiveMetrics.of(context);
         final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
-        final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
+        final routeTopBar = buildMineRouteTopBar(
+          context: context,
+          title: '系统',
+          subtitle: '书架、搜索与阅读基础偏好',
+        );
+        final topInset =
+            MediaQuery.paddingOf(context).top +
+            routeTopBar.preferredSize.height;
 
         return PopScope<void>(
           canPop: context.canPop(),
@@ -45,12 +53,7 @@ class SystemSettingsPage extends StatelessWidget {
           },
           child: Scaffold(
             extendBodyBehindAppBar: true,
-            appBar: AppBar(
-              title: const Text('系统'),
-              backgroundColor: Colors.transparent,
-              surfaceTintColor: Colors.transparent,
-              shadowColor: Colors.transparent,
-            ),
+            appBar: routeTopBar,
             body: LayoutBuilder(
               builder: (context, _) {
                 final maxWidth = AppLayout.pageContentMaxWidth(

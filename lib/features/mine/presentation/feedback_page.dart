@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,6 +8,7 @@ import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/adaptive_overflow_toolbar.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
@@ -15,6 +18,7 @@ import '../../../core/feedback/feedback_models.dart';
 import '../../../core/feedback/feedback_service.dart';
 import '../../../core/network/api_client.dart';
 import '../application/advanced_theme_provider.dart';
+import 'widgets/mine_route_top_bar.dart';
 
 enum _FeedbackStatusFilter { all, pending, resolved, rejected }
 
@@ -126,38 +130,15 @@ class _FeedbackPageState extends ConsumerState<FeedbackPage>
     final horizontal = metrics.pagePadding;
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
+    final routeTopBar = _buildRouteTopBar(context);
+    final topInset =
+        MediaQuery.paddingOf(context).top + routeTopBar.preferredSize.height;
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       resizeToAvoidBottomInset: false,
       extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        shadowColor: Colors.transparent,
-        title: const Text('问题反馈'),
-        actions: [
-          IconButton(
-            onPressed: () {
-              context.push('/error-center');
-            },
-            tooltip: '诊断日志',
-            icon: const Icon(Icons.receipt_long_outlined),
-          ),
-          FilledButton.tonalIcon(
-            onPressed: () async {
-              final changed = await context.push<bool>('/feedback/compose');
-              if (changed == true) {
-                await _loadEntries();
-              }
-            },
-            icon: const Icon(Icons.edit_outlined, size: 18),
-            label: const Text('提交'),
-          ),
-          const SizedBox(width: 12),
-        ],
-      ),
+      appBar: routeTopBar,
       body: DecoratedBox(
         decoration: buildAdvancedThemeBackdropDecoration(
           resolveAdvancedThemeBackdrop(
@@ -229,6 +210,51 @@ class _FeedbackPageState extends ConsumerState<FeedbackPage>
         ),
       ),
     );
+  }
+
+  PreferredSizeWidget _buildRouteTopBar(BuildContext context) {
+    return buildMineRouteTopBar(
+      context: context,
+      title: '问题反馈',
+      subtitle: '提交反馈并查看处理状态',
+      actions: <AdaptiveOverflowToolbarItem>[
+        AdaptiveOverflowToolbarItem(
+          icon: Icons.receipt_long_outlined,
+          label: '诊断日志',
+          priority: 10,
+          onPressed: () {
+            context.push('/error-center');
+          },
+        ),
+        AdaptiveOverflowToolbarItem(
+          icon: Icons.edit_outlined,
+          label: '提交',
+          priority: 12,
+          onPressed: () => unawaited(_openComposePage()),
+        ),
+      ],
+      mobileActions: <Widget>[
+        IconButton(
+          onPressed: () {
+            context.push('/error-center');
+          },
+          tooltip: '诊断日志',
+          icon: const Icon(Icons.receipt_long_outlined),
+        ),
+        IconButton(
+          onPressed: () => unawaited(_openComposePage()),
+          tooltip: '提交',
+          icon: const Icon(Icons.edit_outlined),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _openComposePage() async {
+    final changed = await context.push<bool>('/feedback/compose');
+    if (changed == true && mounted) {
+      await _loadEntries();
+    }
   }
 
   Widget _buildTypeTabs(BuildContext context) {
@@ -563,17 +589,18 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
     final horizontal = metrics.pagePadding;
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
+    final routeTopBar = buildMineRouteTopBar(
+      context: context,
+      title: '反馈详情',
+      subtitle: '处理状态与回复记录',
+    );
+    final topInset =
+        MediaQuery.paddingOf(context).top + routeTopBar.preferredSize.height;
 
     return Scaffold(
       resizeToAvoidBottomInset: false,
       extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        title: const Text('反馈详情'),
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        shadowColor: Colors.transparent,
-      ),
+      appBar: routeTopBar,
       body: Consumer(
         builder: (context, ref, _) {
           final activeTheme =
@@ -860,17 +887,18 @@ class _FeedbackComposePageState extends State<FeedbackComposePage> {
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final colorScheme = Theme.of(context).colorScheme;
-    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
+    final routeTopBar = buildMineRouteTopBar(
+      context: context,
+      title: '提交反馈',
+      subtitle: '问题、建议或书源反馈',
+    );
+    final topInset =
+        MediaQuery.paddingOf(context).top + routeTopBar.preferredSize.height;
 
     return Scaffold(
       resizeToAvoidBottomInset: false,
       extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        title: const Text('提交反馈'),
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        shadowColor: Colors.transparent,
-      ),
+      appBar: routeTopBar,
       body: Consumer(
         builder: (context, ref, _) {
           final activeTheme =

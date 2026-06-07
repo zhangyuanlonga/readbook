@@ -11,11 +11,13 @@ import '../../../app/navigation/bottom_nav_icon_gallery_tab_mapper.dart';
 import '../../../app/navigation/bottom_nav_icon_resolver.dart';
 import '../../../app/shell_navigation_provider.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/adaptive_overflow_toolbar.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/bottom_nav_icon_view.dart';
 import '../../../domain/entities/bottom_nav_icon_gallery.dart';
 import '../application/advanced_theme_provider.dart';
 import 'widgets/image_resource_collection_widgets.dart';
+import 'widgets/mine_route_top_bar.dart';
 
 class BottomNavIconGalleryPage extends ConsumerStatefulWidget {
   const BottomNavIconGalleryPage({super.key});
@@ -237,7 +239,9 @@ class _BottomNavIconGalleryPageState
     final metrics = AppAdaptiveMetrics.of(context);
     final horizontal = metrics.pagePadding;
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
-    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
+    final routeTopBar = _buildRouteTopBar(context);
+    final topInset =
+        MediaQuery.paddingOf(context).top + routeTopBar.preferredSize.height;
 
     return PopScope<void>(
       canPop: context.canPop(),
@@ -249,19 +253,7 @@ class _BottomNavIconGalleryPageState
       },
       child: Scaffold(
         extendBodyBehindAppBar: true,
-        appBar: AppBar(
-          title: const Text('底栏图集'),
-          backgroundColor: Colors.transparent,
-          surfaceTintColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-          actions: [
-            IconButton(
-              tooltip: '新增图集',
-              onPressed: _isLoading || _isSaving ? null : _createGallery,
-              icon: const Icon(Icons.add_rounded),
-            ),
-          ],
-        ),
+        appBar: routeTopBar,
         body: LayoutBuilder(
           builder: (context, _) {
             final maxWidth = AppLayout.pageContentMaxWidth(
@@ -296,6 +288,31 @@ class _BottomNavIconGalleryPageState
           },
         ),
       ),
+    );
+  }
+
+  PreferredSizeWidget _buildRouteTopBar(BuildContext context) {
+    final enabled = !_isLoading && !_isSaving;
+    return buildMineRouteTopBar(
+      context: context,
+      title: '底栏图集',
+      subtitle: '移动端底栏图标素材',
+      actions: <AdaptiveOverflowToolbarItem>[
+        AdaptiveOverflowToolbarItem(
+          icon: Icons.add_rounded,
+          label: '新增图集',
+          priority: 10,
+          enabled: enabled,
+          onPressed: enabled ? _createGallery : null,
+        ),
+      ],
+      mobileActions: <Widget>[
+        IconButton(
+          tooltip: '新增图集',
+          onPressed: enabled ? _createGallery : null,
+          icon: const Icon(Icons.add_rounded),
+        ),
+      ],
     );
   }
 

@@ -9,10 +9,12 @@ import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/platform/app_capability_state.dart';
+import '../../../app/platform/app_input_focus_behavior.dart';
 import '../../../app/platform/app_platform_capabilities.dart';
 import '../../../app/tasks/app_task_manager.dart';
 import '../../../app/theme/app_interface_typography_provider.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/adaptive_overflow_toolbar.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/app_task_bottom_sheet.dart';
@@ -29,6 +31,7 @@ import '../../source/application/external_source_import_bridge.dart';
 import '../../reader/application/reader_font_registry_service.dart';
 import '../../reader/application/reader_preferences_service.dart';
 import '../application/advanced_theme_provider.dart';
+import 'widgets/mine_route_top_bar.dart';
 
 enum _FontImportEntryMode { add, processing, completed }
 
@@ -323,7 +326,9 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
     final metrics = AppAdaptiveMetrics.of(context);
     final horizontal = metrics.pagePadding;
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
-    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
+    final routeTopBar = _buildRouteTopBar(context);
+    final topInset =
+        MediaQuery.paddingOf(context).top + routeTopBar.preferredSize.height;
     final activeAdvancedTheme =
         ref.watch(activeAdvancedThemeProvider).valueOrNull;
     final interfaceFontSettings = ref.watch(appInterfaceFontSettingsProvider);
@@ -346,38 +351,7 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
         status: _taskStatus,
         child: Scaffold(
           extendBodyBehindAppBar: true,
-          appBar: AppBar(
-            title: const Text('字体管理'),
-            backgroundColor: Colors.transparent,
-            surfaceTintColor: Colors.transparent,
-            shadowColor: Colors.transparent,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back),
-              onPressed: () {
-                if (context.canPop()) {
-                  context.pop();
-                  return;
-                }
-                context.go('/mine');
-              },
-            ),
-            actions: [
-              IconButton(
-                tooltip: '搜索',
-                onPressed: _showSearchDialog,
-                icon: Icon(
-                  _searchKeyword.isNotEmpty
-                      ? Icons.search_off_rounded
-                      : Icons.search_rounded,
-                ),
-              ),
-              IconButton(
-                tooltip: '刷新',
-                onPressed: _isLoading ? null : () => unawaited(_reload()),
-                icon: const Icon(Icons.refresh_rounded),
-              ),
-            ],
-          ),
+          appBar: routeTopBar,
           body: LayoutBuilder(
             builder: (context, _) {
               final maxWidth = AppLayout.pageContentMaxWidth(
@@ -494,55 +468,107 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
     );
   }
 
-  void _showSearchDialog() {
+  PreferredSizeWidget _buildRouteTopBar(BuildContext context) {
+    final searchIcon =
+        _searchKeyword.isNotEmpty
+            ? Icons.search_off_rounded
+            : Icons.search_rounded;
+    return buildMineRouteTopBar(
+      context: context,
+      title: '字体管理',
+      subtitle: '${_fonts.length} 个字体，$_validFontCount 个可用',
+      actions: <AdaptiveOverflowToolbarItem>[
+        AdaptiveOverflowToolbarItem(
+          icon: searchIcon,
+          label: _searchKeyword.isNotEmpty ? '清空搜索' : '搜索',
+          priority: 10,
+          onPressed: () => unawaited(_showSearchDialog()),
+        ),
+        AdaptiveOverflowToolbarItem(
+          icon: Icons.refresh_rounded,
+          label: '刷新',
+          priority: 8,
+          enabled: !_isLoading,
+          onPressed: _isLoading ? null : () => unawaited(_reload()),
+        ),
+      ],
+      mobileActions: <Widget>[
+        IconButton(
+          tooltip: _searchKeyword.isNotEmpty ? '清空搜索' : '搜索',
+          onPressed: () => unawaited(_showSearchDialog()),
+          icon: Icon(searchIcon),
+        ),
+        IconButton(
+          tooltip: '刷新',
+          onPressed: _isLoading ? null : () => unawaited(_reload()),
+          icon: const Icon(Icons.refresh_rounded),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _showSearchDialog() async {
     if (_searchKeyword.isNotEmpty) {
       setState(() {
         _searchKeyword = '';
       });
       return;
     }
-    showDialog(
+    final controller = TextEditingController();
+    final keyword = await showAdaptiveActionSurface<String>(
       context: context,
-      builder: (context) {
-        String keyword = '';
-        return AlertDialog(
-          title: const Text('搜索字体'),
-          content: TextField(
-            autofocus: true,
-            decoration: const InputDecoration(
-              hintText: '输入字体名称',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.all(Radius.circular(12)),
+      maxWidth: 420,
+      builder: (surfaceContext) {
+        void submit() {
+          Navigator.of(surfaceContext).pop(controller.text.trim());
+        }
+
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '搜索字体',
+              style: Theme.of(
+                surfaceContext,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              autofocus: appEnableAutoFocusForTextInput,
+              decoration: const InputDecoration(
+                hintText: '输入字体名称',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
+                ),
               ),
+              textInputAction: TextInputAction.search,
+              onSubmitted: (_) => submit(),
             ),
-            onChanged: (value) {
-              keyword = value;
-            },
-            onSubmitted: (value) {
-              setState(() {
-                _searchKeyword = value;
-              });
-              Navigator.pop(context);
-            },
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('取消'),
-            ),
-            TextButton(
-              onPressed: () {
-                setState(() {
-                  _searchKeyword = keyword;
-                });
-                Navigator.pop(context);
-              },
-              child: const Text('搜索'),
+            const SizedBox(height: 18),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(surfaceContext).pop(),
+                  child: const Text('取消'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(onPressed: submit, child: const Text('搜索')),
+              ],
             ),
           ],
         );
       },
     );
+    controller.dispose();
+    if (keyword == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _searchKeyword = keyword.trim();
+    });
   }
 
   Widget _buildSearchBar(BuildContext context) {

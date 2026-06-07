@@ -36,7 +36,8 @@ extension on _AppearancePageState {
       activeAdvancedTheme,
     );
     final mediaQuery = MediaQuery.of(context);
-    final topInset = mediaQuery.padding.top + kToolbarHeight;
+    final routeTopBar = _buildRouteTopBar(context);
+    final topInset = mediaQuery.padding.top + routeTopBar.preferredSize.height;
     final bottomInset = mediaQuery.viewPadding.bottom;
 
     return PopScope<void>(
@@ -49,20 +50,7 @@ extension on _AppearancePageState {
       },
       child: Scaffold(
         extendBodyBehindAppBar: true,
-        appBar: AppBar(
-          title: Text(_pageTitle(widget.section)),
-          backgroundColor: Colors.transparent,
-          surfaceTintColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-          actions: [
-            if (widget.section == AppearanceSection.background)
-              IconButton(
-                tooltip: '新增背景',
-                onPressed: _uploadBackground,
-                icon: const Icon(Icons.add_rounded),
-              ),
-          ],
-        ),
+        appBar: routeTopBar,
         body: LayoutBuilder(
           builder: (context, _) {
             final maxWidth = AppLayout.pageContentMaxWidth(
@@ -119,12 +107,52 @@ extension on _AppearancePageState {
     );
   }
 
+  PreferredSizeWidget _buildRouteTopBar(BuildContext context) {
+    final actions =
+        widget.section == AppearanceSection.background
+            ? <AdaptiveOverflowToolbarItem>[
+              AdaptiveOverflowToolbarItem(
+                icon: Icons.add_rounded,
+                label: '新增背景',
+                priority: 10,
+                onPressed: _uploadBackground,
+              ),
+            ]
+            : const <AdaptiveOverflowToolbarItem>[];
+    final mobileActions =
+        widget.section == AppearanceSection.background
+            ? <Widget>[
+              IconButton(
+                tooltip: '新增背景',
+                onPressed: _uploadBackground,
+                icon: const Icon(Icons.add_rounded),
+              ),
+            ]
+            : const <Widget>[];
+    return buildMineRouteTopBar(
+      context: context,
+      title: _pageTitle(widget.section),
+      subtitle: _pageSubtitle(widget.section),
+      actions: actions,
+      mobileActions: mobileActions,
+    );
+  }
+
   String _pageTitle(AppearanceSection section) {
     return switch (section) {
       AppearanceSection.appearance => '外观',
       AppearanceSection.tabBar => '底栏',
       AppearanceSection.cover => '封面',
       AppearanceSection.background => '应用背景',
+    };
+  }
+
+  String? _pageSubtitle(AppearanceSection section) {
+    return switch (section) {
+      AppearanceSection.appearance => '主题、颜色、字体与导航外观',
+      AppearanceSection.tabBar => '底栏图标和导航展示',
+      AppearanceSection.cover => '书架与主题封面素材',
+      AppearanceSection.background => '应用背景素材管理',
     };
   }
 

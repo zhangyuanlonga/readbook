@@ -15,6 +15,7 @@ import '../../../core/device/device_identity_service.dart';
 import '../application/mine_page_preferences_service.dart';
 import '../application/advanced_theme_provider.dart';
 import '../providers.dart';
+import 'widgets/mine_route_top_bar.dart';
 
 class AboutPage extends ConsumerStatefulWidget {
   const AboutPage({super.key});
@@ -78,7 +79,13 @@ class _AboutPageState extends ConsumerState<AboutPage> {
     final metrics = AppAdaptiveMetrics.of(context);
     final horizontal = metrics.pagePadding;
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
-    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
+    final routeTopBar = buildMineRouteTopBar(
+      context: context,
+      title: '关于',
+      subtitle: '版本、支持与项目信息',
+    );
+    final topInset =
+        MediaQuery.paddingOf(context).top + routeTopBar.preferredSize.height;
 
     return PopScope<void>(
       canPop: context.canPop(),
@@ -90,12 +97,7 @@ class _AboutPageState extends ConsumerState<AboutPage> {
       },
       child: Scaffold(
         extendBodyBehindAppBar: true,
-        appBar: AppBar(
-          title: const Text('关于'),
-          backgroundColor: Colors.transparent,
-          surfaceTintColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-        ),
+        appBar: routeTopBar,
         body: LayoutBuilder(
           builder: (context, _) {
             final contentMaxWidth = AppLayout.aboutPageContentMaxWidth(context);

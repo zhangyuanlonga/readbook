@@ -12,6 +12,7 @@ import '../../../app/widgets/app_status_state_card.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../domain/entities/announcement.dart';
 import '../../mine/application/advanced_theme_provider.dart';
+import '../../mine/presentation/widgets/mine_route_top_bar.dart';
 import '../application/announcement_read_state_service.dart';
 import '../application/announcement_service.dart';
 import '../providers.dart';
@@ -89,7 +90,13 @@ class _AnnouncementDetailPageState
     final metrics = AppAdaptiveMetrics.of(context);
     final horizontal = metrics.pagePadding;
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
-    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
+    final routeTopBar = buildMineRouteTopBar(
+      context: context,
+      title: '公告详情',
+      subtitle: _announcement?.title,
+    );
+    final topInset =
+        MediaQuery.paddingOf(context).top + routeTopBar.preferredSize.height;
     final activeTheme = ref.watch(activeAdvancedThemeProvider).valueOrNull;
     final backdrop = resolveAdvancedThemeBackdrop(
       Theme.of(context).colorScheme,
@@ -98,12 +105,7 @@ class _AnnouncementDetailPageState
 
     return Scaffold(
       extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        title: const Text('公告详情'),
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        shadowColor: Colors.transparent,
-      ),
+      appBar: routeTopBar,
       body: DecoratedBox(
         decoration: buildAdvancedThemeBackdropDecoration(backdrop),
         child: LayoutBuilder(
