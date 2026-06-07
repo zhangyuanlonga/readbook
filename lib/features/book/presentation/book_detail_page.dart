@@ -20,6 +20,8 @@ import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/adaptive_fullscreen_preview.dart';
+import '../../../app/widgets/adaptive_overflow_toolbar.dart';
+import '../../../app/widgets/adaptive_route_top_bar.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../app/widgets/runtime_feedback_card.dart';
@@ -62,6 +64,7 @@ import '../../reader/presentation/reader_catalog_sheet.dart';
 import '../../search/application/search_hit_cache_service.dart';
 import '../../search/application/search_service.dart';
 import '../../search/application/server_gateway_identity.dart';
+import '../../search/presentation/online_source_error_presentation.dart';
 import '../../search/providers.dart' as search_providers;
 import '../../mine/application/advanced_theme_provider.dart';
 import '../../mine/application/cover_gallery_provider.dart';
@@ -76,6 +79,7 @@ import '../application/book_detail_metadata_flow_service.dart';
 import '../application/book_metadata_edit_service.dart';
 import '../application/book_metadata_presentation_resolver.dart';
 import '../application/book_reading_status_service.dart';
+import 'book_reading_status_presentation.dart';
 import 'book_detail_switch_source_helper.dart';
 import 'widgets/book_detail_primary_actions.dart';
 import 'widgets/book_detail_sections.dart';
@@ -265,6 +269,10 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   final Stopwatch _detailOpenStopwatch = Stopwatch()..start();
   final BookDisplayStateResolver _bookMetadataPresentationResolver =
       const BookDisplayStateResolver();
+  final BookReadingStatusPresentationMapper _readingStatusPresentationMapper =
+      const BookReadingStatusPresentationMapper();
+  final OnlineSourceErrorPresentationAdapter _onlineSourceErrorAdapter =
+      const OnlineSourceErrorPresentationAdapter();
   late final ReaderSystemSettingsService _readerSystemSettingsService;
   late final LocalBookStorageService _localBookStorageService;
   late final ReaderPreferencesService _readerPreferencesService;
@@ -942,7 +950,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
               FilledButton.tonalIcon(
                 onPressed: () => unawaited(_showReadingStatusPicker(result)),
                 icon: const Icon(Icons.expand_more_rounded, size: 18),
-                label: Text(status.label),
+                label: Text(_readingStatusLabel(status)),
               ),
             ],
           ),
@@ -1012,7 +1020,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: Icon(_readingStatusIcon(status)),
-                title: Text(status.label),
+                title: Text(_readingStatusLabel(status)),
                 trailing:
                     status == currentStatus
                         ? const Icon(Icons.check_rounded)
@@ -1038,7 +1046,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
           auxiliaryState: _auxiliaryState,
         ) ==
         status) {
-      _showMessage('当前已是${status.label}。');
+      _showMessage('当前已是${_readingStatusLabel(status)}。');
       return;
     }
 
@@ -1064,7 +1072,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
 
     if (markResult == null) {
       if (mounted) {
-        _showMessage('暂无可用章节，暂不能标记为${status.label}。');
+        _showMessage('暂无可用章节，暂不能标记为${_readingStatusLabel(status)}。');
       }
       return;
     }
@@ -1078,16 +1086,18 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       ),
     );
     _showMessage(
-      markResult.progress == null ? '已标记为未读。' : '已标记为${status.label}。',
+      markResult.progress == null
+          ? '已标记为未读。'
+          : '已标记为${_readingStatusLabel(status)}。',
     );
   }
 
+  String _readingStatusLabel(BookReadingStatus status) {
+    return _readingStatusPresentationMapper.resolve(status).label;
+  }
+
   IconData _readingStatusIcon(BookReadingStatus status) {
-    return switch (status) {
-      BookReadingStatus.unread => Icons.markunread_outlined,
-      BookReadingStatus.reading => Icons.menu_book_outlined,
-      BookReadingStatus.finished => Icons.task_alt_rounded,
-    };
+    return _readingStatusPresentationMapper.resolve(status).icon;
   }
 
   Widget _buildDetailServerMetaLine(BookDetailLoadResult result) {
@@ -1537,7 +1547,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
               for (final status in BookReadingStatus.values)
                 ButtonSegment<BookReadingStatus>(
                   value: status,
-                  label: Text(status.label),
+                  label: Text(_readingStatusLabel(status)),
                   icon: Icon(_readingStatusIcon(status), size: 18),
                 ),
             ],
@@ -1937,7 +1947,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
               for (final status in BookReadingStatus.values)
                 ButtonSegment<BookReadingStatus>(
                   value: status,
-                  label: Text(status.label),
+                  label: Text(_readingStatusLabel(status)),
                   icon: Icon(_readingStatusIcon(status), size: 18),
                 ),
             ],
@@ -3589,15 +3599,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       return LocalBookWorkflowPolicy.userReadableLoadError(message);
     }
 
-    return switch (error.code) {
-      ErrorCode.network => '网络请求失败，请检查网络或更换书源后重试。',
-      ErrorCode.validation => '书源配置不完整，暂时无法加载详情。',
-      ErrorCode.ruleParse => '服务器书源解析规则异常，无法加载详情。',
-      ErrorCode.ruleMatchEmpty => '未获取到有效内容，请更换书源或稍后重试。',
-      ErrorCode.decode => '响应解析失败，可能是编码或格式不兼容。',
-      ErrorCode.unknownSource => '书源不存在或已被删除。',
-      ErrorCode.unknown => '加载失败，请稍后重试。',
-    };
+    return _onlineSourceErrorAdapter.forException(error);
   }
 
   String? _toTocWarningText(AppException? error) {
@@ -3610,15 +3612,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       return LocalBookWorkflowPolicy.tocWarningText(message);
     }
 
-    return switch (error.code) {
-      ErrorCode.network => '目录加载失败（网络异常），已展示详情。可稍后刷新目录重试。',
-      ErrorCode.validation => '书源配置不完整，目录暂不可用。',
-      ErrorCode.ruleParse => '服务器书源解析规则异常，目录暂不可用。',
-      ErrorCode.ruleMatchEmpty => '未获取到目录内容，目录暂为空。',
-      ErrorCode.decode => '目录解析失败，目录暂不可用。',
-      ErrorCode.unknownSource => '书源不存在，目录暂不可用。',
-      ErrorCode.unknown => '目录加载失败，目录暂不可用。',
-    };
+    return _onlineSourceErrorAdapter.tocWarningFor(error);
   }
 
   Widget _buildTocWarningCard(String message) {

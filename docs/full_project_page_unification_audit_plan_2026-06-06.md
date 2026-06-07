@@ -412,19 +412,19 @@
 来源：`U2-FIX-01`、`U4-FIX-03`、`U4-FIX-04`、`U5-BS-*`、`U6-FIX-05`、`U6-FIX-09`。
 
 - [x] BL-01-01 先执行 `U5-BS-01` 到 `U5-BS-04`：迁移书架模型、mapper、状态组件和工具条，不改业务行为。
-- [ ] BL-01-02 抽阅读状态展示 mapper：未读 / 阅读中 / 已读完的 label、icon、筛选语义共用，对应 `U4-FIX-03`。
-- [ ] BL-01-03 抽待读清单展示 mapper：明确它是书架收藏状态，不混入阅读状态，对应 `U4-FIX-04`。
+- [x] BL-01-02 抽阅读状态展示 mapper：未读 / 阅读中 / 已读完的 label、icon、筛选语义共用，对应 `U4-FIX-03`。
+- [x] BL-01-03 抽待读清单展示 mapper：明确它是书架收藏状态，不混入阅读状态，对应 `U4-FIX-04`。
 - [x] BL-01-04 拆书架网格 / 列表 / 双列卡片、封面自适应、进度展示和更多菜单，对应 `U2-FIX-01` 与 `U5-BS-06` 到 `U5-BS-12`。
-- [ ] BL-01-05 为书架卡片补移动端宽度和桌面宽度 widget smoke，对应 `U6-FIX-09`。
+- [x] BL-01-05 为书架卡片补移动端宽度和桌面宽度 widget smoke，对应 `U6-FIX-09`。
 
 ### BL-02 在线搜索与详情域
 
 来源：`U2-FIX-03`、`U2-FIX-04`、`U4-FIX-05`、`U6-FIX-01`、`U6-FIX-04`。
 
-- [ ] BL-02-01 在线搜索页接入 `AdaptiveRouteTopBar`：搜索输入、书源筛选、聚合状态和搜索中取消进入顶栏，对应 `U2-FIX-03`。
-- [ ] BL-02-02 在线详情页接入 `AdaptiveRouteTopBar`：返回、书名摘要、加入书架、开始阅读、分享 / 更多按宽度折叠，对应 `U2-FIX-04`。
-- [ ] BL-02-03 抽在线书源错误展示 adapter：搜索、详情、阅读器章节加载和书源切换共用权限 / 网络 / 空结果文案，对应 `U4-FIX-05`。
-- [ ] BL-02-04 统一搜索 / 详情桌面拖拽 smoke：覆盖 520、600、840、1200、1600 宽度，对应 `U2-FIX-07`。
+- [x] BL-02-01 在线搜索页接入 `AdaptiveRouteTopBar`：搜索输入、书源筛选、聚合状态和搜索中取消进入顶栏，对应 `U2-FIX-03`。
+- [x] BL-02-02 在线详情页接入 `AdaptiveRouteTopBar`：返回、书名摘要、加入书架、开始阅读、分享 / 更多按宽度折叠，对应 `U2-FIX-04`。
+- [x] BL-02-03 抽在线书源错误展示 adapter：搜索、详情、阅读器章节加载和书源切换共用权限 / 网络 / 空结果文案，对应 `U4-FIX-05`。
+- [x] BL-02-04 统一搜索 / 详情桌面拖拽 smoke：覆盖 520、600、840、1200、1600 宽度，对应 `U2-FIX-07`。
 
 ### BL-03 阅读器与本地内容域
 
@@ -432,8 +432,24 @@
 
 - [x] BL-03-01 先执行 `U5-RD-01` 到 `U5-RD-04`：阅读器拆 bootstrap、lifecycle、content load 和错误恢复入口。
 - [x] BL-03-02 继续拆目录、设置、选择、分页缓存、触控手势和桌面键鼠输入，对应 `U2-FIX-05` 与 `U5-RD-05` 到 `U5-RD-14`。
-- [ ] BL-03-03 补本地内容导入到阅读 smoke 清单：导入、本地详情、智能分段、阅读、删除、缓存清理按 Desktop / Web / Mobile 记录，对应 `U4-FIX-06`。
-- [ ] BL-03-04 阅读器相关整改必须记录移动端小屏、桌面拖拽、Web 能力降级或真实阻塞原因。
+- [x] BL-03-03 补本地内容导入到阅读 smoke 清单：导入、本地详情、智能分段、阅读、删除、缓存清理按 Desktop / Web / Mobile 记录，对应 `U4-FIX-06`。
+- [x] BL-03-04 阅读器相关整改必须记录移动端小屏、桌面拖拽、Web 能力降级或真实阻塞原因。
+
+#### BL-03 本地内容导入到阅读 smoke 清单
+
+| 平台 | 必测链路 | 通过标准 | 当前状态 |
+| --- | --- | --- | --- |
+| Desktop macOS / Windows / Linux | 本地书库或书架入口导入 TXT / EPUB / PDF；进入本地详情；确认目录或首批目录可展示；点击开始阅读；返回详情；删除本地图书；重启后确认缓存不误删用户源文件。 | 导入 sheet / 页面内状态能完整反馈；本地详情不一次性加载超大目录导致明显卡顿；阅读器能打开首章或预览章节；删除只清理应用受管副本和关联缓存。 | 代码侧已有 `LocalBookStorageService`、`LocalBookIndexService`、`LocalChapterContentService` 自动化覆盖；真实文件选择器和大样本需手工验。 |
+| Mobile Android / iOS | 通过系统文件选择器导入 TXT / EPUB / PDF；检查权限 / 沙盒提示；进入本地详情；阅读首章；锁屏 / 后台回来继续阅读；删除后书架刷新。 | 权限失败有明确提示；导入后文件复制到应用受管目录；阅读进度能保存；返回和删除不报错。 | 未在本轮真机验证，发布前手工 smoke。 |
+| Web | 打开本地书库 / 书架导入入口；确认 Native 文件系统导入能力降级提示；如果后续启用 Web 上传，再补上传 bytes 到 parser 的链路。 | 当前不应出现原生路径导入按钮误导；降级文案清楚说明 Web 暂不支持 Native 文件导入。 | 当前能力层标记 Native 文件系统导入不支持，本轮记录真实阻塞原因，不伪造通过。 |
+
+#### BL-03 阅读器整改验证记录
+
+| 场景 | 必测内容 | 当前记录 |
+| --- | --- | --- |
+| 移动端小屏 | 点击分区 / 长按菜单 / 目录 / 设置 / 选区复制 / 返回；文字、漫画、PDF 或本地内容模式至少各选一个代表样本。 | 阅读器触控、目录、设置、选区和内容模式 glue 已拆出 controller / surface，并有对应单测；真实 Android / iOS 手工未验。 |
+| 桌面拖拽 | 600、840、1200、1600 宽度下打开阅读器；键盘翻页、滚轮、目录侧面板或弹层、设置弹层、选区操作不溢出。 | 桌面输入和 surface policy 有自动化测试；真实窗口拖拽需 macOS / Windows 各验一次。 |
+| Web 降级 | Web 打开阅读器、切换设置、目录、章节加载失败提示；确认文件能力、插件能力不支持时展示降级原因。 | Web 本地导入仍是能力阻塞；在线阅读器需结合 drift Web 初始化和书源链路单独验。 |
 
 ### BL-04 会员与账号会话域
 
@@ -524,3 +540,4 @@
 - [x] 2026-06-07：执行 `U5-ATE-01` 到 `U5-ATE-07`；高级主题编辑器补拆分索引，状态读写 facade 迁移到 `advanced_theme_editor_controller.dart`，标题编辑迁移到 `widgets/advanced_theme_basic_section.dart`，颜色 / 强度区块迁移到 `widgets/advanced_theme_color_section.dart`，视觉资源共用卡片迁移到 `widgets/advanced_theme_wallpaper_section.dart`，封面图集和启动图集入口分别迁移到 `widgets/advanced_theme_cover_gallery_section.dart`、`widgets/advanced_theme_launch_gallery_section.dart`。外观资源链接加载改为一次性走 controller facade，页面不再逐项拼资源列表状态；`advanced_theme_editor_page.dart` 从约 `3890` 行降至 `3763` 行。本轮只拆边界，不改保存、选择、预览和多端交互业务行为。验证：`dart analyze lib/features/mine/application/advanced_theme_editor_controller.dart lib/features/mine/presentation/advanced_theme_editor_page.dart lib/features/mine/presentation/advanced_theme_editor_page_flow.dart lib/features/mine/presentation/widgets/advanced_theme_basic_section.dart lib/features/mine/presentation/widgets/advanced_theme_wallpaper_section.dart lib/features/mine/presentation/widgets/advanced_theme_cover_gallery_section.dart lib/features/mine/presentation/widgets/advanced_theme_launch_gallery_section.dart test/features/mine/application/advanced_theme_editor_controller_test.dart test/features/mine/presentation/advanced_theme_editor_sections_test.dart` 通过；`flutter test test/features/mine/application/advanced_theme_editor_controller_test.dart test/features/mine/presentation/advanced_theme_editor_sections_test.dart` 通过。未验证：Android / iOS / Web / macOS / Windows / Linux 手工 smoke，本轮未改平台入口，后续高级主题编辑器回归需覆盖标题编辑、颜色展开、应用背景、阅读背景、封面图集、启动图集选择和保存。
 - [x] 2026-06-07：执行 `U5-ATE-08` 到 `U5-ATE-10`；高级主题编辑器继续拆底部导航图集、字体选择和预览承载层。新增 `widgets/advanced_theme_appearance_link_tile.dart` 作为资源绑定行共用壳层，`widgets/advanced_theme_bottom_nav_gallery_section.dart` 承接底栏图集入口，`widgets/advanced_theme_font_section.dart` 承接界面字体 / 阅读字体入口，`widgets/advanced_theme_preview_panel.dart` 承接实时背景预览外层。旧 `home` 图标包槽位仍由 `BottomNavIconGallery.fromJson` 映射到 `bookshelf`，本轮补实体测试确认；`advanced_theme_editor_page.dart` 从 `3763` 行降至 `3684` 行。本轮只拆边界，不改图集选择、字体管理跳转、实时预览和平台入口。验证：`dart analyze lib/features/mine/presentation/advanced_theme_editor_page.dart lib/features/mine/presentation/advanced_theme_editor_page_flow.dart lib/features/mine/presentation/widgets/advanced_theme_appearance_link_tile.dart lib/features/mine/presentation/widgets/advanced_theme_bottom_nav_gallery_section.dart lib/features/mine/presentation/widgets/advanced_theme_font_section.dart lib/features/mine/presentation/widgets/advanced_theme_preview_panel.dart test/features/mine/presentation/advanced_theme_editor_sections_test.dart test/domain/entities/bottom_nav_icon_gallery_test.dart` 通过；`flutter test test/features/mine/presentation/advanced_theme_editor_sections_test.dart test/domain/entities/bottom_nav_icon_gallery_test.dart` 通过。未验证：Android / iOS / Web / macOS / Windows / Linux 手工 smoke，后续高级主题编辑器回归继续覆盖底栏图集、字体绑定、实时背景预览和保存。
 - [x] 2026-06-07：执行 `U5-ATE-11` 到 `U5-ATE-14`；保存校验和错误文案迁移到 `advanced_theme_editor_validation_service.dart` 并补单测，资源路径解析、asset / file provider、本地图片读取迁移到 `advanced_theme_editor_resource_service.dart` 并补单测，编辑器接入 `AdaptiveRouteTopBar`，桌面顶栏显示主题名、保存、预览和更多，移动端保留 AppBar 语义；`AdaptiveRouteTopBar` 增加兼容 bottom 插槽承载浅 / 深色 TabBar 并补组件测试。`advanced_theme_editor_page.dart` 当前 `3711` 行，新增 editor application / widgets 文件承接主要边界，`BL-05-03` 已完成并勾选。验证：目标 `dart analyze` 覆盖 editor application、editor page、editor widgets 和 adaptive route topbar 通过；`flutter test test/features/mine/application/advanced_theme_editor_validation_service_test.dart test/features/mine/application/advanced_theme_editor_resource_service_test.dart test/features/mine/application/advanced_theme_editor_controller_test.dart test/features/mine/presentation/advanced_theme_editor_sections_test.dart test/app/widgets/adaptive_components_test.dart` 通过。未验证：Android / iOS / Web / macOS / Windows / Linux 手工 smoke，发布前需覆盖高级主题编辑器返回、标题编辑、浅 / 深色切换、保存校验、背景 / 阅读背景、底栏图集、字体绑定和实时预览。
+- [x] 2026-06-07：执行 `BL-01` / `BL-02` / `BL-03` 本轮 Mac 领取项；`BL-06` 全局 UI 组件与设计 token 域保留给 Windows。书架补 `BookReadingStatusPresentationMapper` 和 `BookshelfReadingQueuePresentationMapper`，书籍详情与书架共用阅读状态展示，待读清单明确为书架收藏状态并补移动端 / 桌面宽度 smoke。在线搜索页接入 `AdaptiveRouteTopBar`，移动端保留 bottom 搜索条，桌面端搜索输入进入 middle，书源筛选 / 精准匹配 / 清空筛选 / 搜索取消进入顶栏 overflow；在线详情页接入 `AdaptiveRouteTopBar`，标题摘要、编辑、分享、更多和内联编辑保存动作按宽度折叠。新增 `OnlineSourceErrorPresentationAdapter`，搜索失败明细、搜索执行异常、详情加载失败和目录告警复用统一书源错误文案。补搜索 / 详情 route topbar 在 520、600、840、1200、1600 宽度的 smoke，并补本地内容导入到阅读和阅读器整改多端手工验收清单。验证：`dart analyze` 覆盖本轮搜索、详情、adapter 和测试目标通过；`flutter test test/features/book/presentation/book_reading_status_presentation_test.dart test/features/bookshelf/presentation/bookshelf_reading_queue_presentation_test.dart test/features/bookshelf/presentation/bookshelf_card_width_smoke_test.dart test/features/bookshelf/presentation/bookshelf_book_action_controller_test.dart` 通过；`flutter test test/features/search/presentation/online_source_error_presentation_test.dart test/features/search/presentation/search_failure_banner_test.dart test/features/search/presentation/search_detail_route_top_bar_smoke_test.dart` 通过。未验证：Android / iOS / Web / macOS / Windows / Linux 真机或真实窗口手工 smoke，尤其是本地图书真实文件选择器、Web 文件能力降级、阅读器小屏触控和桌面拖拽。

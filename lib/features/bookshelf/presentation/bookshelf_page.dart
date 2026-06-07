@@ -53,6 +53,7 @@ import '../../book/application/book_reading_status_service.dart';
 import '../../book/application/book_metadata_presentation_resolver.dart';
 import '../../book/application/book_detail_service.dart';
 import '../../book/application/custom_cover_storage_service.dart';
+import '../../book/presentation/book_reading_status_presentation.dart';
 import '../../announcement/application/announcement_service.dart';
 import '../../announcement/application/announcement_read_state_service.dart';
 import '../../mine/application/advanced_theme_provider.dart';
@@ -69,6 +70,7 @@ import 'bookshelf_page_models.dart';
 import 'bookshelf_preference_mappers.dart';
 import 'bookshelf_preference_restore_controller.dart';
 import 'bookshelf_presentation_metadata_loader.dart';
+import 'bookshelf_reading_queue_presentation.dart';
 import 'bookshelf_reader_entry_controller.dart';
 import 'widgets/bookshelf_book_more_menu.dart';
 import 'widgets/bookshelf_grid_sliver.dart';
@@ -193,6 +195,11 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       const BookshelfCoverLayoutResolver();
   final BookshelfBookActionController _bookActionController =
       const BookshelfBookActionController();
+  final BookReadingStatusPresentationMapper _readingStatusPresentationMapper =
+      const BookReadingStatusPresentationMapper();
+  final BookshelfReadingQueuePresentationMapper
+  _readingQueuePresentationMapper =
+      const BookshelfReadingQueuePresentationMapper();
   final BookshelfInitialLoadController _initialLoadController =
       BookshelfInitialLoadController();
   late final LocalBookImportService _localBookImportService;
@@ -1913,7 +1920,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       if (!mounted) {
         return;
       }
-      _showMessage('待读清单更新失败，请重试。');
+      _showMessage(_readingQueuePresentationMapper.failureMessage);
       return;
     }
 
@@ -1934,7 +1941,11 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         _ensureFilterStillValid();
       });
     });
-    _showMessage(inReadingQueue ? '已加入待读清单。' : '已移出待读清单。');
+    _showMessage(
+      _readingQueuePresentationMapper
+          .resolve(inReadingQueue: inReadingQueue)
+          .successMessage,
+    );
   }
 
   Future<void> _markBookReadingStatus(
@@ -2010,7 +2021,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }
 
   String _readingStatusLabel(_BookshelfReadingStatus status) {
-    return status.label;
+    return _readingStatusPresentationMapper.resolve(status).label;
   }
 
   Future<void> _confirmAndRemoveBook(BookshelfBook book) async {
@@ -2119,18 +2130,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
             () =>
                 _handleBookMoreAction(book, _BookshelfBookMoreAction.category),
       ),
-      _buildBookMenuItem(
-        icon:
-            book.inReadingQueue
-                ? Icons.playlist_remove_rounded
-                : Icons.playlist_add_rounded,
-        label: book.inReadingQueue ? '移出待读清单' : '添加待读清单',
-        onPressed:
-            () => _handleBookMoreAction(
-              book,
-              _BookshelfBookMoreAction.readingQueue,
-            ),
-      ),
+      _buildReadingQueueMenuItem(book),
       SubmenuButton(
         leadingIcon: const Icon(Icons.flag_outlined, size: 18),
         menuChildren: [
@@ -2170,6 +2170,21 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     );
   }
 
+  Widget _buildReadingQueueMenuItem(BookshelfBook book) {
+    final presentation = _readingQueuePresentationMapper.resolve(
+      inReadingQueue: book.inReadingQueue,
+    );
+    return _buildBookMenuItem(
+      icon: presentation.menuIcon,
+      label: presentation.menuLabel,
+      onPressed:
+          () => _handleBookMoreAction(
+            book,
+            _BookshelfBookMoreAction.readingQueue,
+          ),
+    );
+  }
+
   Widget _buildReadingStatusMenuItem(
     BookshelfBook book,
     _BookshelfReadingStatus status,
@@ -2184,11 +2199,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }
 
   IconData _readingStatusIcon(_BookshelfReadingStatus status) {
-    return switch (status) {
-      _BookshelfReadingStatus.unread => Icons.markunread_outlined,
-      _BookshelfReadingStatus.reading => Icons.menu_book_outlined,
-      _BookshelfReadingStatus.finished => Icons.task_alt_rounded,
-    };
+    return _readingStatusPresentationMapper.resolve(status).icon;
   }
 
   Future<void> _openOnlineSearchWithReveal(BuildContext sourceContext) async {
@@ -3988,7 +3999,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       case _BookshelfFilter.all:
         return '全部';
       case _BookshelfFilter.todo:
-        return '待读清单';
+        return _readingQueuePresentationMapper.filterLabel;
       case _BookshelfFilter.unread:
         return '未读';
       case _BookshelfFilter.reading:

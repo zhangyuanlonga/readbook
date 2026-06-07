@@ -123,6 +123,9 @@ extension on _BookDetailPageState {
       if (!mounted) {
         return null;
       }
+      final message = _onlineSourceErrorAdapter.genericFailureForStage(
+        ErrorStage.toc,
+      );
       _logger.warn(
         'Book detail catalog load failed',
         context: <String, Object?>{
@@ -132,16 +135,16 @@ extension on _BookDetailPageState {
           'sourceId': _activeSourceId,
           'detailUrl': _activeDetailUrl,
           'durationMs': requestStopwatch.elapsedMilliseconds,
-          'message': '目录加载失败，请稍后重试。',
+          'message': message,
         },
       );
       _updatePresentationState(
         _presentationState.copyWith(
           isCatalogLoading: false,
-          tocWarningText: '目录加载失败，请稍后重试。',
+          tocWarningText: message,
         ),
       );
-      _showMessage('目录加载失败，请稍后重试。');
+      _showMessage(message);
       return null;
     }
   }
@@ -239,6 +242,9 @@ extension on _BookDetailPageState {
       if (!mounted) {
         return null;
       }
+      final message = _onlineSourceErrorAdapter.genericFailureForStage(
+        ErrorStage.toc,
+      );
       _logger.warn(
         'Book detail first catalog batch failed',
         context: <String, Object?>{
@@ -248,16 +254,16 @@ extension on _BookDetailPageState {
           'sourceId': _activeSourceId,
           'detailUrl': _activeDetailUrl,
           'durationMs': requestStopwatch.elapsedMilliseconds,
-          'message': '目录加载失败，请稍后重试。',
+          'message': message,
         },
       );
       _updatePresentationState(
         _presentationState.copyWith(
           isCatalogLoading: false,
-          tocWarningText: '目录加载失败，请稍后重试。',
+          tocWarningText: message,
         ),
       );
-      _showMessage('目录加载失败，请稍后重试。');
+      _showMessage(message);
       return null;
     }
   }

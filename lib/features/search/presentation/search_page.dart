@@ -17,11 +17,14 @@ import '../../../app/theme/app_border_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/adaptive_grid_sliver.dart';
+import '../../../app/widgets/adaptive_overflow_toolbar.dart';
+import '../../../app/widgets/adaptive_route_top_bar.dart';
 import '../../../app/widgets/adaptive_search_bar.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
 
 import '../../../core/auth/auth_event_bus.dart';
 import '../../../core/errors/app_exception.dart';
+import '../../../core/errors/error_stage.dart';
 import '../../../core/membership/membership_access_presentation.dart';
 import '../../../core/membership/membership_access_service.dart';
 import '../../../domain/entities/book.dart';
@@ -36,6 +39,7 @@ import '../application/search_history_service.dart';
 import '../application/server_online_search_service.dart';
 import '../application/search_system_settings_service.dart';
 import '../providers.dart';
+import 'online_source_error_presentation.dart';
 import 'search_render_state_controller.dart';
 import 'widgets/search_book_card.dart';
 import 'widgets/search_empty_state.dart';
@@ -67,6 +71,8 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   late final SearchHistoryService _historyService;
   late final SearchSystemSettingsService _searchSystemSettingsService;
   late final MembershipAccessService _membershipAccessService;
+  final OnlineSourceErrorPresentationAdapter _onlineSourceErrorAdapter =
+      const OnlineSourceErrorPresentationAdapter();
 
   static const Duration _progressUiThrottleWindow = Duration(
     milliseconds: 1500,
@@ -327,9 +333,15 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final canPopRoute = context.canPop();
-    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
     final canUseOnlineSearch =
         _hasOnlineSearchAccess && !_isCheckingOnlineSearchAccess;
+    final routeTopBar = _buildRouteTopBar(
+      context: context,
+      palette: palette,
+      canUseOnlineSearch: canUseOnlineSearch,
+    );
+    final topInset =
+        MediaQuery.paddingOf(context).top + routeTopBar.preferredSize.height;
 
     return PopScope<void>(
       canPop: canPopRoute,
@@ -340,24 +352,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       child: Scaffold(
         resizeToAvoidBottomInset: false,
         extendBodyBehindAppBar: true,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          surfaceTintColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-          leading: IconButton(
-            onPressed: _handleBackNavigation,
-            tooltip: '返回',
-            icon: const Icon(Icons.arrow_back),
-          ),
-          titleSpacing:
-              widget.hideTopSearchBar || !canUseOnlineSearch
-                  ? NavigationToolbar.kMiddleSpacing
-                  : 0,
-          title:
-              widget.hideTopSearchBar || !canUseOnlineSearch
-                  ? const Text('搜索')
-                  : _buildSearchBar(context, palette),
-        ),
+        appBar: routeTopBar,
         body: DecoratedBox(
           decoration: buildAdvancedThemeBackdropDecoration(backdrop),
           child: LayoutBuilder(
@@ -621,10 +616,151 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     context.go('/bookshelf');
   }
 
+  PreferredSizeWidget _buildRouteTopBar({
+    required BuildContext context,
+    required ResolvedAdvancedThemePalette palette,
+    required bool canUseOnlineSearch,
+  }) {
+    final showSearchBar = !widget.hideTopSearchBar && canUseOnlineSearch;
+    final metrics = AppAdaptiveMetrics.of(context);
+    final mobileSearchBar =
+        showSearchBar && !metrics.isMediumUpWindow
+            ? PreferredSize(
+              preferredSize: const Size.fromHeight(56),
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  AppSpacing.pageHorizontal(context),
+                  0,
+                  AppSpacing.pageHorizontal(context),
+                  8,
+                ),
+                child: _buildSearchBar(context, palette),
+              ),
+            )
+            : null;
+    return AdaptiveRouteTopBar(
+      title: _routeTopBarTitle,
+      subtitle: _routeTopBarSubtitle,
+      leading: IconButton(
+        onPressed: _handleBackNavigation,
+        tooltip: '返回',
+        icon: const Icon(Icons.arrow_back),
+      ),
+      middle:
+          showSearchBar
+              ? _buildSearchBar(context, palette, includeOptions: false)
+              : null,
+      bottom: mobileSearchBar,
+      actions: _buildDesktopTopBarActions(
+        canUseOnlineSearch: canUseOnlineSearch,
+      ),
+      mobileActions: _buildMobileTopBarActions(
+        canUseOnlineSearch: canUseOnlineSearch,
+      ),
+      backgroundColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      shadowColor: Colors.transparent,
+      dividerColor: Colors.transparent,
+      desktopHeight: kToolbarHeight,
+      titleMaxWidth: 180,
+      middleMinWidth: 220,
+      middleMaxWidth: 560,
+    );
+  }
+
+  String get _routeTopBarTitle {
+    if (_isSearching) {
+      return '搜索中';
+    }
+    return '在线搜索';
+  }
+
+  String? get _routeTopBarSubtitle {
+    if (!_hasOnlineSearchAccess) {
+      return _onlineSearchAccessMessage;
+    }
+    if (_selectedServerSourceIds.isNotEmpty) {
+      return _serverSourceMenuLabel;
+    }
+    return _aggregateByTitleAuthorEnabled ? '聚合同名同作者结果' : null;
+  }
+
+  List<AdaptiveOverflowToolbarItem> _buildDesktopTopBarActions({
+    required bool canUseOnlineSearch,
+  }) {
+    if (!canUseOnlineSearch) {
+      return <AdaptiveOverflowToolbarItem>[
+        AdaptiveOverflowToolbarItem(
+          icon: Icons.refresh_rounded,
+          label: '重新检查',
+          priority: 8,
+          enabled: !_isCheckingOnlineSearchAccess,
+          onPressed: _loadOnlineSearchAccess,
+        ),
+      ];
+    }
+    return <AdaptiveOverflowToolbarItem>[
+      AdaptiveOverflowToolbarItem(
+        icon: _isSearching ? Icons.stop_circle_outlined : Icons.search_rounded,
+        label: _isSearching ? '取消搜索' : '搜索',
+        priority: 20,
+        onPressed: _runSearch,
+      ),
+      AdaptiveOverflowToolbarItem(
+        icon: Icons.source_outlined,
+        label: _serverSourceMenuLabel,
+        priority: 10,
+        enabled: !_isSearching,
+        onPressed: () => unawaited(_showActiveSourceFilterSheet()),
+      ),
+      AdaptiveOverflowToolbarItem(
+        icon:
+            _isPreciseBookMatch
+                ? Icons.check_circle_rounded
+                : Icons.check_circle_outline_rounded,
+        label: '精准匹配',
+        priority: 8,
+        enabled: !_isSearching,
+        onPressed: () => _onPreciseMatchChanged(!_isPreciseBookMatch),
+      ),
+      if (_selectedServerSourceIds.isNotEmpty)
+        AdaptiveOverflowToolbarItem(
+          icon: Icons.filter_alt_off_outlined,
+          label: '清空书源筛选',
+          priority: 4,
+          enabled: !_isSearching,
+          onPressed: _clearActiveSourceFilter,
+        ),
+    ];
+  }
+
+  List<Widget> _buildMobileTopBarActions({required bool canUseOnlineSearch}) {
+    if (!canUseOnlineSearch) {
+      return <Widget>[
+        IconButton(
+          tooltip: '重新检查',
+          onPressed:
+              _isCheckingOnlineSearchAccess ? null : _loadOnlineSearchAccess,
+          icon: const Icon(Icons.refresh_rounded),
+        ),
+      ];
+    }
+    return <Widget>[
+      IconButton(
+        tooltip: _isSearching ? '取消搜索' : '搜索',
+        onPressed: _runSearch,
+        icon: Icon(
+          _isSearching ? Icons.stop_circle_outlined : Icons.search_rounded,
+        ),
+      ),
+    ];
+  }
+
   Widget _buildSearchBar(
     BuildContext context,
-    ResolvedAdvancedThemePalette palette,
-  ) {
+    ResolvedAdvancedThemePalette palette, {
+    bool includeOptions = true,
+  }) {
     final theme = Theme.of(context);
     final metrics = AppAdaptiveMetrics.of(context);
     final hintText = switch (_searchContentMode) {
@@ -688,58 +824,60 @@ class _SearchPageState extends ConsumerState<SearchPage> {
               ),
             ),
           ),
-          const SizedBox(width: 4),
-          PopupMenuButton<_SearchMoreAction>(
-            tooltip: '更多选项',
-            enabled: !_isSearching,
-            icon: const Icon(Icons.more_vert_rounded, size: 20),
-            onSelected: (action) {
-              switch (action) {
-                case _SearchMoreAction.serverSources:
-                  unawaited(_showActiveSourceFilterSheet());
-                case _SearchMoreAction.togglePrecise:
-                  _onPreciseMatchChanged(!_isPreciseBookMatch);
-                case _SearchMoreAction.clearSourceFilter:
-                  _clearActiveSourceFilter();
-              }
-            },
-            itemBuilder:
-                (menuContext) => [
-                  PopupMenuItem<_SearchMoreAction>(
-                    value: _SearchMoreAction.serverSources,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('服务器源'),
-                        const SizedBox(height: 2),
-                        Text(
-                          _serverSourceMenuLabel,
-                          style: Theme.of(
-                            menuContext,
-                          ).textTheme.bodySmall?.copyWith(
-                            color:
-                                Theme.of(
-                                  menuContext,
-                                ).colorScheme.onSurfaceVariant,
+          if (includeOptions) ...[
+            const SizedBox(width: 4),
+            PopupMenuButton<_SearchMoreAction>(
+              tooltip: '更多选项',
+              enabled: !_isSearching,
+              icon: const Icon(Icons.more_vert_rounded, size: 20),
+              onSelected: (action) {
+                switch (action) {
+                  case _SearchMoreAction.serverSources:
+                    unawaited(_showActiveSourceFilterSheet());
+                  case _SearchMoreAction.togglePrecise:
+                    _onPreciseMatchChanged(!_isPreciseBookMatch);
+                  case _SearchMoreAction.clearSourceFilter:
+                    _clearActiveSourceFilter();
+                }
+              },
+              itemBuilder:
+                  (menuContext) => [
+                    PopupMenuItem<_SearchMoreAction>(
+                      value: _SearchMoreAction.serverSources,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('服务器源'),
+                          const SizedBox(height: 2),
+                          Text(
+                            _serverSourceMenuLabel,
+                            style: Theme.of(
+                              menuContext,
+                            ).textTheme.bodySmall?.copyWith(
+                              color:
+                                  Theme.of(
+                                    menuContext,
+                                  ).colorScheme.onSurfaceVariant,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  CheckedPopupMenuItem<_SearchMoreAction>(
-                    value: _SearchMoreAction.togglePrecise,
-                    checked: _isPreciseBookMatch,
-                    child: const Text('精准'),
-                  ),
-                  if (_selectedServerSourceIds.isNotEmpty)
-                    const PopupMenuDivider(),
-                  if (_selectedServerSourceIds.isNotEmpty)
-                    const PopupMenuItem<_SearchMoreAction>(
-                      value: _SearchMoreAction.clearSourceFilter,
-                      child: Text('清空服务器源筛选'),
+                    CheckedPopupMenuItem<_SearchMoreAction>(
+                      value: _SearchMoreAction.togglePrecise,
+                      checked: _isPreciseBookMatch,
+                      child: const Text('精准'),
                     ),
-                ],
-          ),
+                    if (_selectedServerSourceIds.isNotEmpty)
+                      const PopupMenuDivider(),
+                    if (_selectedServerSourceIds.isNotEmpty)
+                      const PopupMenuItem<_SearchMoreAction>(
+                        value: _SearchMoreAction.clearSourceFilter,
+                        child: Text('清空服务器源筛选'),
+                      ),
+                  ],
+            ),
+          ],
         ],
       ),
     );
@@ -1674,13 +1812,15 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       if (!mounted || token.isCancelled || sessionId != _searchSessionId) {
         return;
       }
-      _showMessage(error.briefMessage);
+      _showMessage(_onlineSourceErrorAdapter.forException(error));
     } catch (error) {
       if (!mounted || token.isCancelled || sessionId != _searchSessionId) {
         return;
       }
       debugPrint('Search failed: $error');
-      _showMessage('搜索失败，请稍后重试。');
+      _showMessage(
+        _onlineSourceErrorAdapter.genericFailureForStage(ErrorStage.search),
+      );
     } finally {
       _clearProgressUiThrottle(
         updatePageState: mounted && sessionId == _searchSessionId,

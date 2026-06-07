@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../application/search_service.dart';
+import '../online_source_error_presentation.dart';
 
 class SearchFailureBanner extends StatelessWidget {
   const SearchFailureBanner({super.key, required this.report});
 
   final SearchExecutionReport report;
+  static const OnlineSourceErrorPresentationAdapter _errorAdapter =
+      OnlineSourceErrorPresentationAdapter();
 
   @override
   Widget build(BuildContext context) {
@@ -102,6 +105,7 @@ class SearchFailureBanner extends StatelessWidget {
                           ),
                       itemBuilder: (context, index) {
                         final failure = report.failures[index];
+                        final presentation = _errorAdapter.fromFailure(failure);
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 10),
                           child: Column(
@@ -128,7 +132,7 @@ class SearchFailureBanner extends StatelessWidget {
                                       borderRadius: BorderRadius.circular(6),
                                     ),
                                     child: Text(
-                                      failure.gatewayCode ?? failure.code.name,
+                                      presentation.badge,
                                       style: theme.textTheme.labelSmall
                                           ?.copyWith(
                                             color: colorScheme.onErrorContainer,
@@ -139,7 +143,7 @@ class SearchFailureBanner extends StatelessWidget {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                failure.message,
+                                presentation.message,
                                 maxLines: 3,
                                 overflow: TextOverflow.ellipsis,
                                 style: theme.textTheme.bodySmall?.copyWith(
@@ -159,10 +163,7 @@ class SearchFailureBanner extends StatelessWidget {
                               ],
                               const SizedBox(height: 4),
                               Text(
-                                failure.gatewayFailure?.actionHint ??
-                                    (failure.retryable
-                                        ? '建议：可重试或稍后再试'
-                                        : '建议：检查书源或切换书源'),
+                                presentation.actionHint,
                                 style: theme.textTheme.labelSmall?.copyWith(
                                   color: colorScheme.onSurfaceVariant,
                                   fontWeight: FontWeight.w600,
