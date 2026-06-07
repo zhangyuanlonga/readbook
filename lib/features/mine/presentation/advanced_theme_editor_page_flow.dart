@@ -35,21 +35,12 @@ extension on _AdvancedThemeEditorPageState {
     if (!mounted) {
       return;
     }
-    _updateAdvancedThemeEditorState(() {
-      _backgroundLibraryPaths = links.backgroundLibraryPaths.toList(
-        growable: false,
-      );
-      _readerBackgroundLibraryPaths = links.readerBackgroundLibraryPaths.toList(
-        growable: false,
-      );
-      _bottomNavGalleries = links.bottomNavGalleries.toList(growable: false);
-      _coverGalleries = links.coverGalleries.toList(growable: false);
-      _launchImageGalleries = links.launchImageGalleries.toList(
-        growable: false,
-      );
-      _availableFonts = links.availableFonts.toList(growable: false);
-      _activeBottomNavGalleryName = links.activeBottomNavGalleryName;
-    });
+    _pageStateNotifier.update(
+      (state) => _editorController.applyAppearanceLinks(state, links),
+    );
+    if (mounted) {
+      _refreshAdvancedThemeEditorState();
+    }
   }
 
   Future<void> _saveThemeImpl({
@@ -61,11 +52,6 @@ extension on _AdvancedThemeEditorPageState {
       return;
     }
     final normalizedName = _nameController.text.trim();
-    if (normalizedName.isEmpty) {
-      _showMessage('请先填写主题名称');
-      return;
-    }
-
     final parsedLightColors = _parseColorsForMode(AppAdvancedThemeMode.light);
     if (parsedLightColors == null) {
       return;
@@ -74,14 +60,25 @@ extension on _AdvancedThemeEditorPageState {
     if (parsedDarkColors == null) {
       return;
     }
-    if (parsedLightColors.configuredColorCount == 0) {
-      _showMessage('请先完成浅色配置');
-      _selectMode(AppAdvancedThemeMode.light);
-      return;
-    }
-    if (parsedDarkColors.configuredColorCount == 0) {
-      _showMessage('请先完成深色配置');
-      _selectMode(AppAdvancedThemeMode.dark);
+    final validation = _validationService.validateSave(
+      name: normalizedName,
+      lightColors: parsedLightColors,
+      darkColors: parsedDarkColors,
+    );
+    if (!validation.isValid) {
+      final message = validation.message;
+      if (message != null) {
+        _showMessage(message);
+      }
+      switch (validation.focus) {
+        case AdvancedThemeEditorValidationFocus.light:
+          _selectMode(AppAdvancedThemeMode.light);
+        case AdvancedThemeEditorValidationFocus.dark:
+          _selectMode(AppAdvancedThemeMode.dark);
+        case AdvancedThemeEditorValidationFocus.name:
+        case null:
+          break;
+      }
       return;
     }
     _updateAdvancedThemeEditorState(() {

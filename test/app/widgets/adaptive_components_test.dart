@@ -645,4 +645,30 @@ void main() {
 
     expect(find.text('导入本地图书'), findsNothing);
   });
+
+  testWidgets('AdaptiveRouteTopBar renders optional bottom area', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      AdaptiveTestHarness(
+        width: 840,
+        height: 900,
+        wrapWithMaterialApp: true,
+        child: Scaffold(
+          appBar: AdaptiveRouteTopBar(
+            title: '高级主题',
+            bottom: const PreferredSize(
+              preferredSize: Size.fromHeight(42),
+              child: Text('浅色主题'),
+            ),
+          ),
+          body: const SizedBox.shrink(),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('高级主题'), findsOneWidget);
+    expect(find.text('浅色主题'), findsOneWidget);
+  });
 }

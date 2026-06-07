@@ -54,4 +54,32 @@ void main() {
       throwsFormatException,
     );
   });
+
+  test('maps legacy home slot to bookshelf when importing old galleries', () {
+    final createdAt = DateTime.parse('2026-04-10T10:00:00.000Z');
+    const asset = BottomNavIconAssetRef(
+      path: 'assets/icons/home_light.svg',
+      format: BottomNavIconAssetFormat.svg,
+      isAsset: true,
+    );
+
+    final restored = BottomNavIconGallery.fromJson({
+      'id': 'legacy_home_gallery',
+      'name': '旧首页图集',
+      'createdAt': createdAt.toIso8601String(),
+      'updatedAt': createdAt.toIso8601String(),
+      'isBuiltIn': false,
+      'isEditable': true,
+      'isDeletable': true,
+      'items': {
+        'home': {'lightUnselected': asset.toJson()},
+      },
+    });
+
+    expect(
+      restored.items[BottomNavIconGalleryTab.bookshelf]?.lightUnselected?.path,
+      asset.path,
+    );
+    expect(restored.items.containsKey(BottomNavIconGalleryTab.discover), false);
+  });
 }

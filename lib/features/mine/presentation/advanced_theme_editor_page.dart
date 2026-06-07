@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,30 +10,41 @@ import 'package:go_router/go_router.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/motion/app_motion_widgets.dart';
-import '../../../app/platform/app_input_focus_behavior.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/theme/app_theme_palette.dart';
 import '../../../app/theme/app_theme_seed_provider.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/adaptive_fullscreen_preview.dart';
+import '../../../app/widgets/adaptive_overflow_toolbar.dart';
+import '../../../app/widgets/adaptive_route_top_bar.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/text_cover_placeholder.dart';
 import '../../../core/media/image_selection_service.dart';
-import '../../../core/storage/managed_file_path_resolver.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
 import '../../../domain/entities/bottom_nav_icon_gallery.dart';
 import '../../../domain/entities/cover_gallery.dart';
 import '../../../domain/entities/launch_image_gallery.dart';
 import '../../reader/application/reader_font_registry_service.dart';
 import '../application/advanced_theme_editor_page_state.dart';
+import '../application/advanced_theme_editor_controller.dart';
 import '../application/advanced_theme_provider.dart';
+import '../application/advanced_theme_editor_resource_service.dart';
 import '../application/advanced_theme_editor_state_service.dart';
+import '../application/advanced_theme_editor_validation_service.dart';
 import '../application/advanced_theme_service.dart';
 import '../application/theme_semantic_spec.dart';
 import '../providers.dart';
+import 'widgets/advanced_theme_basic_section.dart';
+import 'widgets/advanced_theme_bottom_nav_gallery_section.dart';
+import 'widgets/advanced_theme_cover_gallery_section.dart';
+import 'widgets/advanced_theme_font_section.dart';
+import 'widgets/advanced_theme_launch_gallery_section.dart';
+import 'widgets/advanced_theme_wallpaper_section.dart';
 import 'widgets/advanced_theme_launch_gallery_selection_card.dart';
+import 'widgets/advanced_theme_preview_panel.dart';
 
 part 'advanced_theme_editor_page_flow.dart';
+part 'widgets/advanced_theme_color_section.dart';
 
 class AdvancedThemeEditorPage extends ConsumerStatefulWidget {
   const AdvancedThemeEditorPage({super.key, this.themeId});
@@ -50,11 +60,15 @@ class _AdvancedThemeEditorPageState
     extends ConsumerState<AdvancedThemeEditorPage>
     with SingleTickerProviderStateMixin {
   static const double _resourcePickerSheetHeightFactor = 0.7;
-  static final ManagedFilePathResolver _pathResolver =
-      ManagedFilePathResolver();
 
   late final AdvancedThemeService _service;
   late final AdvancedThemeEditorStateService _stateService;
+  final AdvancedThemeEditorController _editorController =
+      const AdvancedThemeEditorController();
+  final AdvancedThemeEditorValidationService _validationService =
+      const AdvancedThemeEditorValidationService();
+  final AdvancedThemeEditorResourceService _resourceService =
+      AdvancedThemeEditorResourceService();
   final TextEditingController _nameController = TextEditingController();
   late final TabController _modeTabController = TabController(
     length: AppAdvancedThemeMode.values.length,
@@ -81,90 +95,69 @@ class _AdvancedThemeEditorPageState
 
   AppAdvancedTheme? get _draft => _pageState.draft;
   set _draft(AppAdvancedTheme? value) {
-    _pageStateNotifier.update((state) => state.copyWith(draft: value));
+    _pageStateNotifier.update(
+      (state) => _editorController.setDraft(state, value),
+    );
   }
 
   AppAdvancedThemeMode get _selectedMode => _pageState.selectedMode;
   set _selectedMode(AppAdvancedThemeMode value) {
-    _pageStateNotifier.update((state) => state.copyWith(selectedMode: value));
+    _pageStateNotifier.update(
+      (state) => _editorController.setSelectedMode(state, value),
+    );
   }
 
   List<String> get _backgroundLibraryPaths => _pageState.backgroundLibraryPaths;
-  set _backgroundLibraryPaths(List<String> value) {
-    _pageStateNotifier.update(
-      (state) => state.copyWith(backgroundLibraryPaths: value),
-    );
-  }
 
   List<String> get _readerBackgroundLibraryPaths =>
       _pageState.readerBackgroundLibraryPaths;
-  set _readerBackgroundLibraryPaths(List<String> value) {
-    _pageStateNotifier.update(
-      (state) => state.copyWith(readerBackgroundLibraryPaths: value),
-    );
-  }
 
   List<BottomNavIconGallery> get _bottomNavGalleries =>
       _pageState.bottomNavGalleries;
-  set _bottomNavGalleries(List<BottomNavIconGallery> value) {
-    _pageStateNotifier.update(
-      (state) => state.copyWith(bottomNavGalleries: value),
-    );
-  }
 
   List<CoverGallery> get _coverGalleries => _pageState.coverGalleries;
-  set _coverGalleries(List<CoverGallery> value) {
-    _pageStateNotifier.update((state) => state.copyWith(coverGalleries: value));
-  }
 
   List<LaunchImageGallery> get _launchImageGalleries =>
       _pageState.launchImageGalleries;
-  set _launchImageGalleries(List<LaunchImageGallery> value) {
-    _pageStateNotifier.update(
-      (state) => state.copyWith(launchImageGalleries: value),
-    );
-  }
 
   List<ReaderCustomFontEntry> get _availableFonts => _pageState.availableFonts;
-  set _availableFonts(List<ReaderCustomFontEntry> value) {
-    _pageStateNotifier.update((state) => state.copyWith(availableFonts: value));
-  }
 
   String? get _activeBottomNavGalleryName =>
       _pageState.activeBottomNavGalleryName;
-  set _activeBottomNavGalleryName(String? value) {
-    _pageStateNotifier.update(
-      (state) => state.copyWith(activeBottomNavGalleryName: value),
-    );
-  }
 
   bool get _strengthControlsExpanded => _pageState.strengthControlsExpanded;
   set _strengthControlsExpanded(bool value) {
     _pageStateNotifier.update(
-      (state) => state.copyWith(strengthControlsExpanded: value),
+      (state) => _editorController.setStrengthControlsExpanded(state, value),
     );
   }
 
   bool get _componentControlsExpanded => _pageState.componentControlsExpanded;
   set _componentControlsExpanded(bool value) {
     _pageStateNotifier.update(
-      (state) => state.copyWith(componentControlsExpanded: value),
+      (state) => _editorController.setComponentControlsExpanded(state, value),
     );
   }
 
   bool get _isEditingName => _pageState.isEditingName;
   set _isEditingName(bool value) {
-    _pageStateNotifier.update((state) => state.copyWith(isEditingName: value));
+    _pageStateNotifier.update(
+      (state) => _editorController.setEditingName(state, value),
+    );
   }
 
   bool get _isLoading => _pageState.isLoading;
   set _isLoading(bool value) {
-    _pageStateNotifier.update((state) => state.copyWith(isLoading: value));
+    _pageStateNotifier.update(
+      (state) => _editorController.setLoading(state, value),
+    );
   }
 
   bool get _isSaving => _pageState.isSaving;
   set _isSaving(bool value) {
-    _pageStateNotifier.update((state) => state.copyWith(isSaving: value));
+    _pageStateNotifier.update(
+      (state) => _editorController.setSaving(state, value),
+    );
   }
 
   bool _didInitialize = false;
@@ -225,9 +218,14 @@ class _AdvancedThemeEditorPageState
       return;
     }
     mutation();
-    if (mounted) {
-      setState(() {});
+    _refreshAdvancedThemeEditorState();
+  }
+
+  void _refreshAdvancedThemeEditorState() {
+    if (!mounted) {
+      return;
     }
+    setState(() {});
   }
 
   void _handleColorControllerChanged() {
@@ -255,6 +253,14 @@ class _AdvancedThemeEditorPageState
       sourceContext,
     );
     return _saveThemeImpl(revealOverlay: overlay, revealCenter: center);
+  }
+
+  Future<void> _saveThemeFromCurrentContext() {
+    return _saveTheme(context);
+  }
+
+  Future<void> _previewTheme() async {
+    _showMessage('当前页面背景已实时预览主题效果');
   }
 
   Future<void> _closeWithReveal(
@@ -459,15 +465,12 @@ class _AdvancedThemeEditorPageState
       });
       return;
     }
-    final file = File(result.path!);
-    if (!await file.exists()) {
+    final picked = await _resourceService.pickedImageFromPath(result.path!);
+    if (picked == null) {
       _showMessage('背景图片不存在');
       return;
     }
-    final bytes = await file.readAsBytes();
-    await _applyPickedWallpaper(
-      PickedImageData(bytes: bytes, name: file.uri.pathSegments.last),
-    );
+    await _applyPickedWallpaper(picked);
     if (!mounted) {
       return;
     }
@@ -1318,20 +1321,8 @@ class _AdvancedThemeEditorPageState
     });
   }
 
-  File _resolveLocalImageFile(String path) {
-    final normalized = path.trim();
-    if (normalized.startsWith('file://')) {
-      return File(Uri.parse(normalized).toFilePath());
-    }
-    return File(normalized);
-  }
-
   String? _resolveExistingLocalImagePath(String? path) {
-    final normalized = path?.trim() ?? '';
-    if (normalized.startsWith('assets/')) {
-      return normalized;
-    }
-    return _pathResolver.tryResolveExistingFilePathSync(path);
+    return _resourceService.resolveExistingImagePath(path);
   }
 
   Widget _buildResolvedImage(
@@ -1339,26 +1330,15 @@ class _AdvancedThemeEditorPageState
     required BoxFit fit,
     FilterQuality filterQuality = FilterQuality.medium,
   }) {
-    final normalized = path.trim();
-    if (normalized.startsWith('assets/')) {
-      return Image.asset(normalized, fit: fit, filterQuality: filterQuality);
-    }
-    return Image.file(
-      _resolveLocalImageFile(normalized),
+    return Image(
+      image: _resourceService.imageProviderFor(path),
       fit: fit,
       filterQuality: filterQuality,
     );
   }
 
   List<String> _existingImagePaths(Iterable<String> imagePaths) {
-    final existing = <String>[];
-    for (final rawPath in imagePaths) {
-      final resolved = _resolveExistingLocalImagePath(rawPath);
-      if (resolved != null) {
-        existing.add(resolved);
-      }
-    }
-    return existing;
+    return _resourceService.existingImagePaths(imagePaths);
   }
 
   Future<void> _showImagePreviewDialog({
@@ -2101,6 +2081,149 @@ class _AdvancedThemeEditorPageState
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  PreferredSizeWidget _buildRouteTopBar(
+    BuildContext context,
+    AppAdvancedTheme? draft,
+  ) {
+    final title = draft == null ? '高级主题' : draft.name;
+    return AdaptiveRouteTopBar(
+      title: title,
+      subtitle: _modeLabel(_selectedMode),
+      leading: Builder(
+        builder:
+            (leadingContext) => IconButton(
+              tooltip: '返回',
+              onPressed: () => unawaited(_closeWithReveal(leadingContext)),
+              icon: const Icon(Icons.arrow_back_ios_new_rounded),
+            ),
+      ),
+      middle: AdvancedThemeEditorTitle(
+        isEditing: _isEditingName,
+        nameController: _nameController,
+        title: title,
+        onStartEditing: _startEditingName,
+        onSubmitted: (_) => _finishEditingName(),
+      ),
+      actions: _buildDesktopTopBarActions(),
+      mobileActions: _buildMobileTopBarActions(),
+      backgroundColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      shadowColor: Colors.transparent,
+      dividerColor: Colors.transparent,
+      desktopHeight: kToolbarHeight,
+      titleMaxWidth: 220,
+      bottom: _buildModeTabBar(context),
+    );
+  }
+
+  List<AdaptiveOverflowToolbarItem> _buildDesktopTopBarActions() {
+    return [
+      AdaptiveOverflowToolbarItem(
+        icon: Icons.save_outlined,
+        label: '保存',
+        priority: 20,
+        enabled: !_isLoading && !_isSaving,
+        onPressed:
+            _isLoading || _isSaving
+                ? null
+                : () => unawaited(_saveThemeFromCurrentContext()),
+      ),
+      AdaptiveOverflowToolbarItem(
+        icon: Icons.visibility_outlined,
+        label: '预览',
+        priority: 10,
+        enabled: !_isLoading,
+        onPressed: _isLoading ? null : () => unawaited(_previewTheme()),
+      ),
+      AdaptiveOverflowToolbarItem(
+        icon: Icons.check_rounded,
+        label: '确认名称',
+        enabled: _isEditingName,
+        onPressed: _isEditingName ? _finishEditingName : null,
+      ),
+    ];
+  }
+
+  List<Widget> _buildMobileTopBarActions() {
+    return [
+      if (_isEditingName)
+        IconButton(
+          tooltip: '确认名称',
+          onPressed: _finishEditingName,
+          icon: const Icon(Icons.check_rounded),
+        ),
+      IconButton(
+        tooltip: '保存主题',
+        onPressed:
+            _isLoading || _isSaving ? null : _saveThemeFromCurrentContext,
+        icon: const Icon(Icons.save_outlined),
+      ),
+    ];
+  }
+
+  PreferredSizeWidget _buildModeTabBar(BuildContext context) {
+    final theme = Theme.of(context);
+    return PreferredSize(
+      preferredSize: const Size.fromHeight(42),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+        child: Container(
+          height: 36,
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerLow.withValues(alpha: 0.9),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.45),
+            ),
+          ),
+          child: TabBar(
+            controller: _modeTabController,
+            dividerColor: Colors.transparent,
+            indicatorSize: TabBarIndicatorSize.tab,
+            indicator: BoxDecoration(
+              color: theme.colorScheme.surface.withValues(alpha: 0.92),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+              ),
+            ),
+            indicatorPadding: const EdgeInsets.all(3),
+            labelColor: theme.colorScheme.onSurface,
+            unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
+            labelStyle: theme.textTheme.labelMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+            unselectedLabelStyle: theme.textTheme.labelMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+            tabs: const [
+              Tab(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.light_mode_outlined, size: 16),
+                    SizedBox(width: 4),
+                    Text('浅色主题'),
+                  ],
+                ),
+              ),
+              Tab(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.dark_mode_outlined, size: 16),
+                    SizedBox(width: 4),
+                    Text('深色主题'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     ref.watch(advancedThemeEditorPageStateProvider);
@@ -2109,148 +2232,12 @@ class _AdvancedThemeEditorPageState
     final topInset =
         MediaQuery.paddingOf(context).top + kToolbarHeight + 42 + 6;
     final draft = _draft;
-    final theme = Theme.of(context);
     const sectionGap = 8.0;
     return Scaffold(
       extendBodyBehindAppBar: true,
       backgroundColor: _colorSchemeForMode(AppAdvancedThemeMode.light).surface,
       resizeToAvoidBottomInset: true,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        shadowColor: Colors.transparent,
-        leading: Builder(
-          builder:
-              (leadingContext) => IconButton(
-                tooltip: '返回',
-                onPressed: () => unawaited(_closeWithReveal(leadingContext)),
-                icon: const Icon(Icons.arrow_back_ios_new_rounded),
-              ),
-        ),
-        title:
-            _isEditingName
-                ? ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 220),
-                  child: TextField(
-                    controller: _nameController,
-                    autofocus: appEnableAutoFocusForTextInput,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 8,
-                      ),
-                    ),
-                    onSubmitted: (_) => _finishEditingName(),
-                  ),
-                )
-                : GestureDetector(
-                  onTap: _startEditingName,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Flexible(
-                        child: Text(
-                          draft == null ? '高级主题' : draft.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Icon(
-                        Icons.edit_outlined,
-                        size: 16,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ],
-                  ),
-                ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(42),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
-            child: Container(
-              height: 36,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerLow.withValues(
-                  alpha: 0.9,
-                ),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: theme.colorScheme.outlineVariant.withValues(
-                    alpha: 0.45,
-                  ),
-                ),
-              ),
-              child: TabBar(
-                controller: _modeTabController,
-                dividerColor: Colors.transparent,
-                indicatorSize: TabBarIndicatorSize.tab,
-                indicator: BoxDecoration(
-                  color: theme.colorScheme.surface.withValues(alpha: 0.92),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: theme.colorScheme.outlineVariant.withValues(
-                      alpha: 0.5,
-                    ),
-                  ),
-                ),
-                indicatorPadding: const EdgeInsets.all(3),
-                labelColor: theme.colorScheme.onSurface,
-                unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
-                labelStyle: theme.textTheme.labelMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-                unselectedLabelStyle: theme.textTheme.labelMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-                tabs: const [
-                  Tab(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.light_mode_outlined, size: 16),
-                        SizedBox(width: 4),
-                        Text('浅色主题'),
-                      ],
-                    ),
-                  ),
-                  Tab(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.dark_mode_outlined, size: 16),
-                        SizedBox(width: 4),
-                        Text('深色主题'),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        actions: [
-          if (_isEditingName)
-            IconButton(
-              tooltip: '确认名称',
-              onPressed: _finishEditingName,
-              icon: const Icon(Icons.check_rounded),
-            ),
-          Builder(
-            builder:
-                (saveContext) => IconButton(
-                  tooltip: '保存主题',
-                  onPressed:
-                      _isLoading || _isSaving
-                          ? null
-                          : () => unawaited(_saveTheme(saveContext)),
-                  icon: const Icon(Icons.save_outlined),
-                ),
-          ),
-        ],
-      ),
+      appBar: _buildRouteTopBar(context, draft),
       body: ValueListenableBuilder<int>(
         valueListenable: _colorPreviewRevision,
         builder: (context, _, __) {
@@ -2270,92 +2257,51 @@ class _AdvancedThemeEditorPageState
                     color:
                         _colorSchemeForMode(AppAdvancedThemeMode.light).surface,
                   );
-          return DecoratedBox(
+          final maxWidth = AppLayout.pageContentMaxWidth(
+            context,
+            maxWidth: AppLayout.settingsContentMaxWidth,
+          );
+          return AdvancedThemePreviewPanel(
             decoration: decoration,
+            maxWidth: maxWidth,
             child: LayoutBuilder(
               builder: (context, _) {
-                final maxWidth = AppLayout.pageContentMaxWidth(
-                  context,
-                  maxWidth: AppLayout.settingsContentMaxWidth,
-                );
-                return Align(
-                  alignment: Alignment.topCenter,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: maxWidth),
-                    child:
-                        _isLoading
-                            ? const Center(
-                              key: ValueKey<String>('advanced_theme_loading'),
-                              child: CircularProgressIndicator(),
-                            )
-                            : draft == null
-                            ? const Center(
-                              key: ValueKey<String>('advanced_theme_missing'),
-                              child: Text('高级主题不存在'),
-                            )
-                            : AppFadeSlideTransition(
-                              key: const ValueKey<String>(
-                                'advanced_theme_editor',
-                              ),
-                              child: ListView(
-                                key: const ValueKey<String>(
-                                  'advanced_theme_editor_scroll',
-                                ),
-                                keyboardDismissBehavior:
-                                    ScrollViewKeyboardDismissBehavior.onDrag,
-                                padding: EdgeInsets.fromLTRB(
-                                  horizontal,
-                                  topInset,
-                                  horizontal,
-                                  10 + bottomSafe,
-                                ),
-                                children: [
-                                  _buildColorsSection(context),
-                                  const SizedBox(height: sectionGap),
-                                  _buildResourceSection(context, draft),
-                                ],
-                              ),
-                            ),
-                  ),
-                );
+                return _isLoading
+                    ? const Center(
+                      key: ValueKey<String>('advanced_theme_loading'),
+                      child: CircularProgressIndicator(),
+                    )
+                    : draft == null
+                    ? const Center(
+                      key: ValueKey<String>('advanced_theme_missing'),
+                      child: Text('高级主题不存在'),
+                    )
+                    : AppFadeSlideTransition(
+                      key: const ValueKey<String>('advanced_theme_editor'),
+                      child: ListView(
+                        key: const ValueKey<String>(
+                          'advanced_theme_editor_scroll',
+                        ),
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
+                        padding: EdgeInsets.fromLTRB(
+                          horizontal,
+                          topInset,
+                          horizontal,
+                          10 + bottomSafe,
+                        ),
+                        children: [
+                          _buildColorsSection(context),
+                          const SizedBox(height: sectionGap),
+                          _buildResourceSection(context, draft),
+                        ],
+                      ),
+                    );
               },
             ),
           );
         },
       ),
-    );
-  }
-
-  Widget _buildColorsSection(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (
-          var index = 0;
-          index < themeSemanticEditorGroups.length;
-          index++
-        ) ...[
-          _buildThemeFieldSection(
-            context,
-            title: themeSemanticEditorGroups[index].title,
-            tooltipMessage: themeSemanticEditorGroups[index].subtitle,
-            fields: _fieldSpecsForGroup(themeSemanticEditorGroups[index]),
-          ),
-          const SizedBox(height: 8),
-        ],
-        _buildExpandableColorSection(
-          context,
-          title: '强度层',
-          tooltipMessage: '卡片阴影、壁纸透明度、模糊和遮罩强度',
-          expanded: _strengthControlsExpanded,
-          onToggle: () {
-            setState(() {
-              _strengthControlsExpanded = !_strengthControlsExpanded;
-            });
-          },
-          child: _buildStrengthSection(context),
-        ),
-      ],
     );
   }
 
@@ -2481,8 +2427,7 @@ class _AdvancedThemeEditorPageState
               Row(
                 children: [
                   Expanded(
-                    child: _buildVisualResourceCard(
-                      context,
+                    child: AdvancedThemeWallpaperResourceCard(
                       title: '应用背景',
                       subtitle: wallpaperPath == null ? '未设置' : '已设置',
                       preview: _buildGalleryPreviewThumb(
@@ -2511,8 +2456,7 @@ class _AdvancedThemeEditorPageState
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: _buildVisualResourceCard(
-                      context,
+                    child: AdvancedThemeWallpaperResourceCard(
                       title: '阅读背景',
                       subtitle: readerWallpaperPath == null ? '未设置' : '已设置',
                       preview: _buildGalleryPreviewThumb(
@@ -2545,9 +2489,7 @@ class _AdvancedThemeEditorPageState
               Row(
                 children: [
                   Expanded(
-                    child: _buildVisualResourceCard(
-                      context,
-                      title: '书籍封面',
+                    child: AdvancedThemeCoverGallerySection(
                       subtitle:
                           _selectedCoverGalleryPreviewPath() == null
                               ? '未设置'
@@ -2577,9 +2519,7 @@ class _AdvancedThemeEditorPageState
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: _buildVisualResourceCard(
-                      context,
-                      title: '启动图集',
+                    child: AdvancedThemeLaunchGallerySection(
                       subtitle:
                           _selectedLaunchImageGalleryPreviewPath() == null
                               ? '未设置'
@@ -2633,28 +2573,16 @@ class _AdvancedThemeEditorPageState
           padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
           child: Column(
             children: [
-              _buildAppearanceLinkTile(
-                context,
-                icon: Icons.dashboard_outlined,
-                title: '底栏',
+              AdvancedThemeBottomNavGallerySection(
                 subtitle: _resolvedBottomNavGalleryName(),
                 onTap: _pickBottomNavGallery,
               ),
               const Divider(height: 1),
-              _buildAppearanceLinkTile(
-                context,
-                icon: Icons.text_fields_rounded,
-                title: '界面字体',
-                subtitle: _resolvedAppInterfaceFontName(),
-                onTap: () => _pickThemeFont(readerFont: false),
-              ),
-              const Divider(height: 1),
-              _buildAppearanceLinkTile(
-                context,
-                icon: Icons.menu_book_outlined,
-                title: '阅读字体',
-                subtitle: _resolvedReaderFontName(),
-                onTap: () => _pickThemeFont(readerFont: true),
+              AdvancedThemeFontSection(
+                interfaceFontName: _resolvedAppInterfaceFontName(),
+                readerFontName: _resolvedReaderFontName(),
+                onPickInterfaceFont: () => _pickThemeFont(readerFont: false),
+                onPickReaderFont: () => _pickThemeFont(readerFont: true),
               ),
             ],
           ),
@@ -2878,53 +2806,6 @@ class _AdvancedThemeEditorPageState
           secondChild: const SizedBox.shrink(),
         ),
       ],
-    );
-  }
-
-  Widget _buildVisualResourceCard(
-    BuildContext context, {
-    required String title,
-    required String subtitle,
-    required Widget preview,
-    required VoidCallback onTap,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-          decoration: BoxDecoration(
-            color: colorScheme.surface.withValues(alpha: 0.84),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: colorScheme.outlineVariant.withValues(alpha: 0.34),
-            ),
-          ),
-          child: Column(
-            children: [
-              Text(
-                title,
-                style: Theme.of(
-                  context,
-                ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 10),
-              Center(child: preview),
-              const SizedBox(height: 10),
-              Text(
-                subtitle,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 
@@ -3244,68 +3125,6 @@ class _AdvancedThemeEditorPageState
           style: Theme.of(
             context,
           ).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w700),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAppearanceLinkTile(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-    bool showSubtitle = true,
-    Widget? trailing,
-    IconData trailingIcon = Icons.chevron_right_rounded,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return InkWell(
-      borderRadius: BorderRadius.circular(10),
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        child: Row(
-          children: [
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                color: colorScheme.surface,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: colorScheme.outlineVariant.withValues(alpha: 0.4),
-                ),
-              ),
-              child: Icon(icon, size: 18, color: colorScheme.onSurfaceVariant),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  if (showSubtitle) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            if (trailing != null) ...[const SizedBox(width: 10), trailing],
-            const SizedBox(width: 6),
-            Icon(trailingIcon, size: 18, color: colorScheme.onSurfaceVariant),
-          ],
         ),
       ),
     );

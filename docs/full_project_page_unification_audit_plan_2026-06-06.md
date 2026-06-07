@@ -297,22 +297,38 @@
 
 #### U5-ATE：`advanced_theme_editor_page.dart`
 
-当前约 `3890` 行。拆分重点是让编辑状态同源，不把表单字段拆成多个互不同步的局部状态。
+当前约 `3711` 行。拆分重点是让编辑状态同源，不把表单字段拆成多个互不同步的局部状态。
 
-- [ ] U5-ATE-01 盘点编辑器字段、表单分区和保存依赖，补编辑器拆分索引，不改代码。
-- [ ] U5-ATE-02 抽编辑器状态读写 facade 到 `advanced_theme_editor_controller.dart`，页面不直接拼保存 payload。
-- [ ] U5-ATE-03 抽基础信息分区到 `widgets/advanced_theme_basic_section.dart`。
-- [ ] U5-ATE-04 抽颜色和组件样式分区到 `widgets/advanced_theme_color_section.dart`。
-- [ ] U5-ATE-05 抽壁纸 / 背景图选择分区到 `widgets/advanced_theme_wallpaper_section.dart`。
-- [ ] U5-ATE-06 抽封面图集绑定分区到 `widgets/advanced_theme_cover_gallery_section.dart`。
-- [ ] U5-ATE-07 抽启动图集绑定分区到 `widgets/advanced_theme_launch_gallery_section.dart`。
-- [ ] U5-ATE-08 抽底部导航图标图集绑定分区到 `widgets/advanced_theme_bottom_nav_gallery_section.dart`，确认旧 home slot 仍映射书架。
-- [ ] U5-ATE-09 抽字体选择分区到 `widgets/advanced_theme_font_section.dart`，保留 Web / Desktop / Mobile 能力降级。
-- [ ] U5-ATE-10 抽预览面板到 `widgets/advanced_theme_preview_panel.dart`，桌面可右侧固定，移动端保持滚动体验。
-- [ ] U5-ATE-11 抽保存校验和错误文案到 `advanced_theme_editor_validation_service.dart`，补基础校验单测。
-- [ ] U5-ATE-12 抽资源路径解析和 managed file 写入调用到 application service，页面不直接处理真实路径。
-- [ ] U5-ATE-13 接入 `AdaptiveRouteTopBar`：桌面显示主题名、保存、预览、更多；移动端保留 AppBar。
-- [ ] U5-ATE-14 清理已迁移 surface builder，跑高级主题 editor 目标 analyze / tests。
+已拆分边界索引：
+
+- [x] 编辑器状态 facade：`advanced_theme_editor_controller.dart`，负责 draft、模式、保存 / 加载、展开状态和外观资源链接的一致更新。
+- [x] 基础信息：`widgets/advanced_theme_basic_section.dart`，先承接标题编辑入口。
+- [x] 颜色区块：`widgets/advanced_theme_color_section.dart`，以 part extension 承接颜色 / 强度区块 glue，后续再继续抽纯 widget。
+- [x] 视觉资源卡片：`widgets/advanced_theme_wallpaper_section.dart`，作为应用背景 / 阅读背景 / 后续图集卡片的共用壳层。
+- [x] 封面图集：`widgets/advanced_theme_cover_gallery_section.dart`，先承接封面图集绑定入口壳层。
+- [x] 启动图集：`widgets/advanced_theme_launch_gallery_section.dart`，先承接启动图集绑定入口壳层。
+- [x] 外观资源条目：`widgets/advanced_theme_appearance_link_tile.dart`，承接底栏、字体等资源绑定行。
+- [x] 底部导航图集：`widgets/advanced_theme_bottom_nav_gallery_section.dart`，承接底栏图集绑定入口；旧 `home` slot 已由 `BottomNavIconGallery.fromJson` 映射到书架槽位并补测试。
+- [x] 字体选择：`widgets/advanced_theme_font_section.dart`，承接界面字体 / 阅读字体绑定入口，保留原字体管理跳转和能力降级路径。
+- [x] 预览面板：`widgets/advanced_theme_preview_panel.dart`，先承接编辑页实时背景预览承载层；后续桌面右侧固定预览在该组件内继续扩展，移动端仍保持滚动体验。
+- [x] 保存校验：`advanced_theme_editor_validation_service.dart`，承接保存前业务校验和错误文案。
+- [x] 资源解析：`advanced_theme_editor_resource_service.dart`，承接本地 / asset 图片解析、file URI 读取和图片 provider 构造。
+- [x] 路由顶栏：编辑器接入 `AdaptiveRouteTopBar`，桌面顶栏承载主题名、保存、预览、更多，移动端保留 AppBar 语义；`AdaptiveRouteTopBar` 增加兼容的 bottom 插槽承载浅 / 深色 TabBar。
+
+- [x] U5-ATE-01 盘点编辑器字段、表单分区和保存依赖，补编辑器拆分索引，不改代码。
+- [x] U5-ATE-02 抽编辑器状态读写 facade 到 `advanced_theme_editor_controller.dart`，页面不直接拼保存 payload。
+- [x] U5-ATE-03 抽基础信息分区到 `widgets/advanced_theme_basic_section.dart`。
+- [x] U5-ATE-04 抽颜色和组件样式分区到 `widgets/advanced_theme_color_section.dart`。
+- [x] U5-ATE-05 抽壁纸 / 背景图选择分区到 `widgets/advanced_theme_wallpaper_section.dart`。
+- [x] U5-ATE-06 抽封面图集绑定分区到 `widgets/advanced_theme_cover_gallery_section.dart`。
+- [x] U5-ATE-07 抽启动图集绑定分区到 `widgets/advanced_theme_launch_gallery_section.dart`。
+- [x] U5-ATE-08 抽底部导航图标图集绑定分区到 `widgets/advanced_theme_bottom_nav_gallery_section.dart`，确认旧 home slot 仍映射书架。
+- [x] U5-ATE-09 抽字体选择分区到 `widgets/advanced_theme_font_section.dart`，保留 Web / Desktop / Mobile 能力降级。
+- [x] U5-ATE-10 抽预览面板到 `widgets/advanced_theme_preview_panel.dart`，桌面可右侧固定，移动端保持滚动体验。
+- [x] U5-ATE-11 抽保存校验和错误文案到 `advanced_theme_editor_validation_service.dart`，补基础校验单测。
+- [x] U5-ATE-12 抽资源路径解析和 managed file 写入调用到 application service，页面不直接处理真实路径。
+- [x] U5-ATE-13 接入 `AdaptiveRouteTopBar`：桌面显示主题名、保存、预览、更多；移动端保留 AppBar。
+- [x] U5-ATE-14 清理已迁移 surface builder，跑高级主题 editor 目标 analyze / tests。
 
 #### U5-ATL：`advanced_theme_list_page.dart`
 
@@ -337,7 +353,7 @@
 
 - [x] U5-SEQ-01 先做 `U5-BS-01` 到 `U5-BS-04`，先拆书架纯模型、mapper、状态组件和工具条。
 - [x] U5-SEQ-02 再做 `U5-ATL-01` 到 `U5-ATL-06`，先把高级主题列表查询、卡片、状态和 toolbar 拆出来。
-- [ ] U5-SEQ-03 再做 `U5-ATE-01` 到 `U5-ATE-05`，先拆高级主题编辑器状态 facade 和前半表单分区。
+- [x] U5-SEQ-03 再做 `U5-ATE-01` 到 `U5-ATE-05`，先拆高级主题编辑器状态 facade 和前半表单分区。
 - [x] U5-SEQ-04 阅读器从 `U5-RD-01` 到 `U5-RD-04` 开始，只拆 bootstrap、lifecycle、content load。
 - [ ] U5-SEQ-05 每完成一个文件分组前四项，记录文件行数变化、目标 analyze、相关测试和未验证平台。
 
@@ -438,7 +454,7 @@
 
 - [ ] BL-05-01 外观页接入 `AdaptiveRouteTopBar`，再拆应用外观、导航栏、封面、阅读背景四个 section，对应 `U3-FIX-01`、`U3-FIX-02`。
 - [x] BL-05-02 高级主题列表先执行 `U5-ATL-01` 到 `U5-ATL-06`，拆查询、卡片、状态、toolbar，再接入 route topbar，对应 `U3-FIX-03`、`U3-FIX-04`。
-- [ ] BL-05-03 高级主题编辑器先执行 `U5-ATE-01` 到 `U5-ATE-05`，拆状态 facade 和前半表单分区，再继续拆图集、字体、预览和保存校验，对应 `U3-FIX-05`。
+- [x] BL-05-03 高级主题编辑器先执行 `U5-ATE-01` 到 `U5-ATE-05`，拆状态 facade 和前半表单分区，再继续拆图集、字体、预览和保存校验，对应 `U3-FIX-05`。
 - [ ] BL-05-04 图集页面族抽统一管理模式：启动图集、封面图集、底部导航图标图集共享空态、更多菜单、重命名、删除确认和导入进度 surface，对应 `U3-FIX-06`。
 - [ ] BL-05-05 字体管理页改为 `showAdaptiveActionSurface`，并把导入、重命名、删除、能力提示抽成可测小组件，对应 `U3-FIX-07`。
 - [ ] BL-05-06 公告、反馈、关于、系统设置、错误中心接入统一最大宽度、状态卡和 route topbar，对应 `U3-FIX-09`。
@@ -504,3 +520,6 @@
 - [x] 2026-06-07：执行 `BL-04-02` / `BL-04-03`；统一会员快照订阅账号事件并自动失效，补 profile / session 永久会员同时放行在线搜索和高级主题 gate 的 smoke test，补登录、注册、退出、session restore、过期事件 smoke。该链路为平台无关底座，Desktop / Web / Mobile 共享。
 - [x] 2026-06-07：执行 `U5-RD-01` 到 `U5-RD-06`；阅读器主文件补拆分索引，route seed、运行时生命周期、延迟加载 UI、进度保存 payload、分页签名 / 触发计划分别下沉到 application controller。本轮只拆边界，不改阅读器业务行为；保留 `reader_page.dart` / part 文件作为现有 glue。验证：`dart analyze lib/features/reader/application/reader_page_bootstrap_controller.dart lib/features/reader/application/reader_runtime_lifecycle_controller.dart lib/features/reader/application/reader_content_load_controller.dart lib/features/reader/application/reader_progress_commit_controller.dart lib/features/reader/application/reader_pagination_controller.dart lib/features/reader/presentation/reader_page.dart lib/features/reader/presentation/reader_page_lifecycle.dart lib/features/reader/presentation/reader_page_runtime.dart test/features/reader/application/reader_page_bootstrap_controller_test.dart test/features/reader/application/reader_runtime_lifecycle_controller_test.dart test/features/reader/application/reader_content_load_controller_test.dart test/features/reader/application/reader_progress_commit_controller_test.dart test/features/reader/application/reader_pagination_controller_test.dart` 通过；`flutter test` 串行执行 5 个新增 reader controller 测试均通过。未验证：Android / iOS / Web / macOS / Windows / Linux 手工 smoke，本轮未改交互路径，后续阅读器专项按多端矩阵补验。
 - [x] 2026-06-07：执行 `U5-RD-07` 到 `U5-RD-15`；触控 tap zone / 长按入口迁移到 `reader_touch_navigation_layer.dart`，桌面键盘 / 滚轮 glue 迁移到 `reader_desktop_input_layer.dart`，overlay chrome / 系统 UI / 自动隐藏迁移到 `reader_chrome_surface.dart`，目录、设置、选区、内容模式分别新增 `reader_catalog_entry_controller.dart`、`reader_settings_entry_controller.dart`、`reader_selection_controller.dart`、`reader_content_mode_surface_controller.dart`，内容模式 presentation 出口为 `reader_content_mode_surface.dart`，漫画图片错误占位接入 `reader_feedback_widgets.dart`。本轮继续只拆边界，不重写阅读器交互。验证：目标 `dart analyze` 通过；新增测试 `reader_catalog_entry_controller_test.dart`、`reader_settings_entry_controller_test.dart`、`reader_selection_controller_test.dart`、`reader_content_mode_surface_controller_test.dart`、`reader_feedback_widgets_test.dart` 全部通过；既有相关测试 `reader_desktop_input_resolver_test.dart`、`reader_navigation_entry_resolver_test.dart`、`reader_feedback_service_test.dart`、`reader_mode_capabilities_test.dart` 通过；并复跑 `U5-RD-01` 到 `U5-RD-06` 的 5 个 controller 测试通过。未验证：Android / iOS / Web / macOS / Windows / Linux 手工 smoke；由于触控和桌面输入 glue 已拆，后续手工回归需重点覆盖移动端点击分区 / 长按、桌面键盘 / 滚轮、目录、设置、选区复制和图片重试。
+- [x] 2026-06-07：执行 `U5-ATE-01` 到 `U5-ATE-07`；高级主题编辑器补拆分索引，状态读写 facade 迁移到 `advanced_theme_editor_controller.dart`，标题编辑迁移到 `widgets/advanced_theme_basic_section.dart`，颜色 / 强度区块迁移到 `widgets/advanced_theme_color_section.dart`，视觉资源共用卡片迁移到 `widgets/advanced_theme_wallpaper_section.dart`，封面图集和启动图集入口分别迁移到 `widgets/advanced_theme_cover_gallery_section.dart`、`widgets/advanced_theme_launch_gallery_section.dart`。外观资源链接加载改为一次性走 controller facade，页面不再逐项拼资源列表状态；`advanced_theme_editor_page.dart` 从约 `3890` 行降至 `3763` 行。本轮只拆边界，不改保存、选择、预览和多端交互业务行为。验证：`dart analyze lib/features/mine/application/advanced_theme_editor_controller.dart lib/features/mine/presentation/advanced_theme_editor_page.dart lib/features/mine/presentation/advanced_theme_editor_page_flow.dart lib/features/mine/presentation/widgets/advanced_theme_basic_section.dart lib/features/mine/presentation/widgets/advanced_theme_wallpaper_section.dart lib/features/mine/presentation/widgets/advanced_theme_cover_gallery_section.dart lib/features/mine/presentation/widgets/advanced_theme_launch_gallery_section.dart test/features/mine/application/advanced_theme_editor_controller_test.dart test/features/mine/presentation/advanced_theme_editor_sections_test.dart` 通过；`flutter test test/features/mine/application/advanced_theme_editor_controller_test.dart test/features/mine/presentation/advanced_theme_editor_sections_test.dart` 通过。未验证：Android / iOS / Web / macOS / Windows / Linux 手工 smoke，本轮未改平台入口，后续高级主题编辑器回归需覆盖标题编辑、颜色展开、应用背景、阅读背景、封面图集、启动图集选择和保存。
+- [x] 2026-06-07：执行 `U5-ATE-08` 到 `U5-ATE-10`；高级主题编辑器继续拆底部导航图集、字体选择和预览承载层。新增 `widgets/advanced_theme_appearance_link_tile.dart` 作为资源绑定行共用壳层，`widgets/advanced_theme_bottom_nav_gallery_section.dart` 承接底栏图集入口，`widgets/advanced_theme_font_section.dart` 承接界面字体 / 阅读字体入口，`widgets/advanced_theme_preview_panel.dart` 承接实时背景预览外层。旧 `home` 图标包槽位仍由 `BottomNavIconGallery.fromJson` 映射到 `bookshelf`，本轮补实体测试确认；`advanced_theme_editor_page.dart` 从 `3763` 行降至 `3684` 行。本轮只拆边界，不改图集选择、字体管理跳转、实时预览和平台入口。验证：`dart analyze lib/features/mine/presentation/advanced_theme_editor_page.dart lib/features/mine/presentation/advanced_theme_editor_page_flow.dart lib/features/mine/presentation/widgets/advanced_theme_appearance_link_tile.dart lib/features/mine/presentation/widgets/advanced_theme_bottom_nav_gallery_section.dart lib/features/mine/presentation/widgets/advanced_theme_font_section.dart lib/features/mine/presentation/widgets/advanced_theme_preview_panel.dart test/features/mine/presentation/advanced_theme_editor_sections_test.dart test/domain/entities/bottom_nav_icon_gallery_test.dart` 通过；`flutter test test/features/mine/presentation/advanced_theme_editor_sections_test.dart test/domain/entities/bottom_nav_icon_gallery_test.dart` 通过。未验证：Android / iOS / Web / macOS / Windows / Linux 手工 smoke，后续高级主题编辑器回归继续覆盖底栏图集、字体绑定、实时背景预览和保存。
+- [x] 2026-06-07：执行 `U5-ATE-11` 到 `U5-ATE-14`；保存校验和错误文案迁移到 `advanced_theme_editor_validation_service.dart` 并补单测，资源路径解析、asset / file provider、本地图片读取迁移到 `advanced_theme_editor_resource_service.dart` 并补单测，编辑器接入 `AdaptiveRouteTopBar`，桌面顶栏显示主题名、保存、预览和更多，移动端保留 AppBar 语义；`AdaptiveRouteTopBar` 增加兼容 bottom 插槽承载浅 / 深色 TabBar 并补组件测试。`advanced_theme_editor_page.dart` 当前 `3711` 行，新增 editor application / widgets 文件承接主要边界，`BL-05-03` 已完成并勾选。验证：目标 `dart analyze` 覆盖 editor application、editor page、editor widgets 和 adaptive route topbar 通过；`flutter test test/features/mine/application/advanced_theme_editor_validation_service_test.dart test/features/mine/application/advanced_theme_editor_resource_service_test.dart test/features/mine/application/advanced_theme_editor_controller_test.dart test/features/mine/presentation/advanced_theme_editor_sections_test.dart test/app/widgets/adaptive_components_test.dart` 通过。未验证：Android / iOS / Web / macOS / Windows / Linux 手工 smoke，发布前需覆盖高级主题编辑器返回、标题编辑、浅 / 深色切换、保存校验、背景 / 阅读背景、底栏图集、字体绑定和实时预览。
