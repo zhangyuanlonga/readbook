@@ -11,6 +11,7 @@ import '../../core/membership/membership_service.dart';
 import '../../core/mobile_features/mobile_feature_service.dart';
 import '../../core/user/user_profile_service.dart';
 import '../../domain/repositories/bookmark_repository.dart';
+import '../../features/auth/providers.dart' as auth_providers;
 import '../../features/reader/application/local/local_reader_entry_guard_service.dart';
 import '../bookshelf/application/bookshelf_service.dart';
 import 'application/advanced_theme_page_flow_coordinator.dart';
@@ -54,15 +55,13 @@ final bookmarksLocalReaderEntryGuardServiceProvider =
     });
 
 final mineAuthSessionStoreProvider = Provider<AuthSessionStore>((ref) {
-  return AuthSessionStore(
-    secretStore: ref.watch(mineAuthSessionSecretStoreProvider),
-  );
+  return ref.watch(auth_providers.authSessionStoreProvider);
 });
 
 final mineAuthSessionSecretStoreProvider = Provider<AuthSessionSecretStore>((
   ref,
 ) {
-  return createDefaultAuthSessionSecretStore();
+  return ref.watch(auth_providers.authSessionSecretStoreProvider);
 });
 
 final mineUpdateServiceProvider = Provider<AppUpdateService>((ref) {
@@ -78,9 +77,7 @@ final mineMembershipServiceProvider = Provider<MembershipService>((ref) {
 });
 
 final mineUserProfileServiceProvider = Provider<UserProfileService>((ref) {
-  return UserProfileService(
-    sessionStore: ref.watch(mineAuthSessionStoreProvider),
-  );
+  return ref.watch(auth_providers.userProfileServiceProvider);
 });
 
 final remoteAccessSnapshotServiceProvider =

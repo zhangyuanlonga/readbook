@@ -521,12 +521,14 @@ extension on _MinePageState {
           subtitle: activeAdvancedTheme.when(
             data: (theme) {
               final base = theme == null ? '未启用' : '当前：${theme.name}';
-              return _hasThemeCustom ? base : '$base · 开通会员可用';
+              return _hasThemeCustom
+                  ? base
+                  : '$base · ${MembershipAccessPresentation.upgradeTitle}';
             },
             loading: () => _hasThemeCustom ? '读取中' : '校验中',
             error: (_, _) => _hasThemeCustom ? '未启用' : '校验中',
           ),
-          tagText: 'VIP',
+          tagText: MembershipAccessPresentation.vipTag,
           onTap: _handleAdvancedThemeTap,
         ),
       );
@@ -1112,8 +1114,10 @@ extension on _MinePageState {
       const Color(0xFF94A3B8).withValues(alpha: 0.035),
       palette.cardColor,
     );
-    final statusText =
-        _userId == null ? '未登录' : (_hasMembership ? 'PRO' : '普通用户');
+    final statusText = MembershipAccessPresentation.accountBadge(
+      isLoggedIn: _userId != null,
+      hasMembership: _hasMembership,
+    );
     final statusColor =
         _userId == null
             ? palette.noticeAccentColor
@@ -1486,7 +1490,12 @@ extension on _MinePageState {
             : <({String label, String value})>[
               (label: '累计阅读', value: '$_totalReadingHours 小时'),
               (label: '连续阅读', value: '$_readingStreakDays 天'),
-              (label: '主题权益', value: _hasThemeCustom ? '已开启' : '未开启'),
+              (
+                label: '主题权益',
+                value: MembershipAccessPresentation.themeEntitlementValue(
+                  _hasThemeCustom,
+                ),
+              ),
             ];
 
     return Row(

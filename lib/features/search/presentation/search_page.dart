@@ -22,6 +22,7 @@ import '../../../app/widgets/app_empty_state_card.dart';
 
 import '../../../core/auth/auth_event_bus.dart';
 import '../../../core/errors/app_exception.dart';
+import '../../../core/membership/membership_access_presentation.dart';
 import '../../../core/membership/membership_access_service.dart';
 import '../../../domain/entities/book.dart';
 import '../../../domain/entities/book_metadata_override.dart';
@@ -830,7 +831,11 @@ class _SearchPageState extends ConsumerState<SearchPage> {
         setState(() {
           _hasOnlineSearchAccess = false;
           _isCheckingOnlineSearchAccess = false;
-          _onlineSearchAccessMessage = '登录并开通会员后可使用在线搜索。';
+          _onlineSearchAccessMessage =
+              MembershipAccessPresentation.unavailableMessage(
+                MembershipFeatureGate.onlineSearch,
+                isLoggedIn: false,
+              );
           _isLoadingServerSourceCount = false;
           _availableServerSourceCount = 0;
           _selectedServerSourceIds = <String>{};
@@ -850,7 +855,13 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       setState(() {
         _hasOnlineSearchAccess = hasAccess;
         _isCheckingOnlineSearchAccess = false;
-        _onlineSearchAccessMessage = hasAccess ? null : '在线搜索为会员服务，开通会员后即可使用。';
+        _onlineSearchAccessMessage =
+            hasAccess
+                ? null
+                : MembershipAccessPresentation.unavailableMessage(
+                  MembershipFeatureGate.onlineSearch,
+                  isLoggedIn: true,
+                );
         if (!hasAccess) {
           _isLoadingServerSourceCount = false;
           _availableServerSourceCount = 0;
@@ -873,7 +884,9 @@ class _SearchPageState extends ConsumerState<SearchPage> {
         _hasOnlineSearchAccess = false;
         _isCheckingOnlineSearchAccess = false;
         _onlineSearchAccessMessage =
-            error is AppException ? error.briefMessage : '会员状态校验失败，请稍后重试。';
+            error is AppException
+                ? error.briefMessage
+                : MembershipAccessPresentation.checkFailedMessage;
         _isLoadingServerSourceCount = false;
         _availableServerSourceCount = 0;
         _selectedServerSourceIds = <String>{};
@@ -898,7 +911,10 @@ class _SearchPageState extends ConsumerState<SearchPage> {
         break;
       case AuthEventType.loggedOut:
         _invalidateOnlineSearchAccess(
-          message: '登录并开通会员后可使用在线搜索。',
+          message: MembershipAccessPresentation.unavailableMessage(
+            MembershipFeatureGate.onlineSearch,
+            isLoggedIn: false,
+          ),
           checking: false,
           cancelActiveSearch: true,
         );
@@ -965,8 +981,14 @@ class _SearchPageState extends ConsumerState<SearchPage> {
         children: [
           AppEmptyStateCard(
             icon: Icons.workspace_premium_rounded,
-            title: '会员可用在线搜索',
-            description: _onlineSearchAccessMessage ?? '开通会员后可使用服务器书源网关搜索。',
+            title: MembershipAccessPresentation.featureTitle(
+              MembershipFeatureGate.onlineSearch,
+            ),
+            description:
+                _onlineSearchAccessMessage ??
+                MembershipAccessPresentation.featureDescription(
+                  MembershipFeatureGate.onlineSearch,
+                ),
           ),
           const SizedBox(height: 16),
           FilledButton.icon(

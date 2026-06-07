@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../app/widgets/app_empty_state_card.dart';
+import '../../../../core/membership/membership_access_presentation.dart';
 
 class AdvancedThemeVipLockedState extends StatelessWidget {
   const AdvancedThemeVipLockedState({
@@ -42,7 +43,7 @@ class AdvancedThemeVipLockedState extends StatelessWidget {
                       borderRadius: BorderRadius.circular(999),
                     ),
                     child: Text(
-                      'VIP',
+                      MembershipAccessPresentation.vipTag,
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
                         fontWeight: FontWeight.w800,
                         color: colorScheme.primary,
@@ -53,14 +54,18 @@ class AdvancedThemeVipLockedState extends StatelessWidget {
               ),
               const SizedBox(height: 14),
               Text(
-                '高级主题为会员专属功能',
+                MembershipAccessPresentation.featureTitle(
+                  MembershipFeatureGate.advancedTheme,
+                ),
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.w900,
                 ),
               ),
               const SizedBox(height: 8),
               Text(
-                '开通会员后可创建、导入、导出并管理高级主题，打造更完整的阅读界面风格。',
+                MembershipAccessPresentation.featureDescription(
+                  MembershipFeatureGate.advancedTheme,
+                ),
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: colorScheme.onSurfaceVariant,
                   height: 1.5,
@@ -69,7 +74,9 @@ class AdvancedThemeVipLockedState extends StatelessWidget {
               const SizedBox(height: 16),
               FilledButton(
                 onPressed: onOpenMembership,
-                child: const Text('前往会员页'),
+                child: const Text(
+                  MembershipAccessPresentation.membershipButtonLabel,
+                ),
               ),
             ],
           ),

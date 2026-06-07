@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -97,6 +99,15 @@ final appMembershipAccessServiceProvider = Provider<MembershipAccessService>((
 
 final appMembershipAccessSnapshotProvider =
     FutureProvider<MembershipAccessSnapshot>((ref) {
+      // 账号事件是全平台会话变化的唯一刷新信号。统一快照在这里失效后，
+      // 搜索、高级主题、阅读器等后续接入方不会因为各自缓存而读到旧会员状态。
+      late final StreamSubscription<AuthEvent> subscription;
+      subscription = ref.watch(appAuthEventStreamProvider).listen((_) {
+        ref.invalidateSelf();
+      });
+      ref.onDispose(() {
+        unawaited(subscription.cancel());
+      });
       return ref.watch(appMembershipAccessServiceProvider).fetchCurrentAccess();
     });
 

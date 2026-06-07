@@ -121,7 +121,12 @@ extension _ReaderPageSourceSwitchExtension on _ReaderPageState {
     try {
       final session = await _membershipAccessService.getCurrentSession();
       if (session == null) {
-        _showMessage('切换书源为会员服务，请先登录并开通会员。');
+        _showMessage(
+          MembershipAccessPresentation.unavailableMessage(
+            MembershipFeatureGate.switchSource,
+            isLoggedIn: false,
+          ),
+        );
         if (mounted) {
           unawaited(context.push('/membership'));
         }
@@ -132,7 +137,12 @@ extension _ReaderPageSourceSwitchExtension on _ReaderPageState {
         session: session,
       );
       if (!hasAccess) {
-        _showMessage('切换书源为会员服务，开通会员后可使用。');
+        _showMessage(
+          MembershipAccessPresentation.unavailableMessage(
+            MembershipFeatureGate.switchSource,
+            isLoggedIn: true,
+          ),
+        );
         if (mounted) {
           unawaited(context.push('/membership'));
         }
@@ -141,7 +151,9 @@ extension _ReaderPageSourceSwitchExtension on _ReaderPageState {
       return true;
     } catch (error) {
       _showMessage(
-        error is AppException ? error.briefMessage : '会员状态校验失败，请稍后重试。',
+        error is AppException
+            ? error.briefMessage
+            : MembershipAccessPresentation.checkFailedMessage,
       );
       return false;
     }

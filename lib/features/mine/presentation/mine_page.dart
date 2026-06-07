@@ -24,6 +24,7 @@ import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../core/auth/auth_event_bus.dart';
 import '../../../core/auth/auth_service.dart';
 import '../../../core/media/image_selection_service.dart';
+import '../../../core/membership/membership_access_presentation.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
 import '../application/advanced_theme_provider.dart';
 import '../application/launch_image_gallery_provider.dart';
@@ -555,7 +556,12 @@ class _MinePageState extends ConsumerState<MinePage> {
         return;
       }
     }
-    await _showMembershipPrompt('高级主题为会员专属功能，开通后可用。');
+    await _showMembershipPrompt(
+      MembershipAccessPresentation.unavailableMessage(
+        MembershipFeatureGate.advancedTheme,
+        isLoggedIn: _userId != null,
+      ),
+    );
   }
 
   Future<void> _openMembershipCenter() async {
@@ -573,7 +579,7 @@ class _MinePageState extends ConsumerState<MinePage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              '开通会员可用',
+              MembershipAccessPresentation.upgradeTitle,
               style: Theme.of(
                 dialogContext,
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
@@ -591,7 +597,9 @@ class _MinePageState extends ConsumerState<MinePage> {
                 const SizedBox(width: 8),
                 FilledButton(
                   onPressed: () => Navigator.of(dialogContext).pop(true),
-                  child: const Text('前往会员页'),
+                  child: const Text(
+                    MembershipAccessPresentation.membershipButtonLabel,
+                  ),
                 ),
               ],
             ),

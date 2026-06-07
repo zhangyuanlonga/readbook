@@ -17,6 +17,7 @@ import '../../../app/layout/app_spacing.dart';
 import '../../../app/tasks/app_task_manager.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/theme/app_border_tokens.dart';
+import '../../../app/composition/app_providers.dart' as app_providers;
 import '../../../app/widgets/app_task_status.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/app_task_bottom_sheet.dart';
@@ -241,11 +242,10 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   @override
   void initState() {
     super.initState();
-    final sessionStore = ref.read(mineAuthSessionStoreProvider);
-    final sessionService = ref.read(minePageSessionServiceProvider);
     _accessController = AdvancedThemeAccessController(
-      sessionStore: sessionStore,
-      sessionService: sessionService,
+      membershipAccessService: ref.read(
+        app_providers.appMembershipAccessServiceProvider,
+      ),
     );
     _pageFlowCoordinator =
         ref.read(advancedThemePageFlowCoordinatorFactoryProvider)();

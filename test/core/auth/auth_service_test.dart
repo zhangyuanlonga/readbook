@@ -177,6 +177,68 @@ void main() {
       expect(loggedInEvent.isAccountSwitch, isTrue);
     },
   );
+
+  test(
+    'register persists new account session and emits login event with previous account',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      final secretStore = FakeAuthSessionSecretStore();
+      final sessionStore = AuthSessionStore(
+        preferences: prefs,
+        secretStore: secretStore,
+      );
+      await sessionStore.saveSession(
+        const AuthSession(
+          accessToken: 'old_access',
+          refreshToken: 'old_refresh',
+          userId: 'old_user',
+          username: 'old@example.com',
+          displayName: 'Old Reader',
+        ),
+      );
+      final client = _FakeAuthApiClient(
+        responseByPath: <String, Map<String, dynamic>>{
+          '/v1/auth/register': <String, dynamic>{
+            'access_token': 'registered_access',
+            'refresh_token': 'registered_refresh',
+            'user_id': 'registered_user',
+            'username': 'registered@example.com',
+            'account': 'registered@example.com',
+            'display_name': 'Registered Reader',
+          },
+        },
+      );
+      final events = <AuthEvent>[];
+      final subscription = AuthEventBus.instance.stream.listen(events.add);
+      addTearDown(subscription.cancel);
+      final service = AuthService(
+        client: client,
+        baseUrl: 'https://example.com',
+        heartbeatService: _ImmediateHeartbeatService(),
+        analyticsService: _NoopAnalyticsService(),
+        membershipService: _NoopMembershipService(),
+        sessionStore: sessionStore,
+      );
+
+      final session = await service.registerAndStore(
+        account: 'registered@example.com',
+        password: 'password123',
+        displayName: 'Registered Reader',
+      );
+      await Future<void>.delayed(Duration.zero);
+      final storedSession = await sessionStore.getSession();
+
+      expect(session.userId, 'registered_user');
+      expect(storedSession?.userId, 'registered_user');
+      expect(storedSession?.displayName, 'Registered Reader');
+      final loggedInEvent = events.lastWhere(
+        (event) => event.type == AuthEventType.loggedIn,
+      );
+      expect(loggedInEvent.userId, 'registered_user');
+      expect(loggedInEvent.previousUserId, 'old_user');
+      expect(loggedInEvent.isAccountSwitch, isTrue);
+    },
+  );
 }
 
 class _FakeAuthApiClient extends ApiClient {
