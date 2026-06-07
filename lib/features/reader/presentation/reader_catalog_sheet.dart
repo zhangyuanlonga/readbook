@@ -4,7 +4,6 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import '../../../app/layout/app_spacing.dart';
-import '../../../app/layout/app_adaptive.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../domain/entities/bookmark.dart';
@@ -1073,17 +1072,21 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
     );
 
     if (isDesktopSurface) {
-      final metrics = AppAdaptiveMetrics.of(context);
+      final panelSpec = readerLayoutContext.panelLayoutFor(
+        ReaderPanelRole.catalog,
+      );
       return Theme(
         data: readerModalTheme,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
+          padding: panelSpec.outerPadding,
           child: Align(
-            alignment: Alignment.centerRight,
+            alignment: panelSpec.alignment,
             child: ConstrainedBox(
               constraints: BoxConstraints(
-                maxWidth: metrics.isExpandedWindow ? 420 : 380,
-                maxHeight: MediaQuery.sizeOf(context).height - 48,
+                maxWidth: panelSpec.maxWidth,
+                maxHeight:
+                    MediaQuery.sizeOf(context).height -
+                    panelSpec.outerPadding.vertical,
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(22),

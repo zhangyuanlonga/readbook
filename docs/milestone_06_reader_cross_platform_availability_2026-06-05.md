@@ -117,7 +117,7 @@
 - [ ] M6-03-03 检查 Linux 从详情、书架、阅读记录、书签进入 reader 的打开和返回路径，不能用 macOS / Windows 结果替代。
 - [x] M6-03-04 将桌面键盘 / 滚轮动作从页面散点收口到 resolver / controller，并补单测。
 - [ ] M6-03-05 检查桌面窗口缩放、最小窗口、可读最大宽度、左右留白、信息栏、目录和设置弹层不溢出。
-- [ ] M6-03-06 为桌面设置面板定义 dialog / side panel / popover 策略，不反向改移动端 bottom sheet 体验。
+- [x] M6-03-06 为桌面设置面板定义 dialog / side panel / popover 策略，不反向改移动端 bottom sheet 体验。
 - [ ] M6-03-07 检查桌面 PDF 阅读：文件存在、页码恢复、窗口缩放、滚轮、缩放、失败态和进度保存。
 - [x] M6-03-08 输出 macOS、Windows、Linux 三端独立验收记录，未验证平台写清机器和阻塞原因。
 
@@ -271,8 +271,10 @@ flowchart TD
 
 - 已完成 `M6-03-04`：桌面键盘 / 滚轮动作从 `ReaderPage` 页面散点收口到 `ReaderDesktopInputResolver`，并补目标单测。
 - 已完成 `M6-03-08` 的记录输出：macOS debug 构建通过；Windows / Linux 当前会话没有目标机器或 CI，不能用 macOS 结果替代，需后续在目标平台独立补验。
+- 2026-06-07 追加完成 `M6-03-06`：新增 `ReaderPanelLayoutSpec` / `ReaderPanelRole`，统一阅读器桌面目录、设置和二级操作的 UI/UX 形态。移动端继续走 bottom sheet，桌面目录和设置走右侧 side panel，二级操作保留 dialog 策略；`reader_catalog_sheet.dart` 和 `reader_page_settings_panel.dart` 改为消费同一策略，不再各自散落宽度和对齐判断。
+- 2026-06-07 追加明确桌面 overlay 口径：小说正文不铺满文字列，继续居中并限制文本最大宽度；桌面点击正文中心后，目录、自动阅读、夜间和界面设置动作进入顶部工具条，底部只保留居中的轻量进度控制。移动端仍保留底部大按钮栏，不改触控路径。
 - macOS 本次只完成构建基线，不等价于 `M6-03-01` 的详情 / 书架 / 阅读记录 / 书签真实打开路径 smoke。
-- 未完成项：`M6-03-01` 到 `M6-03-03` 真实桌面入口 smoke，`M6-03-05` 窗口缩放和弹层溢出核查，`M6-03-06` 桌面设置面板形态策略，`M6-03-07` 桌面 PDF 阅读 smoke。
+- 未完成项：`M6-03-01` 到 `M6-03-03` 真实桌面入口 smoke，`M6-03-05` 真实窗口拖拽、信息栏、目录和设置弹层溢出核查，`M6-03-07` 桌面 PDF 阅读 smoke。
 
 ### 15.4 M3 / M4 / M5 重叠边界
 
@@ -287,6 +289,14 @@ flowchart TD
 | 命令 / 检查 | 结果 |
 | --- | --- |
 | `dart format lib/features/reader/application/reader_desktop_input_resolver.dart lib/features/reader/presentation/reader_page.dart lib/features/reader/presentation/reader_page_shell.dart test/features/reader/application/reader_desktop_input_resolver_test.dart` | 通过。 |
+| `dart format lib/features/reader/presentation/reader_layout_context.dart lib/features/reader/presentation/reader_page_settings_panel.dart lib/features/reader/presentation/reader_catalog_sheet.dart test/features/reader/presentation/reader_layout_context_test.dart` | 通过。 |
+| `dart analyze lib/features/reader/presentation/reader_layout_context.dart lib/features/reader/presentation/reader_page_settings_panel.dart lib/features/reader/presentation/reader_catalog_sheet.dart test/features/reader/presentation/reader_layout_context_test.dart` | 通过，No issues found。 |
+| `flutter test test/features/reader/presentation/reader_layout_context_test.dart` | 通过，5 tests passed；覆盖 390 / 600 / 840 / 1280 / 1600 宽度下移动 bottom sheet、桌面 side panel、二级 dialog 和正文最大宽度策略。 |
+| `dart analyze lib/features/reader/presentation/reader_page.dart lib/features/reader/presentation/reader_layout_context.dart test/features/reader/presentation/reader_layout_context_test.dart` | 通过，No issues found；覆盖桌面 overlay 动作从底部栏迁移到顶部工具条的代码路径。 |
+| `flutter test test/features/reader/presentation/reader_layout_context_test.dart test/features/reader/presentation/reader_chrome_widgets_test.dart test/features/reader/presentation/reader_settings_presenter_test.dart test/features/reader/presentation/reader_viewport_builder_test.dart` | 通过，15 tests passed；覆盖阅读器 layout、chrome、settings presenter 和 viewport 状态。 |
+| `flutter build macos --debug --no-pub` | 2026-06-07 本轮通过，生成 `build/macos/Build/Products/Debug/shuxiang_reading_next.app`；仍有 `UniversalDetector2` deployment target 和 duplicate library warning。 |
+| `flutter build ios --no-codesign --no-pub` | 2026-06-07 本轮通过，生成 `build/ios/iphoneos/Runner.app`；仍提示 no-codesign 和 UIScene lifecycle。 |
+| `flutter build apk --debug --no-pub` | 2026-06-07 本轮未通过：Gradle 下载 `androidx.test:runner:1.2+` 的 Maven metadata 时多次出现 TLS handshake 失败，属于网络 / 依赖解析阻塞；本轮 Dart analyzer 和目标测试已通过，发布前需在网络恢复后重跑 Android 构建。 |
 | `flutter analyze` | 通过，No issues found。 |
 | `flutter test test/features/reader/application/reader_desktop_input_resolver_test.dart test/features/reader/presentation/reader_route_test.dart test/features/reader/application/reader_entry_route_resolver_test.dart test/features/reader/application/online_reading_chain_smoke_test.dart test/features/reader/presentation/reader_viewport_builder_test.dart test/features/reader/presentation/reader_chrome_widgets_test.dart test/features/reader/presentation/reader_layout_context_test.dart test/features/reader/application/reader_content_mode_resolver_test.dart test/features/reader/application/reader_mode_capabilities_test.dart test/features/reader/application/reader_session_state_resolver_test.dart test/features/book/application/book_detail_read_route_service_test.dart` | 通过，38 tests passed。 |
 | `flutter build web --no-pub` | 通过，`build/web` 已生成；WASM dry-run 提示 `sqlite3` / `ffi` 的 `dart:ffi` 不兼容。 |

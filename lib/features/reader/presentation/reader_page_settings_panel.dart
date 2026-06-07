@@ -23,33 +23,29 @@ extension _ReaderPageSettingsPanelExtension on _ReaderPageState {
     final borderColor = readerModalTheme.colorScheme.outlineVariant.withValues(
       alpha: 0.35,
     );
-    final useSidePanel =
-        readerLayoutContext.settingsPanelPresentation ==
-        ReaderPanelPresentation.sidePanel;
-    final useEdgeToEdgeSheet = !useSidePanel;
+    final panelSpec = readerLayoutContext.panelLayoutFor(
+      ReaderPanelRole.settings,
+      preferredHeightFactor: heightFactor,
+    );
+    final useEdgeToEdgeSheet = panelSpec.edgeToEdge;
     final radius = metrics.cardRadius + (useEdgeToEdgeSheet ? 10 : 12);
-    final horizontalInset = useEdgeToEdgeSheet ? 0.0 : sheetHorizontal;
-    final resolvedMaxWidth =
-        useSidePanel
-            ? min(maxWidth, readerLayoutContext.sidePanelMaxWidth)
-            : min(maxWidth, metrics.bottomSheetMaxWidth);
-    final sidePanelHeightFactor = heightFactor.clamp(0.72, 0.9).toDouble();
+    final resolvedMaxWidth = min(maxWidth, panelSpec.maxWidth);
     return AnimatedPadding(
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOutCubic,
-      padding: EdgeInsets.only(
-        left: horizontalInset,
-        right: horizontalInset,
-        top: useEdgeToEdgeSheet ? 0 : 48,
-        bottom:
-            keyboardInset +
-            (useEdgeToEdgeSheet ? 0 : max(12.0, safeBottom * 0.55)),
+      padding: EdgeInsets.fromLTRB(
+        panelSpec.outerPadding.left,
+        panelSpec.outerPadding.top,
+        panelSpec.outerPadding.right,
+        keyboardInset +
+            (useEdgeToEdgeSheet
+                ? 0
+                : max(panelSpec.outerPadding.bottom, safeBottom * 0.55)),
       ),
       child: Align(
-        alignment:
-            useSidePanel ? Alignment.centerRight : Alignment.bottomCenter,
+        alignment: panelSpec.alignment,
         child: FractionallySizedBox(
-          heightFactor: useSidePanel ? sidePanelHeightFactor : heightFactor,
+          heightFactor: panelSpec.heightFactor,
           child: ConstrainedBox(
             constraints: BoxConstraints(
               maxWidth: useEdgeToEdgeSheet ? double.infinity : resolvedMaxWidth,

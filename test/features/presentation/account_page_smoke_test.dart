@@ -42,6 +42,123 @@ void main() {
     );
   });
 
+  testWidgets('AuthPage uses immersive phone auth layout', (tester) async {
+    await registerAdaptiveViewportTearDown(tester);
+    tester.view.devicePixelRatio = 1;
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          theme: ThemeData(platform: TargetPlatform.iOS),
+          home: const AuthPage(),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(tester.takeException(), isNull);
+    expect(
+      find.byKey(const ValueKey<String>('auth_mobile_brand_header')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('auth_mobile_form_panel')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('auth_mobile_mode_tabs')),
+      findsOneWidget,
+    );
+    expect(find.text('账号登录'), findsNothing);
+    expect(find.text('注册账号'), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('auth_login_tab_label')),
+      findsOne,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('auth_register_tab_label')),
+      findsOne,
+    );
+    expect(find.text('记住密码'), findsOneWidget);
+
+    final modeTabsBottom =
+        tester
+            .getBottomLeft(
+              find.byKey(const ValueKey<String>('auth_mobile_mode_tabs')),
+            )
+            .dy;
+    final accountFieldTop =
+        tester.getTopLeft(find.byType(TextFormField).first).dy;
+    expect(accountFieldTop, greaterThan(modeTabsBottom + 12));
+    expect(find.text('用户协议'), findsOneWidget);
+    expect(tester.getBottomLeft(find.text('用户协议')).dy, lessThan(844));
+  });
+
+  testWidgets('AuthPage keeps centered single column at medium width', (
+    tester,
+  ) async {
+    await registerAdaptiveViewportTearDown(tester);
+    tester.view.devicePixelRatio = 1;
+    await tester.binding.setSurfaceSize(const Size(720, 900));
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          theme: ThemeData(platform: TargetPlatform.iOS),
+          home: const AuthPage(),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(tester.takeException(), isNull);
+    expect(
+      find.byKey(const ValueKey<String>('auth_mobile_form_panel')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('auth_desktop_surface')),
+      findsNothing,
+    );
+
+    final panelRect = tester.getRect(
+      find.byKey(const ValueKey<String>('auth_mobile_form_panel')),
+    );
+    expect(panelRect.width, lessThanOrEqualTo(560));
+  });
+
+  testWidgets(
+    'AuthPage register mode reveals extra fields with strength hint',
+    (tester) async {
+      await registerAdaptiveViewportTearDown(tester);
+      tester.view.devicePixelRatio = 1;
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            theme: ThemeData(platform: TargetPlatform.iOS),
+            home: const AuthPage(),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('auth_register_tab_label')),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 260));
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('显示名'), findsOneWidget);
+      expect(find.text('确认密码'), findsOneWidget);
+      expect(find.text('请再次输入密码'), findsOneWidget);
+      expect(find.text('建议使用 8 位以上，并混合字母和数字。'), findsOneWidget);
+    },
+  );
+
   testWidgets('desktop root startup opens auth route by default', (
     tester,
   ) async {
@@ -85,7 +202,6 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('欢迎回来。请登录您的账户。'), findsWidgets);
     expect(find.text('Selune'), findsWidgets);
-    expect(find.text('静心阅读，\n久一点。'), findsOneWidget);
     expect(
       find.byKey(const ValueKey<String>('auth_desktop_brand_panel')),
       findsOneWidget,

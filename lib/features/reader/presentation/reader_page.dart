@@ -4038,6 +4038,28 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         sourceName.isEmpty
             ? _chapterProgressLabel()
             : '${_chapterProgressLabel()} · $sourceName';
+    final layoutContext = ReaderLayoutContext.resolve(
+      context,
+      viewportKind: _currentViewportKind,
+    );
+    final useDesktopChrome =
+        layoutContext.overlayActionPlacement ==
+        ReaderOverlayActionPlacement.topToolbar;
+    final isDarkMode = _effectiveReaderThemeMode() == ReaderThemeMode.dark;
+    final dayNightIcon =
+        isDarkMode ? Icons.light_mode_rounded : Icons.dark_mode_rounded;
+    final dayNightTooltip = isDarkMode ? '切换日间模式' : '切换夜间模式';
+    final autoReadIcon =
+        _autoReadSessionState == ReaderAutoReadSessionState.running
+            ? Icons.pause_circle_filled_rounded
+            : Icons.play_circle_outline_rounded;
+    final autoReadTooltip = switch (_autoReadSessionState) {
+      ReaderAutoReadSessionState.running => '暂停自动阅读',
+      ReaderAutoReadSessionState.paused ||
+      ReaderAutoReadSessionState.chapterPaused => '继续自动阅读',
+      ReaderAutoReadSessionState.finished ||
+      ReaderAutoReadSessionState.off => '自动阅读',
+    };
 
     return Positioned(
       top: 0,
@@ -4126,6 +4148,52 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                                 ),
                               ),
                               const SizedBox(width: 8),
+                              if (useDesktopChrome) ...[
+                                _buildTopActionButton(
+                                  icon: Icons.list_alt_outlined,
+                                  tooltip: '目录',
+                                  onPressed:
+                                      () => unawaited(
+                                        _openCatalogSheetFromOverlay(),
+                                      ),
+                                  colors: colors,
+                                  emphasizeHitArea: true,
+                                ),
+                                const SizedBox(width: 2),
+                                _buildTopActionButton(
+                                  icon: autoReadIcon,
+                                  tooltip: autoReadTooltip,
+                                  onPressed:
+                                      () =>
+                                          unawaited(_openAutoReadFromOverlay()),
+                                  colors: colors,
+                                  emphasizeHitArea: true,
+                                ),
+                                const SizedBox(width: 2),
+                                _buildTopActionButton(
+                                  icon: dayNightIcon,
+                                  tooltip: dayNightTooltip,
+                                  onPressed:
+                                      () => unawaited(_toggleDayNightMode()),
+                                  colors: colors,
+                                  emphasizeHitArea: true,
+                                ),
+                                const SizedBox(width: 2),
+                                _buildTopActionButton(
+                                  icon: Icons.palette_outlined,
+                                  tooltip: '界面设置',
+                                  onPressed:
+                                      () => unawaited(
+                                        _showSettingsSheet(
+                                          initialTab:
+                                              _ReaderSettingsTab.interface,
+                                        ),
+                                      ),
+                                  colors: colors,
+                                  emphasizeHitArea: true,
+                                ),
+                                const SizedBox(width: 8),
+                              ],
                               _buildTopActionButton(
                                 icon: Icons.auto_stories_rounded,
                                 tooltip: '书籍详情',
@@ -4261,6 +4329,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Widget _buildBottomOverlay(_ReaderThemeColors colors) {
+    final layoutContext = ReaderLayoutContext.resolve(
+      context,
+      viewportKind: _currentViewportKind,
+    );
+    if (!layoutContext.showsBottomActionBar) {
+      return _buildDesktopBottomProgressOverlay(colors, layoutContext);
+    }
+
     const middleLabel = '界面';
     const middleIcon = Icons.palette_outlined;
     final isDarkMode = _effectiveReaderThemeMode() == ReaderThemeMode.dark;
@@ -4395,6 +4471,79 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                               ],
                             ),
                           ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopBottomProgressOverlay(
+    _ReaderThemeColors colors,
+    ReaderLayoutContext layoutContext,
+  ) {
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 0,
+      child: IgnorePointer(
+        ignoring: !_showOverlayControls,
+        child: AnimatedBuilder(
+          animation: _overlayControlsController,
+          builder: (context, _) {
+            final fade = _overlayControlsFadeProgress;
+            return _buildShellOverlayTransition(
+              edge: _OverlayEdge.bottom,
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    24,
+                    0,
+                    24,
+                    max(10.0, layoutContext.metrics.pagePadding * 0.5),
+                  ),
+                  child: Align(
+                    alignment: Alignment.bottomCenter,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: layoutContext.desktopProgressMaxWidth,
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(999),
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: colors.overlay.withValues(alpha: 0.9),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                color: colors.divider.withValues(alpha: 0.22),
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(
+                                    alpha: 0.08 * fade,
+                                  ),
+                                  blurRadius: 18,
+                                  offset: const Offset(0, 8),
+                                ),
+                              ],
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              child: _buildBottomProgressStrip(colors),
+                            ),
+                          ),
                         ),
                       ),
                     ),
