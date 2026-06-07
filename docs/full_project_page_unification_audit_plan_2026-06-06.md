@@ -242,8 +242,8 @@
 
 这些任务适合另一台 Windows 执行，原则是“先拆代码边界，不改业务行为”。Windows 完成后回填本节、对应 `U5-*` 项和 Backlog 项，并提交目标 analyze / tests 结果。
 
-- [ ] WIN-U5-01 执行 `U5-BS-01` 到 `U5-BS-04`：书架模型、mapper、状态组件、工具条拆分；对应 `BL-01-01`。
-- [ ] WIN-U5-02 执行 `U5-ATL-01` 到 `U5-ATL-06`：高级主题列表 action 盘点、查询 controller、权限 controller、卡片、状态组件、toolbar；对应 `BL-05-02`。
+- [x] WIN-U5-01 执行 `U5-BS-01` 到 `U5-BS-04`：书架模型、mapper、状态组件、工具条拆分；对应 `BL-01-01`。
+- [x] WIN-U5-02 执行 `U5-ATL-01` 到 `U5-ATL-06`：高级主题列表 action 盘点、查询 controller、权限 controller、卡片、状态组件、toolbar；对应 `BL-05-02`。
 - [ ] WIN-U5-03 执行 `U5-ATE-01` 到 `U5-ATE-05`：高级主题编辑器字段盘点、状态 facade、基础信息、颜色组件、壁纸分区；对应 `BL-05-03`。
 - [ ] WIN-U5-04 执行 `U5-RD-01` 到 `U5-RD-04`：阅读器拆分索引、bootstrap、lifecycle、content load；对应 `BL-03-01`。
 - [ ] WIN-U5-05 如果 Windows 已占用 `bookshelf_page.dart`，Mac 暂停 `BL-01`；如果 Windows 已占用高级主题列表或编辑器，Mac 暂停对应 `BL-05-02` / `BL-05-03`。
@@ -256,10 +256,10 @@
 
 当前约 `7253` 行。拆分顺序先纯 UI / mapper，再 controller，最后动异步加载链。
 
-- [ ] U5-BS-01 迁移书架私有 enum、展示模型、常量到 `bookshelf_page_models.dart`，不改行为。
-- [ ] U5-BS-02 迁移排序、视图模式、进度显示、网格样式等字符串映射到 `bookshelf_preference_mappers.dart`，补 mapper 单测。
-- [ ] U5-BS-03 抽书架空态、加载态、错误态、继续阅读提示到 `widgets/bookshelf_status_widgets.dart`。
-- [ ] U5-BS-04 抽书架本地搜索、筛选条、阅读状态 selector 到 `widgets/bookshelf_toolbar_widgets.dart`。
+- [x] U5-BS-01 迁移书架私有 enum、展示模型、常量到 `bookshelf_page_models.dart`，不改行为。
+- [x] U5-BS-02 迁移排序、视图模式、进度显示、网格样式等字符串映射到 `bookshelf_preference_mappers.dart`，补 mapper 单测。
+- [x] U5-BS-03 抽书架空态、加载态、错误态、继续阅读提示到 `widgets/bookshelf_status_widgets.dart`。
+- [x] U5-BS-04 抽书架本地搜索、筛选条、阅读状态 selector 到 `widgets/bookshelf_toolbar_widgets.dart`。
 - [ ] U5-BS-05 抽桌面“我的书架 / 阅读状态 / 标签分类入口”侧栏视图到 `widgets/bookshelf_library_sidebar.dart`。
 - [ ] U5-BS-06 抽网格书籍卡片壳层到 `widgets/bookshelf_grid_book_card.dart`，只搬 UI 参数和回调。
 - [ ] U5-BS-07 抽列表 / 双列书籍卡片壳层到 `widgets/bookshelf_list_book_card.dart`，展示开关语义不变。
@@ -318,12 +318,12 @@
 
 当前约 `3681` 行。拆分重点是把查询、会员、导入导出和批量操作从页面方法里拿出去。
 
-- [ ] U5-ATL-01 盘点列表页 action、状态字段、弹层和导入导出流程，补列表页拆分索引，不改行为。
-- [ ] U5-ATL-02 抽列表查询、搜索、分类筛选、排序到 `advanced_theme_list_query_controller.dart`，补排序 / 筛选单测。
-- [ ] U5-ATL-03 抽会员权限加载和 AuthEvent 刷新到 `advanced_theme_access_controller.dart`。
-- [ ] U5-ATL-04 抽主题卡片 UI 到 `widgets/advanced_theme_summary_card.dart`。
-- [ ] U5-ATL-05 抽列表空态、加载态、会员 gate、错误提示到 `widgets/advanced_theme_list_status_widgets.dart`。
-- [ ] U5-ATL-06 抽搜索框、排序、分类筛选、导入入口到 `widgets/advanced_theme_list_toolbar.dart`。
+- [x] U5-ATL-01 盘点列表页 action、状态字段、弹层和导入导出流程，补列表页拆分索引，不改行为。
+- [x] U5-ATL-02 抽列表查询、搜索、分类筛选、排序到 `advanced_theme_list_query_controller.dart`，补排序 / 筛选单测。
+- [x] U5-ATL-03 抽会员权限加载和 AuthEvent 刷新到 `advanced_theme_access_controller.dart`。
+- [x] U5-ATL-04 抽主题卡片 UI 到 `widgets/advanced_theme_summary_card.dart`。
+- [x] U5-ATL-05 抽列表空态、加载态、会员 gate、错误提示到 `widgets/advanced_theme_list_status_widgets.dart`。
+- [x] U5-ATL-06 抽搜索框、排序、分类筛选、导入入口到 `widgets/advanced_theme_list_toolbar.dart`。
 - [ ] U5-ATL-07 接入 `AdaptiveRouteTopBar`：桌面承载搜索、排序、导入、批量操作；移动端保留 AppBar。
 - [ ] U5-ATL-08 抽单个主题导出流程到 `advanced_theme_export_controller.dart`，保留分享 / 保存 / 取消结果。
 - [ ] U5-ATL-09 抽单个主题导入和外部 payload 消费到 `advanced_theme_import_controller.dart`。
@@ -335,8 +335,8 @@
 
 ### U5 最大维护债推荐领取顺序
 
-- [ ] U5-SEQ-01 先做 `U5-BS-01` 到 `U5-BS-04`，先拆书架纯模型、mapper、状态组件和工具条。
-- [ ] U5-SEQ-02 再做 `U5-ATL-01` 到 `U5-ATL-06`，先把高级主题列表查询、卡片、状态和 toolbar 拆出来。
+- [x] U5-SEQ-01 先做 `U5-BS-01` 到 `U5-BS-04`，先拆书架纯模型、mapper、状态组件和工具条。
+- [x] U5-SEQ-02 再做 `U5-ATL-01` 到 `U5-ATL-06`，先把高级主题列表查询、卡片、状态和 toolbar 拆出来。
 - [ ] U5-SEQ-03 再做 `U5-ATE-01` 到 `U5-ATE-05`，先拆高级主题编辑器状态 facade 和前半表单分区。
 - [ ] U5-SEQ-04 阅读器从 `U5-RD-01` 到 `U5-RD-04` 开始，只拆 bootstrap、lifecycle、content load。
 - [ ] U5-SEQ-05 每完成一个文件分组前四项，记录文件行数变化、目标 analyze、相关测试和未验证平台。
@@ -395,7 +395,7 @@
 
 来源：`U2-FIX-01`、`U4-FIX-03`、`U4-FIX-04`、`U5-BS-*`、`U6-FIX-05`、`U6-FIX-09`。
 
-- [ ] BL-01-01 先执行 `U5-BS-01` 到 `U5-BS-04`：迁移书架模型、mapper、状态组件和工具条，不改业务行为。
+- [x] BL-01-01 先执行 `U5-BS-01` 到 `U5-BS-04`：迁移书架模型、mapper、状态组件和工具条，不改业务行为。
 - [ ] BL-01-02 抽阅读状态展示 mapper：未读 / 阅读中 / 已读完的 label、icon、筛选语义共用，对应 `U4-FIX-03`。
 - [ ] BL-01-03 抽待读清单展示 mapper：明确它是书架收藏状态，不混入阅读状态，对应 `U4-FIX-04`。
 - [ ] BL-01-04 拆书架网格 / 列表 / 双列卡片、封面自适应、进度展示和更多菜单，对应 `U2-FIX-01` 与 `U5-BS-06` 到 `U5-BS-12`。
@@ -489,3 +489,5 @@
 - [x] 2026-06-07：补充 U6 UI 统一化后续整改候选；明确 U5 负责最大维护债和大文件拆分，U6 负责 UI 组件、设计 token、adaptive surface、状态卡和多端交互一致性。
 - [x] 2026-06-07：整理跨阶段统一整改 Backlog；把 U2 / U3 / U4 未完成 FIX 与 U5 / U6 按书架、搜索详情、阅读器、本地内容、会员会话、设置资源、全局 UI、测试验证聚合，后续执行优先从 Backlog 领取。
 - [x] 2026-06-07：执行 U5 代码可维护性与成熟库替换审计；补充超大文件排序、成熟库现状、替换候选和 `WIN-U5-*` Windows 优先分发清单。
+- [x] 2026-06-07：执行 `WIN-U5-01` / `BL-01-01`；书架页私有模型迁移到 `bookshelf_page_models.dart`，偏好字符串映射迁移到 `bookshelf_preference_mappers.dart` 并补 mapper 单测，书架状态卡与继续阅读提示显隐壳层拆到 `widgets/bookshelf_status_widgets.dart`，搜索/筛选/设置工具条拆到 `widgets/bookshelf_toolbar_widgets.dart`，旧 `widgets/bookshelf_page_sections.dart` 改为兼容出口；本轮只拆代码边界，不改业务行为。验证：`flutter analyze lib/features/bookshelf/presentation/bookshelf_page.dart lib/features/bookshelf/presentation/bookshelf_page_models.dart lib/features/bookshelf/presentation/bookshelf_preference_mappers.dart lib/features/bookshelf/presentation/widgets/bookshelf_status_widgets.dart lib/features/bookshelf/presentation/widgets/bookshelf_toolbar_widgets.dart test/features/bookshelf/presentation/bookshelf_preference_mappers_test.dart` 通过；`flutter test test/features/bookshelf/presentation/bookshelf_preference_mappers_test.dart test/features/bookshelf/presentation/bookshelf_taxonomy_merge_test.dart` 通过。未验证：Android / iOS / Web / macOS / Windows / Linux 手工 smoke，本轮未改交互路径，发布前按书架页面回归矩阵补验。
+- [x] 2026-06-07：执行 `WIN-U5-02`；高级主题列表页补拆分索引，action / delete decision 迁移到 `advanced_theme_list_actions.dart`，查询排序筛选和选择裁剪迁移到 `advanced_theme_list_query_controller.dart` 并补单测，会员权限加载和 AuthEvent 刷新迁移到 `advanced_theme_access_controller.dart`，主题卡片、状态展示和搜索筛选工具条分别迁移到 `widgets/advanced_theme_summary_card.dart`、`widgets/advanced_theme_list_status_widgets.dart`、`widgets/advanced_theme_list_toolbar.dart`；本轮未接入 `U5-ATL-07` route topbar，因此 `BL-05-02` 暂不整体勾选。验证：`flutter analyze lib/features/mine/presentation/advanced_theme_list_page.dart lib/features/mine/presentation/advanced_theme_list_actions.dart lib/features/mine/application/advanced_theme_list_query_controller.dart lib/features/mine/application/advanced_theme_access_controller.dart lib/features/mine/presentation/widgets/advanced_theme_list_status_widgets.dart lib/features/mine/presentation/widgets/advanced_theme_list_toolbar.dart lib/features/mine/presentation/widgets/advanced_theme_summary_card.dart test/features/mine/application/advanced_theme_list_query_controller_test.dart` 通过；`flutter test test/features/mine/application/advanced_theme_list_query_controller_test.dart test/features/mine/application/advanced_theme_page_state_test.dart` 通过。未验证：Android / iOS / Web / macOS / Windows / Linux 手工 smoke，本轮未改业务行为和平台入口，发布前按高级主题列表回归矩阵补验。

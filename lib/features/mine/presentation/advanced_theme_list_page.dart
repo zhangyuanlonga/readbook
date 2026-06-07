@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 import 'dart:io';
 
 import 'package:circular_theme_reveal/circular_theme_reveal.dart';
@@ -21,16 +20,16 @@ import '../../../app/theme/app_border_tokens.dart';
 import '../../../app/widgets/app_task_status.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/app_task_bottom_sheet.dart';
-import '../../../app/widgets/app_empty_state_card.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/import_export_task_sheet.dart';
 import '../../../app/widgets/import_export_copy.dart';
 import '../../../app/widgets/import_export_task_overlay.dart';
 import '../../../core/auth/auth_event_bus.dart';
-import '../../../core/auth/auth_session_store.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
+import '../application/advanced_theme_access_controller.dart';
 import '../application/advanced_theme_export_error_formatter.dart';
 import '../application/advanced_theme_list_page_state.dart';
+import '../application/advanced_theme_list_query_controller.dart';
 import '../application/advanced_theme_resource_reference_service.dart';
 import '../application/advanced_theme_service.dart';
 import '../../source/application/external_import_diagnostics.dart';
@@ -38,9 +37,11 @@ import '../../source/application/external_import_catalog.dart';
 import '../../source/application/external_source_import_bridge.dart';
 import '../application/advanced_theme_page_flow_coordinator.dart';
 import '../application/advanced_theme_provider.dart';
-import '../application/mine_page_session_service.dart';
 import '../providers.dart';
-import 'widgets/image_resource_collection_widgets.dart';
+import 'advanced_theme_list_actions.dart';
+import 'widgets/advanced_theme_list_status_widgets.dart';
+import 'widgets/advanced_theme_list_toolbar.dart';
+import 'widgets/advanced_theme_summary_card.dart';
 
 class AdvancedThemeListPage extends ConsumerStatefulWidget {
   const AdvancedThemeListPage({super.key});
@@ -50,45 +51,15 @@ class AdvancedThemeListPage extends ConsumerStatefulWidget {
       _AdvancedThemeListPageState();
 }
 
-enum _AdvancedThemeAction { edit, duplicate, exportZip, delete }
+typedef _AdvancedThemeAction = AdvancedThemeAction;
 
-enum _AdvancedThemeListMoreAction {
-  importBatch,
-  sortThemes,
-  floatingEdit,
-  selectThemes,
-}
+typedef _AdvancedThemeListMoreAction = AdvancedThemeListMoreAction;
 
 typedef _AdvancedThemeSortMode = AdvancedThemeSortMode;
 
-enum _AdvancedThemeExportDispatchStatus { completed, cancelled, failed }
+typedef _AdvancedThemeExportDispatchResult = AdvancedThemeExportDispatchResult;
 
-class _AdvancedThemeExportDispatchResult {
-  const _AdvancedThemeExportDispatchResult.completed({this.message})
-    : status = _AdvancedThemeExportDispatchStatus.completed;
-
-  const _AdvancedThemeExportDispatchResult.cancelled({this.message})
-    : status = _AdvancedThemeExportDispatchStatus.cancelled;
-
-  const _AdvancedThemeExportDispatchResult.failed({this.message})
-    : status = _AdvancedThemeExportDispatchStatus.failed;
-
-  final _AdvancedThemeExportDispatchStatus status;
-  final String? message;
-
-  bool get isCompleted =>
-      status == _AdvancedThemeExportDispatchStatus.completed;
-}
-
-class _AdvancedThemeDeleteDecision {
-  const _AdvancedThemeDeleteDecision({
-    required this.confirmed,
-    required this.deleteOptions,
-  });
-
-  final bool confirmed;
-  final AdvancedThemeDeleteOptions deleteOptions;
-}
+typedef _AdvancedThemeDeleteDecision = AdvancedThemeDeleteDecision;
 
 typedef _AdvancedThemeBatchImportSummary = AdvancedThemeBatchImportSummary;
 
@@ -157,11 +128,17 @@ typedef _AdvancedThemeBatchFileImportRunner =
       _AdvancedThemeBatchImportProgressCallback? onProgress,
     });
 
+/// 高级主题列表页拆分索引：
+/// actions / delete decision 在 `advanced_theme_list_actions.dart`；
+/// 查询、排序、筛选和选择裁剪在 `AdvancedThemeListQueryController`；
+/// 会员权限刷新在 `AdvancedThemeAccessController`；
+/// 主题卡片、状态展示和搜索筛选工具条分别在 widgets 目录的 list 专用组件中。
+/// 导入导出队列和单任务 surface 仍留在本文件，后续按 `U5-ATL-08+` 继续拆分。
 class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
-  late final AuthSessionStore _sessionStore;
-  late final MinePageSessionService _sessionService;
+  late final AdvancedThemeAccessController _accessController;
   late final AdvancedThemePageFlowCoordinator _pageFlowCoordinator;
-  bool _hasRequestedRemoteAccessRefresh = false;
+  final AdvancedThemeListQueryController _queryController =
+      const AdvancedThemeListQueryController();
   final TextEditingController _searchController = TextEditingController();
   final Map<String, ImageProvider<Object>> _previewWallpaperImageProviders =
       <String, ImageProvider<Object>>{};
@@ -264,8 +241,12 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   @override
   void initState() {
     super.initState();
-    _sessionStore = ref.read(mineAuthSessionStoreProvider);
-    _sessionService = ref.read(minePageSessionServiceProvider);
+    final sessionStore = ref.read(mineAuthSessionStoreProvider);
+    final sessionService = ref.read(minePageSessionServiceProvider);
+    _accessController = AdvancedThemeAccessController(
+      sessionStore: sessionStore,
+      sessionService: sessionService,
+    );
     _pageFlowCoordinator =
         ref.read(advancedThemePageFlowCoordinatorFactoryProvider)();
     _pageFlowCoordinator.initialize(
@@ -282,42 +263,20 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   }
 
   Future<void> _loadAccess({required bool refreshRemote}) async {
-    final session = await _sessionStore.getSession();
+    final result = await _accessController.load(refreshRemote: refreshRemote);
     if (!mounted) {
       return;
     }
-    if (session == null) {
-      setState(() {
-        _canUseAdvancedThemes = false;
-        _isAccessLoading = false;
-      });
-      return;
-    }
-
-    final snapshot = await _sessionService.loadSession(
-      refreshRemote: refreshRemote,
-    );
-    if (!mounted) {
-      return;
-    }
-    final shouldRefreshRemote =
-        !refreshRemote &&
-        !_hasRequestedRemoteAccessRefresh &&
-        (!snapshot.hasThemeCustom || snapshot.shouldRefreshRemoteAccess);
-    if (shouldRefreshRemote) {
-      _hasRequestedRemoteAccessRefresh = true;
+    if (result.shouldRefreshRemote) {
       setState(() {
         _isAccessLoading = true;
       });
       unawaited(_loadAccess(refreshRemote: true));
       return;
     }
-    if (refreshRemote) {
-      _hasRequestedRemoteAccessRefresh = false;
-    }
     setState(() {
-      _canUseAdvancedThemes = snapshot.hasThemeCustom;
-      _isAccessLoading = false;
+      _canUseAdvancedThemes = result.canUseAdvancedThemes;
+      _isAccessLoading = result.isAccessLoading;
     });
   }
 
@@ -329,17 +288,8 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   }
 
   void _handleAuthEvent(AuthEvent event) {
-    switch (event.type) {
-      case AuthEventType.loggedIn:
-        _hasRequestedRemoteAccessRefresh = false;
-        unawaited(_loadAccess(refreshRemote: true));
-        break;
-      case AuthEventType.loggedOut:
-      case AuthEventType.sessionExpired:
-        _hasRequestedRemoteAccessRefresh = false;
-        unawaited(_loadAccess(refreshRemote: false));
-        break;
-    }
+    final refreshRemote = _accessController.shouldRefreshForAuthEvent(event);
+    unawaited(_loadAccess(refreshRemote: refreshRemote));
   }
 
   Future<void> _load() async {
@@ -390,86 +340,33 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     List<AdvancedThemeSummary> themes,
   ) {
     final activeThemeId = ref.read(activeAdvancedThemeIdProvider);
-    return List<AdvancedThemeSummary>.from(themes)..sort((a, b) {
-      final aIsActive = a.id == activeThemeId;
-      final bIsActive = b.id == activeThemeId;
-      if (aIsActive != bIsActive) {
-        return aIsActive ? -1 : 1;
-      }
-      return switch (_themeSortMode) {
-        _AdvancedThemeSortMode.updatedDesc => b.updatedAt.compareTo(
-          a.updatedAt,
-        ),
-        _AdvancedThemeSortMode.nameAsc => a.name.compareTo(b.name),
-        _AdvancedThemeSortMode.categoryAsc => _compareThemeCategory(a, b),
-      };
-    });
-  }
-
-  int _compareThemeCategory(AdvancedThemeSummary a, AdvancedThemeSummary b) {
-    final categoryA = a.category?.trim() ?? '';
-    final categoryB = b.category?.trim() ?? '';
-    if (categoryA.isNotEmpty && categoryB.isNotEmpty) {
-      final compare = categoryA.compareTo(categoryB);
-      if (compare != 0) {
-        return compare;
-      }
-    } else if (categoryA.isNotEmpty) {
-      return -1;
-    } else if (categoryB.isNotEmpty) {
-      return 1;
-    }
-    return a.name.compareTo(b.name);
+    return _queryController.sortThemeSummaries(
+      themes: themes,
+      activeThemeId: activeThemeId,
+      sortMode: _themeSortMode,
+    );
   }
 
   bool _hasSamePreviewContent(
     List<AdvancedThemeSummary> previous,
     List<AdvancedThemeSummary> next,
   ) {
-    for (var index = 0; index < previous.length; index += 1) {
-      final previousItem = previous[index];
-      final nextItem = next[index];
-      if (previousItem.id != nextItem.id) {
-        return false;
-      }
-      if (previousItem.lightMode.wallpaperPath !=
-              nextItem.lightMode.wallpaperPath ||
-          previousItem.darkMode.wallpaperPath !=
-              nextItem.darkMode.wallpaperPath) {
-        return false;
-      }
-    }
-    return true;
+    return _queryController.hasSamePreviewContent(
+      previous: previous,
+      next: next,
+    );
   }
 
   List<String> get _availableCategories {
-    final categories = _themeSummaries
-      .map((theme) => theme.category?.trim() ?? '')
-      .where((category) => category.isNotEmpty)
-      .toSet()
-      .toList(growable: false)..sort();
-    return categories;
+    return _queryController.availableCategories(_themeSummaries);
   }
 
   List<AdvancedThemeSummary> get _visibleThemes {
-    final keyword = _searchQuery.trim().toLowerCase();
-    final selectedCategory = _selectedCategory?.trim() ?? '';
-    return _themeSummaries
-        .where((theme) {
-          if (selectedCategory.isNotEmpty &&
-              (theme.category?.trim() ?? '') != selectedCategory) {
-            return false;
-          }
-          if (keyword.isEmpty) {
-            return true;
-          }
-          final haystacks = <String>[
-            theme.name,
-            theme.category ?? '',
-          ].map((item) => item.toLowerCase());
-          return haystacks.any((item) => item.contains(keyword));
-        })
-        .toList(growable: false);
+    return _queryController.visibleThemes(
+      summaries: _themeSummaries,
+      searchQuery: _searchQuery,
+      selectedCategory: _selectedCategory,
+    );
   }
 
   List<AdvancedThemeSummary> get _selectedVisibleThemes {
@@ -479,18 +376,20 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   }
 
   bool get _allVisibleThemesSelected {
-    final visibleThemes = _visibleThemes;
-    return visibleThemes.isNotEmpty &&
-        visibleThemes.every((theme) => _selectedThemeIds.contains(theme.id));
+    return _queryController.areAllVisibleThemesSelected(
+      visibleThemes: _visibleThemes,
+      selectedThemeIds: _selectedThemeIds,
+    );
   }
 
   void _pruneSelectionForVisibleThemes() {
     if (!_isSelectionMode) {
       return;
     }
-    final visibleIds = _visibleThemes.map((theme) => theme.id).toSet();
-    _selectedThemeIds =
-        _selectedThemeIds.where((id) => visibleIds.contains(id)).toSet();
+    _selectedThemeIds = _queryController.pruneSelectedThemeIds(
+      visibleThemes: _visibleThemes,
+      selectedThemeIds: _selectedThemeIds,
+    );
     if (_selectedThemeIds.isEmpty) {
       _isSelectionMode = false;
     }
@@ -1196,6 +1095,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       },
     );
   }
+
   Future<void> _exportSelectedThemes() async {
     if (_isSaving) {
       return;
@@ -2039,110 +1939,15 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     BuildContext context, {
     required double topInset,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return ListView(
-      padding: EdgeInsets.fromLTRB(16, topInset + 18, 16, 24),
-      children: [
-        Container(
-          padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
-          decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(
-              color: colorScheme.outlineVariant.withValues(alpha: 0.5),
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: colorScheme.primary.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      'VIP',
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: colorScheme.primary,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Text(
-                '高级主题为会员专属功能',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '开通会员后可创建、导入、导出并管理高级主题，打造更完整的阅读界面风格。',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                  height: 1.5,
-                ),
-              ),
-              const SizedBox(height: 16),
-              FilledButton(
-                onPressed: () => context.push('/membership'),
-                child: const Text('前往会员页'),
-              ),
-            ],
-          ),
-        ),
-      ],
+    return AdvancedThemeVipLockedState(
+      topInset: topInset,
+      onOpenMembership: () => context.push('/membership'),
     );
   }
 
   Widget _buildSavingProgressCard(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 280),
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 24),
-        padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
-        decoration: BoxDecoration(
-          color: colorScheme.surface,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.45),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            const SizedBox(
-              width: 22,
-              height: 22,
-              child: CircularProgressIndicator(strokeWidth: 2.6),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Text(
-                _savingStatusText ?? '处理中...',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-              ),
-            ),
-          ],
-        ),
-      ),
+    return AdvancedThemeSavingProgressCard(
+      statusText: _savingStatusText ?? '处理中...',
     );
   }
 
@@ -2233,164 +2038,37 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
             : '筛选结果 $visibleThemeCount';
     final activeLabel =
         activeThemeName == null ? '当前启用: 未启用' : '当前启用: $activeThemeName';
-    return Row(
-      children: [
-        Expanded(
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: _buildStatusBubble(context, countLabel),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: _buildStatusBubble(context, activeLabel),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatusBubble(BuildContext context, String label) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow.withValues(alpha: 0.92),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.45),
-        ),
-      ),
-      child: Text(
-        label,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: colorScheme.onSurfaceVariant,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
+    return AdvancedThemeListStatusRow(
+      countLabel: countLabel,
+      activeLabel: activeLabel,
     );
   }
 
   Widget _buildSearchBar(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final selectedCategory = _selectedCategory?.trim();
-    final categoryLabel =
-        selectedCategory == null || selectedCategory.isEmpty
-            ? '全部分类'
-            : selectedCategory;
-    final textScale = MediaQuery.textScalerOf(context).scale(1);
-    final shouldUseCompactCategoryLabel =
-        categoryLabel == '全部分类' && textScale > 1.1;
-    final categoryControlFlex = shouldUseCompactCategoryLabel ? 3 : 2;
-    return Row(
-      children: [
-        Flexible(
-          flex: shouldUseCompactCategoryLabel ? 4 : 5,
-          child: CompactCollectionSearchField(
-            controller: _searchController,
-            hintText: '搜索主题名称或分类',
-            query: _searchQuery,
-            onChanged: (value) {
-              setState(() {
-                _searchQuery = value;
-                _pruneSelectionForVisibleThemes();
-              });
-            },
-            onClear: () {
-              _searchController.clear();
-              setState(() {
-                _searchQuery = '';
-                _pruneSelectionForVisibleThemes();
-              });
-            },
-          ),
-        ),
-        const SizedBox(width: 8),
-        Flexible(
-          flex: categoryControlFlex,
-          child: PopupMenuButton<String?>(
-            tooltip: '分类筛选',
-            initialValue: _selectedCategory,
-            onSelected: (value) {
-              setState(() {
-                _selectedCategory =
-                    value?.trim().isEmpty ?? true ? null : value;
-                _pruneSelectionForVisibleThemes();
-              });
-            },
-            itemBuilder:
-                (context) => <PopupMenuEntry<String?>>[
-                  const PopupMenuItem<String?>(
-                    value: null,
-                    child: Center(child: Text('全部分类')),
-                  ),
-                  ..._availableCategories.map(
-                    (category) => PopupMenuItem<String?>(
-                      value: category,
-                      child: Center(child: Text(category)),
-                    ),
-                  ),
-                ],
-            child: Container(
-              height: 40,
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              decoration: BoxDecoration(
-                color: colorScheme.surfaceContainerLowest.withValues(
-                  alpha: 0.92,
-                ),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: colorScheme.outlineVariant.withValues(alpha: 0.28),
-                ),
-              ),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(left: 4, right: 18),
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        categoryLabel,
-                        maxLines: 1,
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w600,
-                          fontSize:
-                              math
-                                  .max(
-                                    11,
-                                    (Theme.of(
-                                              context,
-                                            ).textTheme.bodySmall?.fontSize ??
-                                            12) -
-                                        (shouldUseCompactCategoryLabel ? 1 : 0),
-                                  )
-                                  .toDouble(),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      size: 16,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
+    return AdvancedThemeListToolbar(
+      searchController: _searchController,
+      searchQuery: _searchQuery,
+      selectedCategory: _selectedCategory,
+      availableCategories: _availableCategories,
+      onSearchChanged: (value) {
+        setState(() {
+          _searchQuery = value;
+          _pruneSelectionForVisibleThemes();
+        });
+      },
+      onSearchCleared: () {
+        _searchController.clear();
+        setState(() {
+          _searchQuery = '';
+          _pruneSelectionForVisibleThemes();
+        });
+      },
+      onCategorySelected: (value) {
+        setState(() {
+          _selectedCategory = value?.trim().isEmpty ?? true ? null : value;
+          _pruneSelectionForVisibleThemes();
+        });
+      },
     );
   }
 
@@ -2398,11 +2076,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     final isFiltering =
         _searchQuery.trim().isNotEmpty ||
         (_selectedCategory?.trim().isNotEmpty ?? false);
-    return AppEmptyStateCard(
-      icon: Icons.palette_outlined,
-      title: isFiltering ? '没有匹配的主题' : '还没有高级主题',
-      description: isFiltering ? '换个关键词或分类试试。' : '点击右上角新增，就可以分别配置浅色和深色主题。',
-    );
+    return AdvancedThemeListEmptyState(isFiltering: isFiltering);
   }
 
   Widget _buildThemeCard(
@@ -2411,173 +2085,38 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     required bool isActive,
     bool compact = false,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
     final isSelected = _selectedThemeIds.contains(theme.id);
-    final showSelectedState = _isSelectionMode && isSelected;
     return Builder(
       builder:
-          (cardContext) => InkWell(
-            borderRadius: BorderRadius.circular(18),
+          (cardContext) => AdvancedThemeSummaryCard(
+            theme: theme,
+            isActive: isActive,
+            isSelected: isSelected,
+            isSelectionMode: _isSelectionMode,
+            isSaving: _isSaving,
+            compact: compact,
+            previewStrip: _buildDualModePreviewStrip(context, theme),
             onTap:
-                _isSaving
-                    ? null
-                    : _isSelectionMode
+                _isSelectionMode
                     ? () => _toggleThemeSelection(theme.id)
                     : _floatingEditEnabled
                     ? () => _openEditorDialog(theme.id)
                     : () => _openEditorWithReveal(cardContext, theme.id),
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-              decoration: BoxDecoration(
-                color:
-                    showSelectedState
-                        ? colorScheme.primary.withValues(alpha: 0.12)
-                        : isActive
-                        ? colorScheme.primary.withValues(alpha: 0.08)
-                        : colorScheme.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(
-                  color:
-                      showSelectedState
-                          ? colorScheme.primary.withValues(alpha: 0.72)
-                          : isActive
-                          ? colorScheme.primary.withValues(alpha: 0.55)
-                          : colorScheme.outlineVariant.withValues(alpha: 0.45),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      if (_isSelectionMode) ...[
-                        Checkbox(
-                          value: isSelected,
-                          onChanged:
-                              _isSaving
-                                  ? null
-                                  : (_) => _toggleThemeSelection(theme.id),
-                          visualDensity: const VisualDensity(
-                            horizontal: -4,
-                            vertical: -4,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    theme.name,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleSmall
-                                        ?.copyWith(fontWeight: FontWeight.w700),
-                                  ),
-                                ),
-                                if (isActive) ...[
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: colorScheme.primary,
-                                      borderRadius: BorderRadius.circular(999),
-                                    ),
-                                    child: Text(
-                                      '当前生效',
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.labelSmall?.copyWith(
-                                        color: colorScheme.onPrimary,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                            if ((theme.category?.trim().isNotEmpty ?? false))
-                              Padding(
-                                padding: const EdgeInsets.only(top: 4),
-                                child: Text(
-                                  theme.category!.trim(),
-                                  style: Theme.of(
-                                    context,
-                                  ).textTheme.bodySmall?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      if (!_isSelectionMode)
-                        PopupMenuButton<_AdvancedThemeAction>(
-                          enabled: !_isSaving,
-                          onSelected: (action) {
-                            switch (action) {
-                              case _AdvancedThemeAction.edit:
-                                _openEditor(theme.id);
-                              case _AdvancedThemeAction.duplicate:
-                                unawaited(_duplicateTheme(theme.id));
-                              case _AdvancedThemeAction.exportZip:
-                                unawaited(_exportThemeBundle(theme.id));
-                              case _AdvancedThemeAction.delete:
-                                unawaited(_handleDeleteThemeById(theme.id));
-                            }
-                          },
-                          itemBuilder:
-                              (context) => const [
-                                PopupMenuItem(
-                                  value: _AdvancedThemeAction.edit,
-                                  child: Text('编辑'),
-                                ),
-                                PopupMenuItem(
-                                  value: _AdvancedThemeAction.duplicate,
-                                  child: Text('复制'),
-                                ),
-                                PopupMenuItem(
-                                  value: _AdvancedThemeAction.exportZip,
-                                  child: Text('导出 ZIP'),
-                                ),
-                                PopupMenuItem(
-                                  value: _AdvancedThemeAction.delete,
-                                  child: Text('删除'),
-                                ),
-                              ],
-                        ),
-                    ],
-                  ),
-                  if (!compact) ...[
-                    const SizedBox(height: 10),
-                    _buildDualModePreviewStrip(context, theme),
-                  ],
-                  if (!_isSelectionMode && !compact) ...[
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        onPressed:
-                            _isSaving
-                                ? null
-                                : isActive
-                                ? _disableActiveTheme
-                                : () => unawaited(_applyThemeById(theme.id)),
-                        child: Text(isActive ? '停用主题' : '应用主题'),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
+            onSelectionChanged: (_) => _toggleThemeSelection(theme.id),
+            onActionSelected: (action) {
+              switch (action) {
+                case _AdvancedThemeAction.edit:
+                  _openEditor(theme.id);
+                case _AdvancedThemeAction.duplicate:
+                  unawaited(_duplicateTheme(theme.id));
+                case _AdvancedThemeAction.exportZip:
+                  unawaited(_exportThemeBundle(theme.id));
+                case _AdvancedThemeAction.delete:
+                  unawaited(_handleDeleteThemeById(theme.id));
+              }
+            },
+            onApplyPressed: () => unawaited(_applyThemeById(theme.id)),
+            onDisablePressed: _disableActiveTheme,
           ),
     );
   }

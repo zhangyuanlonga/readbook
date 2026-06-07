@@ -61,6 +61,8 @@ import '../../source/application/external_import_catalog.dart';
 import '../../source/application/external_import_diagnostics.dart';
 import '../../source/application/external_source_import_bridge.dart';
 import '../../source/application/remote_content_task_conflict_service.dart';
+import 'bookshelf_page_models.dart';
+import 'bookshelf_preference_mappers.dart';
 import 'widgets/bookshelf_grid_sliver.dart';
 import 'widgets/bookshelf_page_sections.dart';
 import 'widgets/bookshelf_settings_switch_tile.dart';
@@ -71,7 +73,7 @@ part 'bookshelf_page_selection.dart';
 
 typedef _BookshelfFilter = BookshelfFilter;
 
-enum _BookshelfMoreAction { selectBooks, sortBooks, settings, importLocal }
+typedef _BookshelfMoreAction = BookshelfMoreAction;
 
 typedef _BookshelfSortMode = BookshelfSortMode;
 
@@ -79,38 +81,17 @@ typedef _BookshelfReadingStatus = BookReadingStatus;
 
 typedef _BookshelfViewKind = BookshelfViewKind;
 
-enum _BookshelfGridVisualStyle { standard, overlayTitle, coverOnly }
+typedef _BookshelfGridVisualStyle = BookshelfGridVisualStyle;
 
-enum _BookshelfProgressInfoMode { progressBar, unreadChapters }
+typedef _BookshelfProgressInfoMode = BookshelfProgressInfoMode;
 
-enum _BookshelfBookMoreAction {
-  detail,
-  edit,
-  tags,
-  category,
-  readingQueue,
-  select,
-  delete,
-}
+typedef _BookshelfBookMoreAction = BookshelfBookMoreAction;
 
-class _BookTagEditorResult {
-  const _BookTagEditorResult({required this.tags, required this.createdItems});
+typedef _BookTagEditorResult = BookTagEditorResult;
 
-  final List<String> tags;
-  final List<BookshelfTaxonomyItem> createdItems;
-}
+typedef _BookCategoryEditorResult = BookCategoryEditorResult;
 
-class _BookCategoryEditorResult {
-  const _BookCategoryEditorResult({
-    required this.category,
-    required this.createdItems,
-  });
-
-  final String? category;
-  final List<BookshelfTaxonomyItem> createdItems;
-}
-
-enum _BookshelfSearchQuickFilterContent { none, tags, categories }
+typedef _BookshelfSearchQuickFilterContent = BookshelfSearchQuickFilterContent;
 
 typedef _BookshelfBatchAction = BookshelfBatchAction;
 typedef _BookshelfSelectionState = BookshelfSelectionState;
@@ -145,44 +126,7 @@ List<String> mergeBookshelfTaxonomyNames({
 
 typedef _BookshelfViewSelection = BookshelfViewSelection;
 
-class _BookshelfProgressDisplay {
-  const _BookshelfProgressDisplay({
-    required this.progressValue,
-    required this.summaryText,
-    required this.trailingLabel,
-    required this.unreadLabel,
-    required this.hasProgress,
-    required this.hasUnreadChapters,
-  });
-
-  final double progressValue;
-  final String summaryText;
-  final String trailingLabel;
-  final String unreadLabel;
-  final bool hasProgress;
-  final bool hasUnreadChapters;
-
-  @override
-  bool operator ==(Object other) {
-    return other is _BookshelfProgressDisplay &&
-        other.progressValue == progressValue &&
-        other.summaryText == summaryText &&
-        other.trailingLabel == trailingLabel &&
-        other.unreadLabel == unreadLabel &&
-        other.hasProgress == hasProgress &&
-        other.hasUnreadChapters == hasUnreadChapters;
-  }
-
-  @override
-  int get hashCode => Object.hash(
-    progressValue,
-    summaryText,
-    trailingLabel,
-    unreadLabel,
-    hasProgress,
-    hasUnreadChapters,
-  );
-}
+typedef _BookshelfProgressDisplay = BookshelfProgressDisplay;
 
 class _BookshelfAnimatedProgressSection extends StatefulWidget {
   const _BookshelfAnimatedProgressSection({
@@ -6173,132 +6117,61 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }
 
   _BookshelfSortMode _sortModeFromStorageValue(String value) {
-    return switch (value) {
-      BookshelfService.recentReadSortMode => _BookshelfSortMode.recentRead,
-      BookshelfService.readingProgressSortMode =>
-        _BookshelfSortMode.readingProgress,
-      BookshelfService.createdAtSortMode => _BookshelfSortMode.createdAt,
-      BookshelfService.authorSortMode => _BookshelfSortMode.author,
-      BookshelfService.titleSortMode => _BookshelfSortMode.title,
-      _ => _BookshelfSortMode.defaultOrder,
-    };
+    return sortModeFromStorageValue(value);
   }
 
   _BookshelfGridVisualStyle _gridVisualStyleFromStorageValue(String value) {
-    return switch (value) {
-      BookshelfService.gridOverlayTitleVisualStyle =>
-        _BookshelfGridVisualStyle.overlayTitle,
-      BookshelfService.gridCoverOnlyVisualStyle =>
-        _BookshelfGridVisualStyle.coverOnly,
-      _ => _BookshelfGridVisualStyle.standard,
-    };
+    return gridVisualStyleFromStorageValue(value);
   }
 
   String _gridVisualStyleStorageValue(_BookshelfGridVisualStyle value) {
-    return switch (value) {
-      _BookshelfGridVisualStyle.standard =>
-        BookshelfService.gridStandardVisualStyle,
-      _BookshelfGridVisualStyle.overlayTitle =>
-        BookshelfService.gridOverlayTitleVisualStyle,
-      _BookshelfGridVisualStyle.coverOnly =>
-        BookshelfService.gridCoverOnlyVisualStyle,
-    };
+    return gridVisualStyleStorageValue(value);
   }
 
   _BookshelfProgressInfoMode _progressInfoModeFromStorageValue(String value) {
-    return switch (value) {
-      BookshelfService.progressInfoModeUnreadChapters =>
-        _BookshelfProgressInfoMode.unreadChapters,
-      _ => _BookshelfProgressInfoMode.progressBar,
-    };
+    return progressInfoModeFromStorageValue(value);
   }
 
   String _progressInfoModeStorageValue(_BookshelfProgressInfoMode value) {
-    return switch (value) {
-      _BookshelfProgressInfoMode.progressBar =>
-        BookshelfService.progressInfoModeProgressBar,
-      _BookshelfProgressInfoMode.unreadChapters =>
-        BookshelfService.progressInfoModeUnreadChapters,
-    };
+    return progressInfoModeStorageValue(value);
   }
 
   String _progressInfoModeLabel(_BookshelfProgressInfoMode value) {
-    return switch (value) {
-      _BookshelfProgressInfoMode.progressBar => '进度条',
-      _BookshelfProgressInfoMode.unreadChapters => '未读章节数',
-    };
+    return progressInfoModeLabel(value);
   }
 
   String _gridVisualStyleLabel(_BookshelfGridVisualStyle value) {
-    return switch (value) {
-      _BookshelfGridVisualStyle.standard => '标准',
-      _BookshelfGridVisualStyle.overlayTitle => '封面叠字',
-      _BookshelfGridVisualStyle.coverOnly => '仅封面',
-    };
+    return gridVisualStyleLabel(value);
   }
 
   String _sortModeStorageValue(_BookshelfSortMode mode) {
-    return switch (mode) {
-      _BookshelfSortMode.defaultOrder => BookshelfService.defaultSortMode,
-      _BookshelfSortMode.recentRead => BookshelfService.recentReadSortMode,
-      _BookshelfSortMode.readingProgress =>
-        BookshelfService.readingProgressSortMode,
-      _BookshelfSortMode.createdAt => BookshelfService.createdAtSortMode,
-      _BookshelfSortMode.author => BookshelfService.authorSortMode,
-      _BookshelfSortMode.title => BookshelfService.titleSortMode,
-    };
+    return sortModeStorageValue(mode);
   }
 
   String _sortModeLabel(_BookshelfSortMode mode) {
-    return switch (mode) {
-      _BookshelfSortMode.defaultOrder => '默认排序',
-      _BookshelfSortMode.recentRead => '最近阅读',
-      _BookshelfSortMode.readingProgress => '阅读进度',
-      _BookshelfSortMode.createdAt => '创建时间',
-      _BookshelfSortMode.author => '作者',
-      _BookshelfSortMode.title => '书名',
-    };
+    return sortModeLabel(mode);
   }
 
   String _sortModeDescription(_BookshelfSortMode mode) {
-    return switch (mode) {
-      _BookshelfSortMode.defaultOrder => '优先按最近阅读，其次按加入书架时间。',
-      _BookshelfSortMode.recentRead => '最近打开或更新阅读位置的书籍排在前面。',
-      _BookshelfSortMode.readingProgress => '按当前阅读进度从高到低排序。',
-      _BookshelfSortMode.createdAt => '按加入书架时间从新到旧排序。',
-      _BookshelfSortMode.author => '按作者名称排序，缺少作者信息的书排在后面。',
-      _BookshelfSortMode.title => '按书名排序，相同书名再按加入时间兜底。',
-    };
+    return sortModeDescription(mode);
   }
 
   _BookshelfSearchQuickFilterContent _searchQuickFilterContentFromStorageValue(
     String value,
   ) {
-    return switch (value) {
-      'tags' => _BookshelfSearchQuickFilterContent.tags,
-      'categories' => _BookshelfSearchQuickFilterContent.categories,
-      _ => _BookshelfSearchQuickFilterContent.none,
-    };
+    return searchQuickFilterContentFromStorageValue(value);
   }
 
   String _searchQuickFilterContentStorageValue(
     _BookshelfSearchQuickFilterContent value,
   ) {
-    return switch (value) {
-      _BookshelfSearchQuickFilterContent.tags => 'tags',
-      _BookshelfSearchQuickFilterContent.categories => 'categories',
-      _BookshelfSearchQuickFilterContent.none => 'none',
-    };
+    return searchQuickFilterContentStorageValue(value);
   }
 
   String _searchQuickFilterContentLabel(
     _BookshelfSearchQuickFilterContent value,
   ) {
-    return switch (value) {
-      _BookshelfSearchQuickFilterContent.tags => '标签',
-      _BookshelfSearchQuickFilterContent.categories => '分类',
-      _BookshelfSearchQuickFilterContent.none => '不显示',
-    };
+    return searchQuickFilterContentLabel(value);
   }
 
   Future<Map<String, int>> _loadSourceTypeMap() async {
@@ -6679,21 +6552,12 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final record = _continueReadingRecord;
     final visible = record != null && !_isSelectionMode;
 
-    return IgnorePointer(
-      ignoring: !visible,
-      child: AnimatedSlide(
-        duration: const Duration(milliseconds: 240),
-        curve: Curves.easeOutCubic,
-        offset: visible ? Offset.zero : const Offset(0, 1.15),
-        child: AnimatedOpacity(
-          duration: const Duration(milliseconds: 180),
-          opacity: visible ? 1 : 0,
-          child:
-              record == null
-                  ? const SizedBox.shrink()
-                  : _buildContinueReadingCard(record),
-        ),
-      ),
+    return BookshelfContinueReadingPromptCard(
+      visible: visible,
+      child:
+          record == null
+              ? const SizedBox.shrink()
+              : _buildContinueReadingCard(record),
     );
   }
 
