@@ -62,7 +62,7 @@
 | 书架 | 分类元数据 | `bookshelf.category_metadata.v1` | JSON 列表 | 数据库 | 中 |
 | 书架 | 基础筛选顺序 | `bookshelf.base_filter_order` | JSON 列表 | 轻量索引 / 数据库 | 中 |
 | 远程访问 | 远端能力快照 | `remote.access.snapshot.v1.<userId>` | JSON 对象 | 可保留或后续表化 | 中 |
-| 阅读器 | TXT 章节规则 | `reader.local.txt.chapterRules` | JSON 对象 | 数据库或独立文件 | 中 |
+| 阅读器 | TXT 章节规则 | `reader.local.txt.chapterRules` | 已退役旧 JSON 对象，parser 不再读取 | 不迁移；内置规则随版本发布 | 低 |
 | 阅读器 | 阅读进度 | `reader.progress.<bookId>` | JSON 对象，按书增长 | 数据库 | 高 |
 | 阅读器 | TOC 快照 | `reader.tocSnapshot.<bookId>` | JSON 对象，按书增长 | 数据库 / 缓存边界重判 | 高 |
 | 阅读器 | 自定义背景图列表 | `reader.settings.customBackgroundImages` | JSON 列表 | 托管文件索引 | 中 |
@@ -75,6 +75,7 @@
 
 - `reader.settings.backgroundImageBase64` 虽然不是 JSON，但名字和历史语义表明它存在“大字符串 / 资产误存偏好”的风险，应在后续盘点中视作高风险存量
 - `mine.profile.avatar.path.<userId>` 当前只保存路径字符串，不属于 JSON 聚合，但路径本体仍应视作用户资产绑定
+- `reader.local.txt.chapterRules` 是早期 TXT 用户自定义章节正则残留。2026-06-07 起已退役，`TxtChapterRuleService` 只返回内置规则；旧 key 不做迁移，后续不允许恢复为长期 storage baseline。
 
 ## 3. 数据库盘点
 

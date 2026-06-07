@@ -433,6 +433,15 @@ Windows 下 cache / Drift 相关测试需要当前命令进程 PATH 包含 `buil
 | MOBI parser | `lib/features/reader/application/local/kindle_local_book_parser.dart` | 300 行 | `dart_mobi` 读取 rawml / 资源 / metadata 后转本地章节 | 代码量可控，但底层库成熟度不足。 |
 | PDF parser | `lib/features/reader/application/local/pdf_local_book_parser.dart` | 279 行 | 页索引、移动端文本抽取、按页懒解析 | 抽象层设计合理，但与 `pdfrx` / `pdfium_dart` 多库并存，需要统一路线。 |
 
+### 本地阅读导入到解析规范化（2026-06-07）
+
+本轮按“用户导入 -> 受管存储 -> 索引 -> parser input -> 章节内容 -> 阅读器”重新固定本地阅读链路，新增专项文档 [本地阅读导入到解析规范化计划](local_reading_import_parse_standardization_plan_2026-06-07.md)。
+
+- TXT 自定义章节规则旧设计已退役：`reader.local.txt.chapterRules` 不再读取、不再写入，也不再作为 storage guard baseline。
+- TXT parser 仍保留项目内实现，原因是中文网文章节规则、多编码、超大文件 offset 懒加载和长章节拆分暂时没有成熟库能整体替代。
+- EPUB 已引入 `epub_pro` 作为成熟库 adapter。生产 parser 只在 adapter 输出章节形态与现有 parser 等价、且不是 fixed-layout 时采用 `epub_pro` 索引；同一 xhtml 多 fragment、fixed-layout、inline image、ReaderDocument 复杂章节仍回退项目 parser。
+- Web 本地图书后续必须以 `LocalBookParserInput.webUploadedBytes` 为核心补齐 bytes / IndexedDB / 刷新恢复语义，不能依赖 `dart:io File`。
+
 #### 过度设计 / 手搓风险
 
 | 风险 | 证据 | 判断 | 建议 |

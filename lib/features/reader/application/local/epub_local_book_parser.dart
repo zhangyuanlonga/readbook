@@ -16,6 +16,7 @@ import '../../../../domain/entities/local_chapter.dart';
 import '../../../../domain/entities/reader_document.dart';
 import 'local_text_encoding_detector.dart';
 import 'local_book_parser.dart';
+import 'epub_pro_local_book_adapter.dart';
 
 /// EPUB 解析当前保留定制实现，以维持 ReaderDocument、inline image、
 /// fixed-layout 信号和本地资源物化的既有输出。
@@ -27,8 +28,10 @@ class EpubLocalBookParser implements LocalBookParser {
     LocalTextEncodingDetector textEncodingDetector =
         const LocalTextEncodingDetector(),
     EpubArchiveDecoder archiveDecoder = const EpubArchiveDecoder(),
+    EpubProLocalBookAdapter epubProAdapter = const EpubProLocalBookAdapter(),
   }) : _textEncodingDetector = textEncodingDetector,
-       _archiveDecoder = archiveDecoder;
+       _archiveDecoder = archiveDecoder,
+       _epubProAdapter = epubProAdapter;
 
   static const List<String> _supportedExtensions = <String>[
     '.xhtml',
@@ -69,6 +72,7 @@ class EpubLocalBookParser implements LocalBookParser {
 
   final LocalTextEncodingDetector _textEncodingDetector;
   final EpubArchiveDecoder _archiveDecoder;
+  final EpubProLocalBookAdapter _epubProAdapter;
   static final LinkedHashMap<String, _LoadedEpubArchive> _archiveCache =
       LinkedHashMap<String, _LoadedEpubArchive>();
   static const int _maxArchiveCacheEntries = 4;
@@ -133,12 +137,79 @@ class EpubLocalBookParser implements LocalBookParser {
     final parsedIndex = await Isolate.run<Map<String, Object?>>(
       () => EpubLocalBookParser()._parseArchiveBytesInBackground(bytes),
     );
+    final epubProIndex = await _tryParseIndexWithEpubPro(bytes);
+    final canUseEpubProIndex = _canUseEpubProIndex(
+      epubProIndex: epubProIndex,
+      fallbackPayload: parsedIndex,
+    );
     final coverPath = await _materializeCoverPathFromBackground(
       payload: parsedIndex,
       assetRootDir: assetDir,
     );
 
-    final rawChapters = (parsedIndex['chapters'] as List<Object?>? ??
+    final chapters =
+        canUseEpubProIndex
+            ? epubProIndex!.parsedBook.chapters
+            : _mapBackgroundChapters(parsedIndex);
+
+    if (chapters.isEmpty) {
+      throw AppException(
+        code: ErrorCode.ruleMatchEmpty,
+        stage: ErrorStage.content,
+        briefMessage: 'EPUB 未解析出正文章节，可能是受保护或结构异常文件。',
+      );
+    }
+    return LocalParsedBook(
+      chapters: chapters,
+      title:
+          canUseEpubProIndex
+              ? epubProIndex!.parsedBook.title
+              : _nullableMapString(parsedIndex['title']),
+      author:
+          canUseEpubProIndex
+              ? epubProIndex!.parsedBook.author
+              : _nullableMapString(parsedIndex['author']),
+      description: _nullableMapString(parsedIndex['description']),
+      coverPath: coverPath,
+    );
+  }
+
+  Future<EpubProAdapterResult?> _tryParseIndexWithEpubPro(
+    List<int> bytes,
+  ) async {
+    try {
+      return await _epubProAdapter.parseIndex(bytes);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  bool _canUseEpubProIndex({
+    required EpubProAdapterResult? epubProIndex,
+    required Map<String, Object?> fallbackPayload,
+  }) {
+    if (epubProIndex == null || epubProIndex.parsedBook.chapters.isEmpty) {
+      return false;
+    }
+    final fallbackChapters = _mapBackgroundChapters(fallbackPayload);
+    if (fallbackChapters.isEmpty) {
+      return true;
+    }
+    if (fallbackChapters.any(
+      (chapter) => chapter.contentType == 'epub-fixed',
+    )) {
+      return false;
+    }
+    if (fallbackChapters.length != epubProIndex.parsedBook.chapters.length) {
+      return false;
+    }
+    return true;
+  }
+
+  List<LocalParsedChapter> _mapBackgroundChapters(
+    Map<String, Object?> payload,
+  ) {
+    final rawChapters = (payload['chapters'] as List<Object?>? ??
             const <Object?>[])
         .whereType<Map>()
         .toList(growable: false);
@@ -159,21 +230,7 @@ class EpubLocalBookParser implements LocalBookParser {
         ),
       );
     }
-
-    if (chapters.isEmpty) {
-      throw AppException(
-        code: ErrorCode.ruleMatchEmpty,
-        stage: ErrorStage.content,
-        briefMessage: 'EPUB 未解析出正文章节，可能是受保护或结构异常文件。',
-      );
-    }
-    return LocalParsedBook(
-      chapters: chapters,
-      title: _nullableMapString(parsedIndex['title']),
-      author: _nullableMapString(parsedIndex['author']),
-      description: _nullableMapString(parsedIndex['description']),
-      coverPath: coverPath,
-    );
+    return chapters;
   }
 
   Map<String, Object?> _parseArchiveBytesInBackground(List<int> bytes) {

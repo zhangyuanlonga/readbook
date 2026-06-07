@@ -6,6 +6,8 @@ import 'package:shuxiang_reading_next/domain/entities/local_book.dart';
 import 'package:shuxiang_reading_next/domain/entities/local_chapter.dart';
 import 'package:shuxiang_reading_next/domain/entities/reader_document.dart';
 import 'package:shuxiang_reading_next/features/reader/application/local/epub_local_book_parser.dart';
+import 'package:shuxiang_reading_next/features/reader/application/local/epub_pro_local_book_adapter.dart';
+import 'package:shuxiang_reading_next/features/reader/application/local/local_book_parser.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -347,7 +349,83 @@ void main() {
         'chapter2',
         'chapter10',
       ]);
+      expect(result.chapters.map((chapter) => chapter.sourceRef), <String>[
+        'OPS/chapter2.xhtml',
+        'OPS/chapter10.xhtml',
+      ]);
     });
+
+    test(
+      'uses epub_pro index only when it matches fallback chapter shape',
+      () async {
+        final archive =
+            Archive()
+              ..addFile(
+                ArchiveFile(
+                  'OPS/chapter1.xhtml',
+                  0,
+                  utf8.encode(
+                    '<html><body><h1>第一章</h1><p>第一章内容。</p></body></html>',
+                  ),
+                ),
+              )
+              ..addFile(
+                ArchiveFile(
+                  'OPS/chapter2.xhtml',
+                  0,
+                  utf8.encode(
+                    '<html><body><h1>第二章</h1><p>第二章内容。</p></body></html>',
+                  ),
+                ),
+              );
+        final encoded = ZipEncoder().encode(archive);
+        expect(encoded, isNotNull);
+
+        final file = File('${tempDir.path}/adapter_gate.epub');
+        await file.writeAsBytes(encoded);
+
+        final now = DateTime.parse('2026-02-23T12:00:00.000Z');
+        final parserWithAdapter = EpubLocalBookParser(
+          epubProAdapter: _FakeEpubProAdapter(
+            LocalParsedBook(
+              chapters: const <LocalParsedChapter>[
+                LocalParsedChapter(
+                  title: 'adapter 第一章',
+                  content: '',
+                  sourceRef: 'OPS/chapter1.xhtml',
+                ),
+                LocalParsedChapter(
+                  title: 'adapter 第二章',
+                  content: '',
+                  sourceRef: 'OPS/chapter2.xhtml',
+                ),
+              ],
+              title: 'adapter title',
+              author: 'adapter author',
+            ),
+          ),
+        );
+
+        final result = await parserWithAdapter.parse(
+          LocalBook(
+            id: 'local_epub_adapter_gate_1',
+            title: 'fallback title',
+            format: LocalBookFormat.epub,
+            storagePath: file.path,
+            fileSize: await file.length(),
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
+
+        expect(result.title, 'adapter title');
+        expect(result.author, 'adapter author');
+        expect(result.chapters.map((chapter) => chapter.title), <String>[
+          'adapter 第一章',
+          'adapter 第二章',
+        ]);
+      },
+    );
 
     test(
       'splits same xhtml into fragment-aware chapters from nav toc',
@@ -1241,4 +1319,20 @@ String _expectString(String? value) {
     throw StateError('Expected string to be non-null.');
   }
   return value;
+}
+
+class _FakeEpubProAdapter extends EpubProLocalBookAdapter {
+  const _FakeEpubProAdapter(this.parsedBook);
+
+  final LocalParsedBook parsedBook;
+
+  @override
+  Future<EpubProAdapterResult> parseIndex(List<int> bytes) async {
+    return EpubProAdapterResult(
+      parsedBook: parsedBook,
+      hasNavigation: true,
+      spineItemCount: parsedBook.chapters.length,
+      manifestItemCount: parsedBook.chapters.length,
+    );
+  }
 }

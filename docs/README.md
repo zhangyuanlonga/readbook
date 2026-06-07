@@ -105,6 +105,7 @@
 
 ## 阅读器专项
 
+- [本地阅读导入到解析规范化计划](local_reading_import_parse_standardization_plan_2026-06-07.md)
 - [阅读器本地内容重构执行计划](reader_local_content_refactor_execution_plan_2026-05-21.md)
 - [阅读器自动阅读执行计划](reader_auto_read_execution_plan_2026-05-24.md)
 - [阅读器多模态架构重构执行计划](reader_multimodal_architecture_refactor_execution_plan_2026-05-25.md)

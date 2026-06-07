@@ -5,7 +5,6 @@ import 'package:path/path.dart' as p;
 const Set<String> _approvedJsonBackedPreferenceWrites = <String>{
   'lib/app/navigation/bottom_nav_icon_gallery_service.dart|_galleriesKey',
   'lib/features/mine/application/advanced_theme_service.dart|_activeThemeAppearanceSnapshotKey',
-  'lib/features/reader/application/local/txt_chapter_rule_service.dart|_ruleStorageKey',
   'lib/features/reader/application/reader_preferences_service.dart|_customBackgroundImagesKey',
   'lib/features/reader/application/reader_preferences_service.dart|_recentBodyTextColorsKey',
   'lib/features/reader/application/reader_visual_overrides_service.dart|_visualOverridesKey',

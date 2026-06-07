@@ -18,7 +18,6 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | prefs-json | `lib/app/navigation/bottom_nav_icon_gallery_service.dart|_galleriesKey` | 底部导航图标图集集合索引，当前存储为小型 JSON 列表，图片本体走托管文件。 | 图集数量增长后 SharedPreferences 会膨胀；Web storage 容量和清缓存行为需解释。 | 迁移到文件索引或 Drift，继续保留图片本体托管文件目录。 | 图集索引迁出 SharedPreferences，并保留旧 key 兼容读取测试。 | 暂留 |
 | prefs-json | `lib/features/mine/application/advanced_theme_service.dart|_activeThemeAppearanceSnapshotKey` | 当前生效主题的轻量外观快照，用于启动预热和快速展示。 | 快照字段继续膨胀会变成隐形主题状态。 | 保持轻量；如果字段继续增长，迁入 typed preference 或主题索引文件。 | 快照只保留启动所需轻量字段，或迁出 SharedPreferences 并补旧 key 兼容。 | 暂留 |
-| prefs-json | `lib/features/reader/application/local/txt_chapter_rule_service.dart|_ruleStorageKey` | TXT 章节规则配置，属于小型用户规则集合。 | 规则集合增长或结构复杂后不适合继续 JSON prefs。 | 保持小型规则；如要支持多套规则、同步、排序，迁入 Drift / 文件索引。 | 规则集合表化或文件索引化，并补旧 key 迁移测试。 | 暂留 |
 | prefs-json | `lib/features/reader/application/reader_preferences_service.dart|_customBackgroundImagesKey` | 阅读器自定义背景图路径列表，图片本体不在 prefs。 | 路径列表与用户资产绑定，若继续扩展可能变成资源索引。 | 迁到 managed asset collection / 文件索引，prefs 只留当前选择。 | 背景图列表迁出 prefs，旧 key 兼容读取并清理。 | 暂留 |
 | prefs-json | `lib/features/reader/application/reader_preferences_service.dart|_recentBodyTextColorsKey` | 最近使用正文颜色列表，属于小型 UI 偏好。 | 风险低，但仍是 JSON prefs。 | 可改为 StringList / typed preference，或继续限制数量。 | 使用非 JSON typed key 或明确长期小型保留。 | 暂留 |
 | prefs-json | `lib/features/reader/application/reader_visual_overrides_service.dart|_visualOverridesKey` | 阅读器视觉 override，包含资源相对路径引用，当前通过 `ManagedAssetStore` 解析。 | 视觉配置字段可能膨胀；资源路径和旧 payload 兼容需要持续保护。 | 拆成 typed preference + managed asset ref，或迁入 reader settings 统一模型。 | override 迁入统一 reader settings / Drift / typed key，并补旧 payload 兼容测试。 | 暂留 |
@@ -32,6 +31,7 @@
 ## 3. 当前结论
 
 - 当前 baseline 没有新增 violation，但不是最终理想状态。
+- TXT 章节规则旧 baseline `lib/features/reader/application/local/txt_chapter_rule_service.dart|_ruleStorageKey` 已于 2026-06-07 移除。原因是用户自定义章节规则已经没有产品 UI 承接，继续读取旧 prefs 会导致同一本 TXT 在不同设备上解析结果不一致。
 - P0 风险集中在用户资产和资源目录：`advanced_themes`、阅读器背景图路径；`profile_avatars` 已迁入 `ManagedAssetStore` / policy，后续只保留旧路径兼容。
 - 低风险项是小型 UI 偏好：最近正文颜色仍应优先改为 typed preference / StringList；搜索历史已迁入 `PreferenceKey<List<String>>` 和 `StringList`，并保留旧 JSON 兼容读取。
 - 高级主题 presentation 层直接 `getTemporaryDirectory` 已迁入 application service；后续重点是把 service 内多个临时工作区收敛到统一 temp workspace service。

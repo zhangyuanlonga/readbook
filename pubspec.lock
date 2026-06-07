@@ -361,6 +361,14 @@ packages:
       url: "https://mirrors.tuna.tsinghua.edu.cn/dart-pub/"
     source: hosted
     version: "2.33.0"
+  epub_pro:
+    dependency: "direct main"
+    description:
+      name: epub_pro
+      sha256: "2f405dcf31e45abf4e714acf99ca85e6bea61643160f5a51239f3077f6d3f06a"
+      url: "https://mirrors.tuna.tsinghua.edu.cn/dart-pub/"
+    source: hosted
+    version: "5.6.0"
   equatable:
     dependency: transitive
     description:
@@ -1854,6 +1862,14 @@ packages:
       url: "https://mirrors.tuna.tsinghua.edu.cn/dart-pub/"
     source: hosted
     version: "0.5.1"
+  word_count:
+    dependency: transitive
+    description:
+      name: word_count
+      sha256: "98ccd8ef6d614bcf11a7e6d39d43d08193a3a42d360104234018d1dfb86c413d"
+      url: "https://mirrors.tuna.tsinghua.edu.cn/dart-pub/"
+    source: hosted
+    version: "1.0.4"
   xdg_directories:
     dependency: transitive
     description:
