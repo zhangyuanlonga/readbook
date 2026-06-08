@@ -7,6 +7,7 @@ class ReaderFailurePresentation {
     required this.allowRetry,
     required this.allowSourceSwitch,
     required this.allowWebLogin,
+    required this.allowWebViewTask,
   });
 
   final String message;
@@ -14,6 +15,7 @@ class ReaderFailurePresentation {
   final bool allowRetry;
   final bool allowSourceSwitch;
   final bool allowWebLogin;
+  final bool allowWebViewTask;
 }
 
 class ReaderFailurePresentationService {
@@ -28,8 +30,8 @@ class ReaderFailurePresentationService {
             : error.briefMessage.trim();
     final message =
         actionHint.isEmpty ? baseMessage : '$baseMessage\n$actionHint';
-    final allowWebLogin =
-        failure?.isLoginRequired == true || failure?.isWebViewRequired == true;
+    final allowWebLogin = failure?.isLoginRequired == true;
+    final allowWebViewTask = failure?.isWebViewRequired == true;
     final retryable = failure?.retryable ?? true;
 
     return ReaderFailurePresentation(
@@ -37,12 +39,15 @@ class ReaderFailurePresentationService {
       primaryActionLabel:
           allowWebLogin
               ? '网页登录'
+              : allowWebViewTask
+              ? 'WebView 渲染'
               : retryable
               ? '重试'
               : '换源',
       allowRetry: retryable,
       allowSourceSwitch: true,
       allowWebLogin: allowWebLogin,
+      allowWebViewTask: allowWebViewTask,
     );
   }
 }

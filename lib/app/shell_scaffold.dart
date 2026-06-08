@@ -479,14 +479,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     }
 
     return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLowest.withValues(alpha: 0.98),
-        border: Border(
-          bottom: BorderSide(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.62),
-          ),
-        ),
-      ),
+      decoration: BoxDecoration(color: colorScheme.surface),
       child: SafeArea(
         bottom: false,
         left: false,
@@ -622,6 +615,9 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     final menuController = MenuController();
     return MenuAnchor(
       controller: menuController,
+      alignmentOffset: const Offset(0, 10),
+      animated: true,
+      style: _desktopPopoverMenuStyle(colorScheme),
       menuChildren:
           actions == null
               ? const <Widget>[]
@@ -634,7 +630,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
       builder: (menuContext, controller, child) {
         return Material(
           key: const ValueKey<String>('desktop_bookshelf_view_selector'),
-          color: colorScheme.surfaceContainerLow,
+          color: colorScheme.surfaceContainerLowest,
           borderRadius: BorderRadius.circular(999),
           child: InkWell(
             borderRadius: BorderRadius.circular(999),
@@ -690,109 +686,21 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     required DesktopBookshelfToolbarActions? actions,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
+    final menuController = MenuController();
     return MenuAnchor(
+      controller: menuController,
+      alignmentOffset: const Offset(0, 10),
+      animated: true,
+      style: _desktopPopoverMenuStyle(
+        colorScheme,
+      ).copyWith(alignment: AlignmentDirectional.bottomEnd),
       menuChildren:
           actions == null
               ? const <Widget>[]
               : [
-                SubmenuButton(
-                  leadingIcon: const Icon(Icons.sort_rounded),
-                  menuChildren: [
-                    if (actions.hasBooks)
-                      for (final option in actions.sortOptions)
-                        MenuItemButton(
-                          leadingIcon:
-                              option.selected
-                                  ? const Icon(Icons.check_rounded)
-                                  : const SizedBox(width: 24),
-                          onPressed:
-                              option.selected
-                                  ? null
-                                  : () =>
-                                      actions.onSortModeSelected(option.mode),
-                          child: Text(option.label),
-                        )
-                    else
-                      const MenuItemButton(
-                        onPressed: null,
-                        child: Text('暂无书籍'),
-                      ),
-                  ],
-                  child: const Text('排序方式'),
-                ),
-                SubmenuButton(
-                  leadingIcon: const Icon(Icons.view_comfy_alt_rounded),
-                  menuChildren: [
-                    MenuItemButton(
-                      leadingIcon:
-                          !actions.useGridView && !actions.useListTwoColumnMode
-                              ? const Icon(Icons.check_rounded)
-                              : const SizedBox(width: 24),
-                      onPressed:
-                          !actions.useGridView && !actions.useListTwoColumnMode
-                              ? null
-                              : () => actions.onViewModeSelected(false),
-                      child: const Text('列表'),
-                    ),
-                    MenuItemButton(
-                      leadingIcon:
-                          !actions.useGridView && actions.useListTwoColumnMode
-                              ? const Icon(Icons.check_rounded)
-                              : const SizedBox(width: 24),
-                      onPressed:
-                          !actions.useGridView && actions.useListTwoColumnMode
-                              ? null
-                              : () => actions.onListTwoColumnModeSelected(true),
-                      child: const Text('双列'),
-                    ),
-                    MenuItemButton(
-                      leadingIcon:
-                          actions.useGridView
-                              ? const Icon(Icons.check_rounded)
-                              : const SizedBox(width: 24),
-                      onPressed:
-                          actions.useGridView
-                              ? null
-                              : () => actions.onViewModeSelected(true),
-                      child: const Text('网格'),
-                    ),
-                  ],
-                  child: const Text('显示模式'),
-                ),
-                const Divider(height: 1),
-                MenuItemButton(
-                  leadingIcon: const Icon(Icons.checklist_rounded),
-                  onPressed:
-                      actions.hasFilteredBooks ? actions.onSelectBooks : null,
-                  child: const Text('选择书籍'),
-                ),
-                MenuItemButton(
-                  leadingIcon: const Icon(Icons.library_add_rounded),
-                  onPressed: actions.onImportLocal,
-                  child: const Text('导入图书'),
-                ),
-                SubmenuButton(
-                  leadingIcon: const Icon(Icons.tune_rounded),
-                  menuChildren: [
-                    for (final option
-                        in actions.useGridView
-                            ? actions.gridSettingOptions
-                            : actions.listSettingOptions)
-                      MenuItemButton(
-                        leadingIcon:
-                            option.selected
-                                ? const Icon(Icons.check_rounded)
-                                : const SizedBox(width: 24),
-                        onPressed:
-                            option.modeGroup == null
-                                ? () => option.onChanged(!option.selected)
-                                : option.selected
-                                ? null
-                                : () => option.onChanged(true),
-                        child: Text(option.label),
-                      ),
-                  ],
-                  child: Text(actions.useGridView ? '网格设置' : '列表设置'),
+                _DesktopBookshelfToolbarOptionsPanel(
+                  actions: actions,
+                  onClose: menuController.close,
                 ),
               ],
       builder: (menuContext, controller, child) {
@@ -846,8 +754,8 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
           controller: _desktopBookshelfSearchController,
           focusNode: _desktopBookshelfSearchFocusNode,
           hintText: '搜索当前书架',
-          backgroundColor: colorScheme.surfaceContainerLow,
-          outlineColor: colorScheme.outlineVariant,
+          backgroundColor: colorScheme.surfaceContainerLowest,
+          outlineColor: colorScheme.primary.withValues(alpha: 0.46),
           borderRadius: 999,
           onChanged:
               (value) =>
@@ -980,7 +888,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
                         color: colorScheme.error,
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: colorScheme.surfaceContainerLowest,
+                          color: colorScheme.surface,
                           width: 1.5,
                         ),
                       ),
@@ -1002,7 +910,27 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
       child: VerticalDivider(
         width: 1,
         thickness: 1,
-        color: colorScheme.outlineVariant.withValues(alpha: 0.86),
+        color: colorScheme.outlineVariant.withValues(alpha: 0.28),
+      ),
+    );
+  }
+
+  MenuStyle _desktopPopoverMenuStyle(ColorScheme colorScheme) {
+    return MenuStyle(
+      backgroundColor: WidgetStatePropertyAll(
+        colorScheme.surfaceContainerLowest,
+      ),
+      shadowColor: WidgetStatePropertyAll(
+        colorScheme.shadow.withValues(alpha: 0.12),
+      ),
+      surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+      elevation: const WidgetStatePropertyAll(8),
+      padding: const WidgetStatePropertyAll(EdgeInsets.zero),
+      shape: WidgetStatePropertyAll(
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      ),
+      side: WidgetStatePropertyAll(
+        BorderSide(color: colorScheme.outlineVariant.withValues(alpha: 0.28)),
       ),
     );
   }
@@ -1237,10 +1165,10 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
       width: width,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerLowest,
+          color: colorScheme.surface,
           border: Border(
             right: BorderSide(
-              color: colorScheme.outlineVariant.withValues(alpha: 0.72),
+              color: colorScheme.outlineVariant.withValues(alpha: 0.24),
             ),
           ),
         ),
@@ -1306,7 +1234,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Divider(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.74),
+            color: colorScheme.outlineVariant.withValues(alpha: 0.26),
             height: 1,
           ),
           const SizedBox(height: 18),
@@ -1450,14 +1378,15 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
   }
 
   Color _desktopSelectedNavBackground(ColorScheme colorScheme) {
+    final tintAlpha = colorScheme.brightness == Brightness.dark ? 0.16 : 0.08;
     return Color.alphaBlend(
-      colorScheme.onSurface.withValues(alpha: 0.04),
-      colorScheme.surfaceContainerLow,
+      colorScheme.primary.withValues(alpha: tintAlpha),
+      colorScheme.surface,
     );
   }
 
   Color _desktopDividerColor(ColorScheme colorScheme) {
-    return colorScheme.outline.withValues(alpha: 0.68);
+    return colorScheme.outlineVariant.withValues(alpha: 0.3);
   }
 
   Widget _desktopInkWell({
@@ -1963,6 +1892,619 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
   }
 }
 
+class _DesktopBookshelfToolbarOptionsPanel extends StatelessWidget {
+  const _DesktopBookshelfToolbarOptionsPanel({
+    required this.actions,
+    required this.onClose,
+  });
+
+  final DesktopBookshelfToolbarActions actions;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final settings =
+        actions.useGridView
+            ? actions.gridSettingOptions
+            : actions.listSettingOptions;
+    final panelWidth =
+        (MediaQuery.sizeOf(context).width - 48).clamp(320.0, 360.0).toDouble();
+    final maxHeight = MediaQuery.sizeOf(context).height * 0.72;
+
+    return SizedBox(
+      key: const ValueKey<String>('desktop_bookshelf_view_options_panel'),
+      width: panelWidth,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxHeight),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: colorScheme.primaryContainer.withValues(
+                        alpha: 0.62,
+                      ),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      Icons.tune_rounded,
+                      size: 17,
+                      color: colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '视图选项',
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '排序、布局和书架操作',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: '关闭',
+                    onPressed: onClose,
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Flexible(
+                child: SingleChildScrollView(
+                  primary: false,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _DesktopBookshelfOptionsSection(
+                        title: '排序方式',
+                        child:
+                            actions.hasBooks
+                                ? Column(
+                                  children: [
+                                    for (final option
+                                        in actions.sortOptions) ...[
+                                      _DesktopBookshelfSortOptionTile(
+                                        option: option,
+                                        onSelected:
+                                            option.selected
+                                                ? null
+                                                : () {
+                                                  onClose();
+                                                  actions.onSortModeSelected(
+                                                    option.mode,
+                                                  );
+                                                },
+                                      ),
+                                      if (option != actions.sortOptions.last)
+                                        const SizedBox(height: 8),
+                                    ],
+                                  ],
+                                )
+                                : const _DesktopBookshelfPanelEmpty(
+                                  label: '暂无书籍可排序',
+                                ),
+                      ),
+                      _DesktopBookshelfOptionsSection(
+                        title: '显示模式',
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: _DesktopBookshelfModeButton(
+                                icon: Icons.view_list_rounded,
+                                label: '列表',
+                                selected:
+                                    !actions.useGridView &&
+                                    !actions.useListTwoColumnMode,
+                                onTap:
+                                    !actions.useGridView &&
+                                            !actions.useListTwoColumnMode
+                                        ? null
+                                        : () {
+                                          onClose();
+                                          actions.onViewModeSelected(false);
+                                        },
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: _DesktopBookshelfModeButton(
+                                icon: Icons.view_week_rounded,
+                                label: '双列',
+                                selected:
+                                    !actions.useGridView &&
+                                    actions.useListTwoColumnMode,
+                                onTap:
+                                    !actions.useGridView &&
+                                            actions.useListTwoColumnMode
+                                        ? null
+                                        : () {
+                                          onClose();
+                                          actions.onListTwoColumnModeSelected(
+                                            true,
+                                          );
+                                        },
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: _DesktopBookshelfModeButton(
+                                icon: Icons.grid_view_rounded,
+                                label: '网格',
+                                selected: actions.useGridView,
+                                onTap:
+                                    actions.useGridView
+                                        ? null
+                                        : () {
+                                          onClose();
+                                          actions.onViewModeSelected(true);
+                                        },
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      _DesktopBookshelfOptionsSection(
+                        title: '书架操作',
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: _DesktopBookshelfCommandButton(
+                                icon: Icons.checklist_rounded,
+                                label: '选择书籍',
+                                enabled: actions.hasFilteredBooks,
+                                onTap: () {
+                                  onClose();
+                                  actions.onSelectBooks();
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: _DesktopBookshelfCommandButton(
+                                icon: Icons.library_add_rounded,
+                                label: '导入图书',
+                                primary: true,
+                                onTap: () {
+                                  onClose();
+                                  actions.onImportLocal();
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      _DesktopBookshelfOptionsSection(
+                        title: actions.useGridView ? '网格设置' : '列表设置',
+                        bottomPadding: 0,
+                        child:
+                            settings.isEmpty
+                                ? const _DesktopBookshelfPanelEmpty(
+                                  label: '暂无可用设置',
+                                )
+                                : Column(
+                                  children: [
+                                    for (final option in settings) ...[
+                                      _DesktopBookshelfSettingOptionTile(
+                                        option: option,
+                                      ),
+                                      if (option != settings.last)
+                                        const SizedBox(height: 6),
+                                    ],
+                                  ],
+                                ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DesktopBookshelfOptionsSection extends StatelessWidget {
+  const _DesktopBookshelfOptionsSection({
+    required this.title,
+    required this.child,
+    this.bottomPadding = 16,
+  });
+
+  final String title;
+  final Widget child;
+  final double bottomPadding;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomPadding),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            title,
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: colorScheme.onSurface,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _DesktopBookshelfSortOptionTile extends StatelessWidget {
+  const _DesktopBookshelfSortOptionTile({
+    required this.option,
+    required this.onSelected,
+  });
+
+  final DesktopBookshelfSortOption option;
+  final VoidCallback? onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final selected = option.selected;
+    final foreground =
+        selected ? colorScheme.primary : colorScheme.onSurfaceVariant;
+    final background =
+        selected
+            ? colorScheme.primaryContainer.withValues(alpha: 0.5)
+            : colorScheme.surface;
+    final borderColor =
+        selected
+            ? colorScheme.primary.withValues(alpha: 0.36)
+            : colorScheme.outlineVariant.withValues(alpha: 0.34);
+
+    return Material(
+      color: background,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onSelected,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: borderColor),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+            child: Row(
+              children: [
+                Icon(
+                  selected ? Icons.check_circle_rounded : Icons.sort_rounded,
+                  size: 19,
+                  color: foreground,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        option.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: selected ? colorScheme.primary : null,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        option.description,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DesktopBookshelfModeButton extends StatelessWidget {
+  const _DesktopBookshelfModeButton({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final foreground =
+        selected ? colorScheme.primary : colorScheme.onSurfaceVariant;
+    final background =
+        selected
+            ? colorScheme.primaryContainer.withValues(alpha: 0.56)
+            : colorScheme.surface;
+    final borderColor =
+        selected
+            ? colorScheme.primary.withValues(alpha: 0.38)
+            : colorScheme.outlineVariant.withValues(alpha: 0.34);
+
+    return Material(
+      color: background,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: borderColor),
+          ),
+          child: SizedBox(
+            height: 58,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 19, color: foreground),
+                const SizedBox(height: 5),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: selected ? colorScheme.primary : foreground,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DesktopBookshelfCommandButton extends StatelessWidget {
+  const _DesktopBookshelfCommandButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.enabled = true,
+    this.primary = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool enabled;
+  final bool primary;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final foreground =
+        primary ? colorScheme.primary : colorScheme.onSurfaceVariant;
+    final disabledForeground = colorScheme.onSurfaceVariant.withValues(
+      alpha: 0.38,
+    );
+    final background =
+        primary
+            ? colorScheme.primaryContainer.withValues(alpha: 0.48)
+            : colorScheme.surface;
+    final borderColor =
+        primary
+            ? colorScheme.primary.withValues(alpha: 0.28)
+            : colorScheme.outlineVariant.withValues(alpha: 0.34);
+
+    return Material(
+      color: enabled ? background : colorScheme.surface,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: enabled ? onTap : null,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color:
+                  enabled
+                      ? borderColor
+                      : colorScheme.outlineVariant.withValues(alpha: 0.22),
+            ),
+          ),
+          child: SizedBox(
+            height: 42,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  size: 18,
+                  color: enabled ? foreground : disabledForeground,
+                ),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: enabled ? foreground : disabledForeground,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DesktopBookshelfSettingOptionTile extends StatelessWidget {
+  const _DesktopBookshelfSettingOptionTile({required this.option});
+
+  final DesktopBookshelfDisplaySettingOption option;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final selected = option.selected;
+    final isModeOption = option.modeGroup != null;
+    final foreground =
+        selected ? colorScheme.primary : colorScheme.onSurfaceVariant;
+
+    return Material(
+      color:
+          selected
+              ? colorScheme.primaryContainer.withValues(alpha: 0.36)
+              : colorScheme.surface,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap:
+            isModeOption && selected
+                ? null
+                : () => option.onChanged(isModeOption ? true : !selected),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color:
+                  selected
+                      ? colorScheme.primary.withValues(alpha: 0.3)
+                      : colorScheme.outlineVariant.withValues(alpha: 0.28),
+            ),
+          ),
+          child: SizedBox(
+            height: 42,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
+              child: Row(
+                children: [
+                  Icon(
+                    isModeOption
+                        ? selected
+                            ? Icons.radio_button_checked_rounded
+                            : Icons.radio_button_unchecked_rounded
+                        : Icons.tune_rounded,
+                    size: 18,
+                    color: foreground,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      option.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: selected ? colorScheme.primary : null,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  if (isModeOption)
+                    Icon(
+                      selected
+                          ? Icons.check_rounded
+                          : Icons.chevron_right_rounded,
+                      size: 18,
+                      color: foreground,
+                    )
+                  else
+                    Checkbox(
+                      value: selected,
+                      onChanged:
+                          (value) => option.onChanged(value ?? !selected),
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DesktopBookshelfPanelEmpty extends StatelessWidget {
+  const _DesktopBookshelfPanelEmpty({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.28),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+        child: Text(
+          label,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _DesktopBookshelfLibraryPicker extends StatefulWidget {
   const _DesktopBookshelfLibraryPicker({
     required this.actions,
@@ -2249,7 +2791,7 @@ class _DesktopBookshelfLibraryFilterChip extends StatelessWidget {
         color:
             selected
                 ? accentColor.withValues(alpha: 0.72)
-                : colorScheme.outlineVariant.withValues(alpha: 0.72),
+                : colorScheme.outlineVariant.withValues(alpha: 0.38),
       ),
       onSelected:
           action.enabled && !selected ? (_) => onSelected(action) : null,

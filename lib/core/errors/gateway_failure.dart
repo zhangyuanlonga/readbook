@@ -150,7 +150,7 @@ class GatewayFailure {
       return '该书源需要登录或登录态已失效，可先用客户端 WebView 完成登录并提交会话，再重试或切换其他书源。';
     }
     if (isWebViewRequired) {
-      return '该书源依赖 WebView/浏览器环境，可尝试在客户端完成网页登录并提交 Cookie；仍失败时建议切换书源。';
+      return '该书源依赖 WebView/浏览器环境，可在客户端执行 WebView 渲染任务后重试；仍失败时建议切换书源。';
     }
     if (isAntiSpider) {
       return '疑似触发反爬或限流，可稍后重试、降低并发，或切换其他书源。';

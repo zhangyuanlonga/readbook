@@ -56,8 +56,6 @@ class _MinePageState extends ConsumerState<MinePage> {
   String? _localAvatarPath;
   DateTime? _vipExpireAt;
   String? _membershipPlanType;
-  int _totalReadingHours = 0;
-  int _readingStreakDays = 0;
   bool _hasMembership = false;
   bool _hasThemeCustom = false;
   bool _isRemoteAccessResolved = false;
@@ -194,8 +192,6 @@ class _MinePageState extends ConsumerState<MinePage> {
     _localAvatarPath = null;
     _vipExpireAt = null;
     _membershipPlanType = null;
-    _totalReadingHours = 0;
-    _readingStreakDays = 0;
     _hasMembership = false;
     _hasThemeCustom = false;
     _isRemoteAccessResolved = remoteAccessResolved;
@@ -269,8 +265,6 @@ class _MinePageState extends ConsumerState<MinePage> {
         _localAvatarPath = snapshot.localAvatarPath;
         _vipExpireAt = snapshot.vipExpireAt;
         _membershipPlanType = snapshot.membershipPlanType;
-        _totalReadingHours = snapshot.totalReadingHours;
-        _readingStreakDays = snapshot.readingStreakDays;
       }
     });
     if (snapshot.session == null) {

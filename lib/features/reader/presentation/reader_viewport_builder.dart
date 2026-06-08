@@ -29,6 +29,8 @@ class ReaderViewportBodyState {
     required this.showTransientLoadingGap,
     required this.hasRenderableContent,
     this.errorText,
+    this.primaryActionLabel,
+    this.hasPrimaryErrorAction = false,
     this.canSwitchSource = false,
     this.isSwitchSourceLoading = false,
   });
@@ -38,6 +40,8 @@ class ReaderViewportBodyState {
   final bool showTransientLoadingGap;
   final bool hasRenderableContent;
   final String? errorText;
+  final String? primaryActionLabel;
+  final bool hasPrimaryErrorAction;
   final bool canSwitchSource;
   final bool isSwitchSourceLoading;
 }
@@ -51,6 +55,7 @@ class ReaderViewportBuilder {
     required ReaderViewportTapAwareBuilder tapAwareBuilder,
     required ReaderViewportBuilderCallback contentBuilder,
     required VoidCallback onRetry,
+    VoidCallback? onPrimaryErrorAction,
     Future<void> Function()? onPullToRefresh,
     required VoidCallback onCopyDiagnostics,
     required VoidCallback onSwitchSource,
@@ -96,6 +101,12 @@ class ReaderViewportBuilder {
     }
 
     if (state.errorText != null) {
+      final primaryActionLabel =
+          state.hasPrimaryErrorAction ? state.primaryActionLabel?.trim() : null;
+      final resolvedPrimaryActionLabel =
+          primaryActionLabel == null || primaryActionLabel.isEmpty
+              ? '重试'
+              : primaryActionLabel;
       final child = ReaderBodyRegion(
         model: ReaderBodyRegionModel.stateCard(
           stateCard: ReaderBodyRegionStateCard(
@@ -112,8 +123,13 @@ class ReaderViewportBuilder {
               alignment: WrapAlignment.center,
               children: [
                 FilledButton.tonal(
-                  onPressed: state.isSwitchSourceLoading ? null : onRetry,
-                  child: const Text('重试'),
+                  onPressed:
+                      state.isSwitchSourceLoading
+                          ? null
+                          : (state.hasPrimaryErrorAction
+                              ? onPrimaryErrorAction ?? onRetry
+                              : onRetry),
+                  child: Text(resolvedPrimaryActionLabel),
                 ),
                 if (isLocalContent)
                   OutlinedButton.icon(

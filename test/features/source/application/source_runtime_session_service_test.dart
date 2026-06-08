@@ -37,7 +37,7 @@ void main() {
         expect(call.path, 'v1/sources/https%3A%2F%2Fsource.example/session');
         expect(call.stage, ErrorStage.source);
         final body = call.body as Map<String, Object?>;
-        expect(body['bookSourceUrl'], 'https://source.example');
+        expect(body.containsKey('bookSourceUrl'), isFalse);
         expect(body['cookie'], 'sid=abc');
         expect(body['loginHeaderJson'], '{"Authorization":"Bearer abc"}');
         expect(body['headers'], <String, String>{'X-Token': 'token'});
@@ -87,6 +87,40 @@ void main() {
       expect(client.calls[0].path, 'v1/sources/source_a/session');
       expect(client.calls[1].method, ApiMethod.delete);
       expect(client.calls[1].path, 'v1/sources/source_a/session');
+    });
+
+    test('creates login task from gateway login-task endpoint', () async {
+      final client =
+          _FakeApiClient()
+            ..responses.add(<String, Object?>{
+              'taskId': 'login-1',
+              'sourceId': 'src',
+              'sourceName': '测试源',
+              'mode': 'webView',
+              'loginUrl': 'https://example.com/login',
+              'request': {
+                'url': 'https://example.com/login',
+                'method': 'post',
+                'headers': {'User-Agent': 'reader'},
+                'body': 'next=/book',
+              },
+            });
+      final service = SourceRuntimeSessionService(client: client);
+
+      final task = await service.createLoginTask(
+        sourceId: 'server-gateway:src',
+      );
+
+      expect(client.calls.single.method, ApiMethod.get);
+      expect(client.calls.single.path, 'v1/sources/src/login-task');
+      expect(task.taskId, 'login-1');
+      expect(task.sourceId, 'src');
+      expect(task.sourceName, '测试源');
+      expect(task.mode, 'webView');
+      expect(task.loginUrl, 'https://example.com/login');
+      expect(task.request?.method, 'POST');
+      expect(task.request?.headers, {'User-Agent': 'reader'});
+      expect(task.request?.body, 'next=/book');
     });
   });
 }

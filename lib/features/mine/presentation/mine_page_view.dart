@@ -668,18 +668,6 @@ extension on _MinePageState {
     return actions;
   }
 
-  String _buildProfileStats() {
-    if (_userId == null) {
-      return '登录后可同步书架、阅读记录和会员权益';
-    }
-    final readingHours = _totalReadingHours;
-    final streakDays = _readingStreakDays;
-    if (readingHours <= 0 && streakDays <= 0) {
-      return '还没有阅读记录，今天开始第一段阅读吧';
-    }
-    return '已读 $readingHours 小时  ·  连续 $streakDays 天';
-  }
-
   String _formatDate(DateTime date) {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
@@ -689,22 +677,15 @@ extension on _MinePageState {
     _MineResolvedPalette palette,
     Color membershipAccent,
   ) {
+    if (_userId == null) {
+      return const SizedBox.shrink();
+    }
+
     final theme = Theme.of(context);
-    final isGuest = _userId == null;
     final accent = _hasMembership ? membershipAccent : palette.primaryColor;
-    final title =
-        isGuest
-            ? '会员权益'
-            : _hasMembership
-            ? '高级会员'
-            : '开通会员';
+    final title = _hasMembership ? '高级会员' : '开通会员';
     final detail = _buildMembershipInlineDetail();
-    final actionLabel =
-        isGuest
-            ? '去登录'
-            : _hasMembership
-            ? '查看权益'
-            : '开通会员';
+    final actionLabel = _hasMembership ? '查看权益' : '开通会员';
     final icon =
         _hasMembership
             ? Icons.workspace_premium_rounded
@@ -717,20 +698,21 @@ extension on _MinePageState {
         final showAction = constraints.maxWidth >= 150;
         final effectiveActionLabel =
             compact
-                ? isGuest
-                    ? '登录'
-                    : _hasMembership
+                ? _hasMembership
                     ? '权益'
                     : '开通'
                 : actionLabel;
-        final action = _buildProfileMembershipActionButton(
-          context,
-          label: effectiveActionLabel,
-          accent: accent,
-          palette: palette,
-          prominent: !isGuest && !_hasMembership,
-          onPressed: isGuest ? _handleProfileCardTap : _openMembershipCenter,
-        );
+        final action =
+            showAction
+                ? _buildProfileMembershipActionButton(
+                  context,
+                  label: effectiveActionLabel,
+                  accent: accent,
+                  palette: palette,
+                  prominent: !_hasMembership,
+                  onPressed: _openMembershipCenter,
+                )
+                : null;
 
         return Row(
           crossAxisAlignment: CrossAxisAlignment.center,
@@ -765,7 +747,7 @@ extension on _MinePageState {
             ),
             if (showAction) ...[
               const SizedBox(width: 8),
-              Flexible(flex: 0, child: action),
+              Flexible(flex: 0, child: action!),
             ],
           ],
         );
@@ -775,7 +757,7 @@ extension on _MinePageState {
 
   String _buildMembershipInlineDetail() {
     if (_userId == null) {
-      return '登录后可开通';
+      return '';
     }
     if (!_hasMembership) {
       return '享专属特权';
@@ -1095,19 +1077,14 @@ extension on _MinePageState {
                           );
                         },
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        _buildProfileStats(),
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: palette.textSecondaryColor,
+                      if (_userId != null) ...[
+                        const SizedBox(height: 8),
+                        _buildProfileMembershipRow(
+                          context,
+                          palette,
+                          membershipAccent,
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      _buildProfileMembershipRow(
-                        context,
-                        palette,
-                        membershipAccent,
-                      ),
+                      ],
                     ],
                   ),
                 ),
@@ -1287,20 +1264,22 @@ extension on _MinePageState {
                 ),
                 const SizedBox(height: 22),
                 _buildDesktopProfileMetrics(context, palette: palette),
-                const SizedBox(height: 18),
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    border: Border(top: BorderSide(color: borderColor)),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 16),
-                    child: _buildProfileMembershipRow(
-                      context,
-                      palette,
-                      membershipAccent,
+                if (_userId != null) ...[
+                  const SizedBox(height: 18),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      border: Border(top: BorderSide(color: borderColor)),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 16),
+                      child: _buildProfileMembershipRow(
+                        context,
+                        palette,
+                        membershipAccent,
+                      ),
                     ),
                   ),
-                ),
+                ],
               ],
             ),
           ),
@@ -1326,16 +1305,6 @@ extension on _MinePageState {
             color: palette.textPrimaryColor,
             fontWeight: FontWeight.w800,
             height: 1.05,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          _buildProfileStats(),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: palette.textSecondaryColor,
-            height: 1.35,
           ),
         ),
       ],
@@ -1494,13 +1463,19 @@ extension on _MinePageState {
     final items =
         _userId == null
             ? const <({String label, String value})>[
+              (label: '账号状态', value: '未登录'),
               (label: '书架同步', value: '登录后'),
-              (label: '阅读记录', value: '待开启'),
-              (label: '会员权益', value: '可同步'),
+              (label: '会员权益', value: '登录后'),
             ]
             : <({String label, String value})>[
-              (label: '累计阅读', value: '$_totalReadingHours 小时'),
-              (label: '连续阅读', value: '$_readingStreakDays 天'),
+              (label: '账号状态', value: '已登录'),
+              (
+                label: '会员状态',
+                value: MembershipAccessPresentation.accountBadge(
+                  isLoggedIn: true,
+                  hasMembership: _hasMembership,
+                ),
+              ),
               (
                 label: '主题权益',
                 value: MembershipAccessPresentation.themeEntitlementValue(

@@ -31,6 +31,17 @@ class SourceRuntimeSessionService {
     );
   }
 
+  Future<SourceLoginTask> createLoginTask({required String sourceId}) {
+    return _client.request<SourceLoginTask>(
+      method: ApiMethod.get,
+      path: 'v1/sources/${_pathId(sourceId)}/login-task',
+      attachAccessToken: true,
+      enableRetry: false,
+      stage: ErrorStage.source,
+      decoder: SourceLoginTask.fromJson,
+    );
+  }
+
   Future<SourceRuntimeSessionSnapshot> submitSession({
     required String sourceId,
     String? cookie,
@@ -105,6 +116,63 @@ class SourceRuntimeSessionService {
   }
 }
 
+class SourceLoginTask {
+  const SourceLoginTask({
+    required this.taskId,
+    required this.sourceId,
+    required this.sourceName,
+    required this.mode,
+    this.loginUrl,
+    this.request,
+  });
+
+  final String taskId;
+  final String sourceId;
+  final String sourceName;
+  final String mode;
+  final String? loginUrl;
+  final SourceLoginRequestSnapshot? request;
+
+  factory SourceLoginTask.fromJson(Object? value) {
+    final map = _asMap(value);
+    return SourceLoginTask(
+      taskId: _stringOrDefault(map['taskId'], ''),
+      sourceId: _stringOrDefault(map['sourceId'], ''),
+      sourceName: _stringOrDefault(map['sourceName'], '书源登录'),
+      mode: _stringOrDefault(map['mode'], 'webView'),
+      loginUrl: _normalize(map['loginUrl']?.toString()),
+      request:
+          map['request'] == null
+              ? null
+              : SourceLoginRequestSnapshot.fromJson(map['request']),
+    );
+  }
+}
+
+class SourceLoginRequestSnapshot {
+  const SourceLoginRequestSnapshot({
+    required this.url,
+    required this.method,
+    this.headers = const <String, String>{},
+    this.body,
+  });
+
+  final String url;
+  final String method;
+  final Map<String, String> headers;
+  final String? body;
+
+  factory SourceLoginRequestSnapshot.fromJson(Object? value) {
+    final map = _asMap(value);
+    return SourceLoginRequestSnapshot(
+      url: _stringOrDefault(map['url'], ''),
+      method: _stringOrDefault(map['method'], 'GET').toUpperCase(),
+      headers: _normalizeHeaders(_stringMap(map['headers'])),
+      body: _normalize(map['body']?.toString()),
+    );
+  }
+}
+
 class SourceRuntimeSessionSnapshot {
   const SourceRuntimeSessionSnapshot({
     required this.sourceUrl,
@@ -154,6 +222,28 @@ class SourceRuntimeSessionSnapshot {
       ttlSeconds: _optionalInt(map['ttlSeconds']) ?? 0,
     );
   }
+}
+
+Map<String, Object?> _asMap(Object? value) {
+  if (value is! Map) {
+    return const <String, Object?>{};
+  }
+  return value.map((key, value) => MapEntry(key.toString(), value));
+}
+
+Map<String, String> _stringMap(Object? value) {
+  if (value is! Map) {
+    return const <String, String>{};
+  }
+  final result = <String, String>{};
+  for (final entry in value.entries) {
+    final key = entry.key?.toString().trim() ?? '';
+    final itemValue = entry.value?.toString().trim() ?? '';
+    if (key.isNotEmpty && itemValue.isNotEmpty) {
+      result[key] = itemValue;
+    }
+  }
+  return Map.unmodifiable(result);
 }
 
 Map<String, String> _normalizeHeaders(Map<String, String> headers) {

@@ -552,9 +552,13 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
       if (!mounted) {
         return;
       }
-      final readableError = _toUserReadableError(error);
+      final presentation = _readerFailurePresentationFor(error);
+      final readableError =
+          presentation?.message ?? _toUserReadableError(error);
       _recordReaderFailure(message: readableError, errorCode: error.code);
       setState(() {
+        _readerFailurePresentation = presentation;
+        _readerGatewayFailureStage = _readerGatewayFailureStageFor(error);
         _errorText = readableError;
       });
       _maybePromptSwitchSourceForMissingSource(error.code);
@@ -565,6 +569,8 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
       const fallbackError = '阅读器初始化失败。';
       _recordReaderFailure(message: fallbackError);
       setState(() {
+        _readerFailurePresentation = null;
+        _readerGatewayFailureStage = null;
         _errorText = fallbackError;
       });
     } finally {

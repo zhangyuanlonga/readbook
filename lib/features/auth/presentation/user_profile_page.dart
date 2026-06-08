@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,6 +9,7 @@ import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
+import '../../../core/auth/auth_event_bus.dart';
 import '../../../core/auth/auth_service.dart';
 import '../../../core/auth/auth_session.dart';
 import '../../../core/auth/auth_session_store.dart';
@@ -31,6 +34,7 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
   late final AuthService _authService;
   late final UserProfileService _userProfileService;
   late final MinePageSessionService _minePageSessionService;
+  StreamSubscription<AuthEvent>? _authEventSubscription;
 
   AuthSession? _session;
   UserProfile? _profile;
@@ -39,6 +43,7 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
   bool _isLoadingProfile = false;
   bool _isLoggingOut = false;
   bool _isSavingProfile = false;
+  int _sessionLoadVersion = 0;
 
   @override
   void initState() {
@@ -47,29 +52,52 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
     _authService = ref.read(authServiceProvider);
     _userProfileService = ref.read(userProfileServiceProvider);
     _minePageSessionService = ref.read(minePageSessionServiceProvider);
+    _authEventSubscription = AuthEventBus.instance.stream.listen(
+      _handleAuthEvent,
+    );
     _loadSession();
   }
 
+  @override
+  void dispose() {
+    _authEventSubscription?.cancel();
+    super.dispose();
+  }
+
   Future<void> _loadSession() async {
+    await _reloadSessionFromStore(showLoading: true);
+  }
+
+  Future<void> _reloadSessionFromStore({required bool showLoading}) async {
+    final loadVersion = ++_sessionLoadVersion;
+    if (showLoading && mounted) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
     final session = await _sessionStore.getSession();
     final localAvatarPath = await _minePageSessionService.loadLocalAvatarPath(
       session?.userId,
     );
-    if (!mounted) {
+    if (!mounted || loadVersion != _sessionLoadVersion) {
       return;
     }
+    final sessionChanged = !_isSameSessionIdentity(_session, session);
     setState(() {
       _session = session;
+      if (session == null || sessionChanged) {
+        _profile = null;
+      }
       _localAvatarPath = localAvatarPath;
       _isLoading = false;
     });
     if (session != null) {
-      await _loadProfile();
+      await _loadProfile(session, loadVersion);
     }
   }
 
-  Future<void> _loadProfile() async {
-    if (!mounted) {
+  Future<void> _loadProfile(AuthSession session, int loadVersion) async {
+    if (!mounted || loadVersion != _sessionLoadVersion) {
       return;
     }
     setState(() {
@@ -77,7 +105,10 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
     });
     try {
       final profile = await _userProfileService.fetchMe();
-      if (!mounted) {
+      if (!mounted ||
+          loadVersion != _sessionLoadVersion ||
+          !_isSameSessionIdentity(_session, session) ||
+          !_profileBelongsToSession(profile, session)) {
         return;
       }
       setState(() {
@@ -86,7 +117,9 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
     } catch (_) {
       // Keep the page available with local session data.
     } finally {
-      if (mounted) {
+      if (mounted &&
+          loadVersion == _sessionLoadVersion &&
+          _isSameSessionIdentity(_session, session)) {
         setState(() {
           _isLoadingProfile = false;
         });
@@ -95,23 +128,68 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
   }
 
   Future<void> _refreshPage() async {
-    final session = await _sessionStore.getSession();
-    final localAvatarPath = await _minePageSessionService.loadLocalAvatarPath(
-      session?.userId,
-    );
-    if (!mounted) {
-      return;
+    await _reloadSessionFromStore(showLoading: false);
+  }
+
+  void _handleAuthEvent(AuthEvent event) {
+    switch (event.type) {
+      case AuthEventType.loggedIn:
+        ++_sessionLoadVersion;
+        if (mounted) {
+          setState(() {
+            _session = event.session;
+            _profile = null;
+            _localAvatarPath = null;
+            _isLoading = false;
+            _isLoadingProfile = event.session != null;
+          });
+        }
+        unawaited(_reloadSessionFromStore(showLoading: false));
+        break;
+      case AuthEventType.loggedOut:
+      case AuthEventType.sessionExpired:
+        ++_sessionLoadVersion;
+        if (mounted) {
+          setState(() {
+            _session = null;
+            _profile = null;
+            _localAvatarPath = null;
+            _isLoading = false;
+            _isLoadingProfile = false;
+          });
+        }
+        break;
     }
-    setState(() {
-      _session = session;
-      _localAvatarPath = localAvatarPath;
-      if (session == null) {
-        _profile = null;
-      }
-    });
-    if (session != null) {
-      await _loadProfile();
+  }
+
+  bool _isSameSessionIdentity(AuthSession? left, AuthSession? right) {
+    return _sessionIdentityKey(left) == _sessionIdentityKey(right);
+  }
+
+  bool _profileBelongsToSession(UserProfile profile, AuthSession session) {
+    final sessionUserId = session.userId?.trim() ?? '';
+    final profileUserId = profile.userId.trim();
+    if (sessionUserId.isNotEmpty && profileUserId.isNotEmpty) {
+      return sessionUserId == profileUserId;
     }
+    final sessionIdentity = session.loginIdentity?.trim().toLowerCase() ?? '';
+    final profileIdentity = profile.loginIdentity.trim().toLowerCase();
+    if (sessionIdentity.isNotEmpty && profileIdentity.isNotEmpty) {
+      return sessionIdentity == profileIdentity;
+    }
+    return true;
+  }
+
+  String? _sessionIdentityKey(AuthSession? session) {
+    final userId = session?.userId?.trim() ?? '';
+    if (userId.isNotEmpty) {
+      return 'id:$userId';
+    }
+    final identity = session?.loginIdentity?.trim().toLowerCase() ?? '';
+    if (identity.isNotEmpty) {
+      return 'identity:$identity';
+    }
+    return null;
   }
 
   @override

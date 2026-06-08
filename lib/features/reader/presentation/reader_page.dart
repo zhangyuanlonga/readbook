@@ -71,6 +71,7 @@ import '../../search/presentation/online_source_error_presentation.dart';
 import '../../source/application/source_health_service.dart';
 import '../../source/application/remote_content_task_conflict_service.dart';
 import '../../source/application/remote_content_task_scheduler_service.dart';
+import '../../source/routes.dart';
 import '../application/content_provider.dart';
 import '../application/chapter_content_service.dart';
 import '../application/local/local_reader_identity.dart';
@@ -424,6 +425,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool _isScrollEdgeAdvancingChapter = false;
   SearchCancellationToken? _activeSwitchSourceCancellationToken;
   String? _errorText;
+  ReaderFailurePresentation? _readerFailurePresentation;
+  String? _readerGatewayFailureStage;
   ReaderDocument _document = ReaderDocument(blocks: const <ReaderBlock>[]);
   String _content = '';
   List<String> _paragraphs = const [];
@@ -4919,10 +4922,36 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return '$_bookTitle · 第 $chapter / $total 章';
   }
 
-  String _toUserReadableError(AppException error) {
+  ReaderFailurePresentation? _readerFailurePresentationFor(AppException error) {
     final gatewayFailure = error.gatewayFailure;
     if (gatewayFailure != null) {
-      return const ReaderFailurePresentationService().resolve(error).message;
+      return const ReaderFailurePresentationService().resolve(error);
+    }
+    return null;
+  }
+
+  String _readerGatewayFailureStageFor(AppException error) {
+    final stage = error.gatewayFailure?.stage.trim();
+    if (_isWebViewTaskStage(stage)) {
+      return stage!;
+    }
+    final fallback =
+        error.gatewayFailure?.toErrorStage(fallback: error.stage) ??
+        error.stage;
+    return _isWebViewTaskStage(fallback.name) ? fallback.name : 'content';
+  }
+
+  bool _isWebViewTaskStage(String? value) {
+    return switch (value?.trim()) {
+      'search' || 'detail' || 'toc' || 'content' => true,
+      _ => false,
+    };
+  }
+
+  String _toUserReadableError(AppException error) {
+    final presentation = _readerFailurePresentationFor(error);
+    if (presentation != null) {
+      return presentation.message;
     }
     final message = error.briefMessage;
     if (_isLocalContent) {
@@ -4930,6 +4959,63 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     return _onlineSourceErrorAdapter.forReaderContentException(error);
+  }
+
+  bool get _hasReaderGatewayRecoveryAction {
+    final presentation = _readerFailurePresentation;
+    return presentation?.allowWebLogin == true ||
+        presentation?.allowWebViewTask == true;
+  }
+
+  String? get _readerGatewayRecoveryActionLabel {
+    if (!_hasReaderGatewayRecoveryAction) {
+      return null;
+    }
+    return _readerFailurePresentation?.primaryActionLabel;
+  }
+
+  Future<void> _openReaderGatewayRecovery() async {
+    final presentation = _readerFailurePresentation;
+    if (presentation == null) {
+      await _loadCurrentChapter(initialScrollRatio: null);
+      return;
+    }
+    final sourceId = (_sourceId ?? '').trim();
+    if (sourceId.isEmpty) {
+      _showMessage('缺少书源标识，无法打开恢复入口。');
+      return;
+    }
+
+    final route =
+        presentation.allowWebLogin
+            ? sourceWebViewLoginLocation(
+              sourceId: sourceId,
+              sourceName: _bookTitle.isEmpty ? null : _bookTitle,
+            )
+            : sourceWebViewTaskLocation(
+              sourceId: sourceId,
+              stage: _readerGatewayFailureStage ?? 'content',
+              sourceName: _bookTitle.isEmpty ? null : _bookTitle,
+              bookId: _activeBookId,
+              detailUrl: _detailUrl,
+              chapterUrl: _chapterUrl,
+              chapterIndex: _currentIndex,
+              chapterTitle: _chapterTitle,
+              executionContext: _chapterExecutionContext,
+            );
+
+    final result = await context.push<Object?>(route);
+    if (!mounted || result == null) {
+      return;
+    }
+    _showMessage('已收到客户端协作结果，正在重试当前章节。');
+    setState(() {
+      _isBootstrapping = true;
+      _errorText = null;
+      _readerFailurePresentation = null;
+      _readerGatewayFailureStage = null;
+    });
+    await _bootstrap();
   }
 
   bool _isBookmarkInCurrentChapter(Bookmark bookmark) {

@@ -106,6 +106,8 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
             (_chapterAudioUrl?.trim().isNotEmpty ?? false) ||
             (_chapterAudioManifestUrl?.trim().isNotEmpty ?? false),
         errorText: _errorText,
+        primaryActionLabel: _readerGatewayRecoveryActionLabel,
+        hasPrimaryErrorAction: _hasReaderGatewayRecoveryAction,
         canSwitchSource: _canSwitchSource,
         isSwitchSourceLoading: _isSwitchSourceLoading,
       ),
@@ -121,6 +123,7 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
             ReaderModeViewportKind.audio => _buildAudioReader(colors),
           },
       onRetry: () => unawaited(_loadCurrentChapter(initialScrollRatio: null)),
+      onPrimaryErrorAction: () => unawaited(_openReaderGatewayRecovery()),
       onPullToRefresh:
           _supportsChapterPullToRefresh
               ? () => _reloadCurrentChapterFromPullToRefresh()

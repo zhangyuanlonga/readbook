@@ -790,6 +790,8 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
         );
       }
       _isCurrentChapterCached = snapshot.isCached;
+      _readerFailurePresentation = null;
+      _readerGatewayFailureStage = null;
       _errorText = null;
       _setContentFlow(
         snapshot.result.content,
@@ -1110,9 +1112,13 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
       if (!_isActiveChapterContentRequestFlow(requestToken)) {
         return false;
       }
-      final readableError = _toUserReadableError(error);
+      final presentation = _readerFailurePresentationFor(error);
+      final readableError =
+          presentation?.message ?? _toUserReadableError(error);
       _recordReaderFailure(message: readableError, errorCode: error.code);
       _updateReaderState(() {
+        _readerFailurePresentation = presentation;
+        _readerGatewayFailureStage = _readerGatewayFailureStageFor(error);
         _errorText = readableError;
       });
       _maybePromptSwitchSourceForMissingSource(error.code);
@@ -1125,6 +1131,8 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
       const fallbackError = '加载正文失败。';
       _recordReaderFailure(message: fallbackError);
       _updateReaderState(() {
+        _readerFailurePresentation = null;
+        _readerGatewayFailureStage = null;
         _errorText = fallbackError;
       });
       final switched = await _tryAutoSwitchSourceOnFailure();

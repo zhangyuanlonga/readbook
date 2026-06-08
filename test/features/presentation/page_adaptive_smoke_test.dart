@@ -298,6 +298,10 @@ void main() {
       find.byKey(const ValueKey<String>('mine_mobile_profile_card')),
       findsOneWidget,
     );
+    expect(
+      find.byKey(const ValueKey<String>('mine_profile_membership_panel')),
+      findsNothing,
+    );
     expect(find.text('登录测试页'), findsNothing);
     expect(find.text('会员中心测试页'), findsNothing);
 

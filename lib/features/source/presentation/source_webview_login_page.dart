@@ -1,3 +1,7 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,19 +11,6 @@ import '../../../app/platform/app_platform_capabilities.dart';
 import '../../../app/widgets/feature_disabled_page.dart';
 import '../application/source_runtime_session_service.dart';
 import '../application/webview_cookie_bridge.dart';
-
-const _dumpLocalStorageScript = '''
-(() => {
-  const data = {};
-  for (let index = 0; index < localStorage.length; index += 1) {
-    const key = localStorage.key(index);
-    if (key) {
-      data[key] = localStorage.getItem(key) || '';
-    }
-  }
-  return JSON.stringify(data);
-})()
-''';
 
 class SourceWebViewLoginPage extends ConsumerStatefulWidget {
   const SourceWebViewLoginPage({
@@ -41,6 +32,7 @@ class SourceWebViewLoginPage extends ConsumerStatefulWidget {
 class _SourceWebViewLoginPageState
     extends ConsumerState<SourceWebViewLoginPage> {
   WebViewController? _controller;
+  SourceLoginTask? _loginTask;
   int _progress = 0;
   bool _isSubmitting = false;
   String? _currentUrl;
@@ -54,23 +46,45 @@ class _SourceWebViewLoginPageState
     super.initState();
     _currentUrl = widget.loginUrl.trim();
     if (_isSupportedPlatform) {
-      _initializeController();
+      unawaited(_initializeController());
     }
   }
 
-  void _initializeController() {
+  Future<void> _initializeController() async {
     if (widget.sourceId.trim().isEmpty) {
       _error = '缺少书源标识，无法提交登录会话。';
       return;
     }
 
-    final uri = Uri.tryParse(widget.loginUrl.trim());
+    SourceLoginTask? loginTask;
+    var loginUrl = widget.loginUrl.trim();
+    if (loginUrl.isEmpty) {
+      try {
+        loginTask = await ref
+            .read(sourceRuntimeSessionServiceProvider)
+            .createLoginTask(sourceId: widget.sourceId);
+        loginUrl =
+            loginTask.request?.url.trim().isNotEmpty == true
+                ? loginTask.request!.url.trim()
+                : loginTask.loginUrl?.trim() ?? '';
+      } catch (error) {
+        if (!mounted) return;
+        setState(() => _error = '获取登录任务失败：$error');
+        return;
+      }
+    }
+
+    final uri = Uri.tryParse(loginUrl);
     if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
-      _error = '登录地址无效，无法打开 WebView。';
+      if (mounted) {
+        setState(() => _error = '登录地址无效，无法打开 WebView。');
+      } else {
+        _error = '登录地址无效，无法打开 WebView。';
+      }
       return;
     }
 
-    _controller =
+    final controller =
         WebViewController()
           ..setJavaScriptMode(JavaScriptMode.unrestricted)
           ..setNavigationDelegate(
@@ -108,8 +122,30 @@ class _SourceWebViewLoginPageState
                 setState(() => _currentUrl = url);
               },
             ),
-          )
-          ..loadRequest(uri);
+          );
+    if (!mounted) return;
+    setState(() {
+      _loginTask = loginTask;
+      _controller = controller;
+      _currentUrl = loginUrl;
+      _error = null;
+    });
+
+    final request = loginTask?.request;
+    final method =
+        request?.method == 'POST'
+            ? LoadRequestMethod.post
+            : LoadRequestMethod.get;
+    final body = request?.body;
+    await controller.loadRequest(
+      uri,
+      method: method,
+      headers: request?.headers ?? const <String, String>{},
+      body:
+          body == null || body.isEmpty
+              ? null
+              : Uint8List.fromList(utf8.encode(body)),
+    );
   }
 
   @override
@@ -134,14 +170,20 @@ class _SourceWebViewLoginPageState
     if (controller == null || _error != null) {
       return FeatureDisabledPage(
         title: title,
-        message: _error ?? '登录地址无效，无法打开 WebView。',
-        icon: Icons.error_outline_rounded,
-        actionLabel: '返回',
-        onAction: () {
-          if (context.canPop()) {
-            context.pop();
-          }
-        },
+        message: _error ?? '正在准备登录任务。',
+        icon:
+            _error == null
+                ? Icons.language_rounded
+                : Icons.error_outline_rounded,
+        actionLabel: _error == null ? null : '返回',
+        onAction:
+            _error == null
+                ? null
+                : () {
+                  if (context.canPop()) {
+                    context.pop();
+                  }
+                },
       );
     }
 
@@ -181,6 +223,10 @@ class _SourceWebViewLoginPageState
     if (name != null && name.isNotEmpty) {
       return '$name 登录';
     }
+    final taskName = _loginTask?.sourceName.trim();
+    if (taskName != null && taskName.isNotEmpty) {
+      return '$taskName 登录';
+    }
     return '书源登录';
   }
 
@@ -197,7 +243,7 @@ class _SourceWebViewLoginPageState
       );
       final cookie = normalizeWebViewCookieResult(rawCookie);
       final rawLocalStorage = await controller.runJavaScriptReturningResult(
-        _dumpLocalStorageScript,
+        dumpWebViewLocalStorageScript,
       );
       final localStorage = normalizeWebViewStringMapResult(rawLocalStorage);
       final hasCookie = hasUsableCookieHeader(cookie);
