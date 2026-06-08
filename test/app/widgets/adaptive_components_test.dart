@@ -440,6 +440,43 @@ void main() {
     },
   );
 
+  testWidgets(
+    'AdaptiveRouteTopBar offsets desktop content below MediaQuery chrome',
+    (tester) async {
+      await tester.pumpWidget(
+        AdaptiveTestHarness(
+          width: 840,
+          height: 900,
+          wrapWithMaterialApp: true,
+          child: MediaQuery(
+            data: const MediaQueryData(
+              size: Size(840, 900),
+              padding: EdgeInsets.only(top: 38),
+              viewPadding: EdgeInsets.only(top: 38),
+            ),
+            child: const Scaffold(
+              appBar: AdaptiveRouteTopBar(
+                title: '账号信息',
+                leading: IconButton(
+                  onPressed: null,
+                  icon: Icon(Icons.arrow_back),
+                ),
+              ),
+              body: SizedBox.shrink(),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(tester.getSize(find.byType(AdaptiveRouteTopBar)).height, 64 + 38);
+      expect(
+        tester.getTopLeft(find.byIcon(Icons.arrow_back)).dy,
+        greaterThan(38),
+      );
+    },
+  );
+
   testWidgets('AdaptiveSettingTile exposes tap path when enabled', (
     tester,
   ) async {

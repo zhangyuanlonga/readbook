@@ -75,6 +75,7 @@ class AdaptiveRouteTopBar extends StatelessWidget
       );
     }
 
+    final topPadding = MediaQuery.paddingOf(context).top;
     return _DesktopRouteTopBar(
       title: title,
       subtitle: subtitle,
@@ -83,6 +84,7 @@ class AdaptiveRouteTopBar extends StatelessWidget
       bottom: bottom,
       actions: actions,
       height: desktopHeight,
+      topPadding: topPadding,
       titleMaxWidth: titleMaxWidth,
       middleMinWidth: middleMinWidth,
       middleMaxWidth: middleMaxWidth,
@@ -145,6 +147,7 @@ class _DesktopRouteTopBar extends StatelessWidget {
     required this.bottom,
     required this.actions,
     required this.height,
+    required this.topPadding,
     required this.titleMaxWidth,
     required this.middleMinWidth,
     required this.middleMaxWidth,
@@ -164,6 +167,7 @@ class _DesktopRouteTopBar extends StatelessWidget {
   final PreferredSizeWidget? bottom;
   final List<AdaptiveOverflowToolbarItem> actions;
   final double height;
+  final double topPadding;
   final double titleMaxWidth;
   final double middleMinWidth;
   final double middleMaxWidth;
@@ -198,65 +202,71 @@ class _DesktopRouteTopBar extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             SizedBox(
-              height: height,
+              height: height + topPadding,
               child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: horizontal),
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final showMiddle =
-                        middle != null &&
-                        constraints.maxWidth >=
-                            titleMaxWidth + middleMinWidth + 220;
-                    final toolbarWidth =
-                        constraints.maxWidth < 760
-                            ? 96.0
-                            : constraints.maxWidth < 920
-                            ? 136.0
-                            : 184.0;
+                padding: EdgeInsets.only(top: topPadding),
+                child: SizedBox(
+                  height: height,
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: horizontal),
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final showMiddle =
+                            middle != null &&
+                            constraints.maxWidth >=
+                                titleMaxWidth + middleMinWidth + 220;
+                        final toolbarWidth =
+                            constraints.maxWidth < 760
+                                ? 96.0
+                                : constraints.maxWidth < 920
+                                ? 136.0
+                                : 184.0;
 
-                    return Row(
-                      children: [
-                        if (leading != null) ...[
-                          SizedBox(width: 44, height: 44, child: leading),
-                          const SizedBox(width: 8),
-                        ],
-                        if (showTitle)
-                          ConstrainedBox(
-                            constraints: BoxConstraints(
-                              maxWidth: titleMaxWidth,
-                            ),
-                            child: _DesktopRouteTitle(
-                              title: title,
-                              subtitle: subtitle,
-                              foregroundColor: resolvedForeground,
-                            ),
-                          ),
-                        if (showMiddle) ...[
-                          const SizedBox(width: 18),
-                          Expanded(
-                            child: ConstrainedBox(
-                              constraints: BoxConstraints(
-                                minWidth: middleMinWidth,
-                                maxWidth: middleMaxWidth,
+                        return Row(
+                          children: [
+                            if (leading != null) ...[
+                              SizedBox(width: 44, height: 44, child: leading),
+                              const SizedBox(width: 8),
+                            ],
+                            if (showTitle)
+                              ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  maxWidth: titleMaxWidth,
+                                ),
+                                child: _DesktopRouteTitle(
+                                  title: title,
+                                  subtitle: subtitle,
+                                  foregroundColor: resolvedForeground,
+                                ),
                               ),
-                              child: middle!,
-                            ),
-                          ),
-                        ] else
-                          const Spacer(),
-                        if (actions.isNotEmpty) ...[
-                          const SizedBox(width: 12),
-                          SizedBox(
-                            width: toolbarWidth,
-                            child: AdaptiveOverflowToolbar(
-                              items: actions,
-                              moreTooltip: moreTooltip,
-                            ),
-                          ),
-                        ],
-                      ],
-                    );
-                  },
+                            if (showMiddle) ...[
+                              const SizedBox(width: 18),
+                              Expanded(
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    minWidth: middleMinWidth,
+                                    maxWidth: middleMaxWidth,
+                                  ),
+                                  child: middle!,
+                                ),
+                              ),
+                            ] else
+                              const Spacer(),
+                            if (actions.isNotEmpty) ...[
+                              const SizedBox(width: 12),
+                              SizedBox(
+                                width: toolbarWidth,
+                                child: AdaptiveOverflowToolbar(
+                                  items: actions,
+                                  moreTooltip: moreTooltip,
+                                ),
+                              ),
+                            ],
+                          ],
+                        );
+                      },
+                    ),
+                  ),
                 ),
               ),
             ),

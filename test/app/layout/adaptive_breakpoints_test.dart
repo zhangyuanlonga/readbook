@@ -726,9 +726,7 @@ void main() {
     }
   });
 
-  testWidgets('桌面沉浸式窗口 chrome 只在原生桌面端启用对应留白和控件', (
-    tester,
-  ) async {
+  testWidgets('桌面沉浸式窗口 chrome 只在原生桌面端启用对应留白和控件', (tester) async {
     final macChrome = await _readFromContext<_DesktopWindowChromeSnapshot>(
       tester,
       width: 1280,
@@ -755,13 +753,43 @@ void main() {
     );
 
     expect(macChrome.captionControlsVisible, isFalse);
-    expect(macChrome.sidebarTopPadding, 58);
+    expect(macChrome.topSafePadding, 38);
+    expect(macChrome.sidebarTopPadding, 62);
+    expect(macChrome.routeTopBarTopPadding, 38);
     expect(windowsChrome.captionControlsVisible, isTrue);
+    expect(windowsChrome.topSafePadding, 0);
     expect(windowsChrome.sidebarTopPadding, 24);
+    expect(windowsChrome.routeTopBarTopPadding, 0);
     expect(linuxChrome.captionControlsVisible, isTrue);
+    expect(linuxChrome.topSafePadding, 0);
     expect(linuxChrome.sidebarTopPadding, 24);
+    expect(linuxChrome.routeTopBarTopPadding, 0);
     expect(mobileChrome.captionControlsVisible, isFalse);
+    expect(mobileChrome.topSafePadding, 0);
     expect(mobileChrome.sidebarTopPadding, 24);
+    expect(mobileChrome.routeTopBarTopPadding, 0);
+  });
+
+  testWidgets('macOS 桌面窗口 chrome 将标题栏安全区注入 MediaQuery', (tester) async {
+    final mediaQuery = await _readFromContext<_MediaQueryChromeSnapshot>(
+      tester,
+      width: 1280,
+      platform: TargetPlatform.macOS,
+      wrapWithDesktopWindowChromeInsets: true,
+      read: _MediaQueryChromeSnapshot.fromContext,
+    );
+    final mobileMediaQuery = await _readFromContext<_MediaQueryChromeSnapshot>(
+      tester,
+      width: 390,
+      platform: TargetPlatform.iOS,
+      wrapWithDesktopWindowChromeInsets: true,
+      read: _MediaQueryChromeSnapshot.fromContext,
+    );
+
+    expect(mediaQuery.paddingTop, 38);
+    expect(mediaQuery.viewPaddingTop, 38);
+    expect(mobileMediaQuery.paddingTop, 0);
+    expect(mobileMediaQuery.viewPaddingTop, 0);
   });
 
   testWidgets('ShellScaffold 窄桌面顶栏收起低优先级全局入口', (tester) async {
@@ -1252,6 +1280,7 @@ Future<T> _readFromContext<T>(
   double height = 844,
   double textScaleFactor = 1,
   TargetPlatform? platform,
+  bool wrapWithDesktopWindowChromeInsets = false,
   required T Function(BuildContext context) read,
 }) async {
   T? result;
@@ -1262,6 +1291,9 @@ Future<T> _readFromContext<T>(
       return const SizedBox();
     },
   );
+  if (wrapWithDesktopWindowChromeInsets) {
+    child = DesktopWindowChromeInsets(child: child);
+  }
   if (platform != null) {
     child = Theme(data: ThemeData(platform: platform), child: child);
   }
@@ -1294,16 +1326,42 @@ class _BookshelfMineNavigationNotifier extends AppShellNavigationNotifier {
 class _DesktopWindowChromeSnapshot {
   const _DesktopWindowChromeSnapshot({
     required this.captionControlsVisible,
+    required this.topSafePadding,
     required this.sidebarTopPadding,
+    required this.routeTopBarTopPadding,
   });
 
   final bool captionControlsVisible;
+  final double topSafePadding;
   final double sidebarTopPadding;
+  final double routeTopBarTopPadding;
 
   static _DesktopWindowChromeSnapshot fromContext(BuildContext context) {
     return _DesktopWindowChromeSnapshot(
       captionControlsVisible: DesktopWindowCaptionControls.isVisible(context),
+      topSafePadding: DesktopWindowChromeMetrics.topSafePadding(context),
       sidebarTopPadding: DesktopWindowChromeMetrics.sidebarTopPadding(context),
+      routeTopBarTopPadding: DesktopWindowChromeMetrics.routeTopBarTopPadding(
+        context,
+      ),
+    );
+  }
+}
+
+class _MediaQueryChromeSnapshot {
+  const _MediaQueryChromeSnapshot({
+    required this.paddingTop,
+    required this.viewPaddingTop,
+  });
+
+  final double paddingTop;
+  final double viewPaddingTop;
+
+  static _MediaQueryChromeSnapshot fromContext(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    return _MediaQueryChromeSnapshot(
+      paddingTop: mediaQuery.padding.top,
+      viewPaddingTop: mediaQuery.viewPadding.top,
     );
   }
 }

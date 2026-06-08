@@ -119,6 +119,7 @@ class BookDetailSummaryTextBlock extends StatelessWidget {
     this.titleHeroTag,
     this.metaHeroTag,
     this.titleStyle,
+    this.metaAxis = Axis.vertical,
   });
 
   final String title;
@@ -128,6 +129,7 @@ class BookDetailSummaryTextBlock extends StatelessWidget {
   final String? titleHeroTag;
   final String? metaHeroTag;
   final TextStyle? titleStyle;
+  final Axis metaAxis;
 
   @override
   Widget build(BuildContext context) {
@@ -148,22 +150,42 @@ class BookDetailSummaryTextBlock extends StatelessWidget {
     final authorText =
         author != null && author!.trim().isNotEmpty ? author!.trim() : '未知';
     final normalizedReadingStatus = readingStatusText?.trim();
-    final authorInfoLine = _BookDetailInfoLine(label: '作者', value: authorText);
-    final sourceInfoLine = _BookDetailInfoLine(label: '来源', value: sourceName);
+    final metaItems = <({String label, String value})>[
+      (label: '作者', value: authorText),
+      (label: '来源', value: sourceName),
+      if (normalizedReadingStatus != null && normalizedReadingStatus.isNotEmpty)
+        (label: '状态', value: normalizedReadingStatus),
+    ];
+    final metaBlock =
+        metaAxis == Axis.horizontal
+            ? Wrap(
+              spacing: metrics.sectionGap,
+              runSpacing: metrics.isCompactDensity ? 6 : 8,
+              children: [
+                for (final item in metaItems)
+                  _BookDetailInlineInfo(label: item.label, value: item.value),
+              ],
+            )
+            : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var index = 0; index < metaItems.length; index++) ...[
+                  if (index > 0)
+                    SizedBox(height: metrics.isCompactDensity ? 5 : 7),
+                  _BookDetailInfoLine(
+                    label: metaItems[index].label,
+                    value: metaItems[index].value,
+                  ),
+                ],
+              ],
+            );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         _wrapHero(titleHeroTag, titleWidget),
         SizedBox(height: metrics.contentGap),
-        _wrapHero(metaHeroTag, authorInfoLine),
-        SizedBox(height: metrics.isCompactDensity ? 5 : 7),
-        sourceInfoLine,
-        if (normalizedReadingStatus != null &&
-            normalizedReadingStatus.isNotEmpty) ...[
-          SizedBox(height: metrics.isCompactDensity ? 5 : 7),
-          _BookDetailInfoLine(label: '状态', value: normalizedReadingStatus),
-        ],
+        _wrapHero(metaHeroTag, metaBlock),
       ],
     );
   }
@@ -174,6 +196,46 @@ class BookDetailSummaryTextBlock extends StatelessWidget {
       return child;
     }
     return Hero(tag: normalized, child: child);
+  }
+}
+
+class _BookDetailInlineInfo extends StatelessWidget {
+  const _BookDetailInlineInfo({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final baseStyle = Theme.of(context).textTheme.bodySmall;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: baseStyle?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w600,
+            height: 1.22,
+          ),
+        ),
+        const SizedBox(width: 8),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 140),
+          child: Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: baseStyle?.copyWith(
+              color: colorScheme.onSurface,
+              fontWeight: FontWeight.w600,
+              height: 1.22,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 

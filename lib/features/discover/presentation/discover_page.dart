@@ -805,7 +805,10 @@ class _SourceRowLoadedMeta extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final latency = _SourceRow._latencyText(source.latencyMs);
-    final parts = <String>['${source.categoryCount}类'];
+    final parts = <String>[
+      source.origin == 'cloud_catalog' ? '云端授权目录' : '本地书源',
+      '${source.categoryCount}类',
+    ];
     if (latency != '-') {
       parts.add(latency);
     }

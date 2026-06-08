@@ -9,6 +9,15 @@ class DesktopWindowFrame extends StatelessWidget {
   Widget build(BuildContext context) => child;
 }
 
+class DesktopWindowChromeInsets extends StatelessWidget {
+  const DesktopWindowChromeInsets({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => child;
+}
+
 class DesktopWindowDragArea extends StatelessWidget {
   const DesktopWindowDragArea({super.key, required this.child});
 
@@ -30,5 +39,9 @@ class DesktopWindowCaptionControls extends StatelessWidget {
 class DesktopWindowChromeMetrics {
   const DesktopWindowChromeMetrics._();
 
+  static double topSafePadding(BuildContext context) => 0;
+
   static double sidebarTopPadding(BuildContext context) => 24;
+
+  static double routeTopBarTopPadding(BuildContext context) => 0;
 }

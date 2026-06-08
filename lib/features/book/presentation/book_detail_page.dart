@@ -882,6 +882,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
         fontWeight: FontWeight.w800,
         height: 1.14,
       ),
+      metaAxis: Axis.horizontal,
     );
   }
 

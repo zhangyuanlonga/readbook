@@ -13,6 +13,9 @@ class DiscoverSourceSummary {
     required this.latencyMs,
     required this.categories,
     this.executionContext,
+    this.catalogSourceId,
+    this.origin = 'cloud_catalog',
+    this.accessReason,
     this.sourceReport = const <String, Object?>{},
     this.failure,
   });
@@ -25,6 +28,9 @@ class DiscoverSourceSummary {
   final int? latencyMs;
   final List<DiscoverSourceCategory> categories;
   final String? executionContext;
+  final String? catalogSourceId;
+  final String origin;
+  final String? accessReason;
   final Map<String, Object?> sourceReport;
   final GatewayFailure? failure;
 }

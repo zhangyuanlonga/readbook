@@ -9,6 +9,7 @@ import '../logging/app_logger.dart';
 import '../membership/membership_service.dart';
 import '../network/api_client.dart';
 import '../network/api_config.dart';
+import '../source_access/source_access_service.dart';
 import 'auth_event_bus.dart';
 import 'auth_session.dart';
 import 'auth_session_store.dart';
@@ -20,6 +21,7 @@ class AuthService {
     DeviceHeartbeatService? heartbeatService,
     AnalyticsService? analyticsService,
     MembershipService? membershipService,
+    SourceAccessService? sourceAccessService,
     AuthSessionStore? sessionStore,
   }) : _baseUrl = (baseUrl ?? AppApiConfig.baseUrl).trim(),
        _client =
@@ -36,6 +38,11 @@ class AuthService {
        _membershipService =
            membershipService ??
            MembershipService(baseUrl: (baseUrl ?? AppApiConfig.baseUrl).trim()),
+       _sourceAccessService =
+           sourceAccessService ??
+           SourceAccessService(
+             baseUrl: (baseUrl ?? AppApiConfig.baseUrl).trim(),
+           ),
        _sessionStore = sessionStore ?? AuthSessionStore();
 
   final ApiClient _client;
@@ -43,6 +50,7 @@ class AuthService {
   final DeviceHeartbeatService _heartbeatService;
   final AnalyticsService _analyticsService;
   final MembershipService _membershipService;
+  final SourceAccessService _sourceAccessService;
   final AuthSessionStore _sessionStore;
   final AppLogger _logger = AppLogger.instance;
 
@@ -218,6 +226,18 @@ class AuthService {
     } catch (error, stackTrace) {
       _logger.warn(
         'Post-auth device seat sync failed',
+        context: {
+          'error': error.toString(),
+          'stackTrace': stackTrace.toString(),
+        },
+      );
+    }
+
+    try {
+      await _sourceAccessService.fetchMyScope();
+    } catch (error, stackTrace) {
+      _logger.warn(
+        'Post-auth source access refresh failed',
         context: {
           'error': error.toString(),
           'stackTrace': stackTrace.toString(),

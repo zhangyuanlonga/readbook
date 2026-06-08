@@ -24,6 +24,7 @@ import '../../../core/membership/membership_entitlement.dart';
 import '../../../core/membership/membership_seat_sync_result.dart';
 import '../../../core/membership/membership_service.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/source_access/source_access_provider.dart';
 import '../application/advanced_theme_provider.dart';
 import '../providers.dart';
 
@@ -271,6 +272,7 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
           entitlement: entitlement,
         );
         snapshotRevisionNotifier.update((value) => value + 1);
+        await ref.read(sourceAccessScopeProvider.notifier).refresh();
       }
       MembershipSeatSyncResult? seatSyncResult;
       String? transientError;
@@ -388,6 +390,7 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
       await _membershipService.redeemActivationCode(code);
       _codeController.clear();
       _showMessage(_MembershipMessages.redeemSuccess);
+      await ref.read(sourceAccessScopeProvider.notifier).refresh();
       await _loadPage();
       return true;
     } catch (error) {
@@ -558,6 +561,7 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
     try {
       await _membershipService.claimTrialMembership();
       _showMessage(_MembershipMessages.trialSuccess);
+      await ref.read(sourceAccessScopeProvider.notifier).refresh();
       await _loadPage();
     } catch (error) {
       _showMessage(

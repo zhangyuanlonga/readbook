@@ -8,6 +8,7 @@ import 'package:circular_theme_reveal/circular_theme_reveal.dart';
 import 'package:responsive_framework/responsive_framework.dart';
 import 'composition/app_providers.dart' as app_providers;
 import 'platform/app_platform_capabilities.dart';
+import 'platform/desktop_window_chrome.dart';
 import 'tasks/app_task_manager.dart';
 import '../core/app_update/app_update_dialog.dart';
 import '../core/app_update/app_update_release.dart';
@@ -110,10 +111,15 @@ class App extends ConsumerWidget {
           breakpoints: AppLayout.responsiveBreakpoints,
           child: appChild,
         );
+        final desktopChromeChild = DesktopWindowFrame(
+          child: DesktopWindowChromeInsets(
+            child: CircularThemeRevealOverlay(child: responsiveChild),
+          ),
+        );
 
         return _MobileKeyboardInsetStabilizer(
           textScale: textScale,
-          child: CircularThemeRevealOverlay(child: responsiveChild),
+          child: desktopChromeChild,
         );
       },
     );

@@ -10,8 +10,10 @@ import '../domain/discover_source_summary.dart';
 class ServerDiscoverGatewayService {
   ServerDiscoverGatewayService({
     ApiClient? client,
+    ApiClient? catalogClient,
     SourceHealthService? sourceHealthService,
     String? baseUrl,
+    String? catalogBaseUrl,
   }) : _client =
            client ??
            ApiClient(
@@ -19,10 +21,14 @@ class ServerDiscoverGatewayService {
                  (baseUrl ?? AppApiConfig.effectiveReaderGatewayBaseUrl).trim(),
              defaultTimeout: const Duration(seconds: 30),
            ),
+       _catalogClient =
+           catalogClient ??
+           ApiClient(baseUrl: (catalogBaseUrl ?? AppApiConfig.baseUrl).trim()),
        _sourceHealthService =
            sourceHealthService ?? SourceHealthService.instance;
 
   final ApiClient _client;
+  final ApiClient _catalogClient;
   final SourceHealthService _sourceHealthService;
 
   static const int defaultSourcePageSize = 100;
@@ -139,13 +145,11 @@ class ServerDiscoverGatewayService {
     String? keyword,
   }) async {
     final normalizedKeyword = keyword?.trim() ?? '';
-    return _requestGatewayRest(
-      method: ApiMethod.get,
-      path: 'v1/sources',
+    return _requestCatalogRest(
+      path: '/v1/discovery/book-sources',
       queryParameters: <String, dynamic>{
-        'enabled': true,
         'page': page,
-        'pageSize': pageSize,
+        'page_size': pageSize,
         if (normalizedKeyword.isNotEmpty) 'keyword': normalizedKeyword,
       },
       timeout: const Duration(seconds: 15),
@@ -193,6 +197,9 @@ class ServerDiscoverGatewayService {
         latencyMs: latency,
         categories: categories,
         executionContext: response.executionContext,
+        catalogSourceId: source.catalogSourceId,
+        origin: source.origin,
+        accessReason: source.accessReason,
         sourceReport: response.sourceReport,
       );
     } on AppException catch (error) {
@@ -209,6 +216,9 @@ class ServerDiscoverGatewayService {
         status: DiscoverSourceStatus.unavailable,
         latencyMs: DateTime.now().difference(started).inMilliseconds,
         categories: const <DiscoverSourceCategory>[],
+        catalogSourceId: source.catalogSourceId,
+        origin: source.origin,
+        accessReason: source.accessReason,
         failure: error.gatewayFailure,
       );
     } catch (error) {
@@ -225,6 +235,9 @@ class ServerDiscoverGatewayService {
         status: DiscoverSourceStatus.unavailable,
         latencyMs: DateTime.now().difference(started).inMilliseconds,
         categories: const <DiscoverSourceCategory>[],
+        catalogSourceId: source.catalogSourceId,
+        origin: source.origin,
+        accessReason: source.accessReason,
       );
     }
   }
@@ -238,6 +251,27 @@ class ServerDiscoverGatewayService {
       status: _statusFromHealth(source.healthStatus, 0),
       latencyMs: null,
       categories: const <DiscoverSourceCategory>[],
+      catalogSourceId: source.catalogSourceId,
+      origin: source.origin,
+      accessReason: source.accessReason,
+    );
+  }
+
+  Future<T> _requestCatalogRest<T>({
+    required String path,
+    Map<String, dynamic> queryParameters = const <String, dynamic>{},
+    required Duration timeout,
+    required ApiDataDecoder<T> decoder,
+  }) {
+    return _catalogClient.request<T>(
+      method: ApiMethod.get,
+      path: path,
+      queryParameters: queryParameters,
+      attachAccessToken: true,
+      enableRetry: false,
+      timeout: timeout,
+      stage: ErrorStage.source,
+      decoder: decoder,
     );
   }
 
@@ -315,14 +349,21 @@ class _GatewaySourcePage {
 
   factory _GatewaySourcePage.fromEnvelopeData(Object? data) {
     final map = _asMap(data, 'Invalid source page');
+    final page = _intOrDefault(map['page'], 1);
+    final pageSize = _intOrDefault(map['pageSize'] ?? map['page_size'], 0);
+    final total = _intOrDefault(map['total'], 0);
+    final accessReasons = _stringMap(map['access_reasons']);
     return _GatewaySourcePage(
       items: (map['items'] as List? ?? const <Object?>[])
-          .map(_GatewaySourceItem.fromJson)
+          .map(
+            (item) =>
+                _GatewaySourceItem.fromJson(item, accessReasons: accessReasons),
+          )
           .toList(growable: false),
-      page: _intOrDefault(map['page'], 1),
-      pageSize: _intOrDefault(map['pageSize'] ?? map['page_size'], 0),
-      total: _intOrDefault(map['total'], 0),
-      hasMore: map['hasMore'] == true,
+      page: page,
+      pageSize: pageSize,
+      total: total,
+      hasMore: map['hasMore'] == true || page * pageSize < total,
     );
   }
 }
@@ -334,6 +375,8 @@ class _GatewaySourceItem {
     required this.name,
     required this.enabled,
     this.healthStatus,
+    this.catalogSourceId,
+    this.accessReason,
   });
 
   final String id;
@@ -341,16 +384,33 @@ class _GatewaySourceItem {
   final String name;
   final bool enabled;
   final String? healthStatus;
+  final String? catalogSourceId;
+  final String? accessReason;
 
-  factory _GatewaySourceItem.fromJson(Object? value) {
+  String get origin => 'cloud_catalog';
+
+  factory _GatewaySourceItem.fromJson(
+    Object? value, {
+    Map<String, String> accessReasons = const <String, String>{},
+  }) {
     final map = _asMap(value, 'Invalid source item');
+    final catalogSourceId = _requiredString(map, 'id');
+    final gatewaySourceId =
+        _optionalString(map['gateway_source_id']) ?? catalogSourceId;
     return _GatewaySourceItem(
-      id: _requiredString(map, 'id'),
+      id: gatewaySourceId,
       sourceUrl:
-          _optionalString(map['sourceUrl']) ?? _requiredString(map, 'id'),
-      name: _requiredString(map, 'sourceName'),
+          _optionalString(map['sourceUrl']) ??
+          _optionalString(map['bookSourceUrl']) ??
+          gatewaySourceId,
+      name:
+          _optionalString(map['sourceName']) ??
+          _optionalString(map['name']) ??
+          _requiredString(map, 'title'),
       enabled: map['enabled'] != false,
       healthStatus: _optionalString(map['healthStatus']),
+      catalogSourceId: catalogSourceId,
+      accessReason: accessReasons[catalogSourceId],
     );
   }
 }
@@ -538,6 +598,13 @@ Map<String, Object?> _asMap(Object? value, String message) {
 Map<String, Object?> _mapOrEmpty(Object? value) {
   if (value is! Map) return const <String, Object?>{};
   return value.map((key, value) => MapEntry(key.toString(), value));
+}
+
+Map<String, String> _stringMap(Object? value) {
+  if (value is! Map) return const <String, String>{};
+  return value.map(
+    (key, item) => MapEntry(_stringOrEmpty(key), _stringOrEmpty(item)),
+  )..removeWhere((key, item) => key.isEmpty || item.isEmpty);
 }
 
 String _requiredString(Map<String, Object?> map, String key) {

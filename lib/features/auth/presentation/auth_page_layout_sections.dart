@@ -305,25 +305,14 @@ extension _AuthPageLayoutSections on _AuthPageState {
               alignment: mediumWidth ? Alignment.center : Alignment.centerLeft,
               child:
                   isCompactLandscape
-                      ? Row(
-                        mainAxisSize:
-                            mediumWidth ? MainAxisSize.min : MainAxisSize.max,
-                        children: [
-                          _buildAuthGlyph(colorScheme, size: 34),
-                          const SizedBox(width: 12),
-                          Flexible(
-                            child: Text(
-                              'Selune',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: textTheme.headlineSmall?.copyWith(
-                                color: colorScheme.onSurface,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 0,
-                              ),
-                            ),
-                          ),
-                        ],
+                      ? _buildAuthWordmark(
+                        context,
+                        colorScheme,
+                        alignment:
+                            mediumWidth
+                                ? CrossAxisAlignment.center
+                                : CrossAxisAlignment.start,
+                        compact: true,
                       )
                       : Column(
                         mainAxisSize: MainAxisSize.min,
@@ -332,41 +321,13 @@ extension _AuthPageLayoutSections on _AuthPageState {
                                 ? CrossAxisAlignment.center
                                 : CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _buildAuthGlyph(colorScheme, size: 36),
-                              const SizedBox(width: 10),
-                              Text(
-                                'Selune',
-                                style: textTheme.titleLarge?.copyWith(
-                                  color: colorScheme.onSurface,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 0,
-                                ),
-                              ),
-                            ],
-                          ),
-                          SizedBox(height: isTightHeader ? 10 : 14),
-                          AppAnimatedSwitcher(
-                            child: Text(
-                              _isRegister ? '创建账户' : '欢迎回来',
-                              key: ValueKey<String>(
-                                _isRegister
-                                    ? 'auth_mobile_title_register'
-                                    : 'auth_mobile_title_login',
-                              ),
-                              textAlign:
-                                  mediumWidth
-                                      ? TextAlign.center
-                                      : TextAlign.start,
-                              style: textTheme.headlineSmall?.copyWith(
-                                color: colorScheme.onSurface,
-                                fontWeight: FontWeight.w800,
-                                height: 1.16,
-                                letterSpacing: 0,
-                              ),
-                            ),
+                          _buildAuthWordmark(
+                            context,
+                            colorScheme,
+                            alignment:
+                                mediumWidth
+                                    ? CrossAxisAlignment.center
+                                    : CrossAxisAlignment.start,
                           ),
                           const SizedBox(height: 8),
                           AppAnimatedSwitcher(
@@ -585,24 +546,44 @@ extension _AuthPageLayoutSections on _AuthPageState {
     ColorScheme colorScheme, {
     bool compact = false,
   }) {
+    return _buildAuthWordmark(context, colorScheme, compact: compact);
+  }
+
+  Widget _buildAuthWordmark(
+    BuildContext context,
+    ColorScheme colorScheme, {
+    CrossAxisAlignment alignment = CrossAxisAlignment.start,
+    bool compact = false,
+  }) {
     final textTheme = Theme.of(context).textTheme;
-    final markSize = compact ? 38.0 : 34.0;
-    return Row(
+    return Column(
       mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: alignment,
       children: [
-        _buildAuthGlyph(colorScheme, size: markSize),
-        const SizedBox(width: 12),
-        Flexible(
-          child: Text(
-            'Selune',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: textTheme.headlineSmall?.copyWith(
-              color: colorScheme.onSurface,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0,
-              height: 1,
-            ),
+        Text(
+          'Selune',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: (compact ? textTheme.headlineSmall : textTheme.headlineMedium)
+              ?.copyWith(
+                color: colorScheme.onSurface,
+                fontFamily: 'Georgia',
+                fontFamilyFallback: const ['Times New Roman', 'serif'],
+                fontStyle: FontStyle.italic,
+                fontWeight: FontWeight.w700,
+                height: 0.98,
+                letterSpacing: 0,
+              ),
+        ),
+        SizedBox(height: compact ? 4 : 5),
+        Text(
+          'CLEAR READING',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: textTheme.labelSmall?.copyWith(
+            color: colorScheme.onSurfaceVariant.withValues(alpha: 0.68),
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.35,
           ),
         ),
       ],

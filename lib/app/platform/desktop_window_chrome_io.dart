@@ -19,6 +19,36 @@ class DesktopWindowFrame extends StatelessWidget {
   }
 }
 
+class DesktopWindowChromeInsets extends StatelessWidget {
+  const DesktopWindowChromeInsets({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final topPadding = DesktopWindowChromeMetrics.topSafePadding(context);
+    if (topPadding <= 0) {
+      return child;
+    }
+
+    final mediaQuery = MediaQuery.of(context);
+    final chromePadding = mediaQuery.padding.copyWith(
+      top: mediaQuery.padding.top + topPadding,
+    );
+    final chromeViewPadding = mediaQuery.viewPadding.copyWith(
+      top: mediaQuery.viewPadding.top + topPadding,
+    );
+
+    return MediaQuery(
+      data: mediaQuery.copyWith(
+        padding: chromePadding,
+        viewPadding: chromeViewPadding,
+      ),
+      child: child,
+    );
+  }
+}
+
 class DesktopWindowDragArea extends StatelessWidget {
   const DesktopWindowDragArea({super.key, required this.child});
 
@@ -135,8 +165,21 @@ class _DesktopWindowCaptionControlsState
 class DesktopWindowChromeMetrics {
   const DesktopWindowChromeMetrics._();
 
+  static const double _macOSTopSafePadding = 38;
+  static const double _defaultSidebarTopPadding = 24;
+
+  static double topSafePadding(BuildContext context) {
+    return Theme.of(context).platform == TargetPlatform.macOS
+        ? _macOSTopSafePadding
+        : 0;
+  }
+
   static double sidebarTopPadding(BuildContext context) {
-    return Theme.of(context).platform == TargetPlatform.macOS ? 58 : 24;
+    return _defaultSidebarTopPadding + topSafePadding(context);
+  }
+
+  static double routeTopBarTopPadding(BuildContext context) {
+    return topSafePadding(context);
   }
 }
 

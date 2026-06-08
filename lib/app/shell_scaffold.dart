@@ -414,34 +414,32 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     final width = AppLayout.screenWidth(context);
     final sidebarWidth = _desktopSidebarWidthFor(width);
 
-    return DesktopWindowFrame(
-      child: Scaffold(
-        backgroundColor: colorScheme.surface,
-        body: Row(
-          children: [
-            _buildDesktopSidebar(
-              context,
-              width: sidebarWidth,
-              destinations: destinations,
-              selectedIndex: selectedIndex,
-            ),
-            Expanded(
-              child: DecoratedBox(
-                decoration: BoxDecoration(color: colorScheme.surface),
-                child: Column(
-                  children: [
-                    _buildDesktopTopBar(
-                      context,
-                      destinations: destinations,
-                      selectedIndex: selectedIndex,
-                    ),
-                    Expanded(child: body),
-                  ],
-                ),
+    return Scaffold(
+      backgroundColor: colorScheme.surface,
+      body: Row(
+        children: [
+          _buildDesktopSidebar(
+            context,
+            width: sidebarWidth,
+            destinations: destinations,
+            selectedIndex: selectedIndex,
+          ),
+          Expanded(
+            child: DecoratedBox(
+              decoration: BoxDecoration(color: colorScheme.surface),
+              child: Column(
+                children: [
+                  _buildDesktopTopBar(
+                    context,
+                    destinations: destinations,
+                    selectedIndex: selectedIndex,
+                  ),
+                  Expanded(child: body),
+                ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -488,6 +486,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
               child: DesktopWindowDragArea(child: SizedBox.expand()),
             ),
             SafeArea(
+              top: false,
               bottom: false,
               left: false,
               right: false,
@@ -1165,6 +1164,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
           ),
         ),
         child: SafeArea(
+          top: false,
           right: false,
           child: Padding(
             padding: EdgeInsets.fromLTRB(
