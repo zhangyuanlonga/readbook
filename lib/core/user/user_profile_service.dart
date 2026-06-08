@@ -35,15 +35,19 @@ class UserProfileService {
   final String _baseUrl;
   final AuthSessionStore? _sessionStore;
 
-  Future<UserProfile> fetchMe() async {
+  Future<UserProfile> fetchMe({
+    String? accessToken,
+    bool enableAuthRefresh = true,
+  }) async {
     _ensureBaseUrl();
-    final headers = await _authHeaders();
+    final headers = await _authHeaders(accessToken: accessToken);
     final data = await _client.requestSpec(
       ApiRequestSpec.jsonObject(
         method: ApiMethod.get,
         path: '/v1/users/me',
         headers: headers,
-        attachAccessToken: true,
+        attachAccessToken: accessToken == null,
+        enableAuthRefresh: enableAuthRefresh,
         stage: ErrorStage.unknown,
       ),
     );
@@ -103,8 +107,11 @@ class UserProfileService {
     return error.statusCode == 404 || error.apiCode == 'NOT_FOUND';
   }
 
-  Future<Map<String, String>> _authHeaders() async {
-    final token = (await _sessionStore?.getAccessToken())?.trim() ?? '';
+  Future<Map<String, String>> _authHeaders({String? accessToken}) async {
+    final token =
+        accessToken?.trim() ??
+        (await _sessionStore?.getAccessToken())?.trim() ??
+        '';
     if (token.isEmpty) {
       return const <String, String>{};
     }

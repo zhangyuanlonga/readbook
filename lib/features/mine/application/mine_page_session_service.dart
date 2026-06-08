@@ -3,7 +3,9 @@ import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/auth/auth_session.dart';
+import '../../../core/auth/auth_session_secret_store.dart';
 import '../../../core/auth/auth_session_store.dart';
+import '../../../core/auth/auth_session_storage_keys.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../core/membership/membership_access_resolver.dart';
 import '../../../core/membership/membership_entitlement.dart';
@@ -52,6 +54,10 @@ class MinePageSessionPriming {
   static AuthSession? _primedSession;
 
   static void prime(SharedPreferences prefs) {
+    if (!_hasStartupCredentialHint(prefs)) {
+      _primedSession = null;
+      return;
+    }
     _primedSession = AuthSessionStore.readDisplaySession(prefs);
   }
 
@@ -59,6 +65,16 @@ class MinePageSessionPriming {
     final session = _primedSession;
     _primedSession = null;
     return session;
+  }
+
+  static bool _hasStartupCredentialHint(SharedPreferences prefs) {
+    return (prefs
+                .getString(authSecretFallbackAccessTokenStorageKey)
+                ?.trim()
+                .isNotEmpty ??
+            false) ||
+        (prefs.getString(authAccessTokenStorageKey)?.trim().isNotEmpty ??
+            false);
   }
 }
 
@@ -362,7 +378,13 @@ class MinePageSessionService {
       return null;
     }
     try {
-      final profile = await _userProfileService.fetchMe();
+      final profile = await _userProfileService.fetchMe(
+        accessToken: session.accessToken,
+        enableAuthRefresh: false,
+      );
+      if (!_profileBelongsToSession(profile, session)) {
+        return (session: session, profile: null);
+      }
       final nextSession = AuthSession(
         accessToken: session.accessToken,
         refreshToken: session.refreshToken,
@@ -384,11 +406,39 @@ class MinePageSessionService {
       if (_isSameIdentity(session, nextSession)) {
         return (session: session, profile: profile);
       }
+      final currentSession = await _authSessionStore.getSession();
+      if (!_isSameSessionCredential(currentSession, session)) {
+        return currentSession == null
+            ? null
+            : (session: currentSession, profile: null);
+      }
       await _authSessionStore.saveSession(nextSession);
       return (session: nextSession, profile: profile);
     } catch (_) {
       return (session: session, profile: null);
     }
+  }
+
+  bool _profileBelongsToSession(UserProfile profile, AuthSession session) {
+    final sessionUserId = session.userId?.trim() ?? '';
+    if (sessionUserId.isNotEmpty && profile.userId.trim().isNotEmpty) {
+      return sessionUserId == profile.userId.trim();
+    }
+    final sessionIdentity = session.loginIdentity?.trim().toLowerCase() ?? '';
+    final profileIdentity = profile.loginIdentity.trim().toLowerCase();
+    if (sessionIdentity.isNotEmpty && profileIdentity.isNotEmpty) {
+      return sessionIdentity == profileIdentity;
+    }
+    return true;
+  }
+
+  bool _isSameSessionCredential(AuthSession? current, AuthSession expected) {
+    if (current == null) {
+      return false;
+    }
+    return current.accessToken.trim() == expected.accessToken.trim() &&
+        (current.refreshToken?.trim() ?? '') ==
+            (expected.refreshToken?.trim() ?? '');
   }
 
   bool _isSameIdentity(AuthSession a, AuthSession b) {

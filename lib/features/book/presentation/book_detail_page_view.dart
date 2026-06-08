@@ -33,6 +33,7 @@ extension on _BookDetailPageState {
       desktopHeight: kToolbarHeight,
       titleMaxWidth: 320,
       moreTooltip: '更多',
+      showDesktopTitle: false,
     );
   }
 
@@ -225,106 +226,140 @@ extension on _BookDetailPageState {
                 final result = presentationState.result;
                 final errorText = presentationState.errorText;
 
-                return DecoratedBox(
-                  decoration:
-                      md3CoverBackdrop == null
-                          ? buildAdvancedThemeBackdropDecoration(backdrop)
-                          : buildImageBackdropDecoration(
-                            backgroundColor: colorScheme.surface,
-                            surfaceColor: colorScheme.surfaceContainerLow,
-                            imageProvider: md3CoverBackdrop,
-                            imageOpacity: 0.48,
-                            imageBlurSigma: 18,
-                            imageFit: BoxFit.cover,
-                            overlayColor:
-                                Theme.of(context).brightness == Brightness.dark
-                                    ? Colors.black
-                                    : colorScheme.surface,
-                            overlayOpacity:
-                                Theme.of(context).brightness == Brightness.dark
-                                    ? 0.58
-                                    : 0.72,
-                          ),
-                  child: LayoutBuilder(
-                    builder: (context, _) {
-                      final maxWidth = AppLayout.pageContentMaxWidth(
-                        context,
-                        maxWidth: AppLayout.bookDetailContentMaxWidth,
-                      );
+                final content = LayoutBuilder(
+                  builder: (context, _) {
+                    final detailMaxWidth =
+                        metrics.isMediumUpWindow
+                            ? 960.0
+                            : AppLayout.bookDetailContentMaxWidth;
+                    final maxWidth = AppLayout.pageContentMaxWidth(
+                      context,
+                      maxWidth: detailMaxWidth,
+                    );
 
-                      return Align(
-                        alignment: Alignment.topCenter,
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(maxWidth: maxWidth),
-                          child: RefreshIndicator(
-                            onRefresh: () => _load(forceRefresh: true),
-                            child: ListView(
-                              controller: _detailScrollController,
-                              physics: const AlwaysScrollableScrollPhysics(),
-                              padding: EdgeInsets.fromLTRB(
-                                horizontal,
-                                topInset + metrics.sectionGap,
-                                horizontal,
-                                metrics.sectionGap +
-                                    bottomSafe +
-                                    (usesInlineMetadataEditor
-                                        ? keyboardInset
-                                        : 0),
-                              ),
-                              children: [
-                                if (_metadataInlineNotice != null) ...[
-                                  _buildMetadataInlineNoticeCard(
-                                    _metadataInlineNotice!,
-                                  ),
-                                  SizedBox(height: metrics.sectionGap),
-                                ],
-                                if (_isMissingParams)
-                                  RuntimeFeedbackCard(
-                                    title: '参数不完整',
-                                    message:
-                                        '缺少 sourceId/detailUrl，无法加载详情。请从搜索结果进入。bookId=${widget.bookId}',
-                                    tone: RuntimeFeedbackTone.warning,
-                                  )
-                                else if (errorText != null && result == null)
-                                  RuntimeFeedbackCard(
-                                    title: '加载失败',
-                                    message: errorText,
-                                    tone: RuntimeFeedbackTone.error,
-                                    actions: [
-                                      FilledButton.tonal(
-                                        onPressed:
-                                            () => _load(forceRefresh: true),
-                                        child: const Text('重试'),
-                                      ),
-                                      if (_isLocalContent)
-                                        OutlinedButton.icon(
-                                          onPressed:
-                                              _copyLocalDiagnosticsFromError,
-                                          icon: const Icon(
-                                            Icons.copy_rounded,
-                                            size: 16,
-                                          ),
-                                          label: const Text('复制诊断信息'),
-                                        ),
-                                    ],
-                                  )
-                                else if (result != null) ...[
-                                  ..._buildLoadedContentSections(
-                                    presentationState: presentationState,
-                                    auxiliaryState: auxiliaryState,
-                                    result: result,
-                                  ),
-                                ] else if (presentationState.isLoading) ...[
-                                  _buildInitialLoadingContent(
-                                    auxiliaryState: auxiliaryState,
-                                  ),
-                                ],
-                              ],
+                    return Align(
+                      alignment: Alignment.topCenter,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(maxWidth: maxWidth),
+                        child: RefreshIndicator(
+                          onRefresh: () => _load(forceRefresh: true),
+                          child: ListView(
+                            controller: _detailScrollController,
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            padding: EdgeInsets.fromLTRB(
+                              horizontal,
+                              topInset + metrics.sectionGap,
+                              horizontal,
+                              metrics.sectionGap +
+                                  bottomSafe +
+                                  (usesInlineMetadataEditor
+                                      ? keyboardInset
+                                      : 0),
                             ),
+                            children: [
+                              if (_metadataInlineNotice != null) ...[
+                                _buildMetadataInlineNoticeCard(
+                                  _metadataInlineNotice!,
+                                ),
+                                SizedBox(height: metrics.sectionGap),
+                              ],
+                              if (_isMissingParams)
+                                RuntimeFeedbackCard(
+                                  title: '参数不完整',
+                                  message:
+                                      '缺少 sourceId/detailUrl，无法加载详情。请从搜索结果进入。bookId=${widget.bookId}',
+                                  tone: RuntimeFeedbackTone.warning,
+                                )
+                              else if (errorText != null && result == null)
+                                RuntimeFeedbackCard(
+                                  title: '加载失败',
+                                  message: errorText,
+                                  tone: RuntimeFeedbackTone.error,
+                                  actions: [
+                                    FilledButton.tonal(
+                                      onPressed:
+                                          () => _load(forceRefresh: true),
+                                      child: const Text('重试'),
+                                    ),
+                                    if (_isLocalContent)
+                                      OutlinedButton.icon(
+                                        onPressed:
+                                            _copyLocalDiagnosticsFromError,
+                                        icon: const Icon(
+                                          Icons.copy_rounded,
+                                          size: 16,
+                                        ),
+                                        label: const Text('复制诊断信息'),
+                                      ),
+                                  ],
+                                )
+                              else if (result != null) ...[
+                                ..._buildLoadedContentSections(
+                                  presentationState: presentationState,
+                                  auxiliaryState: auxiliaryState,
+                                  result: result,
+                                ),
+                              ] else if (presentationState.isLoading) ...[
+                                _buildInitialLoadingContent(
+                                  auxiliaryState: auxiliaryState,
+                                ),
+                              ],
+                            ],
                           ),
                         ),
-                      );
-                    },
+                      ),
+                    );
+                  },
+                );
+
+                if (md3CoverBackdrop == null) {
+                  return DecoratedBox(
+                    decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+                    child: content,
+                  );
+                }
+
+                if (metrics.isMediumUpWindow) {
+                  return DecoratedBox(
+                    decoration: buildImageBackdropDecoration(
+                      backgroundColor: colorScheme.surface,
+                      surfaceColor: colorScheme.surfaceContainerLow,
+                      imageProvider: md3CoverBackdrop,
+                      imageOpacity: 0.48,
+                      imageBlurSigma: 18,
+                      imageFit: BoxFit.cover,
+                      overlayColor:
+                          Theme.of(context).brightness == Brightness.dark
+                              ? Colors.black
+                              : colorScheme.surface,
+                      overlayOpacity:
+                          Theme.of(context).brightness == Brightness.dark
+                              ? 0.58
+                              : 0.72,
+                    ),
+                    child: content,
+                  );
+                }
+
+                final mobileBackdropHeight = math.min(
+                  metrics.height * 0.52,
+                  topInset + 330,
+                );
+                return DecoratedBox(
+                  decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+                  child: Stack(
+                    children: [
+                      Positioned(
+                        left: 0,
+                        top: 0,
+                        right: 0,
+                        height: mobileBackdropHeight,
+                        child: _MobileBookDetailCoverBackdrop(
+                          imageProvider: md3CoverBackdrop,
+                        ),
+                      ),
+                      content,
+                    ],
                   ),
                 );
               },
@@ -332,6 +367,51 @@ extension on _BookDetailPageState {
           ),
         );
       },
+    );
+  }
+}
+
+class _MobileBookDetailCoverBackdrop extends StatelessWidget {
+  const _MobileBookDetailCoverBackdrop({required this.imageProvider});
+
+  final ImageProvider imageProvider;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surface = colorScheme.surface;
+    return ClipRect(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          ImageFiltered(
+            imageFilter: ui.ImageFilter.blur(sigmaX: 26, sigmaY: 26),
+            child: Transform.scale(
+              scale: 1.18,
+              child: Image(
+                image: imageProvider,
+                fit: BoxFit.cover,
+                alignment: Alignment.topCenter,
+              ),
+            ),
+          ),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  surface.withValues(alpha: isDark ? 0.48 : 0.62),
+                  surface.withValues(alpha: isDark ? 0.74 : 0.78),
+                  surface,
+                ],
+                stops: const [0, 0.58, 1],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

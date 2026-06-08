@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -6,11 +7,15 @@ import 'package:shuxiang_reading_next/app/layout/app_adaptive.dart';
 import 'package:shuxiang_reading_next/app/layout/app_layout.dart';
 import 'package:shuxiang_reading_next/app/layout/app_spacing.dart';
 import 'package:shuxiang_reading_next/app/navigation/app_navigation_style_provider.dart';
+import 'package:shuxiang_reading_next/app/platform/desktop_window_chrome.dart';
 import 'package:shuxiang_reading_next/app/shell_page_toolbar_provider.dart';
 import 'package:shuxiang_reading_next/app/shell_navigation_provider.dart';
 import 'package:shuxiang_reading_next/app/shell_scaffold.dart';
 import 'package:shuxiang_reading_next/app/widgets/bottom_nav_icon_view.dart';
 import 'package:shuxiang_reading_next/app/widgets/cupertino_dock_navigation_bar.dart';
+import 'package:shuxiang_reading_next/core/auth/auth_session_secret_store.dart';
+import 'package:shuxiang_reading_next/core/auth/auth_session_store.dart';
+import 'package:shuxiang_reading_next/features/auth/providers.dart';
 import 'package:shuxiang_reading_next/features/bookshelf/providers.dart';
 import '../../test_utils/adaptive_test_harness.dart';
 
@@ -721,6 +726,44 @@ void main() {
     }
   });
 
+  testWidgets('桌面沉浸式窗口 chrome 只在原生桌面端启用对应留白和控件', (
+    tester,
+  ) async {
+    final macChrome = await _readFromContext<_DesktopWindowChromeSnapshot>(
+      tester,
+      width: 1280,
+      platform: TargetPlatform.macOS,
+      read: _DesktopWindowChromeSnapshot.fromContext,
+    );
+    final windowsChrome = await _readFromContext<_DesktopWindowChromeSnapshot>(
+      tester,
+      width: 1280,
+      platform: TargetPlatform.windows,
+      read: _DesktopWindowChromeSnapshot.fromContext,
+    );
+    final linuxChrome = await _readFromContext<_DesktopWindowChromeSnapshot>(
+      tester,
+      width: 1280,
+      platform: TargetPlatform.linux,
+      read: _DesktopWindowChromeSnapshot.fromContext,
+    );
+    final mobileChrome = await _readFromContext<_DesktopWindowChromeSnapshot>(
+      tester,
+      width: 390,
+      platform: TargetPlatform.iOS,
+      read: _DesktopWindowChromeSnapshot.fromContext,
+    );
+
+    expect(macChrome.captionControlsVisible, isFalse);
+    expect(macChrome.sidebarTopPadding, 58);
+    expect(windowsChrome.captionControlsVisible, isTrue);
+    expect(windowsChrome.sidebarTopPadding, 24);
+    expect(linuxChrome.captionControlsVisible, isTrue);
+    expect(linuxChrome.sidebarTopPadding, 24);
+    expect(mobileChrome.captionControlsVisible, isFalse);
+    expect(mobileChrome.sidebarTopPadding, 24);
+  });
+
   testWidgets('ShellScaffold 窄桌面顶栏收起低优先级全局入口', (tester) async {
     await _pumpShellScaffold(tester, width: 600);
 
@@ -776,12 +819,25 @@ void main() {
 
   testWidgets('ShellScaffold 桌面顶部栏显示轻量账号入口', (tester) async {
     SharedPreferences.setMockInitialValues(<String, Object>{
+      authSecretFallbackAccessTokenStorageKey: 'desktop_access',
       'auth.user_id': 'desktop_user',
       'auth.username': 'desktop_reader',
       'auth.display_name': 'Desktop Reader',
     });
+    final prefs = await SharedPreferences.getInstance();
+    final sessionStore = AuthSessionStore(
+      preferences: prefs,
+      secretStore: SharedPreferencesAuthSessionSecretStore(preferences: prefs),
+      enableLegacyCredentialFallback: false,
+    );
 
-    await _pumpShellScaffold(tester, width: 1280);
+    await _pumpShellScaffold(
+      tester,
+      width: 1280,
+      overrides: <Override>[
+        authSessionStoreProvider.overrideWithValue(sessionStore),
+      ],
+    );
     await tester.pump();
 
     expect(
@@ -790,7 +846,7 @@ void main() {
     );
     expect(
       find.byKey(const ValueKey<String>('desktop_top_bar_settings_button')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.byKey(const ValueKey<String>('desktop_top_bar_account_entry')),
@@ -825,14 +881,13 @@ void main() {
     );
     expect(
       find.byKey(const ValueKey<String>('desktop_account_menu_settings')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.byKey(const ValueKey<String>('desktop_account_menu_logout')),
       findsOneWidget,
     );
     expect(find.text('个人信息'), findsOneWidget);
-    expect(find.text('设置'), findsOneWidget);
   });
 
   testWidgets('ShellScaffold 桌面顶部栏未登录时显示登录入口', (tester) async {
@@ -860,14 +915,13 @@ void main() {
     );
     expect(
       find.byKey(const ValueKey<String>('desktop_account_menu_settings')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.byKey(const ValueKey<String>('desktop_account_menu_profile')),
       findsNothing,
     );
     expect(find.text('登录账号'), findsOneWidget);
-    expect(find.text('设置'), findsOneWidget);
   });
 
   testWidgets('ShellScaffold 桌面书架显示状态侧栏和筛选弹窗', (tester) async {
@@ -1177,6 +1231,7 @@ void main() {
 Future<void> _pumpShellScaffold(
   WidgetTester tester, {
   required double width,
+  List<Override> overrides = const <Override>[],
 }) async {
   await tester.binding.setSurfaceSize(Size(width, 844));
   addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -1184,6 +1239,7 @@ Future<void> _pumpShellScaffold(
     AdaptiveTestHarness(
       width: width,
       wrapWithMaterialApp: true,
+      overrides: overrides,
       child: const ShellScaffold(location: '/bookshelf', child: SizedBox()),
     ),
   );
@@ -1195,9 +1251,20 @@ Future<T> _readFromContext<T>(
   required double width,
   double height = 844,
   double textScaleFactor = 1,
+  TargetPlatform? platform,
   required T Function(BuildContext context) read,
 }) async {
   T? result;
+
+  Widget child = Builder(
+    builder: (context) {
+      result = read(context);
+      return const SizedBox();
+    },
+  );
+  if (platform != null) {
+    child = Theme(data: ThemeData(platform: platform), child: child);
+  }
 
   await tester.pumpWidget(
     AdaptiveTestHarness(
@@ -1205,12 +1272,7 @@ Future<T> _readFromContext<T>(
       height: height,
       textScaleFactor: textScaleFactor,
       wrapWithMaterialApp: true,
-      child: Builder(
-        builder: (context) {
-          result = read(context);
-          return const SizedBox();
-        },
-      ),
+      child: child,
     ),
   );
   await tester.pump();
@@ -1225,6 +1287,23 @@ class _BookshelfMineNavigationNotifier extends AppShellNavigationNotifier {
       showBookshelf: true,
       showDiscover: false,
       showStats: false,
+    );
+  }
+}
+
+class _DesktopWindowChromeSnapshot {
+  const _DesktopWindowChromeSnapshot({
+    required this.captionControlsVisible,
+    required this.sidebarTopPadding,
+  });
+
+  final bool captionControlsVisible;
+  final double sidebarTopPadding;
+
+  static _DesktopWindowChromeSnapshot fromContext(BuildContext context) {
+    return _DesktopWindowChromeSnapshot(
+      captionControlsVisible: DesktopWindowCaptionControls.isVisible(context),
+      sidebarTopPadding: DesktopWindowChromeMetrics.sidebarTopPadding(context),
     );
   }
 }

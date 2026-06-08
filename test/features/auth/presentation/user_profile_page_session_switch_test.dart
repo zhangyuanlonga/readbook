@@ -123,7 +123,10 @@ class _SwitchingUserProfileService extends UserProfileService {
   int fetchCount = 0;
 
   @override
-  Future<UserProfile> fetchMe() {
+  Future<UserProfile> fetchMe({
+    String? accessToken,
+    bool enableAuthRefresh = true,
+  }) {
     fetchCount += 1;
     if (fetchCount == 1) {
       return _oldProfileCompleter.future;

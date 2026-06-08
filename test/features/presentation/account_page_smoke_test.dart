@@ -339,6 +339,37 @@ void main() {
     },
   );
 
+  testWidgets(
+    'desktop root startup ignores display-only stale account snapshot',
+    (tester) async {
+      await registerAdaptiveViewportTearDown(tester);
+      tester.view.devicePixelRatio = 1;
+      await tester.binding.setSurfaceSize(const Size(1280, 800));
+
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth.user_id': 'stale_desktop_user',
+        'auth.display_name': 'Stale Desktop Reader',
+      });
+      final prefs = await SharedPreferences.getInstance();
+      AuthSessionSnapshotBootstrap.prime(prefs);
+
+      String? startupLocation;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(platform: TargetPlatform.macOS),
+          home: Builder(
+            builder: (context) {
+              startupLocation = resolveAppRootStartupLocation(context);
+              return const SizedBox.shrink();
+            },
+          ),
+        ),
+      );
+
+      expect(startupLocation, '/auth');
+    },
+  );
+
   testWidgets('AnnouncementListPage renders on phone and large screens', (
     tester,
   ) async {

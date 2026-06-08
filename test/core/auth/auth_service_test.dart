@@ -239,6 +239,57 @@ void main() {
       expect(loggedInEvent.isAccountSwitch, isTrue);
     },
   );
+
+  test(
+    'stale refresh result does not overwrite a newer login session',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      final secretStore = FakeAuthSessionSecretStore();
+      final sessionStore = AuthSessionStore(
+        preferences: prefs,
+        secretStore: secretStore,
+      );
+      const oldSession = AuthSession(
+        accessToken: 'old_access',
+        refreshToken: 'old_refresh',
+        userId: 'old_user',
+        username: 'old@example.com',
+      );
+      const newLoginSession = AuthSession(
+        accessToken: 'new_login_access',
+        refreshToken: 'new_login_refresh',
+        userId: 'new_user',
+        username: 'new@example.com',
+      );
+      await sessionStore.saveSession(oldSession);
+
+      final client = _DelayedRefreshApiClient();
+      final service = AuthService(
+        client: client,
+        baseUrl: 'https://example.com',
+        heartbeatService: _ImmediateHeartbeatService(),
+        analyticsService: _NoopAnalyticsService(),
+        membershipService: _NoopMembershipService(),
+        sessionStore: sessionStore,
+      );
+
+      final refreshFuture = service.refreshAndStore();
+      await client.requestStarted.future;
+      await sessionStore.saveSession(newLoginSession);
+      client.complete(<String, dynamic>{
+        'access_token': 'old_refreshed_access',
+        'refresh_token': 'old_refreshed_refresh',
+        'user_id': 'old_user',
+        'username': 'old@example.com',
+      });
+      await refreshFuture;
+
+      final storedSession = await sessionStore.getSession();
+      expect(storedSession?.accessToken, 'new_login_access');
+      expect(storedSession?.refreshToken, 'new_login_refresh');
+      expect(storedSession?.userId, 'new_user');
+    },
+  );
 }
 
 class _FakeAuthApiClient extends ApiClient {
@@ -270,6 +321,44 @@ class _FakeAuthApiClient extends ApiClient {
     capturedPath = path;
     capturedBody = body is Map<String, dynamic> ? body : null;
     final payload = responseByPath[path] ?? <String, dynamic>{};
+    if (decoder != null) {
+      return decoder(payload);
+    }
+    return payload as T;
+  }
+}
+
+class _DelayedRefreshApiClient extends ApiClient {
+  final Completer<void> requestStarted = Completer<void>();
+  final Completer<Map<String, dynamic>> _responseCompleter =
+      Completer<Map<String, dynamic>>();
+
+  void complete(Map<String, dynamic> payload) {
+    _responseCompleter.complete(payload);
+  }
+
+  @override
+  Future<T> request<T>({
+    required ApiMethod method,
+    required String path,
+    Map<String, dynamic> queryParameters = const {},
+    Object? body,
+    Map<String, String> headers = const {},
+    Duration? timeout,
+    int? maxRetries,
+    bool enableRetry = true,
+    bool enableCache = false,
+    Duration? cacheTtl,
+    bool attachAccessToken = false,
+    bool enableAuthRefresh = true,
+    dynamic stage,
+    T Function(Object? data)? decoder,
+  }) async {
+    expect(path, '/v1/auth/refresh');
+    if (!requestStarted.isCompleted) {
+      requestStarted.complete();
+    }
+    final payload = await _responseCompleter.future;
     if (decoder != null) {
       return decoder(payload);
     }

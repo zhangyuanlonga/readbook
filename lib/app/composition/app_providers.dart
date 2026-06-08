@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/auth_event_bus.dart';
+import '../../core/auth/auth_token_refresher_impl.dart';
 import '../../core/cache/cover_image_disk_cache.dart';
 import '../../core/logging/app_logger.dart';
 import '../../core/logging/source_log_store.dart';
@@ -146,12 +147,17 @@ typedef AppLifecycleCoordinatorFactory = AppLifecycleCoordinator Function();
 
 final appLifecycleCoordinatorFactoryProvider =
     Provider<AppLifecycleCoordinatorFactory>((ref) {
+      final authTokenRefresher = AuthTokenRefresherImpl(
+        authService: ref.watch(auth_providers.authServiceProvider),
+        sessionStore: ref.watch(auth_providers.authSessionStoreProvider),
+      );
       return () => AppLifecycleCoordinator(
         incomingExternalImportStream:
             ref.watch(appExternalImportBridgeProvider).payloadStream,
         authEventStream: ref.watch(appAuthEventStreamProvider),
         initializeExternalImportBridge:
             ref.watch(appExternalImportBridgeProvider).initialize,
+        authTokenRefresher: authTokenRefresher,
       );
     });
 

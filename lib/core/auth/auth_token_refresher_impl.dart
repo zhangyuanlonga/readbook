@@ -29,7 +29,9 @@ class AuthTokenRefresherImpl implements AuthTokenRefresher {
       final session = await _authService.refreshAndStore(
         refreshToken: refreshToken,
       );
-      return session.isValid;
+      final storedSession = await _sessionStore.getSession();
+      return session.isValid &&
+          storedSession?.accessToken.trim() == session.accessToken.trim();
     } on ApiException catch (error) {
       if (_shouldInvalidateSession(error)) {
         // 只有服务端明确拒绝凭证时才清理本地会话并广播过期事件。

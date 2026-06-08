@@ -116,9 +116,11 @@ class AuthService {
 
   Future<AuthSession> refresh({String? refreshToken}) async {
     _ensureBaseUrl();
+    final fallbackSession = await _sessionStore.getSession();
     final resolvedRefreshToken =
         (refreshToken == null || refreshToken.trim().isEmpty)
-            ? await _sessionStore.getRefreshToken()
+            ? fallbackSession?.refreshToken?.trim() ??
+                await _sessionStore.getRefreshToken()
             : refreshToken.trim();
     if (resolvedRefreshToken == null || resolvedRefreshToken.isEmpty) {
       throw const AppException(
@@ -137,15 +139,32 @@ class AuthService {
       decoder: _decodeMap,
     );
 
-    final currentSession = await _sessionStore.getSession();
     return _resolveSessionIdentity(
-      _mergeSessionIdentity(_parseSession(data), fallback: currentSession),
+      _mergeSessionIdentity(
+        _parseSession(data),
+        fallback:
+            _sessionRefreshToken(fallbackSession) == resolvedRefreshToken
+                ? fallbackSession
+                : null,
+      ),
     );
   }
 
   Future<AuthSession> refreshAndStore({String? refreshToken}) async {
-    final session = await refresh(refreshToken: refreshToken);
-    await _sessionStore.saveSession(session);
+    final expectedSession = await _sessionStore.getSession();
+    final expectedRefreshToken =
+        refreshToken?.trim().isNotEmpty == true
+            ? refreshToken!.trim()
+            : _sessionRefreshToken(expectedSession);
+    final session = await refresh(refreshToken: expectedRefreshToken);
+    final currentSession = await _sessionStore.getSession();
+    if (_canPersistRefreshResult(
+      expectedSession: expectedSession,
+      currentSession: currentSession,
+      expectedRefreshToken: expectedRefreshToken,
+    )) {
+      await _sessionStore.saveSession(session);
+    }
     return session;
   }
 
@@ -408,6 +427,25 @@ class AuthService {
       vipStatus: session.vipStatus ?? fallback?.vipStatus,
       vipExpireAt: session.vipExpireAt ?? fallback?.vipExpireAt,
     );
+  }
+
+  bool _canPersistRefreshResult({
+    required AuthSession? expectedSession,
+    required AuthSession? currentSession,
+    required String expectedRefreshToken,
+  }) {
+    final normalizedRefreshToken = expectedRefreshToken.trim();
+    if (normalizedRefreshToken.isEmpty) {
+      return expectedSession == null && currentSession == null;
+    }
+    if (currentSession == null) {
+      return expectedSession == null;
+    }
+    return _sessionRefreshToken(currentSession) == normalizedRefreshToken;
+  }
+
+  String _sessionRefreshToken(AuthSession? session) {
+    return session?.refreshToken?.trim() ?? '';
   }
 
   DateTime? _parseTime(Object? value) {

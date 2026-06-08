@@ -61,12 +61,8 @@ String resolveAppRootStartupLocation(BuildContext context) {
     platform: Theme.of(context).platform,
   )) {
     // 桌面端冷启动不能等待异步 session store，否则首帧路由会抖动。
-    // 这里只用启动前预热的 display cache / fallback secret 做同步分流。
-    final hasDisplaySession =
-        AuthSessionSnapshotBootstrap.hasDisplaySessionSync();
-    final hasFallbackSecrets =
-        AuthSessionSnapshotBootstrap.hasFallbackSecretsSync();
-    if (hasDisplaySession || hasFallbackSecrets) {
+    // 这里只用启动前预热的 token hint 做同步分流，避免 display cache 残留导致串号。
+    if (AuthSessionSnapshotBootstrap.hasStartupCredentialSync()) {
       return resolveMinePageStartupLocation();
     }
     return '/auth';
@@ -102,5 +98,19 @@ class AuthSessionSnapshotBootstrap {
       return false;
     }
     return hasPersistedFallbackAuthSecretsSync(prefs);
+  }
+
+  static bool hasStartupCredentialSync() {
+    final prefs = _primedPreferences;
+    if (prefs == null) {
+      return false;
+    }
+    return (prefs
+                .getString(authSecretFallbackAccessTokenStorageKey)
+                ?.trim()
+                .isNotEmpty ??
+            false) ||
+        (prefs.getString(authAccessTokenStorageKey)?.trim().isNotEmpty ??
+            false);
   }
 }

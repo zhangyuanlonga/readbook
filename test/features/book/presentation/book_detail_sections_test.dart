@@ -75,4 +75,27 @@ void main() {
     expect(expanded.maxLines, isNull);
     expect(find.text('收起全文'), findsOneWidget);
   });
+
+  testWidgets('mobile latest meta line places latest chapter and tag inline', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const AdaptiveTestHarness(
+        width: 390,
+        height: 800,
+        wrapWithMaterialApp: true,
+        child: Scaffold(
+          body: BookDetailMobileLatestMetaLine(
+            latestChapter: '忘语新书《玄界之门》',
+            category: '武侠',
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('最新: 忘语新书《玄界之门》'), findsOneWidget);
+    expect(find.text('武侠'), findsOneWidget);
+    expect(find.textContaining('更新'), findsNothing);
+  });
 }

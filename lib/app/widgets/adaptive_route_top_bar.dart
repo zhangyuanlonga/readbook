@@ -31,6 +31,7 @@ class AdaptiveRouteTopBar extends StatelessWidget
     this.middleMinWidth = 180,
     this.middleMaxWidth = 520,
     this.moreTooltip = '更多',
+    this.showDesktopTitle = true,
   });
 
   final String title;
@@ -51,6 +52,7 @@ class AdaptiveRouteTopBar extends StatelessWidget
   final double middleMinWidth;
   final double middleMaxWidth;
   final String moreTooltip;
+  final bool showDesktopTitle;
 
   @override
   Size get preferredSize =>
@@ -85,6 +87,7 @@ class AdaptiveRouteTopBar extends StatelessWidget
       middleMinWidth: middleMinWidth,
       middleMaxWidth: middleMaxWidth,
       moreTooltip: moreTooltip,
+      showTitle: showDesktopTitle,
       backgroundColor: backgroundColor,
       foregroundColor: foregroundColor,
       surfaceTintColor: surfaceTintColor,
@@ -146,6 +149,7 @@ class _DesktopRouteTopBar extends StatelessWidget {
     required this.middleMinWidth,
     required this.middleMaxWidth,
     required this.moreTooltip,
+    required this.showTitle,
     required this.backgroundColor,
     required this.foregroundColor,
     required this.surfaceTintColor,
@@ -164,6 +168,7 @@ class _DesktopRouteTopBar extends StatelessWidget {
   final double middleMinWidth;
   final double middleMaxWidth;
   final String moreTooltip;
+  final bool showTitle;
   final Color? backgroundColor;
   final Color? foregroundColor;
   final Color? surfaceTintColor;
@@ -176,7 +181,8 @@ class _DesktopRouteTopBar extends StatelessWidget {
     final colorScheme = theme.colorScheme;
     final resolvedBackground = backgroundColor ?? colorScheme.surface;
     final resolvedForeground = foregroundColor ?? colorScheme.onSurface;
-    final resolvedDivider = dividerColor ?? colorScheme.outlineVariant;
+    final resolvedDivider =
+        dividerColor ?? colorScheme.outlineVariant.withValues(alpha: 0.7);
     final horizontal = AppSpacing.pageHorizontal(context);
 
     final bottomWidget = bottom;
@@ -186,9 +192,7 @@ class _DesktopRouteTopBar extends StatelessWidget {
       shadowColor: shadowColor,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(color: resolvedDivider.withValues(alpha: 0.7)),
-          ),
+          border: Border(bottom: BorderSide(color: resolvedDivider)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -216,14 +220,17 @@ class _DesktopRouteTopBar extends StatelessWidget {
                           SizedBox(width: 44, height: 44, child: leading),
                           const SizedBox(width: 8),
                         ],
-                        ConstrainedBox(
-                          constraints: BoxConstraints(maxWidth: titleMaxWidth),
-                          child: _DesktopRouteTitle(
-                            title: title,
-                            subtitle: subtitle,
-                            foregroundColor: resolvedForeground,
+                        if (showTitle)
+                          ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: titleMaxWidth,
+                            ),
+                            child: _DesktopRouteTitle(
+                              title: title,
+                              subtitle: subtitle,
+                              foregroundColor: resolvedForeground,
+                            ),
                           ),
-                        ),
                         if (showMiddle) ...[
                           const SizedBox(width: 18),
                           Expanded(

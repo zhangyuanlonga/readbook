@@ -6,12 +6,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/auth/auth_event_bus.dart';
 import '../core/auth/auth_session.dart';
 import '../core/auth/auth_service.dart';
-import '../core/auth/auth_session_store.dart';
 import '../domain/entities/bottom_nav_icon_gallery.dart';
 import '../features/auth/providers.dart';
 import '../features/bookshelf/providers.dart';
@@ -25,6 +23,7 @@ import 'layout/app_layout.dart';
 import 'navigation/bottom_nav_icon_gallery_provider.dart';
 import 'navigation/bottom_nav_icon_resolver.dart';
 import 'navigation/app_navigation_style_provider.dart';
+import 'platform/desktop_window_chrome.dart';
 import 'shell_page_toolbar_provider.dart';
 import 'shell_navigation_provider.dart';
 import 'widgets/adaptive_overflow_toolbar.dart';
@@ -154,8 +153,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
   }
 
   Future<void> _loadTopBarSession() async {
-    final prefs = await SharedPreferences.getInstance();
-    final session = AuthSessionStore.readDisplaySession(prefs);
+    final session = await ref.read(authSessionStoreProvider).getSession();
     if (!mounted) {
       return;
     }
@@ -416,32 +414,34 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     final width = AppLayout.screenWidth(context);
     final sidebarWidth = _desktopSidebarWidthFor(width);
 
-    return Scaffold(
-      backgroundColor: colorScheme.surface,
-      body: Row(
-        children: [
-          _buildDesktopSidebar(
-            context,
-            width: sidebarWidth,
-            destinations: destinations,
-            selectedIndex: selectedIndex,
-          ),
-          Expanded(
-            child: DecoratedBox(
-              decoration: BoxDecoration(color: colorScheme.surface),
-              child: Column(
-                children: [
-                  _buildDesktopTopBar(
-                    context,
-                    destinations: destinations,
-                    selectedIndex: selectedIndex,
-                  ),
-                  Expanded(child: body),
-                ],
+    return DesktopWindowFrame(
+      child: Scaffold(
+        backgroundColor: colorScheme.surface,
+        body: Row(
+          children: [
+            _buildDesktopSidebar(
+              context,
+              width: sidebarWidth,
+              destinations: destinations,
+              selectedIndex: selectedIndex,
+            ),
+            Expanded(
+              child: DecoratedBox(
+                decoration: BoxDecoration(color: colorScheme.surface),
+                child: Column(
+                  children: [
+                    _buildDesktopTopBar(
+                      context,
+                      destinations: destinations,
+                      selectedIndex: selectedIndex,
+                    ),
+                    Expanded(child: body),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -478,85 +478,104 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
       );
     }
 
-    return DecoratedBox(
-      decoration: BoxDecoration(color: colorScheme.surface),
-      child: SafeArea(
-        bottom: false,
-        left: false,
-        right: false,
-        child: SizedBox(
-          height: 74,
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              metrics.pagePadding,
-              12,
-              metrics.pagePadding,
-              12,
+    return SizedBox(
+      height: 74,
+      child: DecoratedBox(
+        decoration: BoxDecoration(color: colorScheme.surface),
+        child: Stack(
+          children: [
+            const Positioned.fill(
+              child: DesktopWindowDragArea(child: SizedBox.expand()),
             ),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final availableWidth = constraints.maxWidth;
-                final isNarrowTopBar =
-                    availableWidth < AppLayout.expandedBreakpointWidth;
-                final hideBookshelfSearch = availableWidth < 640;
-                final showLowPriorityGlobalActions = availableWidth >= 760;
-                final showAccountName = availableWidth >= 820;
-                final middleSpacing = isNarrowTopBar ? 10.0 : 18.0;
-                final itemSpacing = isNarrowTopBar ? 6.0 : 10.0;
+            SafeArea(
+              bottom: false,
+              left: false,
+              right: false,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  metrics.pagePadding,
+                  12,
+                  metrics.pagePadding,
+                  12,
+                ),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final availableWidth = constraints.maxWidth;
+                    final hasWindowControls =
+                        DesktopWindowCaptionControls.isVisible(context);
+                    final controlsWidth = hasWindowControls ? 138.0 : 0.0;
+                    final contentWidth = availableWidth - controlsWidth;
+                    final isNarrowTopBar =
+                        contentWidth < AppLayout.expandedBreakpointWidth;
+                    final hideBookshelfSearch = contentWidth < 640;
+                    final showLowPriorityGlobalActions = contentWidth >= 760;
+                    final showAccountName = contentWidth >= 820;
+                    final middleSpacing = isNarrowTopBar ? 10.0 : 18.0;
+                    final itemSpacing = isNarrowTopBar ? 6.0 : 10.0;
 
-                return Row(
-                  children: [
-                    if (currentTab == AppShellTab.bookshelf) ...[
-                      _buildDesktopBookshelfViewSelector(
-                        context,
-                        actions: bookshelfLibraryActions,
-                      ),
-                      if (!hideBookshelfSearch) ...[
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _buildDesktopTopBarBookshelfSearch(context),
-                        ),
-                      ] else
-                        const Spacer(),
-                    ] else
-                      Expanded(
-                        child: _buildDesktopRegisteredPageToolbar(
+                    return Row(
+                      children: [
+                        if (currentTab == AppShellTab.bookshelf) ...[
+                          _buildDesktopBookshelfViewSelector(
+                            context,
+                            actions: bookshelfLibraryActions,
+                          ),
+                          if (!hideBookshelfSearch) ...[
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _buildDesktopTopBarBookshelfSearch(
+                                context,
+                              ),
+                            ),
+                          ] else
+                            const Expanded(
+                              child: DesktopWindowDragArea(
+                                child: SizedBox.expand(),
+                              ),
+                            ),
+                        ] else
+                          Expanded(
+                            child: _buildDesktopRegisteredPageToolbar(
+                              context,
+                              actions: pageToolbarActions,
+                            ),
+                          ),
+                        SizedBox(width: middleSpacing),
+                        if (currentTab == AppShellTab.bookshelf) ...[
+                          _buildDesktopBookshelfViewOptionsButton(
+                            context,
+                            actions: bookshelfToolbarActions,
+                          ),
+                          SizedBox(width: itemSpacing),
+                        ],
+                        if (showLowPriorityGlobalActions) ...[
+                          _buildDesktopTopBarNotificationButton(context),
+                          SizedBox(width: itemSpacing),
+                        ],
+                        _buildDesktopTopBarThemeModeButton(context),
+                        SizedBox(width: itemSpacing),
+                        if (!showLowPriorityGlobalActions)
+                          _buildDesktopTopBarGlobalMoreButton(context),
+                        if (!isNarrowTopBar) ...[
+                          const SizedBox(width: 14),
+                          _buildDesktopTopBarDivider(context),
+                        ],
+                        SizedBox(width: isNarrowTopBar ? 8 : 14),
+                        _buildDesktopTopBarAccountEntry(
                           context,
-                          actions: pageToolbarActions,
+                          showName: showAccountName,
                         ),
-                      ),
-                    SizedBox(width: middleSpacing),
-                    if (currentTab == AppShellTab.bookshelf) ...[
-                      _buildDesktopBookshelfViewOptionsButton(
-                        context,
-                        actions: bookshelfToolbarActions,
-                      ),
-                      SizedBox(width: itemSpacing),
-                    ],
-                    if (showLowPriorityGlobalActions) ...[
-                      _buildDesktopTopBarNotificationButton(context),
-                      SizedBox(width: itemSpacing),
-                    ],
-                    _buildDesktopTopBarThemeModeButton(context),
-                    SizedBox(width: itemSpacing),
-                    if (showLowPriorityGlobalActions)
-                      _buildDesktopTopBarSettingsButton(context)
-                    else
-                      _buildDesktopTopBarGlobalMoreButton(context),
-                    if (!isNarrowTopBar) ...[
-                      const SizedBox(width: 14),
-                      _buildDesktopTopBarDivider(context),
-                    ],
-                    SizedBox(width: isNarrowTopBar ? 8 : 14),
-                    _buildDesktopTopBarAccountEntry(
-                      context,
-                      showName: showAccountName,
-                    ),
-                  ],
-                );
-              },
+                        if (hasWindowControls) ...[
+                          SizedBox(width: itemSpacing),
+                          const DesktopWindowCaptionControls(),
+                        ],
+                      ],
+                    );
+                  },
+                ),
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -801,18 +820,6 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     );
   }
 
-  Widget _buildDesktopTopBarSettingsButton(BuildContext context) {
-    return _buildDesktopTopBarIconButton(
-      context,
-      key: const ValueKey<String>('desktop_top_bar_settings_button'),
-      icon: Icons.settings_outlined,
-      tooltip: '设置',
-      onTap: () {
-        unawaited(context.push('/system-settings'));
-      },
-    );
-  }
-
   Widget _buildDesktopTopBarGlobalMoreButton(BuildContext context) {
     return MenuAnchor(
       menuChildren: [
@@ -822,13 +829,6 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
             unawaited(context.push('/announcements'));
           },
           child: const Text('通知'),
-        ),
-        MenuItemButton(
-          leadingIcon: const Icon(Icons.settings_outlined),
-          onPressed: () {
-            unawaited(context.push('/system-settings'));
-          },
-          child: const Text('设置'),
         ),
       ],
       builder: (menuContext, controller, child) {
@@ -971,14 +971,6 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
             },
             child: const Text('登录账号'),
           ),
-        MenuItemButton(
-          key: const ValueKey<String>('desktop_account_menu_settings'),
-          leadingIcon: const Icon(Icons.settings_outlined),
-          onPressed: () {
-            unawaited(context.push('/system-settings'));
-          },
-          child: const Text('设置'),
-        ),
         if (session != null) ...[
           const Divider(height: 1),
           MenuItemButton(
@@ -1175,11 +1167,18 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
         child: SafeArea(
           right: false,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 24, 12, 20),
+            padding: EdgeInsets.fromLTRB(
+              12,
+              DesktopWindowChromeMetrics.sidebarTopPadding(context),
+              12,
+              20,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _buildDesktopSidebarHeader(context),
+                DesktopWindowDragArea(
+                  child: _buildDesktopSidebarHeader(context),
+                ),
                 const SizedBox(height: 34),
                 Expanded(
                   child: ListView(
@@ -1339,21 +1338,25 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
             'Selune',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: textTheme.headlineSmall?.copyWith(
+            style: textTheme.headlineMedium?.copyWith(
               color: colorScheme.onSurface,
-              fontWeight: FontWeight.w900,
+              fontFamily: 'Georgia',
+              fontFamilyFallback: const ['Times New Roman', 'serif'],
+              fontStyle: FontStyle.italic,
+              fontWeight: FontWeight.w700,
+              height: 0.98,
               letterSpacing: 0,
             ),
           ),
-          const SizedBox(height: 3),
+          const SizedBox(height: 5),
           Text(
             'CLEAR READING',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: textTheme.labelSmall?.copyWith(
-              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.74),
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.7,
+              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.68),
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.35,
             ),
           ),
         ],
@@ -1892,7 +1895,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
   }
 }
 
-class _DesktopBookshelfToolbarOptionsPanel extends StatelessWidget {
+class _DesktopBookshelfToolbarOptionsPanel extends StatefulWidget {
   const _DesktopBookshelfToolbarOptionsPanel({
     required this.actions,
     required this.onClose,
@@ -1902,9 +1905,21 @@ class _DesktopBookshelfToolbarOptionsPanel extends StatelessWidget {
   final VoidCallback onClose;
 
   @override
+  State<_DesktopBookshelfToolbarOptionsPanel> createState() =>
+      _DesktopBookshelfToolbarOptionsPanelState();
+}
+
+class _DesktopBookshelfToolbarOptionsPanelState
+    extends State<_DesktopBookshelfToolbarOptionsPanel> {
+  bool _sortExpanded = false;
+  bool _settingsExpanded = false;
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final actions = widget.actions;
+    final onClose = widget.onClose;
     final settings =
         actions.useGridView
             ? actions.gridSettingOptions
@@ -1976,8 +1991,15 @@ class _DesktopBookshelfToolbarOptionsPanel extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _DesktopBookshelfOptionsSection(
+                      _DesktopBookshelfCollapsibleOptionsSection(
                         title: '排序方式',
+                        summary: _selectedSortLabel(actions),
+                        expanded: _sortExpanded,
+                        onToggle: () {
+                          setState(() {
+                            _sortExpanded = !_sortExpanded;
+                          });
+                        },
                         child:
                             actions.hasBooks
                                 ? Column(
@@ -2094,8 +2116,15 @@ class _DesktopBookshelfToolbarOptionsPanel extends StatelessWidget {
                           ],
                         ),
                       ),
-                      _DesktopBookshelfOptionsSection(
+                      _DesktopBookshelfCollapsibleOptionsSection(
                         title: actions.useGridView ? '网格设置' : '列表设置',
+                        summary: _settingsSummary(settings),
+                        expanded: _settingsExpanded,
+                        onToggle: () {
+                          setState(() {
+                            _settingsExpanded = !_settingsExpanded;
+                          });
+                        },
                         bottomPadding: 0,
                         child:
                             settings.isEmpty
@@ -2124,25 +2153,46 @@ class _DesktopBookshelfToolbarOptionsPanel extends StatelessWidget {
       ),
     );
   }
+
+  String _selectedSortLabel(DesktopBookshelfToolbarActions actions) {
+    if (!actions.hasBooks) {
+      return '暂无书籍';
+    }
+    for (final option in actions.sortOptions) {
+      if (option.selected) {
+        return option.label;
+      }
+    }
+    return '未选择';
+  }
+
+  String _settingsSummary(List<DesktopBookshelfDisplaySettingOption> settings) {
+    if (settings.isEmpty) {
+      return '暂无设置';
+    }
+    final enabledCount = settings.where((option) => option.selected).length;
+    if (enabledCount == 0) {
+      return '全部停用';
+    }
+    return '$enabledCount 项启用';
+  }
 }
 
 class _DesktopBookshelfOptionsSection extends StatelessWidget {
   const _DesktopBookshelfOptionsSection({
     required this.title,
     required this.child,
-    this.bottomPadding = 16,
   });
 
   final String title;
   final Widget child;
-  final double bottomPadding;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     return Padding(
-      padding: EdgeInsets.only(bottom: bottomPadding),
+      padding: const EdgeInsets.only(bottom: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -2155,6 +2205,115 @@ class _DesktopBookshelfOptionsSection extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           child,
+        ],
+      ),
+    );
+  }
+}
+
+class _DesktopBookshelfCollapsibleOptionsSection extends StatelessWidget {
+  const _DesktopBookshelfCollapsibleOptionsSection({
+    required this.title,
+    required this.summary,
+    required this.expanded,
+    required this.onToggle,
+    required this.child,
+    this.bottomPadding = 16,
+  });
+
+  final String title;
+  final String summary;
+  final bool expanded;
+  final VoidCallback onToggle;
+  final Widget child;
+  final double bottomPadding;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final borderColor =
+        expanded
+            ? colorScheme.primary.withValues(alpha: 0.28)
+            : colorScheme.outlineVariant.withValues(alpha: 0.28);
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomPadding),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Material(
+            color:
+                expanded
+                    ? colorScheme.primaryContainer.withValues(alpha: 0.28)
+                    : colorScheme.surface,
+            borderRadius: BorderRadius.circular(12),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: onToggle,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: borderColor),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+                  child: Row(
+                    children: [
+                      Icon(
+                        expanded
+                            ? Icons.expand_less_rounded
+                            : Icons.expand_more_rounded,
+                        size: 20,
+                        color:
+                            expanded
+                                ? colorScheme.primary
+                                : colorScheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.labelLarge?.copyWith(
+                                color: expanded ? colorScheme.primary : null,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              summary,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          AnimatedCrossFade(
+            firstChild: const SizedBox.shrink(),
+            secondChild: Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: child,
+            ),
+            crossFadeState:
+                expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 160),
+            firstCurve: Curves.easeOutCubic,
+            secondCurve: Curves.easeOutCubic,
+            sizeCurve: Curves.easeOutCubic,
+          ),
         ],
       ),
     );
@@ -2398,6 +2557,16 @@ class _DesktopBookshelfSettingOptionTile extends StatelessWidget {
     final isModeOption = option.modeGroup != null;
     final foreground =
         selected ? colorScheme.primary : colorScheme.onSurfaceVariant;
+    final statusLabel = selected ? '启用' : '停用';
+    void handleChanged(bool value) {
+      if (isModeOption) {
+        if (value || !selected) {
+          option.onChanged(true);
+        }
+        return;
+      }
+      option.onChanged(value);
+    }
 
     return Material(
       color:
@@ -2407,10 +2576,7 @@ class _DesktopBookshelfSettingOptionTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap:
-            isModeOption && selected
-                ? null
-                : () => option.onChanged(isModeOption ? true : !selected),
+        onTap: () => handleChanged(isModeOption ? true : !selected),
         child: DecoratedBox(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
@@ -2429,9 +2595,7 @@ class _DesktopBookshelfSettingOptionTile extends StatelessWidget {
                 children: [
                   Icon(
                     isModeOption
-                        ? selected
-                            ? Icons.radio_button_checked_rounded
-                            : Icons.radio_button_unchecked_rounded
+                        ? Icons.swap_horiz_rounded
                         : Icons.tune_rounded,
                     size: 18,
                     color: foreground,
@@ -2448,22 +2612,36 @@ class _DesktopBookshelfSettingOptionTile extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (isModeOption)
-                    Icon(
-                      selected
-                          ? Icons.check_rounded
-                          : Icons.chevron_right_rounded,
-                      size: 18,
-                      color: foreground,
-                    )
-                  else
-                    Checkbox(
-                      value: selected,
-                      onChanged:
-                          (value) => option.onChanged(value ?? !selected),
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      visualDensity: VisualDensity.compact,
+                  const SizedBox(width: 10),
+                  Text(
+                    statusLabel,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color:
+                          selected
+                              ? colorScheme.primary
+                              : colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w800,
                     ),
+                  ),
+                  Switch(
+                    value: selected,
+                    onChanged: handleChanged,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    trackOutlineWidth: const WidgetStatePropertyAll<double>(0),
+                    trackOutlineColor: const WidgetStatePropertyAll<Color>(
+                      Colors.transparent,
+                    ),
+                    activeThumbColor: colorScheme.primary,
+                    activeTrackColor: colorScheme.primary.withValues(
+                      alpha: 0.22,
+                    ),
+                    inactiveThumbColor: colorScheme.onSurfaceVariant.withValues(
+                      alpha: 0.74,
+                    ),
+                    inactiveTrackColor: colorScheme.outlineVariant.withValues(
+                      alpha: 0.34,
+                    ),
+                  ),
                 ],
               ),
             ),

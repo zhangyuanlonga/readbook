@@ -313,7 +313,10 @@ class _FakeUserProfileService extends UserProfileService {
   int fetchCount = 0;
 
   @override
-  Future<UserProfile> fetchMe() async {
+  Future<UserProfile> fetchMe({
+    String? accessToken,
+    bool enableAuthRefresh = true,
+  }) async {
     fetchCount += 1;
     final error = this.error;
     if (error != null) {

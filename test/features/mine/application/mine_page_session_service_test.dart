@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -5,6 +6,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shuxiang_reading_next/core/auth/auth_session.dart';
+import 'package:shuxiang_reading_next/core/auth/auth_session_secret_store.dart';
 import 'package:shuxiang_reading_next/core/auth/auth_session_store.dart';
 import 'package:shuxiang_reading_next/core/media/image_selection_service.dart';
 import 'package:shuxiang_reading_next/core/membership/membership_entitlement.dart';
@@ -26,9 +28,27 @@ void main() {
   });
 
   test(
-    'prime reads display-only prefs without token for startup preheat',
+    'prime ignores display-only prefs without token for startup preheat',
     () async {
       SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth.user_id': 'user_prime',
+        'auth.username': 'reader_prime',
+        'auth.display_name': 'Reader Prime',
+      });
+      final prefs = await SharedPreferences.getInstance();
+
+      MinePageSessionPriming.prime(prefs);
+      final primed = MinePageSessionPriming.take();
+
+      expect(primed, isNull);
+    },
+  );
+
+  test(
+    'prime reads display prefs when a desktop fallback token exists',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        authSecretFallbackAccessTokenStorageKey: 'desktop_access',
         'auth.user_id': 'user_prime',
         'auth.username': 'reader_prime',
         'auth.display_name': 'Reader Prime',
@@ -129,6 +149,74 @@ void main() {
     expect(cached.shouldRefreshRemoteAccess, isFalse);
     expect(featureService.fetchCount, 1);
     expect(membershipService.fetchCount, 1);
+  });
+
+  test('does not let stale profile sync overwrite a newer session', () async {
+    final prefs = await SharedPreferences.getInstance();
+    final store = AuthSessionStore(
+      preferences: prefs,
+      secretStore: FakeAuthSessionSecretStore(),
+    );
+    const oldSession = AuthSession(
+      accessToken: 'old_access',
+      refreshToken: 'old_refresh',
+      userId: 'old_user',
+      username: 'old@example.com',
+      account: 'old@example.com',
+      displayName: 'Old Reader',
+    );
+    const newSession = AuthSession(
+      accessToken: 'new_access',
+      refreshToken: 'new_refresh',
+      userId: 'new_user',
+      username: 'new@example.com',
+      account: 'new@example.com',
+      displayName: 'New Reader',
+    );
+    await store.saveSession(oldSession);
+
+    final profileService = _DelayedUserProfileService();
+    final service = MinePageSessionService(
+      authSessionStore: store,
+      mobileFeatureService: _FakeMobileFeatureService(),
+      membershipService: _FakeMembershipService(),
+      userProfileService: profileService,
+      remoteAccessSnapshotService: RemoteAccessSnapshotService(
+        preferences: prefs,
+      ),
+    );
+
+    final loadFuture = service.loadSession(refreshRemote: false);
+    await profileService.requestStarted.future;
+    expect(profileService.capturedAccessToken, 'old_access');
+    expect(profileService.capturedEnableAuthRefresh, isFalse);
+
+    await store.saveSession(newSession);
+    profileService.complete(
+      UserProfile(
+        userId: 'old_user',
+        username: 'old@example.com',
+        account: 'old@example.com',
+        displayName: 'Old Remote Reader',
+        phone: null,
+        email: null,
+        role: null,
+        createdAt: null,
+        vipLevel: 'none',
+        planType: 'month',
+        vipStatus: 'expired',
+        vipExpireAt: null,
+        features: <String>[],
+      ),
+    );
+
+    final snapshot = await loadFuture;
+    final storedSession = await store.getSession();
+    expect(storedSession?.userId, 'new_user');
+    expect(storedSession?.displayName, 'New Reader');
+    expect(storedSession?.accessToken, 'new_access');
+    expect(snapshot.session?.userId, 'new_user');
+    expect(snapshot.session?.displayName, 'New Reader');
   });
 
   test(
@@ -471,6 +559,32 @@ class _UnknownMembershipService extends MembershipService {
   }
 }
 
+class _DelayedUserProfileService extends UserProfileService {
+  _DelayedUserProfileService() : super(baseUrl: 'https://example.com');
+
+  final Completer<void> requestStarted = Completer<void>();
+  final Completer<UserProfile> _profileCompleter = Completer<UserProfile>();
+  String? capturedAccessToken;
+  bool? capturedEnableAuthRefresh;
+
+  void complete(UserProfile profile) {
+    _profileCompleter.complete(profile);
+  }
+
+  @override
+  Future<UserProfile> fetchMe({
+    String? accessToken,
+    bool enableAuthRefresh = true,
+  }) {
+    capturedAccessToken = accessToken;
+    capturedEnableAuthRefresh = enableAuthRefresh;
+    if (!requestStarted.isCompleted) {
+      requestStarted.complete();
+    }
+    return _profileCompleter.future;
+  }
+}
+
 class _FakeUserProfileService extends UserProfileService {
   _FakeUserProfileService({
     required this.userId,
@@ -491,7 +605,10 @@ class _FakeUserProfileService extends UserProfileService {
   final String? vipStatus;
 
   @override
-  Future<UserProfile> fetchMe() async {
+  Future<UserProfile> fetchMe({
+    String? accessToken,
+    bool enableAuthRefresh = true,
+  }) async {
     return UserProfile(
       userId: userId,
       username: username,

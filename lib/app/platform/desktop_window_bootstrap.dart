@@ -19,11 +19,13 @@ class DesktopWindowBootstrap {
     }
 
     await windowManager.ensureInitialized();
-    const options = WindowOptions(
+    final options = WindowOptions(
       size: initialSize,
       minimumSize: minimumSize,
       center: true,
       title: windowTitle,
+      titleBarStyle: TitleBarStyle.hidden,
+      windowButtonVisibility: Platform.isMacOS,
     );
     await windowManager.waitUntilReadyToShow(options, () async {
       await windowManager.show();

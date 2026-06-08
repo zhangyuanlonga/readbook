@@ -303,14 +303,20 @@ class _ProfileMembershipService extends UserProfileService {
   final UserProfile _profile;
 
   @override
-  Future<UserProfile> fetchMe() async => _profile;
+  Future<UserProfile> fetchMe({
+    String? accessToken,
+    bool enableAuthRefresh = true,
+  }) async => _profile;
 }
 
 class _FailingUserProfileService extends UserProfileService {
   _FailingUserProfileService() : super(baseUrl: 'https://example.com');
 
   @override
-  Future<UserProfile> fetchMe() async {
+  Future<UserProfile> fetchMe({
+    String? accessToken,
+    bool enableAuthRefresh = true,
+  }) async {
     throw StateError('profile network disabled in smoke test');
   }
 }

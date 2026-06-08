@@ -46,6 +46,7 @@ class BookDetailSummaryCard extends StatelessWidget {
     required this.title,
     required this.sourceName,
     this.author,
+    this.readingStatusText,
     required this.cover,
     this.titleHeroTag,
     this.metaHeroTag,
@@ -54,6 +55,7 @@ class BookDetailSummaryCard extends StatelessWidget {
   final String title;
   final String sourceName;
   final String? author;
+  final String? readingStatusText;
   final Widget cover;
   final String? titleHeroTag;
   final String? metaHeroTag;
@@ -76,10 +78,11 @@ class BookDetailSummaryCard extends StatelessWidget {
                 children: [
                   Align(alignment: Alignment.topLeft, child: cover),
                   SizedBox(height: metrics.sectionGap),
-                  _BookDetailSummaryText(
+                  BookDetailSummaryTextBlock(
                     title: title,
                     sourceName: sourceName,
                     author: author,
+                    readingStatusText: readingStatusText,
                     titleHeroTag: titleHeroTag,
                     metaHeroTag: metaHeroTag,
                   ),
@@ -91,10 +94,11 @@ class BookDetailSummaryCard extends StatelessWidget {
                   Align(alignment: Alignment.topLeft, child: cover),
                   SizedBox(width: metrics.sectionGap),
                   Expanded(
-                    child: _BookDetailSummaryText(
+                    child: BookDetailSummaryTextBlock(
                       title: title,
                       sourceName: sourceName,
                       author: author,
+                      readingStatusText: readingStatusText,
                       titleHeroTag: titleHeroTag,
                       metaHeroTag: metaHeroTag,
                     ),
@@ -105,20 +109,25 @@ class BookDetailSummaryCard extends StatelessWidget {
   }
 }
 
-class _BookDetailSummaryText extends StatelessWidget {
-  const _BookDetailSummaryText({
+class BookDetailSummaryTextBlock extends StatelessWidget {
+  const BookDetailSummaryTextBlock({
+    super.key,
     required this.title,
     required this.sourceName,
     this.author,
+    this.readingStatusText,
     this.titleHeroTag,
     this.metaHeroTag,
+    this.titleStyle,
   });
 
   final String title;
   final String sourceName;
   final String? author;
+  final String? readingStatusText;
   final String? titleHeroTag;
   final String? metaHeroTag;
+  final TextStyle? titleStyle;
 
   @override
   Widget build(BuildContext context) {
@@ -128,14 +137,17 @@ class _BookDetailSummaryText extends StatelessWidget {
       title,
       maxLines: metrics.isCompactDensity ? 2 : 3,
       overflow: TextOverflow.ellipsis,
-      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-        fontWeight: FontWeight.w700,
-        height: 1.18,
-        color: colorScheme.onSurface,
-      ),
+      style:
+          titleStyle ??
+          Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w700,
+            height: 1.18,
+            color: colorScheme.onSurface,
+          ),
     );
     final authorText =
         author != null && author!.trim().isNotEmpty ? author!.trim() : '未知';
+    final normalizedReadingStatus = readingStatusText?.trim();
     final authorInfoLine = _BookDetailInfoLine(label: '作者', value: authorText);
     final sourceInfoLine = _BookDetailInfoLine(label: '来源', value: sourceName);
     return Column(
@@ -147,6 +159,11 @@ class _BookDetailSummaryText extends StatelessWidget {
         _wrapHero(metaHeroTag, authorInfoLine),
         SizedBox(height: metrics.isCompactDensity ? 5 : 7),
         sourceInfoLine,
+        if (normalizedReadingStatus != null &&
+            normalizedReadingStatus.isNotEmpty) ...[
+          SizedBox(height: metrics.isCompactDensity ? 5 : 7),
+          _BookDetailInfoLine(label: '状态', value: normalizedReadingStatus),
+        ],
       ],
     );
   }
@@ -170,12 +187,15 @@ class _BookDetailInfoLine extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final metrics = AppAdaptiveMetrics.of(context);
-    final labelStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
+    final baseStyle = Theme.of(context).textTheme.bodySmall;
+    final labelStyle = baseStyle?.copyWith(
       color: colorScheme.onSurfaceVariant,
       fontWeight: FontWeight.w600,
+      height: 1.22,
     );
-    final valueStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
+    final valueStyle = baseStyle?.copyWith(
       color: colorScheme.onSurface,
+      fontWeight: FontWeight.w600,
       height: 1.22,
     );
 
@@ -226,12 +246,16 @@ class BookDetailServerMetaLine extends StatelessWidget {
     this.category,
     this.tags = const <String>[],
     this.updateTime,
+    this.includeUpdateTime = true,
+    this.excludedValues = const <String>{},
   });
 
   final String? wordCount;
   final String? category;
   final List<String> tags;
   final String? updateTime;
+  final bool includeUpdateTime;
+  final Set<String> excludedValues;
 
   @override
   Widget build(BuildContext context) {
@@ -248,7 +272,7 @@ class BookDetailServerMetaLine extends StatelessWidget {
         for (final item in items)
           _BookDetailInlinePill(
             text: item,
-            backgroundColor: colorScheme.surfaceContainerHigh,
+            backgroundColor: colorScheme.surfaceContainerLowest,
             textColor: colorScheme.onSurfaceVariant,
           ),
       ],
@@ -258,18 +282,20 @@ class BookDetailServerMetaLine extends StatelessWidget {
   List<String> _buildItems() {
     final items = <String>[];
     final word = _cleanLabeledValue(wordCount, label: '字数');
-    if (word != null) {
+    if (word != null && !_isExcluded(word)) {
       items.add(word);
     }
     final seenTags = <String>{};
     final normalizedCategory = _cleanLabeledValue(category, label: '分类');
-    if (normalizedCategory != null) {
+    if (normalizedCategory != null && !_isExcluded(normalizedCategory)) {
       seenTags.add(normalizedCategory);
       items.add(normalizedCategory);
     }
     for (final tag in tags) {
       final normalized = _cleanLabeledValue(tag, label: '标签');
-      if (normalized == null || seenTags.contains(normalized)) {
+      if (normalized == null ||
+          seenTags.contains(normalized) ||
+          _isExcluded(normalized)) {
         continue;
       }
       seenTags.add(normalized);
@@ -278,11 +304,183 @@ class BookDetailServerMetaLine extends StatelessWidget {
         break;
       }
     }
-    final update = _cleanLabeledValue(updateTime, label: '更新');
-    if (update != null) {
-      items.add('更新: $update');
+    if (includeUpdateTime) {
+      final update = _cleanLabeledValue(updateTime, label: '更新');
+      if (update != null) {
+        items.add('更新: $update');
+      }
     }
     return items;
+  }
+
+  bool _isExcluded(String value) {
+    final normalized = value.trim();
+    if (normalized.isEmpty || excludedValues.isEmpty) {
+      return false;
+    }
+    return excludedValues.any((item) => item.trim() == normalized);
+  }
+}
+
+class BookDetailLatestUpdateLine extends StatelessWidget {
+  const BookDetailLatestUpdateLine({
+    super.key,
+    this.updateTime,
+    this.latestChapter,
+    this.totalChapterNum,
+  });
+
+  final String? updateTime;
+  final String? latestChapter;
+  final int? totalChapterNum;
+
+  @override
+  Widget build(BuildContext context) {
+    final update = _cleanLabeledValue(updateTime, label: '更新');
+    final latest = _stripLeadingUpdateFromLatestChapter(latestChapter);
+    final total = totalChapterNum;
+    final items = <String>[
+      if (latest != null && latest.isNotEmpty) '最新: $latest',
+      if (update != null) '更新: $update',
+      if (total != null && total > 0) '共 $total 章',
+    ];
+    if (items.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
+    final surfaceColor = colorScheme.surfaceContainerLowest;
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(
+        horizontal: metrics.cardPadding,
+        vertical: metrics.isCompactDensity ? 9 : 10,
+      ),
+      decoration: BoxDecoration(
+        color: surfaceColor,
+        borderRadius: BorderRadius.circular(metrics.cardRadius),
+      ),
+      child: Text(
+        items.join('  ·  '),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+          color: colorScheme.onSurface,
+          fontWeight: FontWeight.w700,
+          height: 1.35,
+        ),
+      ),
+    );
+  }
+}
+
+class BookDetailMobileLatestMetaLine extends StatelessWidget {
+  const BookDetailMobileLatestMetaLine({
+    super.key,
+    this.latestChapter,
+    this.wordCount,
+    this.category,
+    this.tags = const <String>[],
+    this.excludedValues = const <String>{},
+  });
+
+  final String? latestChapter;
+  final String? wordCount;
+  final String? category;
+  final List<String> tags;
+  final Set<String> excludedValues;
+
+  @override
+  Widget build(BuildContext context) {
+    final latest = _stripLeadingUpdateFromLatestChapter(latestChapter);
+    final metaItems = _buildMetaItems();
+    if ((latest == null || latest.isEmpty) && metaItems.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final colorScheme = Theme.of(context).colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final latestMaxWidth =
+            metaItems.isEmpty
+                ? constraints.maxWidth
+                : (constraints.maxWidth - 78)
+                    .clamp(160.0, constraints.maxWidth)
+                    .toDouble();
+        return Wrap(
+          spacing: metrics.isCompactDensity ? 7 : 8,
+          runSpacing: metrics.isCompactDensity ? 7 : 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            if (latest != null && latest.isNotEmpty)
+              Container(
+                constraints: BoxConstraints(maxWidth: latestMaxWidth),
+                padding: EdgeInsets.symmetric(
+                  horizontal: metrics.isCompactDensity ? 10 : 11,
+                  vertical: metrics.isCompactDensity ? 6 : 7,
+                ),
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceContainerLowest,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  '最新: $latest',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: colorScheme.onSurface,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            for (final item in metaItems)
+              _BookDetailInlinePill(
+                text: item,
+                backgroundColor: colorScheme.surfaceContainerLowest,
+                textColor: colorScheme.onSurfaceVariant,
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  List<String> _buildMetaItems() {
+    final items = <String>[];
+    final word = _cleanLabeledValue(wordCount, label: '字数');
+    if (word != null && !_isExcluded(word)) {
+      items.add(word);
+    }
+    final seenTags = <String>{};
+    final normalizedCategory = _cleanLabeledValue(category, label: '分类');
+    if (normalizedCategory != null && !_isExcluded(normalizedCategory)) {
+      seenTags.add(normalizedCategory);
+      items.add(normalizedCategory);
+    }
+    for (final tag in tags) {
+      final normalized = _cleanLabeledValue(tag, label: '标签');
+      if (normalized == null ||
+          seenTags.contains(normalized) ||
+          _isExcluded(normalized)) {
+        continue;
+      }
+      seenTags.add(normalized);
+      items.add(normalized);
+      if (items.length >= 6) {
+        break;
+      }
+    }
+    return items;
+  }
+
+  bool _isExcluded(String value) {
+    final normalized = value.trim();
+    if (normalized.isEmpty || excludedValues.isEmpty) {
+      return false;
+    }
+    return excludedValues.any((item) => item.trim() == normalized);
   }
 }
 
@@ -415,7 +613,7 @@ class _BookDetailIntroCardState extends State<BookDetailIntroCard> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final metrics = AppAdaptiveMetrics.of(context);
-    final surfaceColor = colorScheme.surfaceContainerHigh;
+    final surfaceColor = colorScheme.surfaceContainerLowest;
     final collapsedLines =
         metrics.isCompactDensity
             ? 5

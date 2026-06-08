@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
@@ -777,9 +778,13 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     return provider;
   }
 
-  Widget _buildDetailCard(BookDetailLoadResult result) {
+  Widget _buildDetailCard(
+    BookDetailLoadResult result, {
+    _BookDetailAuxiliaryState? auxiliaryState,
+  }) {
     final detail = result.detail;
     final presentation = _resolvePresentedMetadata(result: result);
+    final metrics = AppAdaptiveMetrics.of(context);
     final heroTag =
         widget.heroTag?.trim().isNotEmpty == true
             ? widget.heroTag!.trim()
@@ -801,6 +806,13 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       title: presentation.displayTitle,
       sourceName: result.sourceName,
       author: _cleanSummaryMetaValue(presentation.displayAuthor),
+      readingStatusText:
+          !metrics.isMediumUpWindow && auxiliaryState != null
+              ? _detailReadingStatusSummaryText(
+                result: result,
+                auxiliaryState: auxiliaryState,
+              )
+              : null,
       titleHeroTag: titleHeroTag,
       metaHeroTag: metaHeroTag,
       cover: _buildCoverPreview(
@@ -812,6 +824,63 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
         bookId: detail.id,
         sourceId: detail.sourceId,
         detailUrl: detail.detailUrl,
+      ),
+    );
+  }
+
+  Widget _buildDesktopCoverPane(BookDetailLoadResult result) {
+    final detail = result.detail;
+    final presentation = _resolvePresentedMetadata(result: result);
+    final heroTag =
+        widget.heroTag?.trim().isNotEmpty == true
+            ? widget.heroTag!.trim()
+            : _buildBookCoverHeroTag(
+              bookId: detail.id,
+              sourceId: detail.sourceId,
+              detailUrl: detail.detailUrl,
+            );
+    return Center(
+      child: _buildCoverPreview(
+        presentation.realCoverUrl,
+        customCoverPath: presentation.customCoverPath,
+        title: presentation.displayTitle,
+        author: presentation.displayAuthor,
+        heroTag: heroTag,
+        bookId: detail.id,
+        sourceId: detail.sourceId,
+        detailUrl: detail.detailUrl,
+        coverWidth: AppAdaptiveMetrics.of(context).isMediumWindow ? 168 : 208,
+      ),
+    );
+  }
+
+  Widget _buildDesktopSummaryText({
+    required BookDetailLoadResult result,
+    required _BookDetailAuxiliaryState auxiliaryState,
+  }) {
+    final presentation = _resolvePresentedMetadata(result: result);
+    final titleHeroTag =
+        widget.titleHeroTag?.trim().isNotEmpty == true
+            ? widget.titleHeroTag!.trim()
+            : 'book_title_${result.detail.sourceId.trim()}_${result.detail.id.trim()}_${result.detail.detailUrl.hashCode}';
+    final metaHeroTag =
+        widget.metaHeroTag?.trim().isNotEmpty == true
+            ? widget.metaHeroTag!.trim()
+            : 'book_meta_${result.detail.sourceId.trim()}_${result.detail.id.trim()}_${result.detail.detailUrl.hashCode}';
+    final authorText = _cleanSummaryMetaValue(presentation.displayAuthor);
+    return BookDetailSummaryTextBlock(
+      title: presentation.displayTitle,
+      sourceName: result.sourceName,
+      author: authorText,
+      readingStatusText: _detailReadingStatusSummaryText(
+        result: result,
+        auxiliaryState: auxiliaryState,
+      ),
+      titleHeroTag: titleHeroTag,
+      metaHeroTag: metaHeroTag,
+      titleStyle: Theme.of(context).textTheme.headlineSmall?.copyWith(
+        fontWeight: FontWeight.w800,
+        height: 1.14,
       ),
     );
   }
@@ -888,75 +957,16 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     );
   }
 
-  Widget _buildDetailReadingStatusCard({
+  String _detailReadingStatusSummaryText({
     required BookDetailLoadResult result,
     required _BookDetailAuxiliaryState auxiliaryState,
   }) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     final status = _readingStatusOfDetail(
       result: result,
       auxiliaryState: auxiliaryState,
     );
-    final progress = auxiliaryState.readingProgress;
-    final chapterTitle = progress?.chapterTitle.trim() ?? '';
-    final subtitle = switch (status) {
-      BookReadingStatus.unread => '尚未记录阅读进度',
-      BookReadingStatus.reading =>
-        chapterTitle.isEmpty ? '正在阅读' : '读到 $chapterTitle',
-      BookReadingStatus.finished =>
-        chapterTitle.isEmpty ? '已读完' : '已读完 · $chapterTitle',
-    };
-
-    return Material(
-      color: colorScheme.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: () => unawaited(_showReadingStatusPicker(result)),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
-          child: Row(
-            children: [
-              Icon(
-                _readingStatusIcon(status),
-                size: 22,
-                color: colorScheme.primary,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '阅读状态',
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      subtitle,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              FilledButton.tonalIcon(
-                onPressed: () => unawaited(_showReadingStatusPicker(result)),
-                icon: const Icon(Icons.expand_more_rounded, size: 18),
-                label: Text(_readingStatusLabel(status)),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+    final label = _readingStatusLabel(status);
+    return label;
   }
 
   BookReadingStatus _readingStatusOfDetail({
@@ -990,51 +1000,6 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       return (position / readableChapterCount).clamp(0.0, 1.0);
     }
     return progress.chapterPositionRatio.clamp(0.0, 1.0);
-  }
-
-  Future<void> _showReadingStatusPicker(BookDetailLoadResult result) async {
-    if (!mounted) {
-      return;
-    }
-    final currentStatus = _readingStatusOfDetail(
-      result: result,
-      auxiliaryState: _auxiliaryState,
-    );
-    final selected = await showAdaptiveActionSurface<BookReadingStatus>(
-      context: context,
-      maxWidth: 380,
-      builder: (surfaceContext) {
-        final theme = Theme.of(surfaceContext);
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              '阅读状态',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 10),
-            for (final status in BookReadingStatus.values)
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(_readingStatusIcon(status)),
-                title: Text(_readingStatusLabel(status)),
-                trailing:
-                    status == currentStatus
-                        ? const Icon(Icons.check_rounded)
-                        : null,
-                onTap: () => Navigator.of(surfaceContext).pop(status),
-              ),
-          ],
-        );
-      },
-    );
-    if (selected == null || !mounted) {
-      return;
-    }
-    await _markDetailReadingStatus(result, selected);
   }
 
   Future<void> _markDetailReadingStatus(
@@ -1100,13 +1065,33 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     return _readingStatusPresentationMapper.resolve(status).icon;
   }
 
-  Widget _buildDetailServerMetaLine(BookDetailLoadResult result) {
+  Widget _buildDetailServerMetaLine(
+    BookDetailLoadResult result, {
+    bool includeUpdateTime = true,
+    Set<String> excludedValues = const <String>{},
+  }) {
     final detail = result.detail;
     return BookDetailServerMetaLine(
       wordCount: detail.wordCount,
       category: detail.category,
       tags: detail.tags,
       updateTime: detail.updateTime,
+      includeUpdateTime: includeUpdateTime,
+      excludedValues: excludedValues,
+    );
+  }
+
+  Widget _buildMobileLatestMetaLine(
+    BookDetailLoadResult result, {
+    required Set<String> excludedValues,
+  }) {
+    final detail = result.detail;
+    return BookDetailMobileLatestMetaLine(
+      latestChapter: _resolveDisplayLatestChapterTitle(result),
+      wordCount: detail.wordCount,
+      category: detail.category,
+      tags: detail.tags,
+      excludedValues: excludedValues,
     );
   }
 
@@ -1120,12 +1105,28 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     );
   }
 
-  bool _hasDetailServerMeta(BookDetailLoadResult result) {
+  bool _hasDetailServerMeta(
+    BookDetailLoadResult result, {
+    bool includeUpdateTime = true,
+    Set<String> excludedValues = const <String>{},
+  }) {
     final detail = result.detail;
-    return (detail.wordCount?.trim().isNotEmpty ?? false) ||
-        (detail.category?.trim().isNotEmpty ?? false) ||
-        detail.tags.any((item) => item.trim().isNotEmpty) ||
-        (detail.updateTime?.trim().isNotEmpty ?? false);
+    final wordCount = _normalizeServerMetaDisplayValue(
+      detail.wordCount,
+      label: '字数',
+    );
+    final category = _normalizeServerMetaDisplayValue(
+      detail.category,
+      label: '分类',
+    );
+    final hasVisibleTag = detail.tags.any((item) {
+      final normalized = _normalizeServerMetaDisplayValue(item, label: '标签');
+      return normalized != null && !excludedValues.contains(normalized);
+    });
+    return (wordCount != null && !excludedValues.contains(wordCount)) ||
+        (category != null && !excludedValues.contains(category)) ||
+        hasVisibleTag ||
+        (includeUpdateTime && (detail.updateTime?.trim().isNotEmpty ?? false));
   }
 
   bool _hasDetailChapterStatus(BookDetailLoadResult result) {
@@ -1134,6 +1135,103 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
         (result.chapters.isNotEmpty ? result.chapters.length : 0);
     return total > 0 ||
         (_resolveDisplayLatestChapterTitle(result)?.trim().isNotEmpty ?? false);
+  }
+
+  bool _hasMobileLatestMetaStatus(
+    BookDetailLoadResult result, {
+    required Set<String> excludedValues,
+  }) {
+    return (_resolveDisplayLatestChapterTitle(result)?.trim().isNotEmpty ??
+            false) ||
+        _hasDetailServerMeta(
+          result,
+          includeUpdateTime: false,
+          excludedValues: excludedValues,
+        );
+  }
+
+  String? _resolveDetailUpdateTimeText(BookDetailLoadResult result) {
+    final detail = result.detail;
+    final direct = _normalizeDetailUpdateTimeCandidate(detail.updateTime);
+    if (direct != null) {
+      return direct;
+    }
+    for (final candidate in <String?>[
+      detail.wordCount,
+      detail.category,
+      ...detail.tags,
+    ]) {
+      final normalized = _normalizeDetailUpdateTimeCandidate(candidate);
+      if (normalized != null) {
+        return normalized;
+      }
+    }
+    return null;
+  }
+
+  Set<String> _detailServerMetaExcludedValues(BookDetailLoadResult result) {
+    final update = _resolveDetailUpdateTimeText(result);
+    if (update == null || update.isEmpty) {
+      return const <String>{};
+    }
+    final detail = result.detail;
+    final excluded = <String>{update};
+
+    void collect(String? raw, {required String label}) {
+      final candidate = _normalizeDetailUpdateTimeCandidate(raw);
+      if (candidate != update) {
+        return;
+      }
+      final display = _normalizeServerMetaDisplayValue(raw, label: label);
+      if (display != null) {
+        excluded.add(display);
+      }
+    }
+
+    collect(detail.wordCount, label: '字数');
+    collect(detail.category, label: '分类');
+    for (final tag in detail.tags) {
+      collect(tag, label: '标签');
+    }
+    return excluded;
+  }
+
+  String? _normalizeServerMetaDisplayValue(
+    String? raw, {
+    required String label,
+  }) {
+    final trimmed = raw?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+    var normalized = _normalizeSingleLineText(trimmed);
+    final pattern = RegExp('^$label[：:]\\s*');
+    while (pattern.hasMatch(normalized)) {
+      normalized = normalized.replaceFirst(pattern, '').trim();
+    }
+    return normalized.isEmpty ? null : normalized;
+  }
+
+  String? _normalizeDetailUpdateTimeCandidate(String? raw) {
+    final trimmed = raw?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+    var normalized = _normalizeSingleLineText(trimmed);
+    for (final label in const ['更新时间', '更新日期', '更新', '时间', '日期']) {
+      final pattern = RegExp('^$label[：:]\\s*');
+      while (pattern.hasMatch(normalized)) {
+        normalized = normalized.replaceFirst(pattern, '').trim();
+      }
+    }
+    if (normalized.isEmpty) {
+      return null;
+    }
+    final dateLikePattern = RegExp(
+      r'^\d{4}[-/.年]\d{1,2}[-/.月]\d{1,2}日?'
+      r'(?:[ T]\d{1,2}:\d{2}(?::\d{2})?)?$',
+    );
+    return dateLikePattern.hasMatch(normalized) ? normalized : null;
   }
 
   Widget _buildDetailOrganizationCard() {
@@ -1236,7 +1334,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
           0,
           (-_detailScrollOffset.clamp(0.0, 80.0) * 0.1).clamp(-8.0, 0.0),
         ),
-        child: _buildDetailCard(result),
+        child: _buildDetailCard(result, auxiliaryState: auxiliaryState),
       );
       final organizationCard = _buildDetailOrganizationCard();
       final quickActionsCard = _buildQuickActionsCard(
@@ -1244,52 +1342,70 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
         hasCatalog: _canOpenCatalogForResult(result),
       );
       final serverMetaLine = _buildDetailServerMetaLine(result);
+      final mobileMetaExcludedValues = _detailServerMetaExcludedValues(result);
+      final mobileLatestMetaLine = _buildMobileLatestMetaLine(
+        result,
+        excludedValues: mobileMetaExcludedValues,
+      );
       final chapterStatusLine = _buildDetailChapterStatusLine(result);
       final hasServerMeta = _hasDetailServerMeta(result);
+      final hasMobileLatestMeta = _hasMobileLatestMetaStatus(
+        result,
+        excludedValues: mobileMetaExcludedValues,
+      );
       final hasChapterStatus = _hasDetailChapterStatus(result);
       if (metrics.isMediumUpWindow) {
         final compactDesktop = metrics.isMediumWindow;
-        final sideWidth = compactDesktop ? 220.0 : 260.0;
-        final actionWidth = compactDesktop ? 240.0 : 300.0;
+        final coverWidth = compactDesktop ? 188.0 : 240.0;
+        final desktopMetaExcludedValues = _detailServerMetaExcludedValues(
+          result,
+        );
+        final desktopLatestMetaLine = _buildMobileLatestMetaLine(
+          result,
+          excludedValues: desktopMetaExcludedValues,
+        );
+        final hasDesktopLatestMeta = _hasMobileLatestMetaStatus(
+          result,
+          excludedValues: desktopMetaExcludedValues,
+        );
         sections.add(
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(width: sideWidth, child: detailCard),
+              SizedBox(
+                width: coverWidth,
+                child: _buildDesktopCoverPane(result),
+              ),
               SizedBox(width: metrics.sectionGap),
               Expanded(
-                flex: 5,
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    if (hasChapterStatus) ...[
+                    _buildDesktopSummaryText(
+                      result: result,
+                      auxiliaryState: auxiliaryState,
+                    ),
+                    if (hasDesktopLatestMeta) ...[
+                      SizedBox(height: metrics.sectionGap),
+                      desktopLatestMetaLine,
+                    ] else if (hasChapterStatus) ...[
+                      SizedBox(height: metrics.sectionGap),
                       chapterStatusLine,
-                      if (introCard != null ||
-                          presentationState.tocWarningText != null)
-                        SizedBox(height: metrics.sectionGap),
                     ],
-                    if (introCard != null) introCard,
+                    SizedBox(height: metrics.sectionGap),
+                    quickActionsCard,
+                    if (introCard != null) ...[
+                      SizedBox(height: metrics.sectionGap),
+                      introCard,
+                    ],
                     if (presentationState.tocWarningText != null) ...[
                       SizedBox(height: metrics.sectionGap),
                       _buildTocWarningCard(presentationState.tocWarningText!),
                     ],
-                  ],
-                ),
-              ),
-              SizedBox(width: metrics.sectionGap),
-              SizedBox(
-                width: actionWidth,
-                child: Column(
-                  children: [
-                    if (hasServerMeta) ...[
-                      serverMetaLine,
+                    if (hasServerMeta && !hasDesktopLatestMeta) ...[
                       SizedBox(height: metrics.sectionGap),
+                      serverMetaLine,
                     ],
-                    quickActionsCard,
-                    SizedBox(height: metrics.sectionGap),
-                    _buildDetailReadingStatusCard(
-                      result: result,
-                      auxiliaryState: auxiliaryState,
-                    ),
                     if (_detailCategory != null || _detailTags.isNotEmpty) ...[
                       SizedBox(height: metrics.sectionGap),
                       organizationCard,
@@ -1305,29 +1421,27 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
           ),
         );
       } else {
+        final mobileHeaderInset = metrics.isCompactDensity ? 4.0 : 6.0;
         sections.addAll(<Widget>[
-          detailCard,
+          Padding(
+            padding: EdgeInsets.only(left: mobileHeaderInset),
+            child: detailCard,
+          ),
           SizedBox(height: metrics.sectionGap),
-          if (hasServerMeta) ...[
-            serverMetaLine,
+          if (hasMobileLatestMeta) ...[
+            Padding(
+              padding: EdgeInsets.only(left: mobileHeaderInset),
+              child: mobileLatestMetaLine,
+            ),
             SizedBox(height: metrics.sectionGap),
           ],
           quickActionsCard,
-          SizedBox(height: metrics.sectionGap),
-          _buildDetailReadingStatusCard(
-            result: result,
-            auxiliaryState: auxiliaryState,
-          ),
           if (_detailCategory != null || _detailTags.isNotEmpty) ...[
             SizedBox(height: metrics.sectionGap),
             organizationCard,
           ],
           if (introCard != null) ...[
             SizedBox(height: metrics.sectionGap),
-            if (hasChapterStatus) ...[
-              chapterStatusLine,
-              SizedBox(height: metrics.sectionGap),
-            ],
             introCard,
           ],
         ]);
