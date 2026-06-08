@@ -4,10 +4,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/layout/app_spacing.dart';
+import '../../../app/layout/app_adaptive.dart';
+import '../../../app/layout/app_layout.dart';
+import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/adaptive_overflow_toolbar.dart';
+import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../core/network/api_client.dart';
+import '../application/advanced_theme_provider.dart';
 import '../application/private_book_source_provider.dart';
 import '../application/private_book_source_service.dart';
+import 'widgets/image_resource_collection_widgets.dart';
+import 'widgets/mine_route_top_bar.dart';
+
+final _privateBookSourceSearchKeywordProvider =
+    StateProvider.autoDispose<String>((ref) {
+      return '';
+    });
+
+enum _PrivateSourceAction { test, submit, edit, delete }
 
 class PrivateBookSourcesPage extends ConsumerWidget {
   const PrivateBookSourcesPage({super.key});
@@ -18,8 +32,18 @@ class PrivateBookSourcesPage extends ConsumerWidget {
     final listAsync = ref.watch(privateBookSourcesProvider(selectedGroupName));
     final groupsAsync = ref.watch(privateBookSourceGroupsProvider);
     final quotaAsync = ref.watch(sourceQuotaProvider);
-    final horizontal = AppSpacing.pageHorizontal(context);
-    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
+    final searchKeyword = ref.watch(_privateBookSourceSearchKeywordProvider);
+    final activeAdvancedTheme =
+        ref.watch(activeAdvancedThemeProvider).valueOrNull;
+    final backdrop = resolveAdvancedThemeBackdrop(
+      Theme.of(context).colorScheme,
+      activeAdvancedTheme,
+    );
+    final metrics = AppAdaptiveMetrics.of(context);
+    final horizontal = metrics.pagePadding;
+    final routeTopBar = _buildRouteTopBar(context, ref);
+    final topInset =
+        MediaQuery.paddingOf(context).top + routeTopBar.preferredSize.height;
     final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
 
     return PopScope<void>(
@@ -31,118 +55,183 @@ class PrivateBookSourcesPage extends ConsumerWidget {
       },
       child: Scaffold(
         extendBodyBehindAppBar: true,
-        appBar: AppBar(
-          title: const Text('我的书源'),
-          backgroundColor: Colors.transparent,
-          surfaceTintColor: Colors.transparent,
-          actions: <Widget>[
-            IconButton(
-              tooltip: '刷新',
-              onPressed: () => _refresh(ref),
-              icon: const Icon(Icons.refresh),
-            ),
-          ],
-        ),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: () => unawaited(_openForm(context, ref)),
-          icon: const Icon(Icons.add),
-          label: const Text('新增'),
-        ),
-        body: RefreshIndicator(
-          onRefresh: () async => _refresh(ref),
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: EdgeInsets.fromLTRB(
-              horizontal,
-              topInset + 12,
-              horizontal,
-              bottomInset + 96,
-            ),
-            children: <Widget>[
-              quotaAsync.when(
-                data: (quota) => _QuotaCard(quota: quota),
-                loading: () => const _LoadingCard(message: '正在读取额度'),
-                error:
-                    (error, _) => _ErrorCard(
-                      title: '额度读取失败',
-                      message: _messageOf(error),
-                      onRetry: () => ref.invalidate(sourceQuotaProvider),
+        appBar: routeTopBar,
+        body: DecoratedBox(
+          decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: AppLayout.pageContentMaxWidth(
+                  context,
+                  maxWidth: AppLayout.settingsContentMaxWidth,
+                ),
+              ),
+              child: RefreshIndicator(
+                onRefresh: () async => _refresh(ref),
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: EdgeInsets.fromLTRB(
+                    horizontal,
+                    topInset + metrics.contentGap,
+                    horizontal,
+                    bottomInset + metrics.sectionGap,
+                  ),
+                  children: <Widget>[
+                    const _PrivateSourceSearchField(),
+                    SizedBox(height: metrics.contentGap),
+                    quotaAsync.when(
+                      data: (quota) => _QuotaCard(quota: quota),
+                      loading: () => const _LoadingCard(message: '正在读取额度'),
+                      error:
+                          (error, _) => _ErrorCard(
+                            title: '额度读取失败',
+                            message: _messageOf(error),
+                            onRetry: () => ref.invalidate(sourceQuotaProvider),
+                          ),
                     ),
-              ),
-              const SizedBox(height: 14),
-              _GroupFilterSection(
-                selectedGroupName: selectedGroupName,
-                groupsAsync: groupsAsync,
-                onSelected: (groupName) {
-                  ref
-                      .read(selectedPrivateBookSourceGroupProvider.notifier)
-                      .state = groupName;
-                },
-                onRetry: () => ref.invalidate(privateBookSourceGroupsProvider),
-              ),
-              const SizedBox(height: 14),
-              listAsync.when(
-                data: (result) {
-                  if (result.items.isEmpty) {
-                    return _EmptySourcesCard(
-                      onCreate: () => unawaited(_openForm(context, ref)),
-                    );
-                  }
-                  return Column(
-                    children: <Widget>[
-                      for (final item in result.items) ...<Widget>[
-                        _PrivateSourceTile(
-                          item: item,
-                          onEdit:
-                              () => unawaited(
-                                _openForm(context, ref, item: item),
-                              ),
-                          onDelete:
-                              () =>
-                                  unawaited(_deleteSource(context, ref, item)),
-                          onToggle:
-                              (enabled) => unawaited(
-                                _runAction(
-                                  context,
-                                  ref,
-                                  () => ref
-                                      .read(privateBookSourceServiceProvider)
-                                      .setEnabled(item.id, enabled),
-                                  enabled ? '已启用书源' : '已停用书源',
-                                ),
-                              ),
-                          onTest:
-                              () => unawaited(
-                                _runAction(
-                                  context,
-                                  ref,
-                                  () => ref
-                                      .read(privateBookSourceServiceProvider)
-                                      .test(item.id),
-                                  '书源测试已记录',
-                                ),
-                              ),
-                          onSubmit:
-                              () =>
-                                  unawaited(_submitSource(context, ref, item)),
-                        ),
-                        const SizedBox(height: 10),
-                      ],
-                    ],
-                  );
-                },
-                loading: () => const _LoadingCard(message: '正在加载书源'),
-                error:
-                    (error, _) => _ErrorCard(
-                      title: '书源加载失败',
-                      message: _messageOf(error),
-                      onRetry: () => ref.invalidate(privateBookSourcesProvider),
+                    SizedBox(height: metrics.contentGap),
+                    _GroupFilterSection(
+                      selectedGroupName: selectedGroupName,
+                      groupsAsync: groupsAsync,
+                      onSelected: (groupName) {
+                        ref
+                            .read(
+                              selectedPrivateBookSourceGroupProvider.notifier,
+                            )
+                            .state = groupName;
+                      },
+                      onRetry:
+                          () => ref.invalidate(privateBookSourceGroupsProvider),
                     ),
+                    SizedBox(height: metrics.contentGap),
+                    listAsync.when(
+                      data: (result) {
+                        if (result.items.isEmpty) {
+                          return _EmptySourcesCard(
+                            onCreate: () => unawaited(_openForm(context, ref)),
+                          );
+                        }
+                        final visibleItems = _filterPrivateSources(
+                          result.items,
+                          searchKeyword,
+                        );
+                        if (visibleItems.isEmpty) {
+                          return _FilterEmptySourcesCard(
+                            keyword: searchKeyword,
+                            onClear:
+                                () =>
+                                    ref
+                                        .read(
+                                          _privateBookSourceSearchKeywordProvider
+                                              .notifier,
+                                        )
+                                        .state = '',
+                          );
+                        }
+                        return Column(
+                          children: <Widget>[
+                            for (final item in visibleItems) ...<Widget>[
+                              _PrivateSourceTile(
+                                item: item,
+                                onEdit:
+                                    () => unawaited(
+                                      _openForm(context, ref, item: item),
+                                    ),
+                                onDelete:
+                                    () => unawaited(
+                                      _deleteSource(context, ref, item),
+                                    ),
+                                onToggle:
+                                    (enabled) => unawaited(
+                                      _runAction(
+                                        context,
+                                        ref,
+                                        () => ref
+                                            .read(
+                                              privateBookSourceServiceProvider,
+                                            )
+                                            .setEnabled(item.id, enabled),
+                                        enabled ? '已启用书源' : '已停用书源',
+                                      ),
+                                    ),
+                                onTest:
+                                    () => unawaited(
+                                      _runAction(
+                                        context,
+                                        ref,
+                                        () => ref
+                                            .read(
+                                              privateBookSourceServiceProvider,
+                                            )
+                                            .test(item.id),
+                                        '书源测试已记录',
+                                      ),
+                                    ),
+                                onSubmit:
+                                    () => unawaited(
+                                      _submitSource(context, ref, item),
+                                    ),
+                              ),
+                              SizedBox(height: metrics.contentGap),
+                            ],
+                          ],
+                        );
+                      },
+                      loading: () => const _LoadingCard(message: '正在加载书源'),
+                      error:
+                          (error, _) => _ErrorCard(
+                            title: '书源加载失败',
+                            message: _messageOf(error),
+                            onRetry:
+                                () =>
+                                    ref.invalidate(privateBookSourcesProvider),
+                          ),
+                    ),
+                  ],
+                ),
               ),
-            ],
+            ),
           ),
         ),
       ),
+    );
+  }
+
+  static PreferredSizeWidget _buildRouteTopBar(
+    BuildContext context,
+    WidgetRef ref,
+  ) {
+    return buildMineRouteTopBar(
+      context: context,
+      title: '我的书源',
+      subtitle: '私人书源与共享审核',
+      actions: <AdaptiveOverflowToolbarItem>[
+        AdaptiveOverflowToolbarItem(
+          icon: Icons.refresh_rounded,
+          label: '刷新',
+          priority: 8,
+          onPressed: () => _refresh(ref),
+        ),
+        AdaptiveOverflowToolbarItem(
+          icon: Icons.add_rounded,
+          label: '新增书源',
+          priority: 10,
+          onPressed: () => unawaited(_openForm(context, ref)),
+        ),
+      ],
+      mobileActions: <Widget>[
+        IconButton(
+          tooltip: '新增书源',
+          onPressed: () => unawaited(_openForm(context, ref)),
+          icon: const Icon(Icons.add_rounded),
+        ),
+        IconButton(
+          tooltip: '刷新',
+          onPressed: () => _refresh(ref),
+          icon: const Icon(Icons.refresh_rounded),
+        ),
+      ],
     );
   }
 
@@ -313,50 +402,62 @@ class _QuotaCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Row(
-              children: <Widget>[
-                Icon(Icons.speed_outlined, color: theme.colorScheme.primary),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text('书源额度', style: theme.textTheme.titleMedium),
-                ),
-                if (quota.policyName.isNotEmpty)
-                  Text(quota.policyName, style: theme.textTheme.labelMedium),
-              ],
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: _QuotaPill(
+              label:
+                  '总书源 ${quota.privateSourceCount}/${_limitText(quota.maxPrivateSources)}',
             ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: <Widget>[
-                _QuotaChip(
-                  label: '私人源',
-                  value:
-                      '${quota.privateSourceCount}/${_limitText(quota.maxPrivateSources)}',
-                ),
-                _QuotaChip(
-                  label: '今日导入',
-                  value: _remainingText(quota.dailyImportRemaining),
-                ),
-                _QuotaChip(
-                  label: '今日测试',
-                  value: _remainingText(quota.dailyTestRemaining),
-                ),
-                _QuotaChip(
-                  label: '今日提交',
-                  value:
-                      quota.allowSubmitShared
-                          ? _remainingText(quota.dailySubmitRemaining)
-                          : '不可提交',
-                ),
-              ],
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: _QuotaPill(
+              label: '测试 ${_remainingText(quota.dailyTestRemaining)}',
+              foregroundColor: theme.colorScheme.primary,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _QuotaPill extends StatelessWidget {
+  const _QuotaPill({required this.label, this.foregroundColor});
+
+  final String label;
+  final Color? foregroundColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final foreground = foregroundColor ?? colorScheme.onSurfaceVariant;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.58),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.52),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Text(
+              label,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: foreground,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ],
         ),
@@ -365,22 +466,53 @@ class _QuotaCard extends StatelessWidget {
   }
 }
 
-class _QuotaChip extends StatelessWidget {
-  const _QuotaChip({required this.label, required this.value});
+class _PrivateSourceSearchField extends ConsumerStatefulWidget {
+  const _PrivateSourceSearchField();
 
-  final String label;
-  final String value;
+  @override
+  ConsumerState<_PrivateSourceSearchField> createState() =>
+      _PrivateSourceSearchFieldState();
+}
+
+class _PrivateSourceSearchFieldState
+    extends ConsumerState<_PrivateSourceSearchField> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(
+      text: ref.read(_privateBookSourceSearchKeywordProvider),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text('$label $value', style: theme.textTheme.labelLarge),
+    final keyword = ref.watch(_privateBookSourceSearchKeywordProvider);
+    if (_controller.text != keyword) {
+      _controller.value = TextEditingValue(
+        text: keyword,
+        selection: TextSelection.collapsed(offset: keyword.length),
+      );
+    }
+    return CompactCollectionSearchField(
+      controller: _controller,
+      hintText: '搜索书源名称、分组、描述',
+      query: keyword,
+      onChanged:
+          (value) =>
+              ref.read(_privateBookSourceSearchKeywordProvider.notifier).state =
+                  value,
+      onClear:
+          () =>
+              ref.read(_privateBookSourceSearchKeywordProvider.notifier).state =
+                  '',
     );
   }
 }
@@ -406,17 +538,17 @@ class _GroupFilterSection extends StatelessWidget {
           scrollDirection: Axis.horizontal,
           child: Row(
             children: <Widget>[
-              ChoiceChip(
+              _SourceGroupChip(
                 label: const Text('全部'),
                 selected: selectedGroupName == null,
-                onSelected: (_) => onSelected(null),
+                onTap: () => onSelected(null),
               ),
               const SizedBox(width: 8),
               for (final group in groups) ...<Widget>[
-                ChoiceChip(
+                _SourceGroupChip(
                   label: Text('${group.displayName} ${group.sourceCount}'),
                   selected: selectedGroupName == group.name,
-                  onSelected: (_) => onSelected(group.name),
+                  onTap: () => onSelected(group.name),
                 ),
                 const SizedBox(width: 8),
               ],
@@ -439,12 +571,88 @@ class _GroupFilterSection extends StatelessWidget {
       error:
           (error, _) => Align(
             alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh),
-              label: const Text('分组读取失败'),
+            child: _InlineRetryPill(onPressed: onRetry, label: '分组读取失败'),
+          ),
+    );
+  }
+}
+
+class _SourceGroupChip extends StatelessWidget {
+  const _SourceGroupChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final Widget label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Material(
+      color:
+          selected
+              ? colorScheme.primaryContainer.withValues(alpha: 0.52)
+              : colorScheme.surfaceContainerLowest.withValues(alpha: 0.82),
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: Container(
+          height: 30,
+          padding: const EdgeInsets.symmetric(horizontal: 11),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color:
+                  selected
+                      ? colorScheme.primary.withValues(alpha: 0.22)
+                      : colorScheme.outlineVariant.withValues(alpha: 0.24),
             ),
           ),
+          child: DefaultTextStyle.merge(
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: selected ? colorScheme.primary : colorScheme.onSurface,
+              fontWeight: FontWeight.w800,
+            ),
+            child: label,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InlineRetryPill extends StatelessWidget {
+  const _InlineRetryPill({required this.onPressed, required this.label});
+
+  final VoidCallback onPressed;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return TextButton.icon(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        visualDensity: VisualDensity.compact,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        foregroundColor: colorScheme.onSurfaceVariant,
+      ),
+      icon: const Icon(Icons.refresh_rounded, size: 16),
+      label: Text(
+        label,
+        style: theme.textTheme.labelMedium?.copyWith(
+          fontWeight: FontWeight.w800,
+        ),
+      ),
     );
   }
 }
@@ -469,79 +677,219 @@ class _PrivateSourceTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(item.name, style: theme.textTheme.titleMedium),
-                      const SizedBox(height: 4),
-                      Text(
-                        [
-                          _typeLabel(item.supportedTypes),
-                          _groupLabel(item.groupName),
-                          _visibilityLabel(item.visibility),
-                          _reviewLabel(item.reviewStatus),
-                        ].join(' · '),
-                        style: theme.textTheme.bodySmall,
-                      ),
-                    ],
-                  ),
-                ),
-                Switch(value: item.enabled, onChanged: onToggle),
-              ],
+    final colorScheme = theme.colorScheme;
+    final testText =
+        item.lastTestStatus.isEmpty && item.lastTestMessage.isEmpty
+            ? '未测试'
+            : '${_testLabel(item.lastTestStatus)}${item.lastTestMessage.isEmpty ? '' : ' · ${item.lastTestMessage}'}';
+    final infoLine = [
+      _typeLabel(item.supportedTypes),
+      _groupLabel(item.groupName),
+      _visibilityLabel(item.visibility),
+      _reviewLabel(item.reviewStatus),
+      '测试 $testText',
+      if (item.description.isNotEmpty) item.description,
+    ].join(' · ');
+    return Material(
+      color: colorScheme.surfaceContainerLow.withValues(alpha: 0.82),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: item.visibility == 'shared' ? null : onEdit,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(12, 9, 8, 9),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: colorScheme.outlineVariant.withValues(alpha: 0.32),
             ),
-            if (item.lastTestStatus.isNotEmpty ||
-                item.lastTestMessage.isNotEmpty) ...<Widget>[
-              const SizedBox(height: 8),
-              Text(
-                '测试：${_testLabel(item.lastTestStatus)}${item.lastTestMessage.isEmpty ? '' : ' · ${item.lastTestMessage}'}',
-                style: theme.textTheme.bodySmall,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: Text(
+                            item.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        _EnabledStatusPill(
+                          enabled: item.enabled,
+                          onTap: () => onToggle(!item.enabled),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      infoLine,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        height: 1.25,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 4),
+              _PrivateSourceMoreButton(
+                item: item,
+                onTest: onTest,
+                onSubmit: onSubmit,
+                onEdit: onEdit,
+                onDelete: onDelete,
               ),
             ],
-            if (item.description.isNotEmpty) ...<Widget>[
-              const SizedBox(height: 8),
-              Text(item.description, style: theme.textTheme.bodyMedium),
-            ],
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: <Widget>[
-                OutlinedButton.icon(
-                  onPressed: onTest,
-                  icon: const Icon(Icons.science_outlined),
-                  label: const Text('测试'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: item.visibility == 'private' ? onSubmit : null,
-                  icon: const Icon(Icons.ios_share_outlined),
-                  label: const Text('提交共享'),
-                ),
-                IconButton(
-                  tooltip: '编辑',
-                  onPressed: item.visibility == 'shared' ? null : onEdit,
-                  icon: const Icon(Icons.edit_outlined),
-                ),
-                IconButton(
-                  tooltip: '删除',
-                  onPressed: onDelete,
-                  icon: const Icon(Icons.delete_outline),
-                ),
-              ],
-            ),
-          ],
+          ),
         ),
       ),
+    );
+  }
+}
+
+class _EnabledStatusPill extends StatelessWidget {
+  const _EnabledStatusPill({required this.enabled, required this.onTap});
+
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final color = enabled ? colorScheme.primary : colorScheme.onSurfaceVariant;
+    return Material(
+      color:
+          enabled
+              ? colorScheme.primaryContainer.withValues(alpha: 0.5)
+              : colorScheme.surfaceContainerHighest.withValues(alpha: 0.74),
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: Text(
+            enabled ? '启用' : '停用',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PrivateSourceMoreButton extends StatelessWidget {
+  const _PrivateSourceMoreButton({
+    required this.item,
+    required this.onTest,
+    required this.onSubmit,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final PrivateBookSourceItem item;
+  final VoidCallback onTest;
+  final VoidCallback onSubmit;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return SizedBox(
+      width: 36,
+      height: 36,
+      child: PopupMenuButton<_PrivateSourceAction>(
+        tooltip: '更多',
+        padding: EdgeInsets.zero,
+        icon: const Icon(Icons.more_horiz_rounded),
+        onSelected: (action) {
+          switch (action) {
+            case _PrivateSourceAction.test:
+              onTest();
+            case _PrivateSourceAction.submit:
+              onSubmit();
+            case _PrivateSourceAction.edit:
+              onEdit();
+            case _PrivateSourceAction.delete:
+              onDelete();
+          }
+        },
+        itemBuilder:
+            (context) => <PopupMenuEntry<_PrivateSourceAction>>[
+              const PopupMenuItem(
+                value: _PrivateSourceAction.test,
+                child: _PrivateSourceMenuItem(
+                  icon: Icons.science_outlined,
+                  label: '测试',
+                ),
+              ),
+              PopupMenuItem(
+                value: _PrivateSourceAction.submit,
+                enabled: item.visibility == 'private',
+                child: const _PrivateSourceMenuItem(
+                  icon: Icons.ios_share_outlined,
+                  label: '提交共享',
+                ),
+              ),
+              PopupMenuItem(
+                value: _PrivateSourceAction.edit,
+                enabled: item.visibility != 'shared',
+                child: const _PrivateSourceMenuItem(
+                  icon: Icons.edit_outlined,
+                  label: '编辑',
+                ),
+              ),
+              PopupMenuItem(
+                value: _PrivateSourceAction.delete,
+                child: _PrivateSourceMenuItem(
+                  icon: Icons.delete_outline,
+                  label: '删除',
+                  color: colorScheme.error,
+                ),
+              ),
+            ],
+      ),
+    );
+  }
+}
+
+class _PrivateSourceMenuItem extends StatelessWidget {
+  const _PrivateSourceMenuItem({
+    required this.icon,
+    required this.label,
+    this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final foreground = color ?? Theme.of(context).colorScheme.onSurface;
+    return Row(
+      children: <Widget>[
+        Icon(icon, size: 18, color: foreground),
+        const SizedBox(width: 10),
+        Text(label, style: TextStyle(color: foreground)),
+      ],
     );
   }
 }
@@ -788,6 +1136,52 @@ class _EmptySourcesCard extends StatelessWidget {
   }
 }
 
+class _FilterEmptySourcesCard extends StatelessWidget {
+  const _FilterEmptySourcesCard({required this.keyword, required this.onClear});
+
+  final String keyword;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+        child: Column(
+          children: <Widget>[
+            Icon(
+              Icons.manage_search_outlined,
+              size: 34,
+              color: colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              '没有匹配的书源',
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              keyword.trim(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextButton(onPressed: onClear, child: const Text('清空搜索')),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _LoadingCard extends StatelessWidget {
   const _LoadingCard({required this.message});
 
@@ -902,6 +1296,36 @@ String _testLabel(String value) {
     'pending' => '待测试',
     _ => value.isEmpty ? '未测试' : value,
   };
+}
+
+List<PrivateBookSourceItem> _filterPrivateSources(
+  List<PrivateBookSourceItem> items,
+  String keyword,
+) {
+  final normalized = keyword.trim().toLowerCase();
+  if (normalized.isEmpty) {
+    return items;
+  }
+  return items
+      .where((item) {
+        final text =
+            [
+              item.name,
+              item.description,
+              item.groupName,
+              item.visibility,
+              item.reviewStatus,
+              item.lastTestStatus,
+              item.lastTestMessage,
+              _typeLabel(item.supportedTypes),
+              _groupLabel(item.groupName),
+              _visibilityLabel(item.visibility),
+              _reviewLabel(item.reviewStatus),
+              _testLabel(item.lastTestStatus),
+            ].join(' ').toLowerCase();
+        return text.contains(normalized);
+      })
+      .toList(growable: false);
 }
 
 String _messageOf(Object error) {

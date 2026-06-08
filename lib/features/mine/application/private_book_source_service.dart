@@ -341,46 +341,29 @@ class SourceQuotaSnapshot {
   const SourceQuotaSnapshot({
     required this.maxPrivateSources,
     required this.privateSourceCount,
-    required this.dailyImportLimit,
-    required this.dailyImportUsed,
     required this.dailyTestLimit,
     required this.dailyTestUsed,
-    required this.dailySubmitLimit,
-    required this.dailySubmitUsed,
-    required this.maxSourceJsonBytes,
     required this.allowSubmitShared,
     required this.policyName,
   });
 
   final int maxPrivateSources;
   final int privateSourceCount;
-  final int dailyImportLimit;
-  final int dailyImportUsed;
   final int dailyTestLimit;
   final int dailyTestUsed;
-  final int dailySubmitLimit;
-  final int dailySubmitUsed;
-  final int maxSourceJsonBytes;
   final bool allowSubmitShared;
   final String policyName;
 
   int get privateSourceRemaining =>
       _remaining(maxPrivateSources, privateSourceCount);
-  int get dailyImportRemaining => _remaining(dailyImportLimit, dailyImportUsed);
   int get dailyTestRemaining => _remaining(dailyTestLimit, dailyTestUsed);
-  int get dailySubmitRemaining => _remaining(dailySubmitLimit, dailySubmitUsed);
 
   factory SourceQuotaSnapshot.fromJson(Map<String, dynamic> json) {
     return SourceQuotaSnapshot(
       maxPrivateSources: _intAt(json, 'max_private_sources'),
       privateSourceCount: _intAt(json, 'private_source_count'),
-      dailyImportLimit: _intAt(json, 'daily_import_limit'),
-      dailyImportUsed: _intAt(json, 'daily_import_used'),
       dailyTestLimit: _intAt(json, 'daily_test_limit'),
       dailyTestUsed: _intAt(json, 'daily_test_used'),
-      dailySubmitLimit: _intAt(json, 'daily_submit_limit'),
-      dailySubmitUsed: _intAt(json, 'daily_submit_used'),
-      maxSourceJsonBytes: _intAt(json, 'max_source_json_bytes'),
       allowSubmitShared: json['allow_submit_shared'] as bool? ?? false,
       policyName:
           json['policy_name']?.toString() ??
