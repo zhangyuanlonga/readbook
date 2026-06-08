@@ -10,7 +10,6 @@ import 'package:go_router/go_router.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/layout/app_adaptive.dart';
-import '../../../app/lifecycle/async_ownership_controller.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/navigation/search_entry_transition.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
@@ -23,11 +22,8 @@ import '../../../app/widgets/adaptive_route_top_bar.dart';
 import '../../../app/widgets/adaptive_search_bar.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
 
-import '../../../core/auth/auth_event_bus.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_stage.dart';
-import '../../../core/membership/membership_access_presentation.dart';
-import '../../../core/membership/membership_access_service.dart';
 import '../../../domain/entities/book.dart';
 import '../../../domain/entities/book_metadata_override.dart';
 import '../../book/application/book_display_state.dart';
@@ -71,11 +67,8 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   late final BookPresentationQueryService _bookPresentationQueryService;
   late final SearchHistoryService _historyService;
   late final SearchSystemSettingsService _searchSystemSettingsService;
-  late final MembershipAccessService _membershipAccessService;
   final OnlineSourceErrorPresentationAdapter _onlineSourceErrorAdapter =
       const OnlineSourceErrorPresentationAdapter();
-  final AsyncOwnershipController _onlineSearchAccessOwnership =
-      AsyncOwnershipController();
 
   static const Duration _progressUiThrottleWindow = Duration(
     milliseconds: 1500,
@@ -103,8 +96,6 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   Timer? _progressUiTimer;
   Timer? _scrollUiResumeTimer;
   Timer? _scrollUiForceFlushTimer;
-  StreamSubscription<AuthEvent>? _authEventSubscription;
-
   SearchPageState get _pageState => ref.read(searchPageStateProvider);
 
   SearchPageStateNotifier get _pageStateNotifier =>
@@ -250,12 +241,6 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     );
   }
 
-  set _onlineSearchAccessRequestId(int value) {
-    _pageStateNotifier.update(
-      (state) => state.copyWith(onlineSearchAccessRequestId: value),
-    );
-  }
-
   List<String> get _searchHistory => _pageState.searchHistory;
   set _searchHistory(List<String> value) {
     _pageStateNotifier.update((state) => state.copyWith(searchHistory: value));
@@ -285,10 +270,6 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     _searchSystemSettingsService = ref.read(
       searchSystemSettingsServiceProvider,
     );
-    _membershipAccessService = ref.read(searchMembershipAccessServiceProvider);
-    _authEventSubscription = AuthEventBus.instance.stream.listen(
-      _handleAuthEvent,
-    );
     _pageScrollController.addListener(_onPageScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -299,16 +280,12 @@ class _SearchPageState extends ConsumerState<SearchPage> {
 
   @override
   void dispose() {
-    _onlineSearchAccessOwnership.dispose();
     _activeSearchToken?.cancel();
     // ConsumerState 进入 dispose 后不能再通过 ref 读写 provider。
     // 这里仅释放本地计时器/控制器，autoDispose provider 会自行回收页面状态。
     _clearProgressUiThrottle(updatePageState: false);
     _clearDeferredProgressUiUpdate(updatePageState: false);
     _clearPendingSearchCompletion(updatePageState: false);
-    final authEventSubscription = _authEventSubscription;
-    _authEventSubscription = null;
-    unawaited(authEventSubscription?.cancel() ?? Future<void>.value());
     _pageScrollController.removeListener(_onPageScroll);
     _pageScrollController.dispose();
     _progressReportNotifier.dispose();
@@ -951,153 +928,17 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   }
 
   Future<bool> _refreshOnlineSearchAccess({required bool showChecking}) async {
-    final requestId = _onlineSearchAccessOwnership.begin();
-    _onlineSearchAccessRequestId = requestId;
-    if (showChecking && mounted) {
-      setState(() {
-        _isCheckingOnlineSearchAccess = true;
-        _onlineSearchAccessMessage = null;
-      });
-    }
-
-    try {
-      final session = await _membershipAccessService.getCurrentSession();
-      if (!_isLatestOnlineSearchAccessRequest(requestId)) {
-        return false;
-      }
-      if (session == null) {
-        if (!mounted) {
-          return false;
-        }
-        setState(() {
-          _hasOnlineSearchAccess = false;
-          _isCheckingOnlineSearchAccess = false;
-          _onlineSearchAccessMessage =
-              MembershipAccessPresentation.unavailableMessage(
-                MembershipFeatureGate.onlineSearch,
-                isLoggedIn: false,
-              );
-          _isLoadingServerSourceCount = false;
-          _availableServerSourceCount = 0;
-          _selectedServerSourceIds = <String>{};
-        });
-        return false;
-      }
-
-      final hasAccess = await _membershipAccessService.fetchOnlineServiceAccess(
-        session: session,
-      );
-      if (!_isLatestOnlineSearchAccessRequest(requestId)) {
-        return false;
-      }
-      if (!mounted) {
-        return false;
-      }
-      setState(() {
-        _hasOnlineSearchAccess = hasAccess;
-        _isCheckingOnlineSearchAccess = false;
-        _onlineSearchAccessMessage =
-            hasAccess
-                ? null
-                : MembershipAccessPresentation.unavailableMessage(
-                  MembershipFeatureGate.onlineSearch,
-                  isLoggedIn: true,
-                );
-        if (!hasAccess) {
-          _isLoadingServerSourceCount = false;
-          _availableServerSourceCount = 0;
-          _selectedServerSourceIds = <String>{};
-        }
-      });
-      if (hasAccess) {
-        unawaited(_loadSearchSystemSettings());
-        unawaited(_refreshServerSourceCount());
-      }
-      return hasAccess;
-    } catch (error) {
-      if (!_isLatestOnlineSearchAccessRequest(requestId)) {
-        return false;
-      }
-      if (!mounted) {
-        return false;
-      }
-      setState(() {
-        _hasOnlineSearchAccess = false;
-        _isCheckingOnlineSearchAccess = false;
-        _onlineSearchAccessMessage =
-            error is AppException
-                ? error.briefMessage
-                : MembershipAccessPresentation.checkFailedMessage;
-        _isLoadingServerSourceCount = false;
-        _availableServerSourceCount = 0;
-        _selectedServerSourceIds = <String>{};
-      });
-      return false;
-    }
-  }
-
-  bool _isLatestOnlineSearchAccessRequest(int requestId) {
-    return _onlineSearchAccessOwnership.isActive(requestId, mounted: mounted);
-  }
-
-  void _handleAuthEvent(AuthEvent event) {
-    switch (event.type) {
-      case AuthEventType.loggedIn:
-        _invalidateOnlineSearchAccess(
-          message: null,
-          checking: true,
-          cancelActiveSearch: true,
-        );
-        unawaited(_loadOnlineSearchAccess());
-        break;
-      case AuthEventType.loggedOut:
-        _invalidateOnlineSearchAccess(
-          message: MembershipAccessPresentation.unavailableMessage(
-            MembershipFeatureGate.onlineSearch,
-            isLoggedIn: false,
-          ),
-          checking: false,
-          cancelActiveSearch: true,
-        );
-        break;
-      case AuthEventType.sessionExpired:
-        _invalidateOnlineSearchAccess(
-          message: event.message,
-          checking: false,
-          cancelActiveSearch: true,
-        );
-        break;
-    }
-  }
-
-  void _invalidateOnlineSearchAccess({
-    required String? message,
-    required bool checking,
-    required bool cancelActiveSearch,
-  }) {
     if (!mounted) {
-      return;
-    }
-    _onlineSearchAccessRequestId = _onlineSearchAccessOwnership.cancel();
-    if (cancelActiveSearch) {
-      _activeSearchToken?.cancel();
-    }
-    _clearSearchOutput();
-    if (!mounted) {
-      return;
+      return true;
     }
     setState(() {
-      _hasOnlineSearchAccess = false;
-      _isCheckingOnlineSearchAccess = checking;
-      _onlineSearchAccessMessage = message;
-      _isLoadingServerSourceCount = false;
-      _availableServerSourceCount = 0;
-      _selectedServerSourceIds = <String>{};
-      if (cancelActiveSearch) {
-        _isSearching = false;
-        _activeSearchToken = null;
-      }
+      _hasOnlineSearchAccess = true;
+      _isCheckingOnlineSearchAccess = false;
+      _onlineSearchAccessMessage = null;
     });
+    unawaited(_loadSearchSystemSettings());
+    unawaited(_refreshServerSourceCount());
+    return true;
   }
 
   Widget _buildOnlineSearchGate(BuildContext context) {
@@ -1117,32 +958,12 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     }
 
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          AppEmptyStateCard(
-            icon: Icons.workspace_premium_rounded,
-            title: MembershipAccessPresentation.featureTitle(
-              MembershipFeatureGate.onlineSearch,
-            ),
-            description:
-                _onlineSearchAccessMessage ??
-                MembershipAccessPresentation.featureDescription(
-                  MembershipFeatureGate.onlineSearch,
-                ),
-          ),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: () => context.push('/membership'),
-            icon: const Icon(Icons.workspace_premium_rounded),
-            label: const Text('查看会员'),
-          ),
-          const SizedBox(height: 8),
-          TextButton(
-            onPressed: _loadOnlineSearchAccess,
-            child: const Text('重新检查'),
-          ),
-        ],
+      child: AppEmptyStateCard(
+        icon: Icons.search_off_rounded,
+        title: '在线搜索暂不可用',
+        description: _onlineSearchAccessMessage ?? '请检查登录状态或稍后重试。',
+        actionLabel: '重试',
+        onAction: () => unawaited(_loadOnlineSearchAccess()),
       ),
     );
   }

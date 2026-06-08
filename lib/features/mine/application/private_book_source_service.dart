@@ -12,12 +12,12 @@ class PrivateBookSourceService {
 
   final ApiClient _client;
 
-  Future<PrivateBookSourceListResult> list({String? groupName}) {
+  Future<PrivateBookSourceListResult> list({String? groupId}) {
     return _client.request<PrivateBookSourceListResult>(
       method: ApiMethod.get,
       path: '/v1/me/book-sources',
       queryParameters: <String, dynamic>{
-        if (groupName != null) 'group_name': groupName,
+        if (groupId != null) 'group_id': groupId,
       },
       attachAccessToken: true,
       enableRetry: false,
@@ -26,8 +26,8 @@ class PrivateBookSourceService {
     );
   }
 
-  Future<List<PrivateBookSourceGroupSummary>> groups() {
-    return _client.request<List<PrivateBookSourceGroupSummary>>(
+  Future<List<PrivateBookSourceGroup>> groups() {
+    return _client.request<List<PrivateBookSourceGroup>>(
       method: ApiMethod.get,
       path: '/v1/me/book-source-groups',
       attachAccessToken: true,
@@ -38,12 +38,47 @@ class PrivateBookSourceService {
         return items
             .whereType<Map>()
             .map(
-              (item) => PrivateBookSourceGroupSummary.fromJson(
+              (item) => PrivateBookSourceGroup.fromJson(
                 item.map((key, value) => MapEntry(key.toString(), value)),
               ),
             )
             .toList(growable: false);
       },
+    );
+  }
+
+  Future<PrivateBookSourceGroup> createGroup(String name) {
+    return _client.request<PrivateBookSourceGroup>(
+      method: ApiMethod.post,
+      path: '/v1/me/book-source-groups',
+      body: <String, dynamic>{'name': name.trim()},
+      attachAccessToken: true,
+      enableRetry: false,
+      stage: ErrorStage.source,
+      decoder: (data) => _groupFromMutationPayload(data),
+    );
+  }
+
+  Future<PrivateBookSourceGroup> updateGroup(String id, String name) {
+    return _client.request<PrivateBookSourceGroup>(
+      method: ApiMethod.patch,
+      path: '/v1/me/book-source-groups/$id',
+      body: <String, dynamic>{'name': name.trim()},
+      attachAccessToken: true,
+      enableRetry: false,
+      stage: ErrorStage.source,
+      decoder: (data) => _groupFromMutationPayload(data),
+    );
+  }
+
+  Future<void> deleteGroup(String id) {
+    return _client.request<void>(
+      method: ApiMethod.delete,
+      path: '/v1/me/book-source-groups/$id',
+      attachAccessToken: true,
+      enableRetry: false,
+      stage: ErrorStage.source,
+      decoder: (_) {},
     );
   }
 
@@ -147,6 +182,17 @@ class PrivateBookSourceService {
       );
     }
     return PrivateBookSourceItem.fromJson(map);
+  }
+
+  PrivateBookSourceGroup _groupFromMutationPayload(Object? data) {
+    final map = _asMap(data);
+    final item = map['item'];
+    if (item is Map) {
+      return PrivateBookSourceGroup.fromJson(
+        item.map((key, value) => MapEntry(key.toString(), value)),
+      );
+    }
+    return PrivateBookSourceGroup.fromJson(map);
   }
 }
 
@@ -315,24 +361,34 @@ class PrivateBookSourceInput {
   }
 }
 
-class PrivateBookSourceGroupSummary {
-  const PrivateBookSourceGroupSummary({
+class PrivateBookSourceGroup {
+  const PrivateBookSourceGroup({
+    required this.id,
+    required this.code,
     required this.name,
-    required this.displayName,
-    required this.sourceCount,
+    required this.scopeType,
+    required this.ownerUserId,
+    required this.enabled,
   });
 
+  final String id;
+  final String code;
   final String name;
-  final String displayName;
-  final int sourceCount;
+  final String scopeType;
+  final String ownerUserId;
+  final bool enabled;
 
-  factory PrivateBookSourceGroupSummary.fromJson(Map<String, dynamic> json) {
+  String get displayName => name.trim().isEmpty ? '未分组' : name.trim();
+
+  factory PrivateBookSourceGroup.fromJson(Map<String, dynamic> json) {
     final name = json['name']?.toString() ?? '';
-    return PrivateBookSourceGroupSummary(
+    return PrivateBookSourceGroup(
+      id: json['id']?.toString() ?? '',
+      code: json['code']?.toString() ?? '',
       name: name,
-      displayName:
-          json['display_name']?.toString() ?? (name.isEmpty ? '未分组' : name),
-      sourceCount: (json['source_count'] as num?)?.toInt() ?? 0,
+      scopeType: json['scope_type']?.toString() ?? 'private',
+      ownerUserId: json['owner_user_id']?.toString() ?? '',
+      enabled: json['enabled'] != false,
     );
   }
 }
@@ -343,16 +399,12 @@ class SourceQuotaSnapshot {
     required this.privateSourceCount,
     required this.dailyTestLimit,
     required this.dailyTestUsed,
-    required this.allowSubmitShared,
-    required this.policyName,
   });
 
   final int maxPrivateSources;
   final int privateSourceCount;
   final int dailyTestLimit;
   final int dailyTestUsed;
-  final bool allowSubmitShared;
-  final String policyName;
 
   int get privateSourceRemaining =>
       _remaining(maxPrivateSources, privateSourceCount);
@@ -364,11 +416,6 @@ class SourceQuotaSnapshot {
       privateSourceCount: _intAt(json, 'private_source_count'),
       dailyTestLimit: _intAt(json, 'daily_test_limit'),
       dailyTestUsed: _intAt(json, 'daily_test_used'),
-      allowSubmitShared: json['allow_submit_shared'] as bool? ?? false,
-      policyName:
-          json['policy_name']?.toString() ??
-          json['matched_policy_name']?.toString() ??
-          '',
     );
   }
 

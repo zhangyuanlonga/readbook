@@ -12,15 +12,16 @@ final selectedPrivateBookSourceGroupProvider = StateProvider<String?>((ref) {
   return null;
 });
 
-final privateBookSourcesProvider = FutureProvider.family<
-  PrivateBookSourceListResult,
-  String?
->((ref, groupName) async {
-  return ref.watch(privateBookSourceServiceProvider).list(groupName: groupName);
-});
+final privateBookSourcesProvider =
+    FutureProvider.family<PrivateBookSourceListResult, String?>((
+      ref,
+      groupId,
+    ) async {
+      return ref.watch(privateBookSourceServiceProvider).list(groupId: groupId);
+    });
 
 final privateBookSourceGroupsProvider =
-    FutureProvider<List<PrivateBookSourceGroupSummary>>((ref) async {
+    FutureProvider<List<PrivateBookSourceGroup>>((ref) async {
       return ref.watch(privateBookSourceServiceProvider).groups();
     });
 

@@ -7,7 +7,10 @@ import 'package:go_router/go_router.dart';
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/adaptive_filter_bar.dart';
+import '../../../app/widgets/adaptive_list_tile.dart';
 import '../../../app/widgets/adaptive_overflow_toolbar.dart';
+import '../../../app/widgets/app_empty_state_card.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../core/network/api_client.dart';
 import '../application/advanced_theme_provider.dart';
@@ -28,8 +31,8 @@ class PrivateBookSourcesPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final selectedGroupName = ref.watch(selectedPrivateBookSourceGroupProvider);
-    final listAsync = ref.watch(privateBookSourcesProvider(selectedGroupName));
+    final selectedGroupId = ref.watch(selectedPrivateBookSourceGroupProvider);
+    final listAsync = ref.watch(privateBookSourcesProvider(selectedGroupId));
     final groupsAsync = ref.watch(privateBookSourceGroupsProvider);
     final quotaAsync = ref.watch(sourceQuotaProvider);
     final searchKeyword = ref.watch(_privateBookSourceSearchKeywordProvider);
@@ -92,14 +95,14 @@ class PrivateBookSourcesPage extends ConsumerWidget {
                     ),
                     SizedBox(height: metrics.contentGap),
                     _GroupFilterSection(
-                      selectedGroupName: selectedGroupName,
+                      selectedGroupId: selectedGroupId,
                       groupsAsync: groupsAsync,
-                      onSelected: (groupName) {
+                      onSelected: (groupId) {
                         ref
                             .read(
                               selectedPrivateBookSourceGroupProvider.notifier,
                             )
-                            .state = groupName;
+                            .state = groupId;
                       },
                       onRetry:
                           () => ref.invalidate(privateBookSourceGroupsProvider),
@@ -214,6 +217,12 @@ class PrivateBookSourcesPage extends ConsumerWidget {
           onPressed: () => _refresh(ref),
         ),
         AdaptiveOverflowToolbarItem(
+          icon: Icons.folder_copy_outlined,
+          label: '分组',
+          priority: 9,
+          onPressed: () => unawaited(_openGroupManager(context, ref)),
+        ),
+        AdaptiveOverflowToolbarItem(
           icon: Icons.add_rounded,
           label: '新增书源',
           priority: 10,
@@ -221,6 +230,11 @@ class PrivateBookSourcesPage extends ConsumerWidget {
         ),
       ],
       mobileActions: <Widget>[
+        IconButton(
+          tooltip: '分组',
+          onPressed: () => unawaited(_openGroupManager(context, ref)),
+          icon: const Icon(Icons.folder_copy_outlined),
+        ),
         IconButton(
           tooltip: '新增书源',
           onPressed: () => unawaited(_openForm(context, ref)),
@@ -233,6 +247,22 @@ class PrivateBookSourcesPage extends ConsumerWidget {
         ),
       ],
     );
+  }
+
+  static Future<void> _openGroupManager(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    final changed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (context) => const _PrivateSourceGroupManagerSheet(),
+    );
+    if (changed == true) {
+      _refresh(ref);
+    }
   }
 
   static void _refresh(WidgetRef ref) {
@@ -519,14 +549,14 @@ class _PrivateSourceSearchFieldState
 
 class _GroupFilterSection extends StatelessWidget {
   const _GroupFilterSection({
-    required this.selectedGroupName,
+    required this.selectedGroupId,
     required this.groupsAsync,
     required this.onSelected,
     required this.onRetry,
   });
 
-  final String? selectedGroupName;
-  final AsyncValue<List<PrivateBookSourceGroupSummary>> groupsAsync;
+  final String? selectedGroupId;
+  final AsyncValue<List<PrivateBookSourceGroup>> groupsAsync;
   final ValueChanged<String?> onSelected;
   final VoidCallback onRetry;
 
@@ -534,26 +564,27 @@ class _GroupFilterSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return groupsAsync.when(
       data: (groups) {
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: <Widget>[
-              _SourceGroupChip(
-                label: const Text('全部'),
-                selected: selectedGroupName == null,
-                onTap: () => onSelected(null),
+        if (selectedGroupId != null &&
+            !groups.any((group) => group.id == selectedGroupId)) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            onSelected(null);
+          });
+        }
+        return AdaptiveFilterBar(
+          showActionButton: false,
+          chips: <AdaptiveFilterChipData>[
+            AdaptiveFilterChipData(
+              label: '全部',
+              selected: selectedGroupId == null,
+              onTap: () => onSelected(null),
+            ),
+            for (final group in groups)
+              AdaptiveFilterChipData(
+                label: group.displayName,
+                selected: selectedGroupId == group.id,
+                onTap: () => onSelected(group.id),
               ),
-              const SizedBox(width: 8),
-              for (final group in groups) ...<Widget>[
-                _SourceGroupChip(
-                  label: Text('${group.displayName} ${group.sourceCount}'),
-                  selected: selectedGroupName == group.name,
-                  onTap: () => onSelected(group.name),
-                ),
-                const SizedBox(width: 8),
-              ],
-            ],
-          ),
+          ],
         );
       },
       loading:
@@ -577,55 +608,271 @@ class _GroupFilterSection extends StatelessWidget {
   }
 }
 
-class _SourceGroupChip extends StatelessWidget {
-  const _SourceGroupChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
+class _PrivateSourceGroupManagerSheet extends ConsumerStatefulWidget {
+  const _PrivateSourceGroupManagerSheet();
 
-  final Widget label;
-  final bool selected;
-  final VoidCallback onTap;
+  @override
+  ConsumerState<_PrivateSourceGroupManagerSheet> createState() =>
+      _PrivateSourceGroupManagerSheetState();
+}
+
+class _PrivateSourceGroupManagerSheetState
+    extends ConsumerState<_PrivateSourceGroupManagerSheet> {
+  late final TextEditingController _nameController;
+  bool _saving = false;
+  bool _changed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    return Material(
-      color:
-          selected
-              ? colorScheme.primaryContainer.withValues(alpha: 0.52)
-              : colorScheme.surfaceContainerLowest.withValues(alpha: 0.82),
-      borderRadius: BorderRadius.circular(999),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(999),
-        onTap: onTap,
-        child: Container(
-          height: 30,
-          padding: const EdgeInsets.symmetric(horizontal: 11),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color:
-                  selected
-                      ? colorScheme.primary.withValues(alpha: 0.22)
-                      : colorScheme.outlineVariant.withValues(alpha: 0.24),
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final groupsAsync = ref.watch(privateBookSourceGroupsProvider);
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, 4, 16, bottomInset + 16),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.82,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: Text(
+                    '私人分组',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                IconButton(
+                  tooltip: '关闭',
+                  onPressed:
+                      () => Navigator.of(context).pop(_changed ? true : null),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
             ),
-          ),
-          child: DefaultTextStyle.merge(
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: selected ? colorScheme.primary : colorScheme.onSurface,
-              fontWeight: FontWeight.w800,
+            const SizedBox(height: 12),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: TextField(
+                    controller: _nameController,
+                    enabled: !_saving,
+                    decoration: const InputDecoration(
+                      labelText: '新增分组',
+                      hintText: '例如：常用、漫画、备用',
+                    ),
+                    onSubmitted: (_) => unawaited(_createGroup()),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                FilledButton.icon(
+                  onPressed: _saving ? null : () => unawaited(_createGroup()),
+                  icon: const Icon(Icons.add_rounded),
+                  label: Text(_saving ? '保存中' : '新增'),
+                ),
+              ],
             ),
-            child: label,
-          ),
+            const SizedBox(height: 14),
+            Expanded(
+              child: groupsAsync.when(
+                data: (groups) {
+                  if (groups.isEmpty) {
+                    return const AppEmptyStateCard(
+                      icon: Icons.folder_off_outlined,
+                      title: '暂无私人分组',
+                      description: '新增分组后，可以在书源编辑里选择或填写对应分组名。',
+                      compact: true,
+                    );
+                  }
+                  return ListView.separated(
+                    itemCount: groups.length,
+                    separatorBuilder: (_, _) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final group = groups[index];
+                      final isDefault = _isDefaultGroup(group);
+                      return AdaptiveListTile(
+                        key: ValueKey(group.id),
+                        leading: const Icon(Icons.folder_outlined),
+                        title: Text(
+                          group.displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                        subtitle: Text(isDefault ? '默认兜底分组' : '私人书源分组'),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            IconButton(
+                              tooltip: '重命名',
+                              onPressed: () => unawaited(_renameGroup(group)),
+                              icon: const Icon(Icons.edit_outlined),
+                            ),
+                            IconButton(
+                              tooltip: '删除',
+                              onPressed:
+                                  isDefault
+                                      ? null
+                                      : () => unawaited(_deleteGroup(group)),
+                              icon: const Icon(Icons.delete_outline),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                },
+                loading:
+                    () => const Center(
+                      child: CircularProgressIndicator(strokeWidth: 2.4),
+                    ),
+                error:
+                    (error, _) => AppEmptyStateCard(
+                      icon: Icons.error_outline_rounded,
+                      title: '分组读取失败',
+                      description: _messageOf(error),
+                      actionLabel: '重试',
+                      onAction:
+                          () => ref.invalidate(privateBookSourceGroupsProvider),
+                      compact: true,
+                    ),
+              ),
+            ),
+          ],
         ),
       ),
     );
+  }
+
+  Future<void> _createGroup() async {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      _showMessage('请填写分组名称');
+      return;
+    }
+    setState(() {
+      _saving = true;
+    });
+    try {
+      await ref.read(privateBookSourceServiceProvider).createGroup(name);
+      _nameController.clear();
+      _markChanged();
+      _showMessage('分组已新增');
+    } catch (error) {
+      _showMessage(_messageOf(error));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _renameGroup(PrivateBookSourceGroup group) async {
+    final controller = TextEditingController(text: group.displayName);
+    final name = await showDialog<String>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('重命名分组'),
+            content: TextField(
+              controller: controller,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: '分组名称'),
+              onSubmitted: (value) => Navigator.of(context).pop(value.trim()),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed:
+                    () => Navigator.of(context).pop(controller.text.trim()),
+                child: const Text('保存'),
+              ),
+            ],
+          ),
+    );
+    controller.dispose();
+    if (name == null || name.isEmpty || name == group.displayName) {
+      return;
+    }
+    try {
+      final updated = await ref
+          .read(privateBookSourceServiceProvider)
+          .updateGroup(group.id, name);
+      ref.read(selectedPrivateBookSourceGroupProvider.notifier).state =
+          updated.id;
+      _markChanged();
+      _showMessage('分组已重命名');
+    } catch (error) {
+      _showMessage(_messageOf(error));
+    }
+  }
+
+  Future<void> _deleteGroup(PrivateBookSourceGroup group) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('删除分组'),
+            content: Text('确认删除“${group.displayName}”？分组内书源会移到未分组。'),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('删除'),
+              ),
+            ],
+          ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+    try {
+      await ref.read(privateBookSourceServiceProvider).deleteGroup(group.id);
+      if (ref.read(selectedPrivateBookSourceGroupProvider) == group.id) {
+        ref.read(selectedPrivateBookSourceGroupProvider.notifier).state = null;
+      }
+      _markChanged();
+      _showMessage('分组已删除');
+    } catch (error) {
+      _showMessage(_messageOf(error));
+    }
+  }
+
+  void _markChanged() {
+    _changed = true;
+    ref.invalidate(privateBookSourceGroupsProvider);
+    ref.invalidate(privateBookSourcesProvider);
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 }
 
@@ -996,7 +1243,10 @@ class _PrivateSourceFormState extends ConsumerState<_PrivateSourceForm> {
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _groupController,
-                  decoration: const InputDecoration(labelText: '分组'),
+                  decoration: const InputDecoration(
+                    labelText: '私人分组',
+                    hintText: '不填会使用书源 JSON 分组或未分组',
+                  ),
                   onChanged: (_) {
                     _groupEdited = true;
                   },
@@ -1114,24 +1364,12 @@ class _EmptySourcesCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          children: <Widget>[
-            const Icon(Icons.library_books_outlined, size: 42),
-            const SizedBox(height: 10),
-            Text('还没有私人书源', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 10),
-            FilledButton.icon(
-              onPressed: onCreate,
-              icon: const Icon(Icons.add),
-              label: const Text('新增书源'),
-            ),
-          ],
-        ),
-      ),
+    return AppEmptyStateCard(
+      icon: Icons.library_books_outlined,
+      title: '还没有私人书源',
+      description: '可以导入自己的 Legado JSON 书源，并按私人分组维护。',
+      actionLabel: '新增书源',
+      onAction: onCreate,
     );
   }
 }
@@ -1144,40 +1382,13 @@ class _FilterEmptySourcesCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
-        child: Column(
-          children: <Widget>[
-            Icon(
-              Icons.manage_search_outlined,
-              size: 34,
-              color: colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(height: 10),
-            Text(
-              '没有匹配的书源',
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 5),
-            Text(
-              keyword.trim(),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextButton(onPressed: onClear, child: const Text('清空搜索')),
-          ],
-        ),
-      ),
+    return AppEmptyStateCard(
+      icon: Icons.manage_search_outlined,
+      title: '没有匹配的书源',
+      description: keyword.trim().isEmpty ? '当前分组暂无书源。' : keyword.trim(),
+      actionLabel: '清空搜索',
+      onAction: onClear,
+      compact: true,
     );
   }
 }
@@ -1189,8 +1400,15 @@ class _LoadingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: EdgeInsets.zero,
+    final colorScheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+        ),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(18),
         child: Row(
@@ -1222,25 +1440,14 @@ class _ErrorCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(title, style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Text(message),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh),
-              label: const Text('重试'),
-            ),
-          ],
-        ),
-      ),
+    return AppEmptyStateCard(
+      icon: Icons.error_outline_rounded,
+      title: title,
+      description: message,
+      actionLabel: '重试',
+      onAction: onRetry,
+      compact: true,
+      centered: false,
     );
   }
 }
@@ -1269,6 +1476,10 @@ String _typeLabel(List<String> types) {
 String _groupLabel(String value) {
   final normalized = value.trim();
   return normalized.isEmpty ? '未分组' : normalized;
+}
+
+bool _isDefaultGroup(PrivateBookSourceGroup group) {
+  return group.displayName == '未分组';
 }
 
 String _visibilityLabel(String value) {

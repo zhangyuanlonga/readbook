@@ -202,8 +202,9 @@ class ServerOnlineSearchService {
       );
       final statusCode = response.statusCode ?? 0;
       if (statusCode >= 400) {
+        final message = await _serverErrorMessage(response.data, statusCode);
         throw NetworkException(
-          briefMessage: '服务器搜索失败，状态码：$statusCode',
+          briefMessage: message,
           stage: ErrorStage.search,
           requestUrl: url,
         );
@@ -385,6 +386,26 @@ int? _normalizedConcurrency(int? value) {
 
 int _perHostConcurrencyFor(int totalConcurrency) {
   return totalConcurrency <= 4 ? 1 : 2;
+}
+
+Future<String> _serverErrorMessage(ResponseBody? body, int statusCode) async {
+  if (body != null) {
+    try {
+      final raw = await utf8.decoder.bind(body.stream.cast<List<int>>()).join();
+      final data = jsonDecode(raw);
+      if (data is Map) {
+        final code = data['code']?.toString() ?? '';
+        final message = data['message']?.toString() ?? '';
+        if (code == 'SOURCE_QUOTA_EXCEEDED') {
+          return '今日搜索次数已用完。';
+        }
+        if (message.trim().isNotEmpty && message != 'source quota exceeded') {
+          return message.trim();
+        }
+      }
+    } catch (_) {}
+  }
+  return '服务器搜索失败，状态码：$statusCode';
 }
 
 class ServerSearchSourceSummary {
