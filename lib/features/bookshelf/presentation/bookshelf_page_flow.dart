@@ -577,7 +577,7 @@ extension on _BookshelfPageState {
                               isDense: true,
                               isExpanded: true,
                               borderRadius: BorderRadius.circular(14),
-                              alignment: AlignmentDirectional.centerEnd,
+                              alignment: AlignmentDirectional.center,
                               style: theme.textTheme.bodyMedium?.copyWith(
                                 color: colorScheme.onSurface,
                                 fontWeight: FontWeight.w600,
@@ -588,12 +588,12 @@ extension on _BookshelfPageState {
                                 for (final option in values)
                                   DropdownMenuItem<T>(
                                     value: option,
-                                    alignment: AlignmentDirectional.centerEnd,
+                                    alignment: AlignmentDirectional.center,
                                     child: Text(
                                       labelBuilder(option),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      textAlign: TextAlign.end,
+                                      textAlign: TextAlign.center,
                                     ),
                                   ),
                               ],

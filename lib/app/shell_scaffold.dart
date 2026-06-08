@@ -2594,9 +2594,10 @@ class _DesktopBookshelfSettingOptionTile extends StatelessWidget {
               child: Row(
                 children: [
                   Icon(
-                    isModeOption
-                        ? Icons.swap_horiz_rounded
-                        : Icons.tune_rounded,
+                    option.icon ??
+                        (isModeOption
+                            ? Icons.swap_horiz_rounded
+                            : Icons.tune_rounded),
                     size: 18,
                     color: foreground,
                   ),

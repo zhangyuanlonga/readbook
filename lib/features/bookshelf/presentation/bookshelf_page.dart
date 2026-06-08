@@ -734,16 +734,20 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                       ScrollViewKeyboardDismissBehavior.onDrag,
                   physics: const AlwaysScrollableScrollPhysics(),
                   slivers: [
-                    if (!useDesktopLayout && _shouldShowBookshelfSearchSliver)
+                    if (_shouldShowBookshelfSearchSliver &&
+                        (!useDesktopLayout || _shouldShowBookshelfQuickFilters))
                       _buildBookshelfSearchSliver(
                         horizontal: contentHorizontal,
                         topInset: topInset + 12,
+                        showSearchBar: !useDesktopLayout,
                       ),
                     SliverPadding(
                       padding: EdgeInsets.fromLTRB(
                         contentHorizontal,
                         useDesktopLayout
-                            ? metrics.contentGap
+                            ? (_shouldShowBookshelfQuickFilters
+                                ? metrics.contentGap * 0.6
+                                : metrics.contentGap)
                             : contentTopPadding,
                         contentHorizontal,
                         16 + continueReadingReservedSpace,
@@ -802,6 +806,34 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   @override
   bool get wantKeepAlive => true;
 
+  List<DesktopBookshelfDisplaySettingOption> _desktopQuickFilterSettingOptions({
+    required String modeGroup,
+    required _BookshelfSearchQuickFilterContent currentValue,
+    required ValueChanged<_BookshelfSearchQuickFilterContent> onSelected,
+  }) {
+    return [
+      for (final content in _BookshelfSearchQuickFilterContent.values)
+        DesktopBookshelfDisplaySettingOption(
+          label: '快捷筛选: ${_searchQuickFilterContentLabel(content)}',
+          selected: currentValue == content,
+          modeGroup: modeGroup,
+          icon: _quickFilterContentIcon(content),
+          onChanged: (_) => onSelected(content),
+        ),
+    ];
+  }
+
+  IconData _quickFilterContentIcon(_BookshelfSearchQuickFilterContent content) {
+    return switch (content) {
+      _BookshelfSearchQuickFilterContent.none => Icons.visibility_off_outlined,
+      _BookshelfSearchQuickFilterContent.readingStatus =>
+        Icons.fact_check_outlined,
+      _BookshelfSearchQuickFilterContent.categories =>
+        Icons.folder_copy_outlined,
+      _BookshelfSearchQuickFilterContent.tags => Icons.sell_outlined,
+    };
+  }
+
   void _scheduleDesktopToolbarActionsRegistration({
     required List<BookshelfBook> filteredBooks,
     required bool enabled,
@@ -820,6 +852,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       _gridProgressInfoMode,
       _gridShowSourceBadge,
       _gridCoverShadow,
+      _gridQuickFilterContent,
       _listShowCover,
       _listCompactMode,
       _listShowTitle,
@@ -829,6 +862,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       _listProgressInfoMode,
       _listShowSourceBadge,
       _listShowRecentReadTime,
+      _listQuickFilterContent,
     ]);
     if (_lastDesktopToolbarActionsFingerprint == fingerprint) {
       return;
@@ -917,6 +951,13 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                   onChanged:
                       (value) => unawaited(_setDesktopGridCoverShadow(value)),
                 ),
+                ..._desktopQuickFilterSettingOptions(
+                  modeGroup: 'grid_quick_filter_content',
+                  currentValue: _gridQuickFilterContent,
+                  onSelected:
+                      (value) =>
+                          unawaited(_setDesktopGridQuickFilterContent(value)),
+                ),
               ],
               listSettingOptions: [
                 DesktopBookshelfDisplaySettingOption(
@@ -1002,6 +1043,13 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                   onChanged:
                       (value) =>
                           unawaited(_setDesktopListShowRecentReadTime(value)),
+                ),
+                ..._desktopQuickFilterSettingOptions(
+                  modeGroup: 'list_quick_filter_content',
+                  currentValue: _listQuickFilterContent,
+                  onSelected:
+                      (value) =>
+                          unawaited(_setDesktopListQuickFilterContent(value)),
                 ),
               ],
               onSortModeSelected:
@@ -1313,6 +1361,17 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     );
   }
 
+  Future<void> _setDesktopGridQuickFilterContent(
+    _BookshelfSearchQuickFilterContent value,
+  ) {
+    return _setDesktopBookshelfQuickFilterContent(
+      currentValue: _gridQuickFilterContent,
+      value: value,
+      applyValue: () => _gridQuickFilterContent = value,
+      saveValue: _bookshelfService.saveGridQuickFilterContent,
+    );
+  }
+
   Future<void> _setDesktopListShowCover(bool value) {
     return _setDesktopBookshelfDisplaySetting(
       currentValue: _listShowCover,
@@ -1431,6 +1490,17 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     );
   }
 
+  Future<void> _setDesktopListQuickFilterContent(
+    _BookshelfSearchQuickFilterContent value,
+  ) {
+    return _setDesktopBookshelfQuickFilterContent(
+      currentValue: _listQuickFilterContent,
+      value: value,
+      applyValue: () => _listQuickFilterContent = value,
+      saveValue: _bookshelfService.saveListQuickFilterContent,
+    );
+  }
+
   Future<void> _setDesktopBookshelfDisplaySetting({
     required bool currentValue,
     required bool value,
@@ -1478,6 +1548,33 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
 
     try {
       await saveValue(_progressInfoModeStorageValue(value));
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage('书架设置保存失败，请重试。');
+    }
+  }
+
+  Future<void> _setDesktopBookshelfQuickFilterContent({
+    required _BookshelfSearchQuickFilterContent currentValue,
+    required _BookshelfSearchQuickFilterContent value,
+    required VoidCallback applyValue,
+    required Future<void> Function(String value) saveValue,
+  }) async {
+    if (currentValue == value || !mounted) {
+      return;
+    }
+
+    _updateBookshelfLayoutPreservingScroll(() {
+      _updateBookshelfState(() {
+        applyValue();
+        _lastDesktopToolbarActionsFingerprint = null;
+      });
+    });
+
+    try {
+      await saveValue(_searchQuickFilterContentStorageValue(value));
     } catch (_) {
       if (!mounted) {
         return;

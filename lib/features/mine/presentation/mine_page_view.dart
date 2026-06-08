@@ -621,6 +621,15 @@ extension on _MinePageState {
         ),
       );
     }
+    if (visibilityState.isVisible(MinePageItemId.bookSources)) {
+      actions.add(
+        _MineActionItem(
+          icon: Icons.library_books_outlined,
+          label: '我的书源',
+          onTap: _pushMineRouteAction('/mine/book-sources'),
+        ),
+      );
+    }
     if (visibilityState.isVisible(MinePageItemId.tagManagement)) {
       actions.add(
         _MineActionItem(

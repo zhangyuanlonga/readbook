@@ -105,6 +105,7 @@ BookshelfSearchQuickFilterContent searchQuickFilterContentFromStorageValue(
   String value,
 ) {
   return switch (value) {
+    'readingStatus' => BookshelfSearchQuickFilterContent.readingStatus,
     'tags' => BookshelfSearchQuickFilterContent.tags,
     'categories' => BookshelfSearchQuickFilterContent.categories,
     _ => BookshelfSearchQuickFilterContent.none,
@@ -115,6 +116,7 @@ String searchQuickFilterContentStorageValue(
   BookshelfSearchQuickFilterContent value,
 ) {
   return switch (value) {
+    BookshelfSearchQuickFilterContent.readingStatus => 'readingStatus',
     BookshelfSearchQuickFilterContent.tags => 'tags',
     BookshelfSearchQuickFilterContent.categories => 'categories',
     BookshelfSearchQuickFilterContent.none => 'none',
@@ -123,6 +125,7 @@ String searchQuickFilterContentStorageValue(
 
 String searchQuickFilterContentLabel(BookshelfSearchQuickFilterContent value) {
   return switch (value) {
+    BookshelfSearchQuickFilterContent.readingStatus => '阅读状态',
     BookshelfSearchQuickFilterContent.tags => '标签',
     BookshelfSearchQuickFilterContent.categories => '分类',
     BookshelfSearchQuickFilterContent.none => '不显示',

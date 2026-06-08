@@ -35,7 +35,7 @@ class BookCategoryEditorResult {
   final List<BookshelfTaxonomyItem> createdItems;
 }
 
-enum BookshelfSearchQuickFilterContent { none, tags, categories }
+enum BookshelfSearchQuickFilterContent { none, readingStatus, categories, tags }
 
 class BookshelfProgressDisplay {
   const BookshelfProgressDisplay({

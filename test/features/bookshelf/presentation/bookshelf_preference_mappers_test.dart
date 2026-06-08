@@ -54,6 +54,10 @@ void main() {
 
     test('maps search quick filter storage values and labels', () {
       expect(
+        searchQuickFilterContentFromStorageValue('readingStatus'),
+        BookshelfSearchQuickFilterContent.readingStatus,
+      );
+      expect(
         searchQuickFilterContentFromStorageValue('tags'),
         BookshelfSearchQuickFilterContent.tags,
       );
@@ -64,8 +68,20 @@ void main() {
         'categories',
       );
       expect(
+        searchQuickFilterContentStorageValue(
+          BookshelfSearchQuickFilterContent.readingStatus,
+        ),
+        'readingStatus',
+      );
+      expect(
         searchQuickFilterContentLabel(BookshelfSearchQuickFilterContent.none),
         '不显示',
+      );
+      expect(
+        searchQuickFilterContentLabel(
+          BookshelfSearchQuickFilterContent.readingStatus,
+        ),
+        '阅读状态',
       );
     });
   });

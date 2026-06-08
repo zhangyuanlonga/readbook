@@ -16,6 +16,7 @@ import 'presentation/launch_image_gallery_page.dart';
 import 'presentation/membership_center_page.dart';
 import 'presentation/mine_management_page.dart';
 import 'presentation/mine_page.dart';
+import 'presentation/private_book_sources_page.dart';
 import 'presentation/reader_background_page.dart';
 import 'presentation/system_settings_page.dart';
 import '../error/presentation/error_center_page.dart';
@@ -120,6 +121,11 @@ final List<RouteBase> mineRoutes = <RouteBase>[
         (context, state) => const MineManagementPage(
           section: MineManagementSection.categoryManagement,
         ),
+  ),
+  GoRoute(
+    path: '/mine/book-sources',
+    name: 'mine-book-sources',
+    builder: (context, state) => const PrivateBookSourcesPage(),
   ),
   GoRoute(
     path: '/membership',

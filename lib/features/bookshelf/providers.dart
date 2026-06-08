@@ -179,6 +179,8 @@ class DesktopBookshelfDisplaySettingOption {
     required this.selected,
     required this.onChanged,
     this.modeGroup,
+    this.description,
+    this.icon,
   });
 
   /// 桌面端菜单展示的设置名称，仅用于当前显示模式的轻量快捷配置。
@@ -186,6 +188,8 @@ class DesktopBookshelfDisplaySettingOption {
   final bool selected;
   final ValueChanged<bool> onChanged;
   final String? modeGroup;
+  final String? description;
+  final IconData? icon;
 }
 
 final bookshelfServiceProvider = Provider<BookshelfService>((ref) {

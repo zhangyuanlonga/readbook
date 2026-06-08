@@ -1729,6 +1729,7 @@ class BookshelfService {
     required String fallback,
   }) {
     return switch (value?.trim()) {
+      'readingStatus' => 'readingStatus',
       'tags' => 'tags',
       'categories' => 'categories',
       'none' => 'none',

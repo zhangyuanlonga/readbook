@@ -213,11 +213,14 @@ extension on _BookshelfPageState {
   Widget _buildBookshelfSearchSliver({
     required double horizontal,
     required double topInset,
+    bool showSearchBar = true,
   }) {
-    final height = _bookshelfSearchSectionHeight + topInset;
+    final height =
+        _bookshelfSearchSectionHeight(showSearchBar: showSearchBar) + topInset;
     final child = _buildBookshelfSearchSection(
       horizontal: horizontal,
       topInset: topInset,
+      showSearchBar: showSearchBar,
     );
     if (_pinBookshelfSearchBar) {
       return SliverPersistentHeader(
@@ -228,11 +231,14 @@ extension on _BookshelfPageState {
     return SliverToBoxAdapter(child: child);
   }
 
-  double get _bookshelfSearchSectionHeight {
+  double _bookshelfSearchSectionHeight({required bool showSearchBar}) {
     final quickFilterHeight = _shouldShowBookshelfQuickFilters ? 46.0 : 0.0;
-    final searchHeight = _shouldShowExpandedBookshelfSearch ? 42.0 : 0.0;
+    final searchHeight =
+        showSearchBar && _shouldShowExpandedBookshelfSearch ? 42.0 : 0.0;
     final gapHeight =
-        _shouldShowBookshelfQuickFilters && _shouldShowExpandedBookshelfSearch
+        _shouldShowBookshelfQuickFilters &&
+                showSearchBar &&
+                _shouldShowExpandedBookshelfSearch
             ? 8.0
             : 0.0;
     return 12 + quickFilterHeight + gapHeight + searchHeight;
@@ -241,6 +247,7 @@ extension on _BookshelfPageState {
   Widget _buildBookshelfSearchSection({
     required double horizontal,
     required double topInset,
+    bool showSearchBar = true,
   }) {
     final palette = _resolvedPalette(context);
     final backdrop = _resolvedBackdrop(context);
@@ -254,11 +261,15 @@ extension on _BookshelfPageState {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (showSearchBar && _shouldShowExpandedBookshelfSearch)
+            _buildBookshelfSearchBar(),
+          if (_shouldShowBookshelfQuickFilters &&
+              showSearchBar &&
+              _shouldShowExpandedBookshelfSearch)
+            const SizedBox(height: 8),
           if (_shouldShowBookshelfQuickFilters) ...[
             _buildBookshelfQuickFilterBar(),
-            if (_shouldShowExpandedBookshelfSearch) const SizedBox(height: 8),
           ],
-          if (_shouldShowExpandedBookshelfSearch) _buildBookshelfSearchBar(),
         ],
       ),
     );
@@ -267,6 +278,7 @@ extension on _BookshelfPageState {
   bool get _shouldShowBookshelfQuickFilters {
     return switch (_bookshelfQuickFilterContent) {
       _BookshelfSearchQuickFilterContent.none => false,
+      _BookshelfSearchQuickFilterContent.readingStatus => _books.isNotEmpty,
       _BookshelfSearchQuickFilterContent.tags =>
         _userTags.isNotEmpty || _books.any((book) => _tagsOfBook(book).isEmpty),
       _BookshelfSearchQuickFilterContent.categories =>
@@ -277,6 +289,8 @@ extension on _BookshelfPageState {
 
   Widget _buildBookshelfQuickFilterBar() {
     final chips = switch (_bookshelfQuickFilterContent) {
+      _BookshelfSearchQuickFilterContent.readingStatus =>
+        _buildReadingStatusQuickFilterChips(),
       _BookshelfSearchQuickFilterContent.tags => _buildTagQuickFilterChips(),
       _BookshelfSearchQuickFilterContent.categories =>
         _buildCategoryQuickFilterChips(),
@@ -293,6 +307,40 @@ extension on _BookshelfPageState {
       onOpenFilterSheet: null,
       showActionButton: false,
     );
+  }
+
+  List<BookshelfFilterChipData> _buildReadingStatusQuickFilterChips() {
+    const filters = <_BookshelfFilter>[
+      _BookshelfFilter.unread,
+      _BookshelfFilter.reading,
+      _BookshelfFilter.finished,
+    ];
+    return <BookshelfFilterChipData>[
+      BookshelfFilterChipData(
+        label: '全部',
+        selected:
+            !_activeView.isTag &&
+            !_activeView.isCategory &&
+            _activeView.filter == _BookshelfFilter.all,
+        onTap:
+            !_activeView.isTag &&
+                    !_activeView.isCategory &&
+                    _activeView.filter == _BookshelfFilter.all
+                ? null
+                : () => _activateView(
+                  const _BookshelfViewSelection.base(_BookshelfFilter.all),
+                ),
+      ),
+      for (final filter in filters)
+        BookshelfFilterChipData(
+          label: _filterLabel(filter),
+          selected:
+              !_activeView.isTag &&
+              !_activeView.isCategory &&
+              _activeView.filter == filter,
+          onTap: () => _activateView(_BookshelfViewSelection.base(filter)),
+        ),
+    ];
   }
 
   List<BookshelfFilterChipData> _buildTagQuickFilterChips() {

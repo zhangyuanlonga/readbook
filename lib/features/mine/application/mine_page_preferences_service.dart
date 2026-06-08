@@ -25,6 +25,7 @@ enum MinePageItemId {
   profileCard,
   membershipCenter,
   inspiration,
+  bookSources,
   appAppearance,
   advancedTheme,
   bottomNavGallery,
@@ -77,6 +78,11 @@ const List<MinePageItemDefinition> minePageItemDefinitions = [
   MinePageItemDefinition(
     id: MinePageItemId.inspiration,
     title: '灵感笔记',
+    sectionTitle: '数据',
+  ),
+  MinePageItemDefinition(
+    id: MinePageItemId.bookSources,
+    title: '我的书源',
     sectionTitle: '数据',
   ),
   MinePageItemDefinition(
