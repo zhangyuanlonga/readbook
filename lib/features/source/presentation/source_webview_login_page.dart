@@ -8,6 +8,19 @@ import '../../../app/widgets/feature_disabled_page.dart';
 import '../application/source_runtime_session_service.dart';
 import '../application/webview_cookie_bridge.dart';
 
+const _dumpLocalStorageScript = '''
+(() => {
+  const data = {};
+  for (let index = 0; index < localStorage.length; index += 1) {
+    const key = localStorage.key(index);
+    if (key) {
+      data[key] = localStorage.getItem(key) || '';
+    }
+  }
+  return JSON.stringify(data);
+})()
+''';
+
 class SourceWebViewLoginPage extends ConsumerStatefulWidget {
   const SourceWebViewLoginPage({
     super.key,
@@ -183,13 +196,23 @@ class _SourceWebViewLoginPageState
         'document.cookie',
       );
       final cookie = normalizeWebViewCookieResult(rawCookie);
-      if (!hasUsableCookieHeader(cookie)) {
-        _showMessage('未读取到可用 Cookie。请确认已完成登录，或该站点是否限制 JS 读取 Cookie。');
+      final rawLocalStorage = await controller.runJavaScriptReturningResult(
+        _dumpLocalStorageScript,
+      );
+      final localStorage = normalizeWebViewStringMapResult(rawLocalStorage);
+      final hasCookie = hasUsableCookieHeader(cookie);
+      if (!hasCookie && localStorage.isEmpty) {
+        _showMessage('未读取到可用 Cookie 或 localStorage。请确认已完成登录，或该站点是否限制 JS 读取会话。');
         return;
       }
 
       final service = ref.read(sourceRuntimeSessionServiceProvider);
-      await service.submitSession(sourceId: widget.sourceId, cookie: cookie);
+      await service.submitLoginResult(
+        sourceId: widget.sourceId,
+        cookies: hasCookie ? cookie : null,
+        localStorage: localStorage,
+        finalUrl: _currentUrl,
+      );
       if (!mounted) return;
       _showMessage('登录会话已提交给网关，可以返回重试当前书源。');
       if (context.canPop()) {

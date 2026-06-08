@@ -28,6 +28,37 @@ bool hasUsableCookieHeader(String value) {
   return value.split(';').map((part) => part.trim()).any(_isCookiePair);
 }
 
+Map<String, String> normalizeWebViewStringMapResult(Object? value) {
+  Object? decoded = value?.toString().trim() ?? '';
+  for (var index = 0; index < 2; index += 1) {
+    if (decoded is! String) {
+      break;
+    }
+    final text = decoded.trim();
+    if (text.isEmpty || text == 'null' || text == 'undefined') {
+      return const <String, String>{};
+    }
+    try {
+      decoded = jsonDecode(text);
+    } catch (_) {
+      decoded = _stripMatchingQuotes(text);
+      break;
+    }
+  }
+  if (decoded is! Map) {
+    return const <String, String>{};
+  }
+  final normalized = <String, String>{};
+  for (final entry in decoded.entries) {
+    final key = entry.key?.toString().trim() ?? '';
+    final itemValue = entry.value?.toString().trim() ?? '';
+    if (key.isNotEmpty && itemValue.isNotEmpty) {
+      normalized[key] = itemValue;
+    }
+  }
+  return Map.unmodifiable(normalized);
+}
+
 bool _looksLikeQuotedJson(String value) {
   if (value.length < 2) {
     return false;

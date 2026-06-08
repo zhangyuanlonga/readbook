@@ -38,16 +38,47 @@ class SourceRuntimeSessionService {
     String? loginHeaderJson,
     String? loginInfoJson,
     String? sourceVariableJson,
+    Map<String, String> localStorage = const <String, String>{},
   }) {
     return _client.request<SourceRuntimeSessionSnapshot>(
       method: ApiMethod.put,
       path: 'v1/sources/${_pathId(sourceId)}/session',
       body: <String, Object?>{
-        'bookSourceUrl': fromServerGatewaySourceId(sourceId),
         if (_normalize(cookie) != null) 'cookie': _normalize(cookie),
         if (headers.isNotEmpty) 'headers': _normalizeHeaders(headers),
         if (_normalize(loginHeaderJson) != null)
           'loginHeaderJson': _normalize(loginHeaderJson),
+        if (_normalize(loginInfoJson) != null)
+          'loginInfoJson': _normalize(loginInfoJson),
+        if (_normalize(sourceVariableJson) != null)
+          'sourceVariableJson': _normalize(sourceVariableJson),
+        if (localStorage.isNotEmpty)
+          'localStorage': _normalizeHeaders(localStorage),
+      },
+      stage: ErrorStage.source,
+      decoder: SourceRuntimeSessionSnapshot.fromJson,
+    );
+  }
+
+  Future<SourceRuntimeSessionSnapshot> submitLoginResult({
+    required String sourceId,
+    String? cookies,
+    Map<String, String> headers = const <String, String>{},
+    Map<String, String> localStorage = const <String, String>{},
+    String? finalUrl,
+    String? loginInfoJson,
+    String? sourceVariableJson,
+  }) {
+    return _client.request<SourceRuntimeSessionSnapshot>(
+      method: ApiMethod.post,
+      path: 'v1/sources/${_pathId(sourceId)}/login-result',
+      body: <String, Object?>{
+        'sourceId': fromServerGatewaySourceId(sourceId),
+        if (_normalize(cookies) != null) 'cookies': _normalize(cookies),
+        if (headers.isNotEmpty) 'headers': _normalizeHeaders(headers),
+        if (localStorage.isNotEmpty)
+          'localStorage': _normalizeHeaders(localStorage),
+        if (_normalize(finalUrl) != null) 'finalUrl': _normalize(finalUrl),
         if (_normalize(loginInfoJson) != null)
           'loginInfoJson': _normalize(loginInfoJson),
         if (_normalize(sourceVariableJson) != null)

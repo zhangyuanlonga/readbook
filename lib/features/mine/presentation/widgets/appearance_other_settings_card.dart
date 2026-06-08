@@ -188,7 +188,7 @@ class _AppearanceOtherSettingsCardState
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    '高级会员和顶部用户卡片暂不支持隐藏，其余项目可单独控制显示状态。',
+                    '顶部用户卡片暂不支持隐藏，会员入口已合并到用户卡片，其余项目可单独控制显示状态。',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                       height: 1.45,

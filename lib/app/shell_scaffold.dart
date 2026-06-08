@@ -619,34 +619,17 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     final activeLabel = actions?.activeLabel.trim();
+    final menuController = MenuController();
     return MenuAnchor(
+      controller: menuController,
       menuChildren:
           actions == null
               ? const <Widget>[]
-              : [
-                for (final action in actions.statusActions)
-                  MenuItemButton(
-                    leadingIcon:
-                        action.selected
-                            ? const Icon(Icons.check_rounded)
-                            : Icon(action.icon),
-                    onPressed:
-                        action.enabled && !action.selected
-                            ? action.onSelected
-                            : null,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(action.label),
-                        const SizedBox(width: 16),
-                        Text(
-                          '${action.count}',
-                          style: Theme.of(context).textTheme.labelSmall
-                              ?.copyWith(color: colorScheme.onSurfaceVariant),
-                        ),
-                      ],
-                    ),
-                  ),
+              : <Widget>[
+                _DesktopBookshelfLibraryPicker(
+                  actions: actions,
+                  onClose: menuController.close,
+                ),
               ],
       builder: (menuContext, controller, child) {
         return Material(
@@ -673,7 +656,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 116),
+                      constraints: const BoxConstraints(maxWidth: 160),
                       child: Text(
                         activeLabel == null || activeLabel.isEmpty
                             ? '全部'
@@ -1977,5 +1960,299 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
       return AppShellTab.mine;
     }
     return AppShellTab.bookshelf;
+  }
+}
+
+class _DesktopBookshelfLibraryPicker extends StatefulWidget {
+  const _DesktopBookshelfLibraryPicker({
+    required this.actions,
+    required this.onClose,
+  });
+
+  final DesktopBookshelfLibraryActions actions;
+  final VoidCallback onClose;
+
+  @override
+  State<_DesktopBookshelfLibraryPicker> createState() =>
+      _DesktopBookshelfLibraryPickerState();
+}
+
+class _DesktopBookshelfLibraryPickerState
+    extends State<_DesktopBookshelfLibraryPicker> {
+  late final TextEditingController _searchController;
+  String _keyword = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final groups =
+        widget.actions.filterGroups.isNotEmpty
+            ? widget.actions.filterGroups
+            : <DesktopBookshelfLibraryFilterGroup>[
+              DesktopBookshelfLibraryFilterGroup(
+                title: '阅读状态',
+                actions: [
+                  for (final action in widget.actions.statusActions)
+                    DesktopBookshelfLibraryFilterAction(
+                      label: action.label,
+                      count: action.count,
+                      selected: action.selected,
+                      icon: action.icon,
+                      enabled: action.enabled,
+                      onSelected: action.onSelected,
+                    ),
+                ],
+              ),
+            ];
+    final maxHeight = MediaQuery.sizeOf(context).height * 0.68;
+
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: 460, maxHeight: maxHeight),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: colorScheme.primaryContainer.withValues(alpha: 0.62),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.filter_alt_outlined,
+                    size: 17,
+                    color: colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '筛选书架',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '状态、分类和标签',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: '关闭',
+                  onPressed: widget.onClose,
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: '搜索分类或标签',
+                prefixIcon: const Icon(Icons.search_rounded, size: 18),
+                suffixIcon:
+                    _keyword.isEmpty
+                        ? null
+                        : IconButton(
+                          tooltip: '清空',
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() {
+                              _keyword = '';
+                            });
+                          },
+                          icon: const Icon(Icons.close_rounded, size: 18),
+                        ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              onChanged: (value) {
+                setState(() {
+                  _keyword = value;
+                });
+              },
+            ),
+            const SizedBox(height: 12),
+            Flexible(
+              child: SingleChildScrollView(
+                primary: false,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final group in groups)
+                      _DesktopBookshelfLibraryFilterSection(
+                        group: group,
+                        keyword: _keyword,
+                        onSelected: (action) {
+                          widget.onClose();
+                          action.onSelected();
+                        },
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DesktopBookshelfLibraryFilterSection extends StatelessWidget {
+  const _DesktopBookshelfLibraryFilterSection({
+    required this.group,
+    required this.keyword,
+    required this.onSelected,
+  });
+
+  final DesktopBookshelfLibraryFilterGroup group;
+  final String keyword;
+  final ValueChanged<DesktopBookshelfLibraryFilterAction> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final normalizedKeyword = keyword.trim().toLowerCase();
+    final visibleActions =
+        normalizedKeyword.isEmpty
+            ? group.actions
+            : group.actions
+                .where(
+                  (action) =>
+                      action.label.toLowerCase().contains(normalizedKeyword),
+                )
+                .toList(growable: false);
+
+    if (visibleActions.isEmpty && group.emptyLabel == null) {
+      return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            group.title,
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: colorScheme.onSurface,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (visibleActions.isEmpty)
+            Text(
+              normalizedKeyword.isEmpty ? group.emptyLabel! : '没有匹配项',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            )
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final action in visibleActions)
+                  _DesktopBookshelfLibraryFilterChip(
+                    action: action,
+                    onSelected: onSelected,
+                  ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DesktopBookshelfLibraryFilterChip extends StatelessWidget {
+  const _DesktopBookshelfLibraryFilterChip({
+    required this.action,
+    required this.onSelected,
+  });
+
+  final DesktopBookshelfLibraryFilterAction action;
+  final ValueChanged<DesktopBookshelfLibraryFilterAction> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final accentColor = action.accentColor ?? colorScheme.primary;
+    final selected = action.selected;
+    return FilterChip(
+      selected: selected,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
+      avatar: Icon(
+        selected ? Icons.check_rounded : action.icon,
+        size: 16,
+        color: selected ? accentColor : colorScheme.onSurfaceVariant,
+      ),
+      label: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 132),
+            child: Text(
+              action.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            '${action.count}',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color:
+                  selected
+                      ? colorScheme.onSecondaryContainer
+                      : colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+      selectedColor: accentColor.withValues(alpha: 0.16),
+      checkmarkColor: accentColor,
+      side: BorderSide(
+        color:
+            selected
+                ? accentColor.withValues(alpha: 0.72)
+                : colorScheme.outlineVariant.withValues(alpha: 0.72),
+      ),
+      onSelected:
+          action.enabled && !selected ? (_) => onSelected(action) : null,
+    );
   }
 }

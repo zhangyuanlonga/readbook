@@ -612,15 +612,6 @@ extension on _MinePageState {
     required MinePageVisibilityState visibilityState,
   }) {
     final actions = <_MineActionItem>[];
-    if (visibilityState.isVisible(MinePageItemId.membershipCenter)) {
-      actions.add(
-        _MineActionItem(
-          icon: Icons.workspace_premium_outlined,
-          label: '高级会员',
-          onTap: _openMembershipCenter,
-        ),
-      );
-    }
     if (visibilityState.isVisible(MinePageItemId.inspiration)) {
       actions.add(
         _MineActionItem(
@@ -698,128 +689,165 @@ extension on _MinePageState {
     _MineResolvedPalette palette,
     Color membershipAccent,
   ) {
-    if (_userId == null) {
-      return const SizedBox.shrink();
-    }
+    final theme = Theme.of(context);
+    final isGuest = _userId == null;
+    final accent = _hasMembership ? membershipAccent : palette.primaryColor;
+    final title =
+        isGuest
+            ? '会员权益'
+            : _hasMembership
+            ? '高级会员'
+            : '开通会员';
+    final detail = _buildMembershipInlineDetail();
+    final actionLabel =
+        isGuest
+            ? '去登录'
+            : _hasMembership
+            ? '查看权益'
+            : '开通会员';
+    final icon =
+        _hasMembership
+            ? Icons.workspace_premium_rounded
+            : Icons.workspace_premium_outlined;
+    return LayoutBuilder(
+      key: const ValueKey<String>('mine_profile_membership_panel'),
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 250;
+        final showDetail = constraints.maxWidth >= 190;
+        final showAction = constraints.maxWidth >= 150;
+        final effectiveActionLabel =
+            compact
+                ? isGuest
+                    ? '登录'
+                    : _hasMembership
+                    ? '权益'
+                    : '开通'
+                : actionLabel;
+        final action = _buildProfileMembershipActionButton(
+          context,
+          label: effectiveActionLabel,
+          accent: accent,
+          palette: palette,
+          prominent: !isGuest && !_hasMembership,
+          onPressed: isGuest ? _handleProfileCardTap : _openMembershipCenter,
+        );
 
-    if (_hasMembership) {
-      return _buildMembershipProgressRow(context, palette, membershipAccent);
-    }
-
-    return _buildUpgradeRow(context, palette);
-  }
-
-  Widget _buildMembershipProgressRow(
-    BuildContext context,
-    _MineResolvedPalette palette,
-    Color membershipAccent,
-  ) {
-    final expireAt = _vipExpireAt;
-    final isLifetime = _membershipPlanType?.toLowerCase() == 'lifetime';
-    if (expireAt == null) {
-      if (!isLifetime) {
-        return const SizedBox.shrink();
-      }
-      return Row(
-        children: [
-          Icon(Icons.all_inclusive_rounded, size: 15, color: membershipAccent),
-          const SizedBox(width: 6),
-          Text(
-            '终身会员 · 永久有效',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: membershipAccent,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      );
-    }
-
-    final now = DateTime.now();
-    final totalDays = _membershipCycleDays(_membershipPlanType, expireAt, now);
-    final remainingDays = expireAt.difference(now).inDays.clamp(0, totalDays);
-    final progress =
-        totalDays > 0
-            ? ((totalDays - remainingDays).clamp(0, totalDays) / totalDays)
-            : 0.0;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(2),
-          child: LinearProgressIndicator(
-            value: progress.clamp(0.0, 1.0),
-            minHeight: 4,
-            backgroundColor: palette.cardBorderColor.withValues(alpha: 0.3),
-            valueColor: AlwaysStoppedAnimation<Color>(membershipAccent),
-          ),
-        ),
-        const SizedBox(height: 6),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Text(
-              '会员有效期至 ${_formatDate(expireAt)}',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: palette.textSecondaryColor,
-                fontSize: 11,
+            if (constraints.maxWidth >= 48) ...[
+              Icon(icon, size: 16, color: accent),
+              const SizedBox(width: 7),
+            ],
+            Expanded(
+              child: Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: title,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: palette.textPrimaryColor,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    if (showDetail)
+                      TextSpan(
+                        text: '  ·  $detail',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: palette.textSecondaryColor,
+                        ),
+                      ),
+                  ],
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
-            Text(
-              '剩余 $remainingDays 天',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: membershipAccent,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            if (showAction) ...[
+              const SizedBox(width: 8),
+              Flexible(flex: 0, child: action),
+            ],
           ],
-        ),
-      ],
+        );
+      },
     );
   }
 
-  int _membershipCycleDays(String? planType, DateTime expireAt, DateTime now) {
-    final normalized = planType?.trim().toLowerCase() ?? '';
-    if (normalized.contains('year') || normalized.contains('annual')) {
-      return 365;
+  String _buildMembershipInlineDetail() {
+    if (_userId == null) {
+      return '登录后可开通';
     }
-    if (normalized.contains('quarter')) {
-      return 92;
+    if (!_hasMembership) {
+      return '享专属特权';
     }
-    if (normalized.contains('month')) {
-      return 31;
+    final isLifetime = _membershipPlanType?.toLowerCase() == 'lifetime';
+    if (isLifetime) {
+      return '终身会员 · 永久有效';
     }
-    if (normalized.contains('week')) {
-      return 7;
+    final expireAt = _vipExpireAt;
+    if (expireAt != null) {
+      return '有效期至 ${_formatDate(expireAt)}';
     }
-    final remainingDays = expireAt.difference(now).inDays;
-    return remainingDays.clamp(1, 365).toInt();
+    return '会员有效';
   }
 
-  Widget _buildUpgradeRow(BuildContext context, _MineResolvedPalette palette) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          Icon(
-            Icons.workspace_premium_rounded,
-            size: 14,
-            color: palette.primaryColor,
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              '开通会员，享受专属特权',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: palette.primaryColor,
-                fontSize: 12,
-              ),
-            ),
-          ),
-        ],
+  Widget _buildProfileMembershipActionButton(
+    BuildContext context, {
+    required String label,
+    required Color accent,
+    required _MineResolvedPalette palette,
+    required bool prominent,
+    required VoidCallback onPressed,
+  }) {
+    final icon =
+        _hasMembership
+            ? Icons.chevron_right_rounded
+            : Icons.workspace_premium_rounded;
+    final foreground =
+        ThemeData.estimateBrightnessForColor(accent) == Brightness.dark
+            ? Colors.white
+            : Colors.black;
+    final baseStyle = ButtonStyle(
+      minimumSize: const WidgetStatePropertyAll<Size>(Size(0, 34)),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
+      padding: const WidgetStatePropertyAll<EdgeInsetsGeometry>(
+        EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      ),
+      textStyle: WidgetStatePropertyAll<TextStyle?>(
+        Theme.of(
+          context,
+        ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w800),
+      ),
+      shape: WidgetStatePropertyAll<RoundedRectangleBorder>(
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+
+    if (prominent) {
+      return FilledButton.icon(
+        key: const ValueKey<String>('mine_profile_membership_action_button'),
+        onPressed: _isLoggingOut ? null : onPressed,
+        icon: Icon(icon, size: 16),
+        label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+        style: baseStyle.copyWith(
+          backgroundColor: WidgetStatePropertyAll<Color>(accent),
+          foregroundColor: WidgetStatePropertyAll<Color>(foreground),
+        ),
+      );
+    }
+
+    return OutlinedButton.icon(
+      key: const ValueKey<String>('mine_profile_membership_action_button'),
+      onPressed: _isLoggingOut ? null : onPressed,
+      icon: Icon(_userId == null ? Icons.login_rounded : icon, size: 16),
+      label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+      style: baseStyle.copyWith(
+        foregroundColor: WidgetStatePropertyAll<Color>(accent),
+        backgroundColor: WidgetStatePropertyAll<Color>(palette.cardColor),
+        side: WidgetStatePropertyAll<BorderSide>(
+          BorderSide(color: accent.withValues(alpha: 0.20)),
+        ),
       ),
     );
   }
@@ -1001,59 +1029,71 @@ extension on _MinePageState {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              displayName,
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w800,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          if (_hasMembership)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: membershipAccent.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                'PRO',
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  color: membershipAccent,
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final showMembershipBadge =
+                              _hasMembership && constraints.maxWidth >= 86;
+                          final showGuestBadge =
+                              _userId == null &&
+                              !isDesktopProfile &&
+                              constraints.maxWidth >= 112;
+
+                          return Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  displayName,
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                            ),
-                          if (_userId == null && !isDesktopProfile)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: palette.noticeSurfaceColor,
-                                borderRadius: BorderRadius.circular(999),
-                                border: Border.all(
-                                  color: palette.noticeAccentColor.withValues(
-                                    alpha: 0.55,
+                              if (showMembershipBadge)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: membershipAccent.withValues(
+                                      alpha: 0.12,
+                                    ),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    'PRO',
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                      color: membershipAccent,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              child: Text(
-                                '未登录',
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  color: palette.noticeAccentColor,
+                              if (showGuestBadge)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: palette.noticeSurfaceColor,
+                                    borderRadius: BorderRadius.circular(999),
+                                    border: Border.all(
+                                      color: palette.noticeAccentColor
+                                          .withValues(alpha: 0.55),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    '未登录',
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                      color: palette.noticeAccentColor,
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            ),
-                        ],
+                            ],
+                          );
+                        },
                       ),
                       const SizedBox(height: 6),
                       Text(
@@ -1254,17 +1294,11 @@ extension on _MinePageState {
                   ),
                   child: Padding(
                     padding: const EdgeInsets.only(top: 16),
-                    child:
-                        _userId == null
-                            ? _buildDesktopProfileLoginHint(
-                              context,
-                              palette: palette,
-                            )
-                            : _buildProfileMembershipRow(
-                              context,
-                              palette,
-                              membershipAccent,
-                            ),
+                    child: _buildProfileMembershipRow(
+                      context,
+                      palette,
+                      membershipAccent,
+                    ),
                   ),
                 ),
               ],
@@ -1302,29 +1336,6 @@ extension on _MinePageState {
           style: theme.textTheme.bodyMedium?.copyWith(
             color: palette.textSecondaryColor,
             height: 1.35,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDesktopProfileLoginHint(
-    BuildContext context, {
-    required _MineResolvedPalette palette,
-  }) {
-    return Row(
-      children: [
-        Icon(Icons.sync_alt_rounded, size: 16, color: palette.primaryColor),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            '登录后可同步书架、阅读记录和会员权益',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: palette.textSecondaryColor,
-              fontWeight: FontWeight.w600,
-            ),
           ),
         ),
       ],

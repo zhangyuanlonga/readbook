@@ -72,6 +72,7 @@ const List<MinePageItemDefinition> minePageItemDefinitions = [
     id: MinePageItemId.membershipCenter,
     title: '高级会员',
     sectionTitle: '数据',
+    displayable: false,
   ),
   MinePageItemDefinition(
     id: MinePageItemId.inspiration,

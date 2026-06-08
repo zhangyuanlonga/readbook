@@ -870,8 +870,9 @@ void main() {
     expect(find.text('设置'), findsOneWidget);
   });
 
-  testWidgets('ShellScaffold 桌面书架显示状态侧栏和视图下拉', (tester) async {
+  testWidgets('ShellScaffold 桌面书架显示状态侧栏和筛选弹窗', (tester) async {
     var selectedStatus = '';
+    var selectedFilter = '';
     final actions = DesktopBookshelfLibraryActions(
       activeLabel: '全部',
       statusActions: [
@@ -911,6 +912,44 @@ void main() {
           onSelected: () => selectedStatus = 'finished',
         ),
       ],
+      filterGroups: [
+        DesktopBookshelfLibraryFilterGroup(
+          title: '快捷入口',
+          actions: [
+            DesktopBookshelfLibraryFilterAction(
+              label: '全部',
+              count: 5,
+              selected: true,
+              icon: Icons.library_books_outlined,
+              onSelected: () => selectedFilter = 'all',
+            ),
+          ],
+        ),
+        DesktopBookshelfLibraryFilterGroup(
+          title: '分类',
+          actions: [
+            DesktopBookshelfLibraryFilterAction(
+              label: '仙侠',
+              count: 2,
+              selected: false,
+              icon: Icons.folder_copy_outlined,
+              onSelected: () => selectedFilter = 'category:仙侠',
+            ),
+          ],
+        ),
+        DesktopBookshelfLibraryFilterGroup(
+          title: '标签',
+          actions: [
+            DesktopBookshelfLibraryFilterAction(
+              label: '热门',
+              count: 3,
+              selected: false,
+              icon: Icons.sell_outlined,
+              onSelected: () => selectedFilter = 'tag:热门',
+            ),
+          ],
+        ),
+      ],
     );
 
     await tester.pumpWidget(
@@ -937,6 +976,21 @@ void main() {
 
     await tester.tap(find.text('阅读中'));
     expect(selectedStatus, 'reading');
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('desktop_bookshelf_view_selector')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('筛选书架'), findsOneWidget);
+    expect(find.text('分类'), findsOneWidget);
+    expect(find.text('标签'), findsOneWidget);
+    expect(find.text('仙侠'), findsOneWidget);
+    expect(find.text('热门'), findsOneWidget);
+
+    await tester.tap(find.text('热门'));
+    await tester.pumpAndSettle();
+    expect(selectedFilter, 'tag:热门');
   });
 
   testWidgets('ShellScaffold 底部导航保持统计页位于我的之前', (tester) async {

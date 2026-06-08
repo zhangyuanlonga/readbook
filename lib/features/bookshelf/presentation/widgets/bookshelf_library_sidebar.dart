@@ -25,6 +25,8 @@ DesktopBookshelfLibraryActions? buildDesktopBookshelfLibraryActions({
   required bool enabled,
   required String activeLabel,
   required Iterable<BookshelfLibrarySidebarActionInput> statusActions,
+  List<DesktopBookshelfLibraryFilterGroup> filterGroups =
+      const <DesktopBookshelfLibraryFilterGroup>[],
 }) {
   if (!enabled) {
     return null;
@@ -41,5 +43,6 @@ DesktopBookshelfLibraryActions? buildDesktopBookshelfLibraryActions({
           onSelected: action.onSelected,
         ),
     ],
+    filterGroups: filterGroups,
   );
 }

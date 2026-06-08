@@ -16,4 +16,22 @@ void main() {
       expect(hasUsableCookieHeader('broken; =skip'), isFalse);
     });
   });
+
+  group('normalizeWebViewStringMapResult', () {
+    test('decodes map and double encoded JavaScript strings', () {
+      expect(
+        normalizeWebViewStringMapResult('{"token":"abc","empty":" "}'),
+        <String, String>{'token': 'abc'},
+      );
+      expect(
+        normalizeWebViewStringMapResult('"{\\"sid\\":\\"local\\"}"'),
+        <String, String>{'sid': 'local'},
+      );
+    });
+
+    test('ignores invalid local storage payloads', () {
+      expect(normalizeWebViewStringMapResult('undefined'), isEmpty);
+      expect(normalizeWebViewStringMapResult('"not a map"'), isEmpty);
+    });
+  });
 }

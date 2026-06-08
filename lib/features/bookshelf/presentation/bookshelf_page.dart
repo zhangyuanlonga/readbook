@@ -1026,7 +1026,20 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }
 
   void _scheduleDesktopLibraryActionsRegistration({required bool enabled}) {
-    final statusCounts = _buildDesktopLibraryStatusBookCounts();
+    final statusCounts = _buildDesktopLibraryFilterBookCounts(
+      _kDesktopLibraryStatusFilters,
+    );
+    final baseFilterCounts = _buildDesktopLibraryFilterBookCounts(
+      _kDefaultBaseFilters,
+    );
+    final tagBookCount = _buildTagBookCount();
+    final categoryBookCount = _buildCategoryBookCount();
+    final userTags = _userTags;
+    final userCategories = _userCategories;
+    final untaggedCount =
+        _books.where((book) => _tagsOfBook(book).isEmpty).length;
+    final uncategorizedCount =
+        _books.where((book) => (_categoryOfBook(book) ?? '').isEmpty).length;
     final fingerprint = Object.hashAll([
       enabled,
       _activeView,
@@ -1034,8 +1047,21 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       identityHashCode(_progressByBookKey),
       identityHashCode(_localBooksById),
       identityHashCode(_cachedChapterCountByBookKey),
+      for (final filter in _kDefaultBaseFilters) baseFilterCounts[filter] ?? 0,
       for (final filter in _kDesktopLibraryStatusFilters)
         statusCounts[filter] ?? 0,
+      untaggedCount,
+      uncategorizedCount,
+      for (final category in userCategories) ...[
+        category,
+        categoryBookCount[category] ?? 0,
+        _categoryItem(category).colorValue,
+      ],
+      for (final tag in userTags) ...[
+        tag,
+        tagBookCount[tag] ?? 0,
+        _tagItem(tag).colorValue,
+      ],
     ]);
     if (_lastDesktopLibraryActionsFingerprint == fingerprint) {
       return;
@@ -1060,6 +1086,100 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                 () => _activateView(_BookshelfViewSelection.base(filter)),
           ),
       ],
+      filterGroups: [
+        DesktopBookshelfLibraryFilterGroup(
+          title: '快捷入口',
+          actions: [
+            for (final filter in _kDefaultBaseFilters)
+              DesktopBookshelfLibraryFilterAction(
+                label: _filterLabel(filter),
+                count: baseFilterCounts[filter] ?? 0,
+                selected:
+                    !_activeView.isTag &&
+                    !_activeView.isCategory &&
+                    _activeView.filter == filter,
+                icon: _desktopLibraryStatusIcon(filter),
+                onSelected:
+                    () => _activateView(_BookshelfViewSelection.base(filter)),
+              ),
+          ],
+        ),
+        DesktopBookshelfLibraryFilterGroup(
+          title: '阅读状态',
+          actions: [
+            for (final filter in const <_BookshelfFilter>[
+              _BookshelfFilter.todo,
+              _BookshelfFilter.unread,
+              _BookshelfFilter.reading,
+              _BookshelfFilter.finished,
+            ])
+              DesktopBookshelfLibraryFilterAction(
+                label: _filterLabel(filter),
+                count: statusCounts[filter] ?? 0,
+                selected:
+                    !_activeView.isTag &&
+                    !_activeView.isCategory &&
+                    _activeView.filter == filter,
+                icon: _desktopLibraryStatusIcon(filter),
+                onSelected:
+                    () => _activateView(_BookshelfViewSelection.base(filter)),
+              ),
+          ],
+        ),
+        DesktopBookshelfLibraryFilterGroup(
+          title: '分类',
+          emptyLabel: '暂无分类',
+          actions: [
+            DesktopBookshelfLibraryFilterAction(
+              label: '未分类',
+              count: uncategorizedCount,
+              selected: _activeView.isUncategorized,
+              icon: Icons.folder_off_outlined,
+              onSelected:
+                  () => _activateView(
+                    const _BookshelfViewSelection.category(null),
+                  ),
+            ),
+            for (final category in userCategories)
+              DesktopBookshelfLibraryFilterAction(
+                label: category,
+                count: categoryBookCount[category] ?? 0,
+                selected:
+                    _activeView.isCategory && _activeView.category == category,
+                icon: Icons.folder_copy_outlined,
+                accentColor: Color(_categoryItem(category).colorValue),
+                onSelected:
+                    () => _activateView(
+                      _BookshelfViewSelection.category(category),
+                    ),
+              ),
+          ],
+        ),
+        DesktopBookshelfLibraryFilterGroup(
+          title: '标签',
+          emptyLabel: '暂无标签',
+          actions: [
+            DesktopBookshelfLibraryFilterAction(
+              label: '未打标签',
+              count: untaggedCount,
+              selected: _activeView.isTag && _activeView.tag == '',
+              icon: Icons.sell_outlined,
+              onSelected:
+                  () => _activateView(const _BookshelfViewSelection.tag('')),
+            ),
+            for (final tag in userTags)
+              DesktopBookshelfLibraryFilterAction(
+                label: tag,
+                count: tagBookCount[tag] ?? 0,
+                selected: _activeView.isTag && _activeView.tag == tag,
+                icon: Icons.sell_outlined,
+                accentColor: Color(_tagItem(tag).colorValue),
+                onSelected:
+                    () => _activateView(_BookshelfViewSelection.tag(tag)),
+              ),
+          ],
+        ),
+      ],
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
@@ -1069,12 +1189,15 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     });
   }
 
-  Map<_BookshelfFilter, int> _buildDesktopLibraryStatusBookCounts() {
+  Map<_BookshelfFilter, int> _buildDesktopLibraryFilterBookCounts(
+    Iterable<_BookshelfFilter> filters,
+  ) {
+    final filterList = filters.toList(growable: false);
     final counts = <_BookshelfFilter, int>{
-      for (final filter in _kDesktopLibraryStatusFilters) filter: 0,
+      for (final filter in filterList) filter: 0,
     };
     for (final book in _books) {
-      for (final filter in _kDesktopLibraryStatusFilters) {
+      for (final filter in filterList) {
         if (_bookMatchesStaticFilter(book, filter)) {
           counts[filter] = (counts[filter] ?? 0) + 1;
         }

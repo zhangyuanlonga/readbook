@@ -227,9 +227,37 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
                   ),
                 ),
                 SizedBox(height: metrics.sectionGap),
-                FilledButton(
-                  onPressed: () => context.push('/auth'),
-                  child: const Text('去登录'),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final compact = constraints.maxWidth < 360;
+                    final loginButton = FilledButton.icon(
+                      onPressed: () => context.push('/auth'),
+                      icon: const Icon(Icons.login_rounded),
+                      label: const Text('去登录'),
+                    );
+                    final membershipButton = OutlinedButton.icon(
+                      onPressed: () => context.push('/membership'),
+                      icon: const Icon(Icons.workspace_premium_outlined),
+                      label: const Text('了解会员'),
+                    );
+                    if (compact) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          loginButton,
+                          SizedBox(height: metrics.contentGap),
+                          membershipButton,
+                        ],
+                      );
+                    }
+                    return Row(
+                      children: [
+                        Expanded(child: loginButton),
+                        SizedBox(width: metrics.contentGap),
+                        Expanded(child: membershipButton),
+                      ],
+                    );
+                  },
                 ),
               ],
             ),
@@ -553,9 +581,20 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
                 ],
               ),
             ),
-            Icon(
-              Icons.chevron_right_rounded,
-              color: colorScheme.onSurfaceVariant,
+            FilledButton.icon(
+              onPressed: () => context.push('/membership'),
+              icon: const Icon(Icons.workspace_premium_rounded, size: 16),
+              label: const Text('开通会员'),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(0, 36),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                textStyle: Theme.of(
+                  context,
+                ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w800),
+              ),
             ),
           ],
         ),
@@ -616,10 +655,17 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
                     ),
                   ),
                 ),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  size: 18,
-                  color: colorScheme.onSurfaceVariant,
+                TextButton.icon(
+                  onPressed: () => context.push('/membership'),
+                  icon: const Icon(Icons.chevron_right_rounded, size: 16),
+                  label: const Text('查看权益'),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    minimumSize: const Size(0, 32),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    textStyle: Theme.of(context).textTheme.labelMedium
+                        ?.copyWith(fontWeight: FontWeight.w800),
+                  ),
                 ),
               ],
             ),

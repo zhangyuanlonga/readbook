@@ -128,15 +128,49 @@ class DesktopBookshelfLibraryStatusAction {
   final bool enabled;
 }
 
+class DesktopBookshelfLibraryFilterAction {
+  const DesktopBookshelfLibraryFilterAction({
+    required this.label,
+    required this.count,
+    required this.selected,
+    required this.icon,
+    required this.onSelected,
+    this.enabled = true,
+    this.accentColor,
+  });
+
+  final String label;
+  final int count;
+  final bool selected;
+  final IconData icon;
+  final VoidCallback onSelected;
+  final bool enabled;
+  final Color? accentColor;
+}
+
+class DesktopBookshelfLibraryFilterGroup {
+  const DesktopBookshelfLibraryFilterGroup({
+    required this.title,
+    required this.actions,
+    this.emptyLabel,
+  });
+
+  final String title;
+  final List<DesktopBookshelfLibraryFilterAction> actions;
+  final String? emptyLabel;
+}
+
 class DesktopBookshelfLibraryActions {
   const DesktopBookshelfLibraryActions({
     required this.activeLabel,
     required this.statusActions,
+    this.filterGroups = const <DesktopBookshelfLibraryFilterGroup>[],
   });
 
   /// 当前书架视图名称，用于桌面顶栏的紧凑下拉入口。
   final String activeLabel;
   final List<DesktopBookshelfLibraryStatusAction> statusActions;
+  final List<DesktopBookshelfLibraryFilterGroup> filterGroups;
 }
 
 class DesktopBookshelfDisplaySettingOption {

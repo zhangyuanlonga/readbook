@@ -157,7 +157,7 @@ void main() {
     );
     expect(sessionService.refreshRemoteRequests[0], isFalse);
     expect(sessionService.refreshRemoteRequests[1], isTrue);
-    expect(find.text('终身会员 · 永久有效'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, '查看权益'), findsOneWidget);
   });
 
   testWidgets('MinePage refreshes when membership snapshot revision changes', (
@@ -188,7 +188,7 @@ void main() {
     );
     await tester.pumpAndSettle(const Duration(milliseconds: 300));
 
-    expect(find.text('开通会员，享受专属特权'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, '开通会员'), findsOneWidget);
 
     sessionService.remoteHasMembership = true;
     final container = ProviderScope.containerOf(
@@ -201,7 +201,113 @@ void main() {
     await tester.pumpAndSettle(const Duration(milliseconds: 300));
 
     expect(sessionService.refreshRemoteRequests.last, isTrue);
-    expect(find.text('终身会员 · 永久有效'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, '查看权益'), findsOneWidget);
+  });
+
+  testWidgets('MinePage opens membership center from profile membership card', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    await tester.binding.setSurfaceSize(const Size(1280, 800));
+    addTearDown(() async {
+      await tester.binding.setSurfaceSize(null);
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final sessionService = _MembershipAwareMinePageSessionService(
+      cachedHasMembership: false,
+      remoteHasMembership: false,
+    );
+    final router = GoRouter(
+      initialLocation: '/mine',
+      routes: <RouteBase>[
+        GoRoute(path: '/mine', builder: (context, state) => const MinePage()),
+        GoRoute(
+          path: '/membership',
+          builder: (context, state) => const _MineTestMembershipPage(),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          minePageSessionServiceProvider.overrideWithValue(sessionService),
+        ],
+        child: MaterialApp.router(
+          theme: ThemeData(platform: TargetPlatform.macOS),
+          routerConfig: router,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(milliseconds: 300));
+
+    expect(find.widgetWithText(FilledButton, '开通会员'), findsOneWidget);
+    expect(
+      find.byKey(
+        const ValueKey<String>('mine_profile_membership_action_button'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('会员中心测试页'), findsNothing);
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey<String>('mine_profile_membership_action_button'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('会员中心测试页'), findsOneWidget);
+  });
+
+  testWidgets('MinePage guest profile card opens auth', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() async {
+      await tester.binding.setSurfaceSize(null);
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final router = GoRouter(
+      initialLocation: '/mine',
+      routes: <RouteBase>[
+        GoRoute(path: '/mine', builder: (context, state) => const MinePage()),
+        GoRoute(
+          path: '/auth',
+          builder: (context, state) => const _MineTestAuthPage(),
+        ),
+        GoRoute(
+          path: '/membership',
+          builder: (context, state) => const _MineTestMembershipPage(),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp.router(
+          theme: ThemeData(platform: TargetPlatform.android),
+          routerConfig: router,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(milliseconds: 300));
+
+    expect(
+      find.byKey(const ValueKey<String>('mine_mobile_profile_card')),
+      findsOneWidget,
+    );
+    expect(find.text('登录测试页'), findsNothing);
+    expect(find.text('会员中心测试页'), findsNothing);
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('mine_mobile_profile_card')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('登录测试页'), findsOneWidget);
+    expect(find.text('会员中心测试页'), findsNothing);
   });
 
   testWidgets(
@@ -347,6 +453,15 @@ class _MineTestAuthPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Scaffold(body: Center(child: Text('登录测试页')));
+  }
+}
+
+class _MineTestMembershipPage extends StatelessWidget {
+  const _MineTestMembershipPage();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(body: Center(child: Text('会员中心测试页')));
   }
 }
 
