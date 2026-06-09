@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -158,16 +159,7 @@ class PrivateBookSourcesPage extends ConsumerWidget {
                                     ),
                                 onTest:
                                     () => unawaited(
-                                      _runAction(
-                                        context,
-                                        ref,
-                                        () => ref
-                                            .read(
-                                              privateBookSourceServiceProvider,
-                                            )
-                                            .test(item.id),
-                                        '书源测试已记录',
-                                      ),
+                                      _testSource(context, ref, item),
                                     ),
                                 onSubmit:
                                     () => unawaited(
@@ -344,6 +336,58 @@ class PrivateBookSourcesPage extends ConsumerWidget {
       () => ref.read(privateBookSourceServiceProvider).submit(item.id, note),
       '已提交共享审核',
     );
+  }
+
+  static Future<void> _testSource(
+    BuildContext context,
+    WidgetRef ref,
+    PrivateBookSourceItem item,
+  ) async {
+    final config = await showAdaptiveActionSurface<_SourceTestConfig>(
+      context: context,
+      maxWidth: 560,
+      maxHeightFactor: 0.86,
+      padding: EdgeInsets.zero,
+      builder: (context) => _SourceTestConfigSheet(item: item),
+    );
+    if (config == null || !context.mounted) {
+      return;
+    }
+    try {
+      final result = await ref
+          .read(privateBookSourceServiceProvider)
+          .test(
+            item.id,
+            keyword: config.keyword,
+            timeoutMs: config.timeoutMs,
+            checkItems: config.checkItems,
+          );
+      if (!context.mounted) {
+        return;
+      }
+      _refresh(ref);
+      final report = result.report;
+      if (report != null) {
+        await showAdaptiveActionSurface<void>(
+          context: context,
+          maxWidth: 680,
+          maxHeightFactor: 0.9,
+          padding: EdgeInsets.zero,
+          builder: (context) => _SourceCheckReportSheet(report: report),
+        );
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('书源测试已记录：${_testLabel(result.item.lastTestStatus)}')),
+      );
+    } catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_messageOf(error))));
+    }
   }
 
   static Future<void> _runAction(
@@ -1485,6 +1529,378 @@ class _PrivateSourceMenuItem extends StatelessWidget {
   }
 }
 
+enum _SourceTestMode {
+  main('主链路', <String>['domain', 'search', 'info', 'toc', 'content']),
+  discovery('发现', <String>['domain', 'discovery', 'info', 'toc', 'content']),
+  custom('自定义', <String>['domain', 'search']);
+
+  const _SourceTestMode(this.label, this.items);
+
+  final String label;
+  final List<String> items;
+}
+
+class _SourceTestConfig {
+  const _SourceTestConfig({
+    required this.keyword,
+    required this.timeoutMs,
+    required this.checkItems,
+  });
+
+  final String keyword;
+  final int timeoutMs;
+  final List<String> checkItems;
+}
+
+class _SourceTestConfigSheet extends StatefulWidget {
+  const _SourceTestConfigSheet({required this.item});
+
+  final PrivateBookSourceItem item;
+
+  @override
+  State<_SourceTestConfigSheet> createState() => _SourceTestConfigSheetState();
+}
+
+class _SourceTestConfigSheetState extends State<_SourceTestConfigSheet> {
+  final TextEditingController _keywordController = TextEditingController();
+  _SourceTestMode _mode = _SourceTestMode.main;
+  int _timeoutMs = 30000;
+  late Set<String> _checkItems = _SourceTestMode.main.items.toSet();
+
+  @override
+  void dispose() {
+    _keywordController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final metrics = AppAdaptiveMetrics.of(context);
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        metrics.pagePadding,
+        metrics.contentGap,
+        metrics.pagePadding,
+        bottomInset + metrics.sectionGap,
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.82,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Text('测试书源', style: theme.textTheme.titleLarge),
+              const SizedBox(height: 4),
+              Text(
+                widget.item.name,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 18),
+              SegmentedButton<_SourceTestMode>(
+                segments: const <ButtonSegment<_SourceTestMode>>[
+                  ButtonSegment(
+                    value: _SourceTestMode.main,
+                    label: Text('主链路'),
+                    icon: Icon(Icons.route_outlined),
+                  ),
+                  ButtonSegment(
+                    value: _SourceTestMode.discovery,
+                    label: Text('发现'),
+                    icon: Icon(Icons.explore_outlined),
+                  ),
+                  ButtonSegment(
+                    value: _SourceTestMode.custom,
+                    label: Text('自定义'),
+                    icon: Icon(Icons.tune_rounded),
+                  ),
+                ],
+                selected: <_SourceTestMode>{_mode},
+                onSelectionChanged: (values) {
+                  final value = values.first;
+                  setState(() {
+                    _mode = value;
+                    if (value != _SourceTestMode.custom) {
+                      _checkItems = value.items.toSet();
+                    }
+                  });
+                },
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: _keywordController,
+                decoration: const InputDecoration(
+                  labelText: '测试关键字',
+                  hintText: '为空时使用书源内置关键字',
+                  prefixIcon: Icon(Icons.search_rounded),
+                ),
+              ),
+              const SizedBox(height: 14),
+              DropdownButtonFormField<int>(
+                initialValue: _timeoutMs,
+                decoration: const InputDecoration(
+                  labelText: '超时',
+                  prefixIcon: Icon(Icons.timer_outlined),
+                ),
+                items: const <DropdownMenuItem<int>>[
+                  DropdownMenuItem(value: 12000, child: Text('12 秒')),
+                  DropdownMenuItem(value: 30000, child: Text('30 秒')),
+                  DropdownMenuItem(value: 60000, child: Text('60 秒')),
+                  DropdownMenuItem(value: 90000, child: Text('90 秒')),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => _timeoutMs = value);
+                  }
+                },
+              ),
+              const SizedBox(height: 16),
+              Text('检测过程', style: theme.textTheme.titleSmall),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: <Widget>[
+                  for (final item in const <String>[
+                    'domain',
+                    'search',
+                    'discovery',
+                    'info',
+                    'toc',
+                    'content',
+                  ])
+                    FilterChip(
+                      label: Text(_checkItemLabel(item)),
+                      selected: _checkItems.contains(item),
+                      onSelected: _mode == _SourceTestMode.custom
+                          ? (selected) {
+                              setState(() {
+                                if (selected) {
+                                  _checkItems.add(item);
+                                } else {
+                                  _checkItems.remove(item);
+                                }
+                              });
+                            }
+                          : null,
+                    ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: <Widget>[
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('取消'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton.icon(
+                    onPressed: _checkItems.isEmpty
+                        ? null
+                        : () => Navigator.of(context).pop(
+                              _SourceTestConfig(
+                                keyword: _keywordController.text.trim(),
+                                timeoutMs: _timeoutMs,
+                                checkItems: _orderedCheckItems(_checkItems),
+                              ),
+                            ),
+                    icon: const Icon(Icons.science_outlined),
+                    label: const Text('开始测试'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SourceCheckReportSheet extends StatelessWidget {
+  const _SourceCheckReportSheet({required this.report});
+
+  final SourceCheckReport report;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
+    final summary = report.summary;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        metrics.pagePadding,
+        metrics.contentGap,
+        metrics.pagePadding,
+        metrics.sectionGap,
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.86,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Icon(
+                  summary.valid
+                      ? Icons.check_circle_rounded
+                      : Icons.error_rounded,
+                  color: summary.valid
+                      ? colorScheme.primary
+                      : colorScheme.error,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    summary.valid ? '检测通过' : '检测失败',
+                    style: theme.textTheme.titleLarge,
+                  ),
+                ),
+                IconButton(
+                  tooltip: '关闭',
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              [
+                if (summary.sourceName.isNotEmpty) summary.sourceName,
+                if (summary.mode.isNotEmpty) summary.mode,
+                if (summary.keyword.isNotEmpty) '关键字 ${summary.keyword}',
+                if (summary.elapsedMs > 0) _formatDurationMs(summary.elapsedMs),
+              ].join(' · '),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+            if (summary.message.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 10),
+              Text(summary.message, style: theme.textTheme.bodyMedium),
+            ],
+            const SizedBox(height: 14),
+            Expanded(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+                  ),
+                ),
+                child: ListView.separated(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: report.logs.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
+                  itemBuilder: (context, index) {
+                    return _SourceCheckLogRow(entry: report.logs[index]);
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: <Widget>[
+                OutlinedButton.icon(
+                  onPressed: report.copyText.trim().isEmpty
+                      ? null
+                      : () {
+                          Clipboard.setData(
+                            ClipboardData(text: report.copyText),
+                          );
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('检测日志已复制')),
+                          );
+                        },
+                  icon: const Icon(Icons.copy_rounded),
+                  label: const Text('复制日志'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SourceCheckLogRow extends StatelessWidget {
+  const _SourceCheckLogRow({required this.entry});
+
+  final SourceCheckLogEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final color = switch (entry.level) {
+      'success' => colorScheme.primary,
+      'error' => colorScheme.error,
+      'muted' => colorScheme.onSurfaceVariant,
+      _ => colorScheme.onSurface,
+    };
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        SizedBox(
+          width: 76,
+          child: Text(
+            '[${_formatLogTime(entry.timeMs)}]',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+        ),
+        Text(
+          entry.direction == 'in' ? '<-' : '->',
+          style: theme.textTheme.bodySmall?.copyWith(color: color),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                entry.message,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              for (final detail in entry.details)
+                Padding(
+                  padding: const EdgeInsets.only(top: 3),
+                  child: Text(
+                    detail,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _PrivateSourceForm extends ConsumerStatefulWidget {
   const _PrivateSourceForm({this.item});
 
@@ -2101,6 +2517,43 @@ String _testLabel(String value) {
     'pending' => '待测试',
     _ => value.isEmpty ? '未测试' : value,
   };
+}
+
+String _checkItemLabel(String value) {
+  return switch (value) {
+    'domain' => '域名',
+    'search' => '搜索',
+    'discovery' => '发现',
+    'info' => '详情',
+    'toc' => '目录',
+    'content' => '正文',
+    _ => value,
+  };
+}
+
+List<String> _orderedCheckItems(Set<String> values) {
+  return const <String>[
+    'domain',
+    'search',
+    'discovery',
+    'info',
+    'toc',
+    'content',
+  ].where(values.contains).toList(growable: false);
+}
+
+String _formatDurationMs(int value) {
+  if (value >= 1000) {
+    return '${(value / 1000).toStringAsFixed(1)} 秒';
+  }
+  return '$value ms';
+}
+
+String _formatLogTime(int value) {
+  final minutes = value ~/ 60000;
+  final seconds = (value % 60000) ~/ 1000;
+  final millis = value % 1000;
+  return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}.${millis.toString().padLeft(3, '0')}';
 }
 
 List<PrivateBookSourceItem> _filterPrivateSources(

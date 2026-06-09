@@ -2567,7 +2567,7 @@ List<_ServerSourceGroupBucket> _buildServerSourceGroups(
       _ServerSourceGroupBucket(
         id: group.id,
         name: group.displayName,
-        section: group.isPrivate ? '我的分组' : '共享分组',
+        section: group.isPrivate ? '我的分组' : '平台分组',
         sources: sources,
       ),
     );
@@ -2599,7 +2599,7 @@ List<_ServerSourceGroupBucket> _buildServerSourceGroups(
 
 int _sourceSectionOrder(String section) {
   return switch (section) {
-    '共享分组' => 0,
+    '平台分组' => 0,
     '我的分组' => 1,
     _ => 2,
   };

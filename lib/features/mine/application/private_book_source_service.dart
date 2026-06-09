@@ -143,14 +143,24 @@ class PrivateBookSourceService {
     );
   }
 
-  Future<PrivateBookSourceItem> test(String id) {
-    return _client.request<PrivateBookSourceItem>(
+  Future<PrivateBookSourceTestResult> test(
+    String id, {
+    String keyword = '',
+    int? timeoutMs,
+    List<String> checkItems = const <String>[],
+  }) {
+    return _client.request<PrivateBookSourceTestResult>(
       method: ApiMethod.post,
       path: '/v1/me/book-sources/$id/test',
+      body: <String, dynamic>{
+        if (keyword.trim().isNotEmpty) 'keyword': keyword.trim(),
+        if (timeoutMs != null) 'timeoutMs': timeoutMs,
+        if (checkItems.isNotEmpty) 'checkItems': checkItems,
+      },
       attachAccessToken: true,
       enableRetry: false,
       stage: ErrorStage.source,
-      decoder: (data) => _itemFromMutationPayload(data),
+      decoder: (data) => PrivateBookSourceTestResult.fromJson(_asMap(data)),
     );
   }
 
@@ -223,6 +233,149 @@ class PrivateBookSourceListResult {
       total: (json['total'] as num?)?.toInt() ?? 0,
       page: (json['page'] as num?)?.toInt() ?? 1,
       pageSize: (json['page_size'] as num?)?.toInt() ?? 20,
+    );
+  }
+}
+
+class PrivateBookSourceTestResult {
+  const PrivateBookSourceTestResult({
+    required this.item,
+    required this.quota,
+    required this.report,
+    required this.raw,
+  });
+
+  final PrivateBookSourceItem item;
+  final SourceQuotaSnapshot? quota;
+  final SourceCheckReport? report;
+  final Map<String, dynamic> raw;
+
+  factory PrivateBookSourceTestResult.fromJson(Map<String, dynamic> json) {
+    final item = json['item'];
+    final quota = json['quota'];
+    final report = json['report'];
+    return PrivateBookSourceTestResult(
+      item: item is Map
+          ? PrivateBookSourceItem.fromJson(
+              item.map((key, value) => MapEntry(key.toString(), value)),
+            )
+          : PrivateBookSourceItem.fromJson(json),
+      quota: quota is Map
+          ? SourceQuotaSnapshot.fromJson(
+              quota.map((key, value) => MapEntry(key.toString(), value)),
+            )
+          : null,
+      report: report is Map
+          ? SourceCheckReport.fromJson(
+              report.map((key, value) => MapEntry(key.toString(), value)),
+            )
+          : null,
+      raw: json,
+    );
+  }
+}
+
+class SourceCheckReport {
+  const SourceCheckReport({
+    required this.summary,
+    required this.logs,
+    required this.copyText,
+  });
+
+  final SourceCheckSummary summary;
+  final List<SourceCheckLogEntry> logs;
+  final String copyText;
+
+  factory SourceCheckReport.fromJson(Map<String, dynamic> json) {
+    final logs = json['logs'] as List? ?? const [];
+    final summary = json['summary'];
+    return SourceCheckReport(
+      summary: summary is Map
+          ? SourceCheckSummary.fromJson(
+              summary.map((key, value) => MapEntry(key.toString(), value)),
+            )
+          : const SourceCheckSummary.empty(),
+      logs: logs
+          .whereType<Map>()
+          .map(
+            (item) => SourceCheckLogEntry.fromJson(
+              item.map((key, value) => MapEntry(key.toString(), value)),
+            ),
+          )
+          .toList(growable: false),
+      copyText: json['copyText']?.toString() ?? '',
+    );
+  }
+}
+
+class SourceCheckSummary {
+  const SourceCheckSummary({
+    required this.sourceName,
+    required this.mode,
+    required this.valid,
+    required this.keyword,
+    required this.elapsedMs,
+    required this.failureStage,
+    required this.message,
+  });
+
+  const SourceCheckSummary.empty()
+    : sourceName = '',
+      mode = '',
+      valid = false,
+      keyword = '',
+      elapsedMs = 0,
+      failureStage = '',
+      message = '';
+
+  final String sourceName;
+  final String mode;
+  final bool valid;
+  final String keyword;
+  final int elapsedMs;
+  final String failureStage;
+  final String message;
+
+  factory SourceCheckSummary.fromJson(Map<String, dynamic> json) {
+    return SourceCheckSummary(
+      sourceName: json['sourceName']?.toString() ?? '',
+      mode: json['mode']?.toString() ?? '',
+      valid: json['valid'] == true,
+      keyword: json['keyword']?.toString() ?? '',
+      elapsedMs: (json['elapsedMs'] as num?)?.toInt() ?? 0,
+      failureStage: json['failureStage']?.toString() ?? '',
+      message: json['message']?.toString() ?? '',
+    );
+  }
+}
+
+class SourceCheckLogEntry {
+  const SourceCheckLogEntry({
+    required this.timeMs,
+    required this.direction,
+    required this.stage,
+    required this.level,
+    required this.message,
+    required this.details,
+  });
+
+  final int timeMs;
+  final String direction;
+  final String stage;
+  final String level;
+  final String message;
+  final List<String> details;
+
+  factory SourceCheckLogEntry.fromJson(Map<String, dynamic> json) {
+    return SourceCheckLogEntry(
+      timeMs: (json['timeMs'] as num?)?.toInt() ?? 0,
+      direction: json['direction']?.toString() ?? 'out',
+      stage: json['stage']?.toString() ?? '',
+      level: json['level']?.toString() ?? 'info',
+      message: json['message']?.toString() ?? '',
+      details: (json['details'] as List? ?? const [])
+          .map((item) => item.toString())
+          .toList(growable: false),
     );
   }
 }

@@ -1,5 +1,7 @@
 import '../network/auth_token_refresher.dart';
 import '../network/api_client.dart';
+import '../logging/app_logger.dart';
+import '../source_access/source_access_service.dart';
 import 'auth_event_bus.dart';
 import 'auth_service.dart';
 import 'auth_session_store.dart';
@@ -8,11 +10,15 @@ class AuthTokenRefresherImpl implements AuthTokenRefresher {
   AuthTokenRefresherImpl({
     AuthService? authService,
     AuthSessionStore? sessionStore,
+    SourceAccessService? sourceAccessService,
   }) : _authService = authService ?? AuthService(),
-       _sessionStore = sessionStore ?? AuthSessionStore();
+       _sessionStore = sessionStore ?? AuthSessionStore(),
+       _sourceAccessService = sourceAccessService ?? SourceAccessService();
 
   final AuthService _authService;
   final AuthSessionStore _sessionStore;
+  final SourceAccessService _sourceAccessService;
+  final AppLogger _logger = AppLogger.instance;
 
   @override
   Future<String?> getAccessToken() {
@@ -30,8 +36,13 @@ class AuthTokenRefresherImpl implements AuthTokenRefresher {
         refreshToken: refreshToken,
       );
       final storedSession = await _sessionStore.getSession();
-      return session.isValid &&
+      final refreshed =
+          session.isValid &&
           storedSession?.accessToken.trim() == session.accessToken.trim();
+      if (refreshed) {
+        await _refreshSourceAccessScope();
+      }
+      return refreshed;
     } on ApiException catch (error) {
       if (_shouldInvalidateSession(error)) {
         // 只有服务端明确拒绝凭证时才清理本地会话并广播过期事件。
@@ -48,6 +59,20 @@ class AuthTokenRefresherImpl implements AuthTokenRefresher {
       // Transient refresh failures should not immediately wipe local session.
       // Let the next authenticated request or foreground refresh retry again.
       return false;
+    }
+  }
+
+  Future<void> _refreshSourceAccessScope() async {
+    try {
+      await _sourceAccessService.fetchMyScope();
+    } catch (error, stackTrace) {
+      _logger.warn(
+        'Post-token-refresh source access refresh failed',
+        context: {
+          'error': error.toString(),
+          'stackTrace': stackTrace.toString(),
+        },
+      );
     }
   }
 
