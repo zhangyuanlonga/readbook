@@ -7,7 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
-import '../../../app/widgets/adaptive_filter_bar.dart';
+import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/adaptive_list_tile.dart';
 import '../../../app/widgets/adaptive_overflow_toolbar.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
@@ -81,7 +81,19 @@ class PrivateBookSourcesPage extends ConsumerWidget {
                     bottomInset + metrics.sectionGap,
                   ),
                   children: <Widget>[
-                    const _PrivateSourceSearchField(),
+                    _PrivateSourceToolbar(
+                      selectedGroupId: selectedGroupId,
+                      groupsAsync: groupsAsync,
+                      onGroupSelected: (groupId) {
+                        ref
+                            .read(
+                              selectedPrivateBookSourceGroupProvider.notifier,
+                            )
+                            .state = groupId;
+                      },
+                      onRetry:
+                          () => ref.invalidate(privateBookSourceGroupsProvider),
+                    ),
                     SizedBox(height: metrics.contentGap),
                     quotaAsync.when(
                       data: (quota) => _QuotaCard(quota: quota),
@@ -92,20 +104,6 @@ class PrivateBookSourcesPage extends ConsumerWidget {
                             message: _messageOf(error),
                             onRetry: () => ref.invalidate(sourceQuotaProvider),
                           ),
-                    ),
-                    SizedBox(height: metrics.contentGap),
-                    _GroupFilterSection(
-                      selectedGroupId: selectedGroupId,
-                      groupsAsync: groupsAsync,
-                      onSelected: (groupId) {
-                        ref
-                            .read(
-                              selectedPrivateBookSourceGroupProvider.notifier,
-                            )
-                            .state = groupId;
-                      },
-                      onRetry:
-                          () => ref.invalidate(privateBookSourceGroupsProvider),
                     ),
                     SizedBox(height: metrics.contentGap),
                     listAsync.when(
@@ -253,11 +251,11 @@ class PrivateBookSourcesPage extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
   ) async {
-    final changed = await showModalBottomSheet<bool>(
+    final changed = await showAdaptiveActionSurface<bool>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
+      maxWidth: 560,
+      maxHeightFactor: 0.86,
+      padding: EdgeInsets.zero,
       builder: (context) => const _PrivateSourceGroupManagerSheet(),
     );
     if (changed == true) {
@@ -276,11 +274,11 @@ class PrivateBookSourcesPage extends ConsumerWidget {
     WidgetRef ref, {
     PrivateBookSourceItem? item,
   }) async {
-    final changed = await showModalBottomSheet<bool>(
+    final changed = await showAdaptiveActionSurface<bool>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
+      maxWidth: 680,
+      maxHeightFactor: 0.9,
+      padding: EdgeInsets.zero,
       builder: (context) => _PrivateSourceForm(item: item),
     );
     if (changed == true) {
@@ -293,22 +291,16 @@ class PrivateBookSourcesPage extends ConsumerWidget {
     WidgetRef ref,
     PrivateBookSourceItem item,
   ) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAdaptiveActionSurface<bool>(
       context: context,
+      maxWidth: 420,
       builder:
-          (context) => AlertDialog(
-            title: const Text('删除书源'),
-            content: Text('确认删除“${item.name}”？删除后不可恢复。'),
-            actions: <Widget>[
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('取消'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('删除'),
-              ),
-            ],
+          (context) => _ConfirmActionSurface(
+            icon: Icons.delete_outline,
+            title: '删除书源',
+            message: '确认删除“${item.name}”？删除后不可恢复。',
+            confirmLabel: '删除',
+            destructive: true,
           ),
     );
     if (confirmed != true) {
@@ -331,31 +323,12 @@ class PrivateBookSourcesPage extends ConsumerWidget {
     PrivateBookSourceItem item,
   ) async {
     final noteController = TextEditingController(text: item.description);
-    final note = await showDialog<String>(
+    final note = await showAdaptiveActionSurface<String>(
       context: context,
+      maxWidth: 520,
       builder:
-          (context) => AlertDialog(
-            title: const Text('提交共享审核'),
-            content: TextField(
-              controller: noteController,
-              minLines: 2,
-              maxLines: 5,
-              decoration: const InputDecoration(
-                labelText: '提交说明',
-                hintText: '说明这个书源适合共享的原因',
-              ),
-            ),
-            actions: <Widget>[
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('取消'),
-              ),
-              FilledButton(
-                onPressed:
-                    () => Navigator.of(context).pop(noteController.text.trim()),
-                child: const Text('提交'),
-              ),
-            ],
+          (context) => _SubmitSourceReviewSurface(
+            controller: noteController,
           ),
     );
     noteController.dispose();
@@ -421,6 +394,186 @@ class PrivateBookSourcesPage extends ConsumerWidget {
         context,
       ).showSnackBar(SnackBar(content: Text(_messageOf(error))));
     }
+  }
+}
+
+class _ConfirmActionSurface extends StatelessWidget {
+  const _ConfirmActionSurface({
+    required this.icon,
+    required this.title,
+    required this.message,
+    required this.confirmLabel,
+    this.destructive = false,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+  final String confirmLabel;
+  final bool destructive;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final accentColor = destructive ? colorScheme.error : colorScheme.primary;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: accentColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              alignment: Alignment.center,
+              child: Icon(icon, color: accentColor),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    title,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    message,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 22),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('取消'),
+            ),
+            const SizedBox(width: 8),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style:
+                  destructive
+                      ? FilledButton.styleFrom(
+                        backgroundColor: colorScheme.error,
+                        foregroundColor: colorScheme.onError,
+                      )
+                      : null,
+              child: Text(confirmLabel),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _RenameGroupSurface extends StatelessWidget {
+  const _RenameGroupSurface({required this.controller});
+
+  final TextEditingController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Text(
+          '重命名分组',
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 14),
+        TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: '分组名称'),
+          onSubmitted: (value) => Navigator.of(context).pop(value.trim()),
+        ),
+        const SizedBox(height: 18),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('取消'),
+            ),
+            const SizedBox(width: 8),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(controller.text.trim()),
+              child: const Text('保存'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _SubmitSourceReviewSurface extends StatelessWidget {
+  const _SubmitSourceReviewSurface({required this.controller});
+
+  final TextEditingController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Text(
+          '提交共享审核',
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 14),
+        TextField(
+          controller: controller,
+          minLines: 3,
+          maxLines: 6,
+          decoration: const InputDecoration(
+            labelText: '提交说明',
+            hintText: '说明这个书源适合共享的原因',
+            alignLabelWithHint: true,
+          ),
+        ),
+        const SizedBox(height: 18),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('取消'),
+            ),
+            const SizedBox(width: 8),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(controller.text.trim()),
+              child: const Text('提交'),
+            ),
+          ],
+        ),
+      ],
+    );
   }
 }
 
@@ -496,6 +649,49 @@ class _QuotaPill extends StatelessWidget {
   }
 }
 
+class _PrivateSourceToolbar extends StatelessWidget {
+  const _PrivateSourceToolbar({
+    required this.selectedGroupId,
+    required this.groupsAsync,
+    required this.onGroupSelected,
+    required this.onRetry,
+  });
+
+  final String? selectedGroupId;
+  final AsyncValue<List<PrivateBookSourceGroup>> groupsAsync;
+  final ValueChanged<String?> onGroupSelected;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    final groupButton = _PrivateSourceGroupMenuButton(
+      selectedGroupId: selectedGroupId,
+      groupsAsync: groupsAsync,
+      onSelected: onGroupSelected,
+      onRetry: onRetry,
+    );
+    if (metrics.isCompactWindow) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          const _PrivateSourceSearchField(),
+          SizedBox(height: metrics.contentGap),
+          Align(alignment: Alignment.centerRight, child: groupButton),
+        ],
+      );
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: <Widget>[
+        const Expanded(child: _PrivateSourceSearchField()),
+        const SizedBox(width: 12),
+        groupButton,
+      ],
+    );
+  }
+}
+
 class _PrivateSourceSearchField extends ConsumerStatefulWidget {
   const _PrivateSourceSearchField();
 
@@ -547,8 +743,8 @@ class _PrivateSourceSearchFieldState
   }
 }
 
-class _GroupFilterSection extends StatelessWidget {
-  const _GroupFilterSection({
+class _PrivateSourceGroupMenuButton extends StatelessWidget {
+  const _PrivateSourceGroupMenuButton({
     required this.selectedGroupId,
     required this.groupsAsync,
     required this.onSelected,
@@ -570,40 +766,233 @@ class _GroupFilterSection extends StatelessWidget {
             onSelected(null);
           });
         }
-        return AdaptiveFilterBar(
-          showActionButton: false,
-          chips: <AdaptiveFilterChipData>[
-            AdaptiveFilterChipData(
-              label: '全部',
-              selected: selectedGroupId == null,
-              onTap: () => onSelected(null),
+        final selectedLabel =
+            selectedGroupId == null
+                ? '全部分组'
+                : groups
+                    .where((group) => group.id == selectedGroupId)
+                    .map((group) => group.displayName)
+                    .firstOrNull ??
+                    '全部分组';
+        return _GroupMenuPill(
+          label: selectedLabel,
+          selected: selectedGroupId != null,
+          onTap: () => unawaited(
+            _showPrivateSourceGroupPicker(
+              context: context,
+              groups: groups,
+              selectedGroupId: selectedGroupId,
+              onSelected: onSelected,
             ),
-            for (final group in groups)
-              AdaptiveFilterChipData(
-                label: group.displayName,
-                selected: selectedGroupId == group.id,
-                onTap: () => onSelected(group.id),
-              ),
-          ],
+          ),
         );
       },
       loading:
-          () => const SizedBox(
-            height: 32,
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
+          () => const _GroupMenuPill(
+            label: '读取分组',
+            selected: false,
+            loading: true,
           ),
       error:
-          (error, _) => Align(
-            alignment: Alignment.centerLeft,
-            child: _InlineRetryPill(onPressed: onRetry, label: '分组读取失败'),
+          (error, _) => _GroupMenuPill(
+            label: '分组失败',
+            selected: false,
+            error: true,
+            onTap: onRetry,
           ),
+    );
+  }
+}
+
+class _GroupMenuPill extends StatelessWidget {
+  const _GroupMenuPill({
+    required this.label,
+    required this.selected,
+    this.loading = false,
+    this.error = false,
+    this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final bool loading;
+  final bool error;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final foreground =
+        error
+            ? colorScheme.error
+            : selected
+            ? colorScheme.primary
+            : colorScheme.onSurfaceVariant;
+    return Material(
+      color:
+          selected
+              ? colorScheme.primaryContainer.withValues(alpha: 0.42)
+              : colorScheme.surfaceContainerLow.withValues(alpha: 0.9),
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: loading ? null : onTap,
+        child: Container(
+          height: 40,
+          constraints: const BoxConstraints(maxWidth: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color:
+                  error
+                      ? colorScheme.error.withValues(alpha: 0.5)
+                      : colorScheme.outlineVariant.withValues(alpha: 0.42),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              if (loading)
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                Icon(Icons.folder_copy_outlined, size: 18, color: foreground),
+              const SizedBox(width: 7),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: foreground,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              if (!loading) ...<Widget>[
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  size: 18,
+                  color: foreground,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+Future<void> _showPrivateSourceGroupPicker({
+  required BuildContext context,
+  required List<PrivateBookSourceGroup> groups,
+  required String? selectedGroupId,
+  required ValueChanged<String?> onSelected,
+}) async {
+  final selected = await showAdaptiveActionSurface<String?>(
+    context: context,
+    maxWidth: 440,
+    maxHeightFactor: 0.78,
+    builder:
+        (context) => _PrivateSourceGroupPickerSurface(
+          groups: groups,
+          selectedGroupId: selectedGroupId,
+        ),
+  );
+  if (selected != _PrivateSourceGroupPickerSurface.noSelection) {
+    onSelected(selected);
+  }
+}
+
+class _PrivateSourceGroupPickerSurface extends StatelessWidget {
+  const _PrivateSourceGroupPickerSurface({
+    required this.groups,
+    required this.selectedGroupId,
+  });
+
+  static const String noSelection = '__private_group_no_selection__';
+
+  final List<PrivateBookSourceGroup> groups;
+  final String? selectedGroupId;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: Text(
+                '选择分组',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            IconButton(
+              tooltip: '关闭',
+              onPressed: () => Navigator.of(context).pop(noSelection),
+              icon: const Icon(Icons.close_rounded),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * 0.56,
+          ),
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: groups.length + 1,
+            separatorBuilder:
+                (_, _) => Divider(
+                  height: 1,
+                  color: colorScheme.outlineVariant.withValues(alpha: 0.32),
+                ),
+            itemBuilder: (context, index) {
+              final isAll = index == 0;
+              final group = isAll ? null : groups[index - 1];
+              final id = group?.id;
+              final selected = selectedGroupId == id;
+              return ListTile(
+                leading: Icon(
+                  isAll
+                      ? Icons.folder_copy_outlined
+                      : Icons.folder_outlined,
+                  color:
+                      selected
+                          ? colorScheme.primary
+                          : colorScheme.onSurfaceVariant,
+                ),
+                title: Text(
+                  isAll ? '全部分组' : group!.displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                  ),
+                ),
+                trailing:
+                    selected
+                        ? Icon(Icons.check_rounded, color: colorScheme.primary)
+                        : null,
+                onTap: () => Navigator.of(context).pop(id),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }
@@ -638,12 +1027,17 @@ class _PrivateSourceGroupManagerSheetState
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
     final groupsAsync = ref.watch(privateBookSourceGroupsProvider);
+    final metrics = AppAdaptiveMetrics.of(context);
+    final maxHeight = MediaQuery.sizeOf(context).height * 0.78;
     return Padding(
-      padding: EdgeInsets.fromLTRB(16, 4, 16, bottomInset + 16),
+      padding: EdgeInsets.fromLTRB(
+        metrics.pagePadding,
+        metrics.contentGap,
+        metrics.pagePadding,
+        bottomInset + metrics.sectionGap,
+      ),
       child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.sizeOf(context).height * 0.82,
-        ),
+        constraints: BoxConstraints(maxHeight: maxHeight),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
@@ -785,28 +1179,12 @@ class _PrivateSourceGroupManagerSheetState
 
   Future<void> _renameGroup(PrivateBookSourceGroup group) async {
     final controller = TextEditingController(text: group.displayName);
-    final name = await showDialog<String>(
+    final name = await showAdaptiveActionSurface<String>(
       context: context,
+      maxWidth: 440,
       builder:
-          (context) => AlertDialog(
-            title: const Text('重命名分组'),
-            content: TextField(
-              controller: controller,
-              autofocus: true,
-              decoration: const InputDecoration(labelText: '分组名称'),
-              onSubmitted: (value) => Navigator.of(context).pop(value.trim()),
-            ),
-            actions: <Widget>[
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('取消'),
-              ),
-              FilledButton(
-                onPressed:
-                    () => Navigator.of(context).pop(controller.text.trim()),
-                child: const Text('保存'),
-              ),
-            ],
+          (context) => _RenameGroupSurface(
+            controller: controller,
           ),
     );
     controller.dispose();
@@ -827,22 +1205,16 @@ class _PrivateSourceGroupManagerSheetState
   }
 
   Future<void> _deleteGroup(PrivateBookSourceGroup group) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAdaptiveActionSurface<bool>(
       context: context,
+      maxWidth: 440,
       builder:
-          (context) => AlertDialog(
-            title: const Text('删除分组'),
-            content: Text('确认删除“${group.displayName}”？分组内书源会移到未分组。'),
-            actions: <Widget>[
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('取消'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('删除'),
-              ),
-            ],
+          (context) => _ConfirmActionSurface(
+            icon: Icons.folder_delete_outlined,
+            title: '删除分组',
+            message: '确认删除“${group.displayName}”？分组内书源会移到未分组。',
+            confirmLabel: '删除',
+            destructive: true,
           ),
     );
     if (confirmed != true) {
@@ -873,34 +1245,6 @@ class _PrivateSourceGroupManagerSheetState
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
-  }
-}
-
-class _InlineRetryPill extends StatelessWidget {
-  const _InlineRetryPill({required this.onPressed, required this.label});
-
-  final VoidCallback onPressed;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    return TextButton.icon(
-      onPressed: onPressed,
-      style: TextButton.styleFrom(
-        visualDensity: VisualDensity.compact,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        foregroundColor: colorScheme.onSurfaceVariant,
-      ),
-      icon: const Icon(Icons.refresh_rounded, size: 16),
-      label: Text(
-        label,
-        style: theme.textTheme.labelMedium?.copyWith(
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-    );
   }
 }
 
@@ -1196,8 +1540,15 @@ class _PrivateSourceFormState extends ConsumerState<_PrivateSourceForm> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final groupsAsync = ref.watch(privateBookSourceGroupsProvider);
+    final metrics = AppAdaptiveMetrics.of(context);
     return Padding(
-      padding: EdgeInsets.fromLTRB(16, 4, 16, bottomInset + 16),
+      padding: EdgeInsets.fromLTRB(
+        metrics.pagePadding,
+        metrics.contentGap,
+        metrics.pagePadding,
+        bottomInset + metrics.sectionGap,
+      ),
       child: Form(
         key: _formKey,
         child: ConstrainedBox(
@@ -1241,13 +1592,10 @@ class _PrivateSourceFormState extends ConsumerState<_PrivateSourceForm> {
                   },
                 ),
                 const SizedBox(height: 12),
-                TextFormField(
+                _PrivateGroupAutocompleteField(
                   controller: _groupController,
-                  decoration: const InputDecoration(
-                    labelText: '私人分组',
-                    hintText: '不填会使用书源 JSON 分组或未分组',
-                  ),
-                  onChanged: (_) {
+                  groupsAsync: groupsAsync,
+                  onChanged: () {
                     _groupEdited = true;
                   },
                 ),
@@ -1355,6 +1703,252 @@ class _PrivateSourceFormState extends ConsumerState<_PrivateSourceForm> {
     }
     _groupController.text = groupName;
   }
+}
+
+class _PrivateGroupAutocompleteField extends StatefulWidget {
+  const _PrivateGroupAutocompleteField({
+    required this.controller,
+    required this.groupsAsync,
+    required this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final AsyncValue<List<PrivateBookSourceGroup>> groupsAsync;
+  final VoidCallback onChanged;
+
+  @override
+  State<_PrivateGroupAutocompleteField> createState() =>
+      _PrivateGroupAutocompleteFieldState();
+}
+
+class _PrivateGroupAutocompleteFieldState
+    extends State<_PrivateGroupAutocompleteField> {
+  late final FocusNode _focusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode = FocusNode();
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final groups =
+        widget.groupsAsync.valueOrNull ?? const <PrivateBookSourceGroup>[];
+    final groupNames = _uniqueGroupNames(groups);
+    final loading = widget.groupsAsync.isLoading && groups.isEmpty;
+    final hasError = widget.groupsAsync.hasError && groups.isEmpty;
+    return RawAutocomplete<String>(
+      textEditingController: widget.controller,
+      focusNode: _focusNode,
+      optionsBuilder: (value) {
+        final rawKeyword = value.text.trim();
+        final keyword = rawKeyword.toLowerCase();
+        if (keyword.isEmpty) {
+          return groupNames.take(12);
+        }
+        final matches = groupNames
+            .where((name) => name.toLowerCase().contains(keyword))
+            .take(12)
+            .toList();
+        final exists = groupNames.any(
+          (name) => name.toLowerCase() == keyword,
+        );
+        if (!exists) {
+          matches.add(rawKeyword);
+        }
+        return matches;
+      },
+      onSelected: (_) => widget.onChanged(),
+      fieldViewBuilder: (context, textController, focusNode, onFieldSubmitted) {
+        return TextFormField(
+          controller: textController,
+          focusNode: focusNode,
+          decoration: InputDecoration(
+            labelText: '私人分组',
+            hintText: '选择已有分组，或输入新分组名',
+            helperText: loading
+                ? '正在读取分组'
+                : hasError
+                ? '分组读取失败，可直接输入新分组名'
+                : '不存在的分组名会在保存时自动创建',
+            suffixIcon: IconButton(
+              tooltip: '查看已有分组',
+              onPressed: groupNames.isEmpty
+                  ? null
+                  : () {
+                      focusNode.requestFocus();
+                      textController.selection = TextSelection(
+                        baseOffset: 0,
+                        extentOffset: textController.text.length,
+                      );
+                    },
+              icon: const Icon(Icons.arrow_drop_down_rounded),
+            ),
+          ),
+          onChanged: (_) => widget.onChanged(),
+        );
+      },
+      optionsViewBuilder: (context, onSelected, options) {
+        final items = options.toList(growable: false);
+        if (items.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        final theme = Theme.of(context);
+        final colorScheme = theme.colorScheme;
+        final maxWidth = MediaQuery.sizeOf(context).width - 32;
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            color: Colors.transparent,
+            elevation: 2,
+            shadowColor: colorScheme.shadow.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(16),
+            clipBehavior: Clip.antiAlias,
+            child: Container(
+              width: maxWidth.clamp(260.0, 420.0),
+              constraints: const BoxConstraints(maxHeight: 248),
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerLow.withValues(alpha: 0.98),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+                ),
+              ),
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                shrinkWrap: true,
+                itemCount: items.length,
+                separatorBuilder:
+                    (_, _) => Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Divider(
+                        height: 1,
+                        color: colorScheme.outlineVariant.withValues(
+                          alpha: 0.28,
+                        ),
+                      ),
+                    ),
+                itemBuilder: (context, index) {
+                  final name = items[index];
+                  final exists = groupNames.any(
+                    (groupName) =>
+                        groupName.toLowerCase() == name.toLowerCase(),
+                  );
+                  return _PrivateGroupOptionRow(
+                    name: name,
+                    exists: exists,
+                    onTap: () => onSelected(name),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _PrivateGroupOptionRow extends StatelessWidget {
+  const _PrivateGroupOptionRow({
+    required this.name,
+    required this.exists,
+    required this.onTap,
+  });
+
+  final String name;
+  final bool exists;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        child: Row(
+          children: <Widget>[
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color:
+                    exists
+                        ? colorScheme.primaryContainer.withValues(alpha: 0.48)
+                        : colorScheme.surfaceContainerHighest.withValues(
+                          alpha: 0.82,
+                        ),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              alignment: Alignment.center,
+              child: Icon(
+                exists
+                    ? Icons.folder_outlined
+                    : Icons.create_new_folder_outlined,
+                size: 19,
+                color:
+                    exists ? colorScheme.primary : colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(width: 11),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    exists ? '已有私人分组' : '保存时创建',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(
+              Icons.chevron_right_rounded,
+              size: 20,
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+List<String> _uniqueGroupNames(List<PrivateBookSourceGroup> groups) {
+  final seen = <String>{};
+  final names = <String>[];
+  for (final group in groups) {
+    final name = group.displayName.trim();
+    if (name.isEmpty || !seen.add(name)) {
+      continue;
+    }
+    names.add(name);
+  }
+  names.sort();
+  return names;
 }
 
 class _EmptySourcesCard extends StatelessWidget {

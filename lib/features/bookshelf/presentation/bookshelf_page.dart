@@ -3233,7 +3233,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                           size: 14,
                           color:
                               isSelected
-                                  ? palette.buttonTextColor
+                                  ? _readableForegroundFor(palette.primaryColor)
                                   : palette.textSecondaryColor,
                         ),
                       ),
@@ -3762,7 +3762,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
               size: 14,
               color:
                   selected
-                      ? palette.buttonTextColor
+                      ? _readableForegroundFor(palette.primaryColor)
                       : colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
             ),
           ),
@@ -4620,7 +4620,11 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final (label, background, foreground) =
         isLocal
             ? _localSourceBadgePresentation(colorScheme, localBook)
-            : ('在线', palette.secondaryColor, palette.buttonTextColor);
+            : (
+              '在线',
+              palette.secondaryColor,
+              _readableForegroundFor(palette.secondaryColor),
+            );
     final borderRadius = compact ? 6.0 : 7.0;
     final horizontalPadding = compact ? 8.0 : 10.0;
     final minWidth = compact ? 30.0 : 36.0;
@@ -6369,4 +6373,11 @@ class _BookshelfPinnedHeaderDelegate extends SliverPersistentHeaderDelegate {
   bool shouldRebuild(covariant _BookshelfPinnedHeaderDelegate oldDelegate) {
     return oldDelegate.extent != extent || oldDelegate.child != child;
   }
+}
+
+Color _readableForegroundFor(Color backgroundColor) {
+  return ThemeData.estimateBrightnessForColor(backgroundColor) ==
+          Brightness.dark
+      ? Colors.white
+      : Colors.black;
 }

@@ -28,7 +28,9 @@ class BookshelfEmptyCard extends StatelessWidget {
                 onPressed: onImportLocal,
                 style: FilledButton.styleFrom(
                   backgroundColor: palette.primaryColor,
-                  foregroundColor: palette.buttonTextColor,
+                  foregroundColor: _readableButtonForeground(
+                    palette.primaryColor,
+                  ),
                 ),
                 icon: const Icon(Icons.library_add_rounded),
                 label: const Text('导入本地图书'),
@@ -36,6 +38,13 @@ class BookshelfEmptyCard extends StatelessWidget {
               : null,
     );
   }
+}
+
+Color _readableButtonForeground(Color backgroundColor) {
+  return ThemeData.estimateBrightnessForColor(backgroundColor) ==
+          Brightness.dark
+      ? Colors.white
+      : Colors.black;
 }
 
 class BookshelfFilterEmptyCard extends StatelessWidget {

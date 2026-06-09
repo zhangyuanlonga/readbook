@@ -5,6 +5,7 @@ class SourceAccessScope {
     required this.membershipActive,
     required this.vipLevel,
     required this.features,
+    required this.groups,
     required this.groupCodes,
     required this.sourceIds,
     required this.groupSourceIds,
@@ -16,6 +17,7 @@ class SourceAccessScope {
   final bool membershipActive;
   final String vipLevel;
   final List<String> features;
+  final List<SourceAccessGroupSummary> groups;
   final List<String> groupCodes;
   final List<String> sourceIds;
   final Map<String, List<String>> groupSourceIds;
@@ -33,6 +35,15 @@ class SourceAccessScope {
       membershipActive: json['membership_active'] == true,
       vipLevel: _stringOrEmpty(json['vip_level']),
       features: _stringList(json['features']),
+      groups: groups
+          .whereType<Map>()
+          .map(
+            (item) => SourceAccessGroupSummary.fromJson(
+              item.map((key, value) => MapEntry(key.toString(), value)),
+            ),
+          )
+          .where((item) => item.id.isNotEmpty)
+          .toList(growable: false),
       groupCodes: groups
           .whereType<Map>()
           .map((item) => _stringOrEmpty(item['code']))
@@ -41,6 +52,35 @@ class SourceAccessScope {
       sourceIds: _stringList(json['source_ids']),
       groupSourceIds: _groupSourceIds(json['group_source_ids']),
       sourceScopeSource: _stringOrEmpty(json['source_scope_source']),
+    );
+  }
+}
+
+class SourceAccessGroupSummary {
+  const SourceAccessGroupSummary({
+    required this.id,
+    required this.code,
+    required this.name,
+    required this.scopeType,
+    required this.ownerUserId,
+  });
+
+  final String id;
+  final String code;
+  final String name;
+  final String scopeType;
+  final String ownerUserId;
+
+  bool get isPrivate => scopeType == 'private';
+  String get displayName => name.isEmpty ? code : name;
+
+  factory SourceAccessGroupSummary.fromJson(Map<String, dynamic> json) {
+    return SourceAccessGroupSummary(
+      id: _stringOrEmpty(json['id']),
+      code: _stringOrEmpty(json['code']),
+      name: _stringOrEmpty(json['name']),
+      scopeType: _stringOrEmpty(json['scope_type']),
+      ownerUserId: _stringOrEmpty(json['owner_user_id']),
     );
   }
 }

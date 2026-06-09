@@ -47,17 +47,17 @@ void main() {
     expect(lightScheme.surfaceTint, Colors.transparent);
   });
 
-  test('pure white seed applies snow white cool surfaces', () {
+  test('pure white seed keeps fully white light surfaces', () {
     final lightScheme = buildAppLightColorScheme(const Color(0xFFFFFFFF));
 
     expect(lightScheme.primary, const Color(0xFF1677FF));
     expect(lightScheme.onPrimary, const Color(0xFFFFFFFF));
     expect(lightScheme.primaryContainer, const Color(0xFFEAF2FF));
-    expect(lightScheme.surface, const Color(0xFFF8F9FA));
-    expect(lightScheme.surfaceContainerLow, const Color(0xFFF3F4F5));
-    expect(lightScheme.surfaceContainerHighest, const Color(0xFFE1E3E4));
-    expect(lightScheme.outline, const Color(0xFF727786));
-    expect(lightScheme.outlineVariant, const Color(0xFFC1C6D7));
+    expect(lightScheme.surface, const Color(0xFFFFFFFF));
+    expect(lightScheme.surfaceContainerLow, const Color(0xFFFFFFFF));
+    expect(lightScheme.surfaceContainerHighest, const Color(0xFFFFFFFF));
+    expect(lightScheme.outline, const Color(0xFFD9DEE5));
+    expect(lightScheme.outlineVariant, const Color(0xFFE6E6E6));
     expect(lightScheme.onSurface, const Color(0xFF191C1D));
     expect(lightScheme.surfaceTint, Colors.transparent);
   });

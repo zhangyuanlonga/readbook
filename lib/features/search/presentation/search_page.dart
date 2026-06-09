@@ -24,6 +24,8 @@ import '../../../app/widgets/app_empty_state_card.dart';
 
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_stage.dart';
+import '../../../core/source_access/source_access_scope.dart';
+import '../../../core/source_access/source_access_service.dart';
 import '../../../domain/entities/book.dart';
 import '../../../domain/entities/book_metadata_override.dart';
 import '../../book/application/book_display_state.dart';
@@ -60,10 +62,125 @@ enum _SearchMoreAction { serverSources, togglePrecise, clearSourceFilter }
 
 typedef _DeferredProgressUiUpdate = DeferredSearchProgressUiUpdate;
 
+class _MobileSearchRouteTopBar extends StatelessWidget
+    implements PreferredSizeWidget {
+  const _MobileSearchRouteTopBar({
+    required this.onBack,
+    required this.searchBar,
+  });
+
+  final VoidCallback onBack;
+  final Widget searchBar;
+
+  @override
+  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
+
+  @override
+  Widget build(BuildContext context) {
+    final horizontal = AppSpacing.pageHorizontal(context);
+    return AppBar(
+      toolbarHeight: kToolbarHeight,
+      automaticallyImplyLeading: false,
+      backgroundColor: Colors.transparent,
+      foregroundColor: Theme.of(context).colorScheme.onSurface,
+      surfaceTintColor: Colors.transparent,
+      shadowColor: Colors.transparent,
+      titleSpacing: 0,
+      title: Padding(
+        padding: EdgeInsets.only(right: horizontal),
+        child: Row(
+          children: <Widget>[
+            SizedBox(
+              width: 44,
+              height: 44,
+              child: IconButton(
+                tooltip: '返回',
+                onPressed: onBack,
+                icon: const Icon(Icons.arrow_back),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Expanded(child: searchBar),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SearchMoreMenuItemContent extends StatelessWidget {
+  const _SearchMoreMenuItemContent({
+    required this.icon,
+    required this.title,
+    this.checked = false,
+    this.subtitle,
+  });
+
+  final IconData icon;
+  final String title;
+  final bool checked;
+  final String? subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final normalizedSubtitle = subtitle?.trim() ?? '';
+    return SizedBox(
+      width: 168,
+      height: 44,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: <Widget>[
+          SizedBox(
+            width: 22,
+            child: Icon(
+              checked ? Icons.check_circle_rounded : icon,
+              size: 19,
+              color:
+                  checked ? colorScheme.primary : colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (normalizedSubtitle.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 2),
+                  Text(
+                    normalizedSubtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _SearchPageState extends ConsumerState<SearchPage> {
   final TextEditingController _keywordController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   late final ServerOnlineSearchService _serverOnlineSearchService;
+  late final SourceAccessService _sourceAccessService;
   late final BookPresentationQueryService _bookPresentationQueryService;
   late final SearchHistoryService _historyService;
   late final SearchSystemSettingsService _searchSystemSettingsService;
@@ -248,21 +365,22 @@ class _SearchPageState extends ConsumerState<SearchPage> {
 
   String get _serverSourceMenuLabel {
     if (_isLoadingServerSourceCount && _availableServerSourceCount == 0) {
-      return '服务器源加载中';
+      return '搜索范围加载中';
     }
     if (_availableServerSourceCount == 0) {
-      return '无可用服务器源';
+      return '无可用搜索范围';
     }
     if (_selectedServerSourceIds.isEmpty) {
-      return '服务器源：全部 $_availableServerSourceCount 个';
+      return '搜索范围：全部 $_availableServerSourceCount 个';
     }
-    return '服务器源：已选 ${_selectedServerSourceIds.length} 个';
+    return '搜索范围：已选 ${_selectedServerSourceIds.length} 个';
   }
 
   @override
   void initState() {
     super.initState();
     _serverOnlineSearchService = ref.read(serverOnlineSearchServiceProvider);
+    _sourceAccessService = SourceAccessService();
     _bookPresentationQueryService = ref.read(
       searchBookPresentationQueryServiceProvider,
     );
@@ -385,7 +503,9 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                                     modeActiveBackgroundColor:
                                         palette.primaryColor,
                                     modeActiveForegroundColor:
-                                        palette.buttonTextColor,
+                                        _readableForegroundFor(
+                                          palette.primaryColor,
+                                        ),
                                     onContentModeChanged: _onContentModeChanged,
                                   ),
                                 ),
@@ -602,21 +722,12 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   }) {
     final showSearchBar = !widget.hideTopSearchBar && canUseOnlineSearch;
     final metrics = AppAdaptiveMetrics.of(context);
-    final mobileSearchBar =
-        showSearchBar && !metrics.isMediumUpWindow
-            ? PreferredSize(
-              preferredSize: const Size.fromHeight(56),
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  AppSpacing.pageHorizontal(context),
-                  0,
-                  AppSpacing.pageHorizontal(context),
-                  8,
-                ),
-                child: _buildSearchBar(context, palette),
-              ),
-            )
-            : null;
+    if (showSearchBar && !metrics.isMediumUpWindow) {
+      return _MobileSearchRouteTopBar(
+        onBack: _handleBackNavigation,
+        searchBar: _buildSearchBar(context, palette),
+      );
+    }
     return AdaptiveRouteTopBar(
       title: _routeTopBarTitle,
       subtitle: _routeTopBarSubtitle,
@@ -629,7 +740,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
           showSearchBar
               ? _buildSearchBar(context, palette, includeOptions: false)
               : null,
-      bottom: mobileSearchBar,
+      bottom: null,
       actions: _buildDesktopTopBarActions(
         canUseOnlineSearch: canUseOnlineSearch,
       ),
@@ -724,15 +835,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
         ),
       ];
     }
-    return <Widget>[
-      IconButton(
-        tooltip: _isSearching ? '取消搜索' : '搜索',
-        onPressed: _runSearch,
-        icon: Icon(
-          _isSearching ? Icons.stop_circle_outlined : Icons.search_rounded,
-        ),
-      ),
-    ];
+    return const <Widget>[];
   }
 
   Widget _buildSearchBar(
@@ -749,7 +852,9 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     };
 
     return Padding(
-      padding: EdgeInsets.only(right: metrics.contentGap + 2),
+      padding: EdgeInsets.only(
+        right: includeOptions ? 0 : metrics.contentGap + 2,
+      ),
       child: Row(
         children: [
           Expanded(
@@ -804,57 +909,58 @@ class _SearchPageState extends ConsumerState<SearchPage> {
             ),
           ),
           if (includeOptions) ...[
-            const SizedBox(width: 4),
-            PopupMenuButton<_SearchMoreAction>(
-              tooltip: '更多选项',
-              enabled: !_isSearching,
-              icon: const Icon(Icons.more_vert_rounded, size: 20),
-              onSelected: (action) {
-                switch (action) {
-                  case _SearchMoreAction.serverSources:
-                    unawaited(_showActiveSourceFilterSheet());
-                  case _SearchMoreAction.togglePrecise:
-                    _onPreciseMatchChanged(!_isPreciseBookMatch);
-                  case _SearchMoreAction.clearSourceFilter:
-                    _clearActiveSourceFilter();
-                }
-              },
-              itemBuilder:
-                  (menuContext) => [
-                    PopupMenuItem<_SearchMoreAction>(
-                      value: _SearchMoreAction.serverSources,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('服务器源'),
-                          const SizedBox(height: 2),
-                          Text(
-                            _serverSourceMenuLabel,
-                            style: Theme.of(
-                              menuContext,
-                            ).textTheme.bodySmall?.copyWith(
-                              color:
-                                  Theme.of(
-                                    menuContext,
-                                  ).colorScheme.onSurfaceVariant,
-                            ),
+            const SizedBox(width: 2),
+            SizedBox(
+              width: 38,
+              height: metrics.controlHeight,
+              child: PopupMenuButton<_SearchMoreAction>(
+                tooltip: '更多选项',
+                enabled: !_isSearching,
+                padding: EdgeInsets.zero,
+                icon: const Icon(Icons.more_vert_rounded, size: 20),
+                onSelected: (action) {
+                  switch (action) {
+                    case _SearchMoreAction.serverSources:
+                      unawaited(_showActiveSourceFilterSheet());
+                    case _SearchMoreAction.togglePrecise:
+                      _onPreciseMatchChanged(!_isPreciseBookMatch);
+                    case _SearchMoreAction.clearSourceFilter:
+                      _clearActiveSourceFilter();
+                  }
+                },
+                itemBuilder:
+                    (menuContext) => [
+                      PopupMenuItem<_SearchMoreAction>(
+                        value: _SearchMoreAction.serverSources,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: _SearchMoreMenuItemContent(
+                          icon: Icons.manage_search_rounded,
+                          title: '搜索范围',
+                          subtitle: _serverSourceMenuLabel,
+                        ),
+                      ),
+                      PopupMenuItem<_SearchMoreAction>(
+                        value: _SearchMoreAction.togglePrecise,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: _SearchMoreMenuItemContent(
+                          icon: Icons.check_circle_outline_rounded,
+                          checked: _isPreciseBookMatch,
+                          title: '精准匹配',
+                        ),
+                      ),
+                      if (_selectedServerSourceIds.isNotEmpty)
+                        const PopupMenuDivider(),
+                      if (_selectedServerSourceIds.isNotEmpty)
+                        const PopupMenuItem<_SearchMoreAction>(
+                          value: _SearchMoreAction.clearSourceFilter,
+                          padding: EdgeInsets.symmetric(horizontal: 16),
+                          child: _SearchMoreMenuItemContent(
+                            icon: Icons.filter_alt_off_outlined,
+                            title: '清空搜索范围',
                           ),
-                        ],
-                      ),
-                    ),
-                    CheckedPopupMenuItem<_SearchMoreAction>(
-                      value: _SearchMoreAction.togglePrecise,
-                      checked: _isPreciseBookMatch,
-                      child: const Text('精准'),
-                    ),
-                    if (_selectedServerSourceIds.isNotEmpty)
-                      const PopupMenuDivider(),
-                    if (_selectedServerSourceIds.isNotEmpty)
-                      const PopupMenuItem<_SearchMoreAction>(
-                        value: _SearchMoreAction.clearSourceFilter,
-                        child: Text('清空服务器源筛选'),
-                      ),
-                  ],
+                        ),
+                    ],
+              ),
             ),
           ],
         ],
@@ -1061,6 +1167,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       builder:
           (context) => _ServerSourceFilterSheet(
             service: _serverOnlineSearchService,
+            sourceAccessService: _sourceAccessService,
             contentMode: requestedMode,
             initialSelectedIds: _selectedServerSourceIds,
           ),
@@ -1800,11 +1907,13 @@ class _SearchPageState extends ConsumerState<SearchPage> {
 class _ServerSourceFilterSheet extends StatefulWidget {
   const _ServerSourceFilterSheet({
     required this.service,
+    required this.sourceAccessService,
     required this.contentMode,
     required this.initialSelectedIds,
   });
 
   final ServerOnlineSearchService service;
+  final SourceAccessService sourceAccessService;
   final SearchContentMode contentMode;
   final Set<String> initialSelectedIds;
 
@@ -1814,16 +1923,13 @@ class _ServerSourceFilterSheet extends StatefulWidget {
 }
 
 class _ServerSourceFilterSheetState extends State<_ServerSourceFilterSheet> {
-  static const int _pageSize = 80;
-
-  final ScrollController _scrollController = ScrollController();
   final TextEditingController _filterController = TextEditingController();
-  final List<ServerSearchSourceSummary> _items = <ServerSearchSourceSummary>[];
+  final Map<String, ServerSearchSourceSummary> _sourcesById =
+      <String, ServerSearchSourceSummary>{};
+  List<_ServerSourceGroupBucket> _groups = const <_ServerSourceGroupBucket>[];
   late Set<String> _draftSelectedIds;
   bool _allSourcesSelected = true;
   bool _isLoading = false;
-  bool _hasMore = true;
-  int _nextPage = 1;
   int _total = 0;
   String _filterKeyword = '';
   String? _errorText;
@@ -1834,63 +1940,48 @@ class _ServerSourceFilterSheetState extends State<_ServerSourceFilterSheet> {
     super.initState();
     _draftSelectedIds = Set<String>.of(widget.initialSelectedIds);
     _allSourcesSelected = widget.initialSelectedIds.isEmpty;
-    _scrollController.addListener(_onScroll);
-    unawaited(_loadNextPage(reset: true));
+    unawaited(_loadSources());
   }
 
   @override
   void dispose() {
     _filterDebounceTimer?.cancel();
-    _scrollController.removeListener(_onScroll);
-    _scrollController.dispose();
     _filterController.dispose();
     super.dispose();
   }
 
-  void _onScroll() {
-    if (!_scrollController.hasClients || _isLoading || !_hasMore) {
-      return;
-    }
-    final position = _scrollController.position;
-    if (position.pixels + 240 >= position.maxScrollExtent) {
-      unawaited(_loadNextPage());
-    }
-  }
-
-  Future<void> _loadNextPage({bool reset = false}) async {
+  Future<void> _loadSources() async {
     if (_isLoading) return;
     setState(() {
       _isLoading = true;
       _errorText = null;
-      if (reset) {
-        _items.clear();
-        _nextPage = 1;
-        _hasMore = true;
-      }
     });
 
     try {
-      final page = await widget.service.loadSourcePage(
+      final scopeFuture = widget.sourceAccessService.fetchMyScope();
+      final sourceFuture = widget.service.loadSourcePage(
         contentMode: widget.contentMode,
-        page: _nextPage,
-        pageSize: _pageSize,
-        keyword: _filterKeyword,
+        page: 1,
+        pageSize: 500,
       );
+      final scope = await scopeFuture;
+      final page = await sourceFuture;
       if (!mounted) return;
-      final knownIds = _items.map((item) => item.id).toSet();
-      final nextItems = page.items
-          .where((item) => knownIds.add(item.id))
-          .toList(growable: false);
+      final sourceMap = <String, ServerSearchSourceSummary>{
+        for (final item in page.items) item.id: item,
+      };
+      final groups = _buildServerSourceGroups(scope, sourceMap);
       setState(() {
-        _items.addAll(nextItems);
-        _total = page.total;
-        _hasMore = page.hasMore;
-        _nextPage = page.page + 1;
+        _sourcesById
+          ..clear()
+          ..addAll(sourceMap);
+        _groups = groups;
+        _total = sourceMap.length;
       });
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _errorText = '服务器书源加载失败：$error';
+        _errorText = '可用书源加载失败：$error';
       });
     } finally {
       if (mounted) {
@@ -1905,8 +1996,9 @@ class _ServerSourceFilterSheetState extends State<_ServerSourceFilterSheet> {
     _filterDebounceTimer?.cancel();
     _filterDebounceTimer = Timer(const Duration(milliseconds: 320), () {
       if (!mounted) return;
-      _filterKeyword = value.trim();
-      unawaited(_loadNextPage(reset: true));
+      setState(() {
+        _filterKeyword = value.trim();
+      });
     });
   }
 
@@ -1934,35 +2026,150 @@ class _ServerSourceFilterSheetState extends State<_ServerSourceFilterSheet> {
     });
   }
 
+  void _toggleGroup(_ServerSourceGroupBucket group, bool selected) {
+    setState(() {
+      _allSourcesSelected = false;
+      for (final source in group.sources) {
+        if (selected) {
+          _draftSelectedIds.add(source.id);
+        } else {
+          _draftSelectedIds.remove(source.id);
+        }
+      }
+      if (_draftSelectedIds.isEmpty) {
+        _allSourcesSelected = true;
+      }
+    });
+  }
+
+  bool? _groupSelectedValue(_ServerSourceGroupBucket group) {
+    if (_allSourcesSelected) {
+      return false;
+    }
+    final selectedCount =
+        group.sources
+            .where((source) => _draftSelectedIds.contains(source.id))
+            .length;
+    if (selectedCount == 0) {
+      return false;
+    }
+    if (selectedCount == group.sources.length) {
+      return true;
+    }
+    return null;
+  }
+
+  List<_ServerSourceGroupBucket> get _visibleGroups {
+    final keyword = _filterKeyword.trim().toLowerCase();
+    if (keyword.isEmpty) {
+      return _groups;
+    }
+    final out = <_ServerSourceGroupBucket>[];
+    for (final group in _groups) {
+      final groupMatched =
+          group.name.toLowerCase().contains(keyword) ||
+          group.section.toLowerCase().contains(keyword);
+      final sources =
+          groupMatched
+              ? group.sources
+              : group.sources
+                  .where(
+                    (source) => source.name.toLowerCase().contains(keyword),
+                  )
+                  .toList(growable: false);
+      if (sources.isNotEmpty) {
+        out.add(group.copyWithSources(sources));
+      }
+    }
+    return out;
+  }
+
+  String get _selectionLabel {
+    if (_allSourcesSelected) {
+      return _total > 0 ? '搜索全部可用书源' : '暂无可用书源';
+    }
+    final selectedGroupCount =
+        _groups
+            .where(
+              (group) =>
+                  group.sources.isNotEmpty &&
+                  group.sources.every(
+                    (source) => _draftSelectedIds.contains(source.id),
+                  ),
+            )
+            .length;
+    if (selectedGroupCount == 1 &&
+        _draftSelectedIds.length ==
+            _groups
+                .firstWhere(
+                  (group) =>
+                      group.sources.isNotEmpty &&
+                      group.sources.every(
+                        (source) => _draftSelectedIds.contains(source.id),
+                      ),
+                )
+                .sources
+                .length) {
+      final group = _groups.firstWhere(
+        (group) =>
+            group.sources.isNotEmpty &&
+            group.sources.every(
+              (source) => _draftSelectedIds.contains(source.id),
+            ),
+      );
+      return '搜索：${group.name}';
+    }
+    if (selectedGroupCount > 1) {
+      return '搜索 $selectedGroupCount 个分组';
+    }
+    return '搜索已选 ${_draftSelectedIds.length} 个书源';
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final metrics = AppAdaptiveMetrics.of(context);
+    final visibleGroups = _visibleGroups;
+    final maxHeight = MediaQuery.sizeOf(context).height * 0.78;
     return SafeArea(
-      child: SizedBox(
-        height: MediaQuery.of(context).size.height * 0.78,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-              child: Row(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          metrics.pagePadding,
+          metrics.contentGap,
+          metrics.pagePadding,
+          metrics.sectionGap,
+        ),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: maxHeight),
+          child: Column(
+            children: [
+              Row(
                 children: [
                   Expanded(
-                    child: Text('指定服务器书源', style: theme.textTheme.titleMedium),
+                    child: Text(
+                      '选择搜索范围',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                   ),
-                  Text(
-                    _total > 0 ? '共 $_total 个' : '加载中',
-                    style: theme.textTheme.bodySmall,
+                  _ServerSourceCountPill(
+                    label:
+                        _isLoading && _total == 0
+                            ? '加载中'
+                            : _total > 0
+                            ? '共 $_total 个'
+                            : '暂无可用',
+                    loading: _isLoading && _total == 0,
                   ),
                 ],
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              child: TextField(
+              SizedBox(height: metrics.contentGap),
+              TextField(
                 controller: _filterController,
                 onChanged: _onFilterChanged,
                 decoration: InputDecoration(
-                  hintText: '筛选服务器书源名称或分组',
+                  hintText: '筛选分组或书源',
                   prefixIcon: const Icon(Icons.search_rounded, size: 18),
                   suffixIcon:
                       _filterController.text.isEmpty
@@ -1977,137 +2184,164 @@ class _ServerSourceFilterSheetState extends State<_ServerSourceFilterSheet> {
                           ),
                   isDense: true,
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(14),
                   ),
                 ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Row(
-                children: [
-                  Text(
+              SizedBox(height: metrics.contentGap),
+              _ServerSourceSelectionSummary(
+                allSourcesSelected: _allSourcesSelected,
+                selectedCount: _draftSelectedIds.length,
+                total: _total,
+                onSelectAll:
                     _allSourcesSelected
-                        ? '当前搜索全部服务器书源'
-                        : '已选 ${_draftSelectedIds.length} / $_total',
-                    style: theme.textTheme.bodySmall,
-                  ),
-                  const Spacer(),
-                  TextButton(
-                    onPressed:
-                        _allSourcesSelected
-                            ? null
-                            : () {
-                              setState(() {
-                                _allSourcesSelected = true;
-                                _draftSelectedIds.clear();
-                              });
-                            },
-                    child: const Text('全部书源'),
-                  ),
-                ],
+                        ? null
+                        : () {
+                          setState(() {
+                            _allSourcesSelected = true;
+                            _draftSelectedIds.clear();
+                          });
+                        },
               ),
-            ),
-            Expanded(
-              child:
-                  _errorText != null && _items.isEmpty
-                      ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Text(
-                            _errorText!,
-                            textAlign: TextAlign.center,
-                            style: theme.textTheme.bodyMedium,
+              SizedBox(height: metrics.contentGap),
+              Expanded(
+                child:
+                    _errorText != null && _sourcesById.isEmpty
+                        ? Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Text(
+                              _errorText!,
+                              textAlign: TextAlign.center,
+                              style: theme.textTheme.bodyMedium,
+                            ),
+                          ),
+                        )
+                        : DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surfaceContainerLow
+                                .withValues(alpha: 0.72),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: theme.colorScheme.outlineVariant
+                                  .withValues(alpha: 0.36),
+                            ),
+                          ),
+                          child: ListView.builder(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            itemCount: visibleGroups.length + 2,
+                            itemBuilder: (context, index) {
+                              if (index == 0) {
+                                return _ServerSourceAllTile(
+                                  total: _total,
+                                  selected: _allSourcesSelected,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _allSourcesSelected = value != false;
+                                      if (_allSourcesSelected) {
+                                        _draftSelectedIds.clear();
+                                      }
+                                    });
+                                  },
+                                );
+                              }
+                              final groupIndex = index - 1;
+                              if (groupIndex >= visibleGroups.length) {
+                                if (_isLoading) {
+                                  return const Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 18),
+                                    child: Center(
+                                      child: SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }
+                                if (visibleGroups.isEmpty) {
+                                  return Padding(
+                                    padding: const EdgeInsets.all(24),
+                                    child: Center(
+                                      child: Text(
+                                        _filterKeyword.trim().isEmpty
+                                            ? '暂无可用书源'
+                                            : '没有匹配的分组或书源',
+                                        style: theme.textTheme.bodyMedium,
+                                      ),
+                                    ),
+                                  );
+                                }
+                                return const SizedBox(height: 8);
+                              }
+                              final group = visibleGroups[groupIndex];
+                              final value = _groupSelectedValue(group);
+                              return _ServerSourceGroupTile(
+                                group: group,
+                                selectedValue: value,
+                                allSourcesSelected: _allSourcesSelected,
+                                selectedIds: _draftSelectedIds,
+                                onGroupChanged:
+                                    (next) =>
+                                        _toggleGroup(group, next != false),
+                                onItemChanged: _toggleItem,
+                              );
+                            },
                           ),
                         ),
-                      )
-                      : ListView.builder(
-                        controller: _scrollController,
-                        itemCount: _items.length + 2,
-                        itemBuilder: (context, index) {
-                          if (index == 0) {
-                            return CheckboxListTile(
-                              value: _allSourcesSelected,
-                              title: Text(
-                                _total > 0 ? '全部服务器书源 ($_total)' : '全部服务器书源',
-                              ),
-                              subtitle: const Text('不指定时默认搜索全部服务器书源'),
-                              controlAffinity: ListTileControlAffinity.leading,
-                              onChanged: (value) {
-                                setState(() {
-                                  _allSourcesSelected = value != false;
-                                  if (_allSourcesSelected) {
-                                    _draftSelectedIds.clear();
-                                  }
-                                });
-                              },
-                            );
-                          }
-                          final itemIndex = index - 1;
-                          if (itemIndex >= _items.length) {
-                            if (_isLoading) {
-                              return const Padding(
-                                padding: EdgeInsets.symmetric(vertical: 18),
-                                child: Center(
-                                  child: SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  ),
-                                ),
-                              );
-                            }
-                            if (_hasMore) {
-                              return TextButton(
-                                onPressed: () => unawaited(_loadNextPage()),
-                                child: const Text('加载更多服务器书源'),
-                              );
-                            }
-                            return const SizedBox(height: 8);
-                          }
-                          final item = _items[itemIndex];
-                          final selected =
-                              _allSourcesSelected ||
-                              _draftSelectedIds.contains(item.id);
-                          final subtitle = <String>[
-                            if ((item.group ?? '').trim().isNotEmpty)
-                              item.group!.trim(),
-                          ].join(' · ');
-                          return CheckboxListTile(
-                            value: selected,
-                            title: Text(item.name),
-                            subtitle: subtitle.isEmpty ? null : Text(subtitle),
-                            controlAffinity: ListTileControlAffinity.leading,
-                            onChanged:
-                                (value) => _toggleItem(item.id, value == true),
-                          );
-                        },
-                      ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('取消'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed:
-                          (!_allSourcesSelected && _draftSelectedIds.isEmpty)
-                              ? null
-                              : () =>
-                                  Navigator.of(context).pop(_resultSelection()),
-                      child: const Text('应用筛选'),
-                    ),
-                  ),
-                ],
+              ),
+              SizedBox(height: metrics.contentGap),
+              _ServerSourcePickerActions(
+                selectionLabel: _selectionLabel,
+                canApply: _allSourcesSelected || _draftSelectedIds.isNotEmpty,
+                onCancel: () => Navigator.of(context).pop(),
+                onApply: () => Navigator.of(context).pop(_resultSelection()),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ServerSourceCountPill extends StatelessWidget {
+  const _ServerSourceCountPill({required this.label, required this.loading});
+
+  final String label;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow.withValues(alpha: 0.86),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.42),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            if (loading) ...<Widget>[
+              const SizedBox(
+                width: 13,
+                height: 13,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              const SizedBox(width: 6),
+            ],
+            Text(
+              label,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w800,
               ),
             ),
           ],
@@ -2115,4 +2349,265 @@ class _ServerSourceFilterSheetState extends State<_ServerSourceFilterSheet> {
       ),
     );
   }
+}
+
+class _ServerSourceSelectionSummary extends StatelessWidget {
+  const _ServerSourceSelectionSummary({
+    required this.allSourcesSelected,
+    required this.selectedCount,
+    required this.total,
+    required this.onSelectAll,
+  });
+
+  final bool allSourcesSelected;
+  final int selectedCount;
+  final int total;
+  final VoidCallback? onSelectAll;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: Text(
+            allSourcesSelected ? '当前搜索全部可用书源' : '已选 $selectedCount / $total',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+        TextButton.icon(
+          onPressed: onSelectAll,
+          icon: const Icon(Icons.done_all_rounded, size: 18),
+          label: const Text('全部书源'),
+        ),
+      ],
+    );
+  }
+}
+
+class _ServerSourceAllTile extends StatelessWidget {
+  const _ServerSourceAllTile({
+    required this.total,
+    required this.selected,
+    required this.onChanged,
+  });
+
+  final int total;
+  final bool selected;
+  final ValueChanged<bool?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return CheckboxListTile(
+      value: selected,
+      title: Text(total > 0 ? '全部可用书源 ($total)' : '全部可用书源'),
+      subtitle: const Text('不指定时默认搜索全部可用书源'),
+      controlAffinity: ListTileControlAffinity.leading,
+      onChanged: onChanged,
+    );
+  }
+}
+
+class _ServerSourceGroupTile extends StatelessWidget {
+  const _ServerSourceGroupTile({
+    required this.group,
+    required this.selectedValue,
+    required this.allSourcesSelected,
+    required this.selectedIds,
+    required this.onGroupChanged,
+    required this.onItemChanged,
+  });
+
+  final _ServerSourceGroupBucket group;
+  final bool? selectedValue;
+  final bool allSourcesSelected;
+  final Set<String> selectedIds;
+  final ValueChanged<bool?> onGroupChanged;
+  final void Function(String id, bool selected) onItemChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return ExpansionTile(
+      key: PageStorageKey<String>('source-group-${group.id}'),
+      leading: Checkbox(
+        tristate: true,
+        value: selectedValue,
+        onChanged: group.sources.isEmpty ? null : onGroupChanged,
+      ),
+      title: Text(
+        group.name,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: theme.textTheme.bodyMedium?.copyWith(
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+      subtitle: Text('${group.section} · ${group.sources.length} 个书源'),
+      children: group.sources
+          .map(
+            (item) => CheckboxListTile(
+              value: !allSourcesSelected && selectedIds.contains(item.id),
+              title: Text(
+                item.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle:
+                  (item.group ?? '').trim().isEmpty
+                      ? null
+                      : Text(
+                        item.group!.trim(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+              controlAffinity: ListTileControlAffinity.leading,
+              dense: true,
+              onChanged: (value) => onItemChanged(item.id, value == true),
+            ),
+          )
+          .toList(growable: false),
+    );
+  }
+}
+
+class _ServerSourcePickerActions extends StatelessWidget {
+  const _ServerSourcePickerActions({
+    required this.selectionLabel,
+    required this.canApply,
+    required this.onCancel,
+    required this.onApply,
+  });
+
+  final String selectionLabel;
+  final bool canApply;
+  final VoidCallback onCancel;
+  final VoidCallback onApply;
+
+  @override
+  Widget build(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    if (metrics.isCompactWindow) {
+      return Row(
+        children: <Widget>[
+          Expanded(
+            child: OutlinedButton(onPressed: onCancel, child: const Text('取消')),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: FilledButton(
+              onPressed: canApply ? onApply : null,
+              child: Text(selectionLabel),
+            ),
+          ),
+        ],
+      );
+    }
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: <Widget>[
+        TextButton(onPressed: onCancel, child: const Text('取消')),
+        const SizedBox(width: 8),
+        FilledButton(
+          onPressed: canApply ? onApply : null,
+          child: Text(selectionLabel),
+        ),
+      ],
+    );
+  }
+}
+
+class _ServerSourceGroupBucket {
+  const _ServerSourceGroupBucket({
+    required this.id,
+    required this.name,
+    required this.section,
+    required this.sources,
+  });
+
+  final String id;
+  final String name;
+  final String section;
+  final List<ServerSearchSourceSummary> sources;
+
+  _ServerSourceGroupBucket copyWithSources(
+    List<ServerSearchSourceSummary> sources,
+  ) {
+    return _ServerSourceGroupBucket(
+      id: id,
+      name: name,
+      section: section,
+      sources: sources,
+    );
+  }
+}
+
+List<_ServerSourceGroupBucket> _buildServerSourceGroups(
+  SourceAccessScope scope,
+  Map<String, ServerSearchSourceSummary> sourcesById,
+) {
+  final groups = <_ServerSourceGroupBucket>[];
+  final assigned = <String>{};
+  for (final group in scope.groups) {
+    final ids = scope.groupSourceIds[group.id] ?? const <String>[];
+    final sources = ids
+        .map((id) => sourcesById[id])
+        .whereType<ServerSearchSourceSummary>()
+        .toList(growable: false);
+    if (sources.isEmpty) {
+      continue;
+    }
+    assigned.addAll(sources.map((source) => source.id));
+    groups.add(
+      _ServerSourceGroupBucket(
+        id: group.id,
+        name: group.displayName,
+        section: group.isPrivate ? '我的分组' : '共享分组',
+        sources: sources,
+      ),
+    );
+  }
+  final fallback = sourcesById.values
+      .where((source) => !assigned.contains(source.id))
+      .toList(growable: false);
+  if (fallback.isNotEmpty) {
+    groups.add(
+      _ServerSourceGroupBucket(
+        id: 'other-accessible',
+        name: '其他可用书源',
+        section: '可用书源',
+        sources: fallback,
+      ),
+    );
+  }
+  groups.sort((a, b) {
+    final sectionOrder = _sourceSectionOrder(
+      a.section,
+    ).compareTo(_sourceSectionOrder(b.section));
+    if (sectionOrder != 0) {
+      return sectionOrder;
+    }
+    return a.name.compareTo(b.name);
+  });
+  return groups;
+}
+
+int _sourceSectionOrder(String section) {
+  return switch (section) {
+    '共享分组' => 0,
+    '我的分组' => 1,
+    _ => 2,
+  };
+}
+
+Color _readableForegroundFor(Color backgroundColor) {
+  return ThemeData.estimateBrightnessForColor(backgroundColor) ==
+          Brightness.dark
+      ? Colors.white
+      : Colors.black;
 }

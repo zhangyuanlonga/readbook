@@ -203,7 +203,7 @@ class SearchBookCard extends ConsumerWidget {
               child: _SourceHitBadge(
                 count: sourceHitCount,
                 backgroundColor: palette.secondaryColor,
-                textColor: palette.buttonTextColor,
+                textColor: _readableForegroundFor(palette.secondaryColor),
               ),
             ),
         ],
@@ -385,4 +385,11 @@ class _SourceHitBadge extends StatelessWidget {
       ),
     );
   }
+}
+
+Color _readableForegroundFor(Color backgroundColor) {
+  return ThemeData.estimateBrightnessForColor(backgroundColor) ==
+          Brightness.dark
+      ? Colors.white
+      : Colors.black;
 }

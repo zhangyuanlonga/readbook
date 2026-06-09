@@ -325,6 +325,7 @@ class ServerOnlineSearchService {
       queryParameters: <String, dynamic>{
         'contentType': _contentTypeParam(contentMode),
         'enabled': true,
+        'accessScope': 'me',
         if ((keyword ?? '').trim().isNotEmpty) 'keyword': keyword!.trim(),
         'page': page.clamp(1, 1 << 30),
         'pageSize': pageSize.clamp(1, 500),

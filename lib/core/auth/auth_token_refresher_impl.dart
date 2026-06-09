@@ -54,7 +54,6 @@ class AuthTokenRefresherImpl implements AuthTokenRefresher {
   bool _shouldInvalidateSession(ApiException error) {
     final apiCode = error.apiCode.toUpperCase();
     return error.statusCode == 401 ||
-        error.statusCode == 403 ||
         apiCode.contains('UNAUTHORIZED') ||
         apiCode.contains('TOKEN') ||
         apiCode.contains('SESSION') ||
