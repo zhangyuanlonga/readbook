@@ -266,15 +266,48 @@ class PrivateBookSourcesPage extends ConsumerWidget {
     WidgetRef ref, {
     PrivateBookSourceItem? item,
   }) async {
+    var formItem = item;
+    if (item != null && (item.sourceJson.isEmpty && item.sourceCode.isEmpty)) {
+      formItem = await _loadSourceDetailForEdit(context, ref, item);
+      if (formItem == null || !context.mounted) {
+        return;
+      }
+    }
     final changed = await showAdaptiveActionSurface<bool>(
       context: context,
       maxWidth: 680,
       maxHeightFactor: 0.9,
       padding: EdgeInsets.zero,
-      builder: (context) => _PrivateSourceForm(item: item),
+      builder: (context) => _PrivateSourceForm(item: formItem),
     );
     if (changed == true) {
       _refresh(ref);
+    }
+  }
+
+  static Future<PrivateBookSourceItem?> _loadSourceDetailForEdit(
+    BuildContext context,
+    WidgetRef ref,
+    PrivateBookSourceItem item,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final loading = messenger.showSnackBar(
+      const SnackBar(content: Text('正在读取书源详情')),
+    );
+    try {
+      final detail = await ref
+          .read(privateBookSourceServiceProvider)
+          .get(item.id);
+      loading.close();
+      return detail;
+    } catch (error) {
+      loading.close();
+      if (context.mounted) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('书源详情读取失败：${_messageOf(error)}')),
+        );
+      }
+      return null;
     }
   }
 
@@ -319,9 +352,7 @@ class PrivateBookSourcesPage extends ConsumerWidget {
       context: context,
       maxWidth: 520,
       builder:
-          (context) => _SubmitSourceReviewSurface(
-            controller: noteController,
-          ),
+          (context) => _SubmitSourceReviewSurface(controller: noteController),
     );
     noteController.dispose();
     if (note == null) {
@@ -330,7 +361,7 @@ class PrivateBookSourcesPage extends ConsumerWidget {
     if (!context.mounted) {
       return;
     }
-    await _runAction(
+    await _runVoidAction(
       context,
       ref,
       () => ref.read(privateBookSourceServiceProvider).submit(item.id, note),
@@ -378,7 +409,9 @@ class PrivateBookSourcesPage extends ConsumerWidget {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('书源测试已记录：${_testLabel(result.item.lastTestStatus)}')),
+        SnackBar(
+          content: Text('书源检测已记录：${_testLabel(result.item.lastTestStatus)}'),
+        ),
       );
     } catch (error) {
       if (!context.mounted) {
@@ -563,7 +596,8 @@ class _RenameGroupSurface extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             FilledButton(
-              onPressed: () => Navigator.of(context).pop(controller.text.trim()),
+              onPressed:
+                  () => Navigator.of(context).pop(controller.text.trim()),
               child: const Text('保存'),
             ),
           ],
@@ -611,7 +645,8 @@ class _SubmitSourceReviewSurface extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             FilledButton(
-              onPressed: () => Navigator.of(context).pop(controller.text.trim()),
+              onPressed:
+                  () => Navigator.of(context).pop(controller.text.trim()),
               child: const Text('提交'),
             ),
           ],
@@ -645,7 +680,7 @@ class _QuotaCard extends StatelessWidget {
           child: Align(
             alignment: Alignment.centerRight,
             child: _QuotaPill(
-              label: '测试 ${_remainingText(quota.dailyTestRemaining)}',
+              label: '检测 ${_remainingText(quota.dailyTestRemaining)}',
               foregroundColor: theme.colorScheme.primary,
             ),
           ),
@@ -814,21 +849,22 @@ class _PrivateSourceGroupMenuButton extends StatelessWidget {
             selectedGroupId == null
                 ? '全部分组'
                 : groups
-                    .where((group) => group.id == selectedGroupId)
-                    .map((group) => group.displayName)
-                    .firstOrNull ??
+                        .where((group) => group.id == selectedGroupId)
+                        .map((group) => group.displayName)
+                        .firstOrNull ??
                     '全部分组';
         return _GroupMenuPill(
           label: selectedLabel,
           selected: selectedGroupId != null,
-          onTap: () => unawaited(
-            _showPrivateSourceGroupPicker(
-              context: context,
-              groups: groups,
-              selectedGroupId: selectedGroupId,
-              onSelected: onSelected,
-            ),
-          ),
+          onTap:
+              () => unawaited(
+                _showPrivateSourceGroupPicker(
+                  context: context,
+                  groups: groups,
+                  selectedGroupId: selectedGroupId,
+                  onSelected: onSelected,
+                ),
+              ),
         );
       },
       loading:
@@ -1011,9 +1047,7 @@ class _PrivateSourceGroupPickerSurface extends StatelessWidget {
               final selected = selectedGroupId == id;
               return ListTile(
                 leading: Icon(
-                  isAll
-                      ? Icons.folder_copy_outlined
-                      : Icons.folder_outlined,
+                  isAll ? Icons.folder_copy_outlined : Icons.folder_outlined,
                   color:
                       selected
                           ? colorScheme.primary
@@ -1226,10 +1260,7 @@ class _PrivateSourceGroupManagerSheetState
     final name = await showAdaptiveActionSurface<String>(
       context: context,
       maxWidth: 440,
-      builder:
-          (context) => _RenameGroupSurface(
-            controller: controller,
-          ),
+      builder: (context) => _RenameGroupSurface(controller: controller),
     );
     controller.dispose();
     if (name == null || name.isEmpty || name == group.displayName) {
@@ -1315,14 +1346,14 @@ class _PrivateSourceTile extends StatelessWidget {
     final colorScheme = theme.colorScheme;
     final testText =
         item.lastTestStatus.isEmpty && item.lastTestMessage.isEmpty
-            ? '未测试'
+            ? '未检测'
             : '${_testLabel(item.lastTestStatus)}${item.lastTestMessage.isEmpty ? '' : ' · ${item.lastTestMessage}'}';
     final infoLine = [
       _typeLabel(item.supportedTypes),
       _groupLabel(item.groupName),
       _visibilityLabel(item.visibility),
       _reviewLabel(item.reviewStatus),
-      '测试 $testText',
+      '检测 $testText',
       if (item.description.isNotEmpty) item.description,
     ].join(' · ');
     return Material(
@@ -1472,7 +1503,7 @@ class _PrivateSourceMoreButton extends StatelessWidget {
                 value: _PrivateSourceAction.test,
                 child: _PrivateSourceMenuItem(
                   icon: Icons.science_outlined,
-                  label: '测试',
+                  label: '检测',
                 ),
               ),
               PopupMenuItem(
@@ -1594,7 +1625,7 @@ class _SourceTestConfigSheetState extends State<_SourceTestConfigSheet> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Text('测试书源', style: theme.textTheme.titleLarge),
+              Text('检测书源', style: theme.textTheme.titleLarge),
               const SizedBox(height: 4),
               Text(
                 widget.item.name,
@@ -1638,7 +1669,7 @@ class _SourceTestConfigSheetState extends State<_SourceTestConfigSheet> {
               TextField(
                 controller: _keywordController,
                 decoration: const InputDecoration(
-                  labelText: '测试关键字',
+                  labelText: '检测关键字',
                   hintText: '为空时使用书源内置关键字',
                   prefixIcon: Icon(Icons.search_rounded),
                 ),
@@ -1680,17 +1711,18 @@ class _SourceTestConfigSheetState extends State<_SourceTestConfigSheet> {
                     FilterChip(
                       label: Text(_checkItemLabel(item)),
                       selected: _checkItems.contains(item),
-                      onSelected: _mode == _SourceTestMode.custom
-                          ? (selected) {
-                              setState(() {
-                                if (selected) {
-                                  _checkItems.add(item);
-                                } else {
-                                  _checkItems.remove(item);
-                                }
-                              });
-                            }
-                          : null,
+                      onSelected:
+                          _mode == _SourceTestMode.custom
+                              ? (selected) {
+                                setState(() {
+                                  if (selected) {
+                                    _checkItems.add(item);
+                                  } else {
+                                    _checkItems.remove(item);
+                                  }
+                                });
+                              }
+                              : null,
                     ),
                 ],
               ),
@@ -1704,9 +1736,10 @@ class _SourceTestConfigSheetState extends State<_SourceTestConfigSheet> {
                   ),
                   const SizedBox(width: 8),
                   FilledButton.icon(
-                    onPressed: _checkItems.isEmpty
-                        ? null
-                        : () => Navigator.of(context).pop(
+                    onPressed:
+                        _checkItems.isEmpty
+                            ? null
+                            : () => Navigator.of(context).pop(
                               _SourceTestConfig(
                                 keyword: _keywordController.text.trim(),
                                 timeoutMs: _timeoutMs,
@@ -1714,7 +1747,7 @@ class _SourceTestConfigSheetState extends State<_SourceTestConfigSheet> {
                               ),
                             ),
                     icon: const Icon(Icons.science_outlined),
-                    label: const Text('开始测试'),
+                    label: const Text('开始检测'),
                   ),
                 ],
               ),
@@ -1758,9 +1791,8 @@ class _SourceCheckReportSheet extends StatelessWidget {
                   summary.valid
                       ? Icons.check_circle_rounded
                       : Icons.error_rounded,
-                  color: summary.valid
-                      ? colorScheme.primary
-                      : colorScheme.error,
+                  color:
+                      summary.valid ? colorScheme.primary : colorScheme.error,
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -1817,16 +1849,17 @@ class _SourceCheckReportSheet extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.end,
               children: <Widget>[
                 OutlinedButton.icon(
-                  onPressed: report.copyText.trim().isEmpty
-                      ? null
-                      : () {
-                          Clipboard.setData(
-                            ClipboardData(text: report.copyText),
-                          );
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('检测日志已复制')),
-                          );
-                        },
+                  onPressed:
+                      report.copyText.trim().isEmpty
+                          ? null
+                          : () {
+                            Clipboard.setData(
+                              ClipboardData(text: report.copyText),
+                            );
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('检测日志已复制')),
+                            );
+                          },
                   icon: const Icon(Icons.copy_rounded),
                   label: const Text('复制日志'),
                 ),
@@ -2169,13 +2202,12 @@ class _PrivateGroupAutocompleteFieldState
         if (keyword.isEmpty) {
           return groupNames.take(12);
         }
-        final matches = groupNames
-            .where((name) => name.toLowerCase().contains(keyword))
-            .take(12)
-            .toList();
-        final exists = groupNames.any(
-          (name) => name.toLowerCase() == keyword,
-        );
+        final matches =
+            groupNames
+                .where((name) => name.toLowerCase().contains(keyword))
+                .take(12)
+                .toList();
+        final exists = groupNames.any((name) => name.toLowerCase() == keyword);
         if (!exists) {
           matches.add(rawKeyword);
         }
@@ -2189,22 +2221,24 @@ class _PrivateGroupAutocompleteFieldState
           decoration: InputDecoration(
             labelText: '私人分组',
             hintText: '选择已有分组，或输入新分组名',
-            helperText: loading
-                ? '正在读取分组'
-                : hasError
-                ? '分组读取失败，可直接输入新分组名'
-                : '不存在的分组名会在保存时自动创建',
+            helperText:
+                loading
+                    ? '正在读取分组'
+                    : hasError
+                    ? '分组读取失败，可直接输入新分组名'
+                    : '不存在的分组名会在保存时自动创建',
             suffixIcon: IconButton(
               tooltip: '查看已有分组',
-              onPressed: groupNames.isEmpty
-                  ? null
-                  : () {
-                      focusNode.requestFocus();
-                      textController.selection = TextSelection(
-                        baseOffset: 0,
-                        extentOffset: textController.text.length,
-                      );
-                    },
+              onPressed:
+                  groupNames.isEmpty
+                      ? null
+                      : () {
+                        focusNode.requestFocus();
+                        textController.selection = TextSelection(
+                          baseOffset: 0,
+                          extentOffset: textController.text.length,
+                        );
+                      },
               icon: const Icon(Icons.arrow_drop_down_rounded),
             ),
           ),
@@ -2514,8 +2548,8 @@ String _testLabel(String value) {
   return switch (value) {
     'passed' => '通过',
     'failed' => '失败',
-    'pending' => '待测试',
-    _ => value.isEmpty ? '未测试' : value,
+    'pending' => '待检测',
+    _ => value.isEmpty ? '未检测' : value,
   };
 }
 

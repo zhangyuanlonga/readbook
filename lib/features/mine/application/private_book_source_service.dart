@@ -26,6 +26,17 @@ class PrivateBookSourceService {
     );
   }
 
+  Future<PrivateBookSourceItem> get(String id) {
+    return _client.request<PrivateBookSourceItem>(
+      method: ApiMethod.get,
+      path: '/v1/me/book-sources/$id',
+      attachAccessToken: true,
+      enableRetry: false,
+      stage: ErrorStage.source,
+      decoder: (data) => _itemFromMutationPayload(data),
+    );
+  }
+
   Future<List<PrivateBookSourceGroup>> groups() {
     return _client.request<List<PrivateBookSourceGroup>>(
       method: ApiMethod.get,
@@ -149,6 +160,9 @@ class PrivateBookSourceService {
     int? timeoutMs,
     List<String> checkItems = const <String>[],
   }) {
+    final requestTimeout = Duration(
+      milliseconds: (timeoutMs ?? 30000).clamp(1000, 180000) + 30000,
+    );
     return _client.request<PrivateBookSourceTestResult>(
       method: ApiMethod.post,
       path: '/v1/me/book-sources/$id/test',
@@ -157,6 +171,7 @@ class PrivateBookSourceService {
         if (timeoutMs != null) 'timeoutMs': timeoutMs,
         if (checkItems.isNotEmpty) 'checkItems': checkItems,
       },
+      timeout: requestTimeout,
       attachAccessToken: true,
       enableRetry: false,
       stage: ErrorStage.source,
@@ -164,15 +179,15 @@ class PrivateBookSourceService {
     );
   }
 
-  Future<PrivateBookSourceItem> submit(String id, String note) {
-    return _client.request<PrivateBookSourceItem>(
+  Future<void> submit(String id, String note) {
+    return _client.request<void>(
       method: ApiMethod.post,
       path: '/v1/me/book-sources/$id/submit',
       body: <String, dynamic>{'note': note},
       attachAccessToken: true,
       enableRetry: false,
       stage: ErrorStage.source,
-      decoder: (data) => _itemFromMutationPayload(data),
+      decoder: (_) {},
     );
   }
 
@@ -255,21 +270,24 @@ class PrivateBookSourceTestResult {
     final quota = json['quota'];
     final report = json['report'];
     return PrivateBookSourceTestResult(
-      item: item is Map
-          ? PrivateBookSourceItem.fromJson(
-              item.map((key, value) => MapEntry(key.toString(), value)),
-            )
-          : PrivateBookSourceItem.fromJson(json),
-      quota: quota is Map
-          ? SourceQuotaSnapshot.fromJson(
-              quota.map((key, value) => MapEntry(key.toString(), value)),
-            )
-          : null,
-      report: report is Map
-          ? SourceCheckReport.fromJson(
-              report.map((key, value) => MapEntry(key.toString(), value)),
-            )
-          : null,
+      item:
+          item is Map
+              ? PrivateBookSourceItem.fromJson(
+                item.map((key, value) => MapEntry(key.toString(), value)),
+              )
+              : PrivateBookSourceItem.fromJson(json),
+      quota:
+          quota is Map
+              ? SourceQuotaSnapshot.fromJson(
+                quota.map((key, value) => MapEntry(key.toString(), value)),
+              )
+              : null,
+      report:
+          report is Map
+              ? SourceCheckReport.fromJson(
+                report.map((key, value) => MapEntry(key.toString(), value)),
+              )
+              : null,
       raw: json,
     );
   }
@@ -290,11 +308,12 @@ class SourceCheckReport {
     final logs = json['logs'] as List? ?? const [];
     final summary = json['summary'];
     return SourceCheckReport(
-      summary: summary is Map
-          ? SourceCheckSummary.fromJson(
-              summary.map((key, value) => MapEntry(key.toString(), value)),
-            )
-          : const SourceCheckSummary.empty(),
+      summary:
+          summary is Map
+              ? SourceCheckSummary.fromJson(
+                summary.map((key, value) => MapEntry(key.toString(), value)),
+              )
+              : const SourceCheckSummary.empty(),
       logs: logs
           .whereType<Map>()
           .map(

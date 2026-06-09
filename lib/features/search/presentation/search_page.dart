@@ -2068,7 +2068,7 @@ class _ServerSourceFilterSheetState extends State<_ServerSourceFilterSheet> {
     for (final group in _groups) {
       final groupMatched =
           group.name.toLowerCase().contains(keyword) ||
-          group.section.toLowerCase().contains(keyword);
+          group.sourceLabel.toLowerCase().contains(keyword);
       final sources =
           groupMatched
               ? group.sources
@@ -2448,7 +2448,7 @@ class _ServerSourceGroupTile extends StatelessWidget {
           fontWeight: FontWeight.w800,
         ),
       ),
-      subtitle: Text('${group.section} · ${group.sources.length} 个书源'),
+      subtitle: Text('来源：${group.sourceLabel} · ${group.sources.length} 个书源'),
       children: group.sources
           .map(
             (item) => CheckboxListTile(
@@ -2526,13 +2526,13 @@ class _ServerSourceGroupBucket {
   const _ServerSourceGroupBucket({
     required this.id,
     required this.name,
-    required this.section,
+    required this.sourceLabel,
     required this.sources,
   });
 
   final String id;
   final String name;
-  final String section;
+  final String sourceLabel;
   final List<ServerSearchSourceSummary> sources;
 
   _ServerSourceGroupBucket copyWithSources(
@@ -2541,7 +2541,7 @@ class _ServerSourceGroupBucket {
     return _ServerSourceGroupBucket(
       id: id,
       name: name,
-      section: section,
+      sourceLabel: sourceLabel,
       sources: sources,
     );
   }
@@ -2567,7 +2567,7 @@ List<_ServerSourceGroupBucket> _buildServerSourceGroups(
       _ServerSourceGroupBucket(
         id: group.id,
         name: group.displayName,
-        section: group.isPrivate ? '我的分组' : '平台分组',
+        sourceLabel: group.isPrivate ? '我的私人书源' : '平台书源',
         sources: sources,
       ),
     );
@@ -2580,15 +2580,15 @@ List<_ServerSourceGroupBucket> _buildServerSourceGroups(
       _ServerSourceGroupBucket(
         id: 'other-accessible',
         name: '其他可用书源',
-        section: '可用书源',
+        sourceLabel: '可用书源',
         sources: fallback,
       ),
     );
   }
   groups.sort((a, b) {
     final sectionOrder = _sourceSectionOrder(
-      a.section,
-    ).compareTo(_sourceSectionOrder(b.section));
+      a.sourceLabel,
+    ).compareTo(_sourceSectionOrder(b.sourceLabel));
     if (sectionOrder != 0) {
       return sectionOrder;
     }
@@ -2599,8 +2599,8 @@ List<_ServerSourceGroupBucket> _buildServerSourceGroups(
 
 int _sourceSectionOrder(String section) {
   return switch (section) {
-    '平台分组' => 0,
-    '我的分组' => 1,
+    '平台书源' => 0,
+    '我的私人书源' => 1,
     _ => 2,
   };
 }

@@ -45,6 +45,8 @@ class ServerOnlineSearchService {
 
   static const int _rawSearchPageSize = 100;
   static const int _maxSearchConcurrency = 12;
+  static const Duration _searchStreamTimeout = Duration(minutes: 21);
+  static const Duration _searchOnceTimeout = Duration(minutes: 5);
 
   static String _contentTypeParam(SearchContentMode mode) {
     return switch (mode) {
@@ -119,7 +121,7 @@ class ServerOnlineSearchService {
       body: payload,
       attachAccessToken: true,
       enableRetry: false,
-      timeout: const Duration(seconds: 35),
+      timeout: _searchOnceTimeout,
       stage: ErrorStage.search,
       decoder: _ServerSearchResponse.fromEnvelopeData,
     );
@@ -195,7 +197,7 @@ class ServerOnlineSearchService {
           headers: headers,
           sendTimeout: const Duration(seconds: 8),
           connectTimeout: const Duration(seconds: 8),
-          receiveTimeout: const Duration(seconds: 40),
+          receiveTimeout: _searchStreamTimeout,
           validateStatus:
               (statusCode) => statusCode != null && statusCode < 600,
         ),
