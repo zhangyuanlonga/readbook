@@ -22,6 +22,9 @@ FULL_VERSION="${FULL_VERSION:-}"
 APPREAD_API_BASE_URL="${APPREAD_API_BASE_URL:-}"
 APPREAD_READER_GATEWAY_BASE_URL="${APPREAD_READER_GATEWAY_BASE_URL:-}"
 APPREAD_APP_NAME="${APPREAD_APP_NAME:-selune}"
+AUTO_BUILD_NUMBER="${AUTO_BUILD_NUMBER:-0}"
+BUILD_SEQUENCE="${BUILD_SEQUENCE:-}"
+BUILD_TIMEZONE="${BUILD_TIMEZONE:-Asia/Shanghai}"
 VERSION_PROMPT="${VERSION_PROMPT:-1}"
 SKIP_CLEAN="${SKIP_CLEAN:-0}"
 SKIP_PUB_GET="${SKIP_PUB_GET:-0}"
@@ -40,7 +43,7 @@ Usage:
   ./scripts/build_unified_artifacts.sh [platforms] [build_mode]
 
 Arguments:
-  platforms   auto | android,ios,macos,linux,windows,web (default: auto)
+  platforms   auto | native | mobile | desktop | all | android,ios,macos,linux,windows,web (default: auto)
   build_mode  debug | profile | release (default: release)
 
 Environment variables:
@@ -54,6 +57,9 @@ Environment variables:
   FULL_VERSION     Full Flutter version like 1.1.0+26041801
   BUILD_NAME       Override Flutter --build-name
   BUILD_NUMBER     Override Flutter --build-number
+  AUTO_BUILD_NUMBER 1 to generate build-number as YYMMDDNN when BUILD_NUMBER is empty
+  BUILD_SEQUENCE   Optional daily build sequence for AUTO_BUILD_NUMBER, 1-99
+  BUILD_TIMEZONE   Timezone used by AUTO_BUILD_NUMBER (default: Asia/Shanghai)
   VERSION_PROMPT   1 to ask interactively before build when TTY is available
   SKIP_CLEAN       1 to skip flutter clean
   SKIP_PUB_GET     1 to skip flutter pub get
@@ -63,10 +69,14 @@ Environment variables:
 
 Examples:
   ./scripts/build_unified_artifacts.sh
+  ./scripts/build_unified_artifacts.sh native release
+  ./scripts/build_unified_artifacts.sh mobile release
+  ./scripts/build_unified_artifacts.sh desktop release
   ./scripts/build_unified_artifacts.sh android,ios,macos,web release
   ANDROID_APK_PROFILE=split ./scripts/build_unified_artifacts.sh android release
   ANDROID_TARGET=both ANDROID_APK_PROFILE=universal ./scripts/build_unified_artifacts.sh android release
   FULL_VERSION=1.1.0+26041802 ./scripts/build_unified_artifacts.sh android,ios release
+  AUTO_BUILD_NUMBER=1 BUILD_NAME=1.2.0 ./scripts/build_unified_artifacts.sh native release
 USAGE
 }
 
@@ -143,6 +153,50 @@ trim_whitespace() {
   echo "${value}"
 }
 
+format_build_sequence() {
+  local sequence="$1"
+  sequence="$(trim_whitespace "${sequence}")"
+
+  if [[ -z "${sequence}" ]]; then
+    echo "01"
+    return 0
+  fi
+  if [[ ! "${sequence}" =~ ^[0-9]+$ ]]; then
+    echo "Error: BUILD_SEQUENCE must be an integer between 1 and 99." >&2
+    exit 1
+  fi
+
+  sequence="$((10#${sequence}))"
+  if [[ "${sequence}" -lt 1 || "${sequence}" -gt 99 ]]; then
+    echo "Error: BUILD_SEQUENCE must be between 1 and 99." >&2
+    exit 1
+  fi
+
+  printf "%02d" "${sequence}"
+}
+
+generate_auto_build_number() {
+  local current_number="$1"
+  local date_prefix sequence
+
+  date_prefix="$(TZ="${BUILD_TIMEZONE}" date +%y%m%d)"
+
+  if [[ -n "${BUILD_SEQUENCE}" ]]; then
+    sequence="$(format_build_sequence "${BUILD_SEQUENCE}")"
+  elif [[ "${current_number}" =~ ^${date_prefix}([0-9][0-9])$ ]]; then
+    if [[ "$((10#${BASH_REMATCH[1]}))" -ge 99 ]]; then
+      echo "Error: daily auto build sequence exceeded 99 for ${date_prefix}." >&2
+      echo "Set BUILD_SEQUENCE manually between 1 and 99, or update BUILD_NUMBER directly." >&2
+      exit 1
+    fi
+    sequence="$(printf "%02d" "$((10#${BASH_REMATCH[1]} + 1))")"
+  else
+    sequence="01"
+  fi
+
+  echo "${date_prefix}${sequence}"
+}
+
 resolve_version_overrides() {
   local pubspec_version current_name current_number current_full_version input
 
@@ -167,7 +221,11 @@ resolve_version_overrides() {
     BUILD_NAME="${current_name}"
   fi
   if [[ -z "${BUILD_NUMBER}" ]]; then
-    BUILD_NUMBER="${current_number}"
+    if [[ "${AUTO_BUILD_NUMBER}" == "1" ]]; then
+      BUILD_NUMBER="$(generate_auto_build_number "${current_number}")"
+    else
+      BUILD_NUMBER="${current_number}"
+    fi
   fi
 
   current_full_version="${BUILD_NAME:-none}"
@@ -205,20 +263,38 @@ resolve_version_overrides() {
 
 normalize_platforms() {
   local input="$1"
+  local normalized_input
   local raw
   local token
   local -a tokens=()
 
   PLATFORMS=()
+  normalized_input="$(printf '%s' "${input}" | tr '[:upper:]' '[:lower:]')"
 
-  if [[ "${input}" == "auto" ]]; then
+  if [[ "${normalized_input}" == "auto" ]]; then
     raw="$(default_platforms_for_host)"
   else
-    raw="${input//,/ }"
+    raw="$(printf '%s' "${normalized_input}" | tr ',' ' ')"
   fi
 
   for token in ${raw}; do
-    tokens+=("${token}")
+    case "${token}" in
+      native|mobile+desktop|mobile-desktop|mobile_desktop|mobile_and_desktop)
+        tokens+=(android ios macos linux windows)
+        ;;
+      mobile)
+        tokens+=(android ios)
+        ;;
+      desktop)
+        tokens+=(macos linux windows)
+        ;;
+      all)
+        tokens+=(android ios macos linux windows web)
+        ;;
+      *)
+        tokens+=("${token}")
+        ;;
+    esac
   done
 
   if [[ "${#tokens[@]}" -eq 0 ]]; then

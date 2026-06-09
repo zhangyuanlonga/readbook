@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       platforms:
-        description: "Comma-separated targets: all, android, ios, macos, linux, windows, web"
+        description: "Targets: native/mobile+desktop, mobile, desktop, all, or comma-separated android,ios,macos,linux,windows,web"
         required: true
-        default: "all"
+        default: "native"
       build_mode:
         description: "Flutter build mode"
         required: true
@@ -38,12 +38,20 @@ on:
           - arm64
           - split
           - universal
+      full_version:
+        description: "Optional full app version, for example 1.1.0+26041801. Overrides build_name/build_number."
+        required: false
+        default: ""
       build_name:
         description: "Optional Flutter build-name, for example 1.1.0"
         required: false
         default: ""
       build_number:
         description: "Optional Flutter build-number, for example 26041801"
+        required: false
+        default: ""
+      build_sequence:
+        description: "Optional daily sequence for automatic build-number, 1-99. Empty means 01."
         required: false
         default: ""
       artifact_name:
@@ -106,6 +114,27 @@ jobs:
           }
 
           allowed=(all android ios macos linux windows web)
+          expand_platform_token() {
+            local token="$1"
+            case "${token}" in
+              native|mobile+desktop|mobile-desktop|mobile_desktop|mobile_and_desktop)
+                echo "android ios macos linux windows"
+                ;;
+              mobile)
+                echo "android ios"
+                ;;
+              desktop)
+                echo "macos linux windows"
+                ;;
+              all)
+                echo "all"
+                ;;
+              *)
+                echo "${token}"
+                ;;
+            esac
+          }
+
           contains_platform() {
             local needle="$1"
             shift
@@ -119,21 +148,26 @@ jobs:
           }
 
           read -r -a supported <<<"$(normalize "${SUPPORTED_PLATFORMS}")"
-          read -r -a requested <<<"$(normalize "${REQUESTED_PLATFORMS}")"
+          read -r -a raw_requested <<<"$(normalize "${REQUESTED_PLATFORMS}")"
+          requested=()
+          for platform in "${raw_requested[@]}"; do
+            read -r -a expanded <<<"$(expand_platform_token "${platform}")"
+            requested+=("${expanded[@]}")
+          done
 
           selected=()
           for platform in "${requested[@]}"; do
             if ! contains_platform "${platform}" "${allowed[@]}"; then
-              echo "::error::Unsupported platform '${platform}'. Use all, android, ios, macos, linux, windows, web."
+              echo "::error::Unsupported platform '${platform}'. Use native, mobile, desktop, all, android, ios, macos, linux, windows, or web."
               exit 1
             fi
           done
 
-          if [[ "${#requested[@]}" -eq 1 && "${requested[0]}" == "all" ]]; then
+          if contains_platform "all" "${requested[@]}"; then
             selected=("${supported[@]}")
           else
             for platform in "${requested[@]}"; do
-              if contains_platform "${platform}" "${supported[@]}"; then
+              if contains_platform "${platform}" "${supported[@]}" && ! contains_platform "${platform}" "${selected[@]+"${selected[@]}"}"; then
                 selected+=("${platform}")
               fi
             done
@@ -223,8 +257,12 @@ jobs:
           APPREAD_READER_GATEWAY_BASE_URL: ${{ inputs.appread_reader_gateway_base_url }}
           APPREAD_APP_NAME: ${{ inputs.appread_app_name }}
           ARTIFACT_NAME: ${{ inputs.artifact_name }}
+          FULL_VERSION: ${{ inputs.full_version }}
           BUILD_NAME: ${{ inputs.build_name }}
           BUILD_NUMBER: ${{ inputs.build_number }}
+          BUILD_SEQUENCE: ${{ inputs.build_sequence }}
+          AUTO_BUILD_NUMBER: "1"
+          BUILD_TIMEZONE: Asia/Shanghai
           OUTPUT_ROOT: build/unified_artifacts
           VERSION_PROMPT: "0"
           ALLOW_PARTIAL: "0"
