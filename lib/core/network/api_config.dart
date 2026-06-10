@@ -14,11 +14,11 @@ class AppApiConfig {
   static String get baseUrl {
     final primary = _primaryBaseUrl.trim();
     if (primary.isNotEmpty) {
-      return primary;
+      return _withTrailingSlash(primary);
     }
     final legacy = _legacyBaseUrl.trim();
     if (legacy.isNotEmpty) {
-      return legacy;
+      return _withTrailingSlash(legacy);
     }
     return 'https://www.sxyd.lltask.top/api/';
   }
@@ -39,13 +39,21 @@ class AppApiConfig {
   static String get effectiveReaderGatewayBaseUrl {
     final configured = _primaryReaderGatewayBaseUrl.trim();
     if (configured.isNotEmpty) {
-      return configured;
+      return _withTrailingSlash(configured);
     }
     final legacy = _legacyReaderGatewayBaseUrl.trim();
     if (legacy.isNotEmpty) {
-      return legacy;
+      return _withTrailingSlash(legacy);
     }
     return defaultReaderGatewayBaseUrl;
+  }
+
+  static String _withTrailingSlash(String value) {
+    final normalized = value.trim();
+    if (normalized.isEmpty || normalized.endsWith('/')) {
+      return normalized;
+    }
+    return '$normalized/';
   }
 
   static const String appName = String.fromEnvironment(
