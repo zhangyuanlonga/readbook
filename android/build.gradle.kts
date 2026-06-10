@@ -1,8 +1,16 @@
 import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
+val flutterStorageBaseUrl = (System.getenv("FLUTTER_STORAGE_BASE_URL") ?: "https://storage.flutter-io.cn")
+    .trimEnd('/')
+
 allprojects {
     repositories {
+        maven("${flutterStorageBaseUrl}/download.flutter.io") {
+            content {
+                includeGroup("io.flutter")
+            }
+        }
         maven("https://repo.huaweicloud.com/repository/maven/")
         maven("https://maven.aliyun.com/repository/google")
         maven("https://maven.aliyun.com/repository/central")
