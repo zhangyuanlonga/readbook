@@ -13,6 +13,7 @@ import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/adaptive_setting_tile.dart';
 import '../../../domain/entities/reader_settings.dart';
 import '../../bookshelf/application/bookshelf_system_settings_service.dart';
+import '../application/app_reset_service.dart';
 import '../application/advanced_theme_provider.dart';
 import '../../reader/application/reader_preferences_service.dart';
 import '../../search/application/search_system_settings_service.dart';
@@ -89,7 +90,11 @@ class SystemSettingsPage extends StatelessWidget {
                                     SizedBox(height: 12),
                                     _SearchConcurrencySettingPanel(),
                                     SizedBox(height: 12),
+                                    _StorageManagementEntryPanel(),
+                                    SizedBox(height: 12),
                                     _ReaderSettingsResetPanel(),
+                                    SizedBox(height: 12),
+                                    _AppResetPanel(),
                                   ],
                                 );
                               }
@@ -98,7 +103,9 @@ class SystemSettingsPage extends StatelessWidget {
                                 const <Widget>[
                                   _BookshelfAutoRefreshSettingPanel(),
                                   _SearchConcurrencySettingPanel(),
+                                  _StorageManagementEntryPanel(),
                                   _ReaderSettingsResetPanel(),
+                                  _AppResetPanel(),
                                 ],
                                 spacing: 12,
                               );
@@ -198,6 +205,11 @@ class SystemSettingsPage extends StatelessWidget {
                   context,
                   icon: Icons.restart_alt_rounded,
                   label: '阅读重置',
+                ),
+                _buildMetaChip(
+                  context,
+                  icon: Icons.storage_rounded,
+                  label: '存储管理',
                 ),
               ],
             ),
@@ -431,6 +443,165 @@ class _ReaderSettingsResetPanel extends StatefulWidget {
   @override
   State<_ReaderSettingsResetPanel> createState() =>
       _ReaderSettingsResetPanelState();
+}
+
+class _StorageManagementEntryPanel extends StatelessWidget {
+  const _StorageManagementEntryPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    return AdaptiveSettingSection(
+      child: AdaptiveSettingTile(
+        icon: Icons.storage_rounded,
+        title: '存储管理',
+        description: '查看数据库、本地图书、缓存和用户资源占用，并执行分类清理。',
+        onTap: () => context.push('/storage-management'),
+      ),
+    );
+  }
+}
+
+class _AppResetPanel extends StatefulWidget {
+  const _AppResetPanel();
+
+  @override
+  State<_AppResetPanel> createState() => _AppResetPanelState();
+}
+
+class _AppResetPanelState extends State<_AppResetPanel> {
+  final AppResetService _resetService = AppResetService();
+  bool _isResetting = false;
+  String? _errorText;
+
+  Future<void> _confirmReset() async {
+    if (_isResetting) {
+      return;
+    }
+    final controller = TextEditingController();
+    var canConfirm = false;
+    final confirmed = await showAdaptiveActionSurface<bool>(
+      context: context,
+      maxWidth: 460,
+      builder: (surfaceContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  '重置应用数据',
+                  style: Theme.of(surfaceContext).textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  '会清除登录状态、设置、阅读记录、数据库和缓存。\n\n不会删除本地图书文件、自定义封面、背景图、字体和其它用户资源。\n\n请输入“重置”确认。',
+                  style: Theme.of(surfaceContext).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  onChanged: (value) {
+                    final next = value.trim() == '重置';
+                    if (next == canConfirm) {
+                      return;
+                    }
+                    setSheetState(() {
+                      canConfirm = next;
+                    });
+                  },
+                  decoration: const InputDecoration(
+                    hintText: '输入 重置',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.of(surfaceContext).pop(false),
+                      child: const Text('取消'),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton(
+                      onPressed:
+                          canConfirm
+                              ? () => Navigator.of(surfaceContext).pop(true)
+                              : null,
+                      child: const Text('确认重置'),
+                    ),
+                  ],
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    controller.dispose();
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _isResetting = true;
+      _errorText = null;
+    });
+    try {
+      await _resetService.resetAndRestart();
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorText = '重置失败，请稍后重试。';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isResetting = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    return AdaptiveSettingSection(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AdaptiveSettingTile(
+            icon: Icons.delete_sweep_rounded,
+            title: '重置应用数据',
+            description: '清除设置、数据库和缓存，保留本地图书与用户资源。',
+            loading: _isResetting,
+          ),
+          SizedBox(height: metrics.contentGap),
+          FilledButton.tonalIcon(
+            onPressed: _isResetting ? null : _confirmReset,
+            icon:
+                _isResetting
+                    ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                    : const Icon(Icons.warning_amber_rounded),
+            label: const Text('开始重置'),
+          ),
+          if (_errorText case final message?) ...[
+            SizedBox(height: metrics.contentGap),
+            _buildErrorBanner(context, message: message),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
 class _ReaderSettingsResetPanelState extends State<_ReaderSettingsResetPanel> {

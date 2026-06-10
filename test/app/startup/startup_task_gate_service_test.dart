@@ -27,4 +27,28 @@ void main() {
     expect(second, isFalse);
     expect(nextDay, isTrue);
   });
+
+  test('claims interval run only after minimum duration has elapsed', () async {
+    final prefs = await SharedPreferences.getInstance();
+    final service = StartupTaskGateService(preferences: prefs);
+    final first = await service.claimIntervalRun(
+      'storage_maintenance',
+      minInterval: const Duration(days: 7),
+      now: DateTime.utc(2026, 6, 1, 8),
+    );
+    final second = await service.claimIntervalRun(
+      'storage_maintenance',
+      minInterval: const Duration(days: 7),
+      now: DateTime.utc(2026, 6, 5, 8),
+    );
+    final third = await service.claimIntervalRun(
+      'storage_maintenance',
+      minInterval: const Duration(days: 7),
+      now: DateTime.utc(2026, 6, 8, 8),
+    );
+
+    expect(first, isTrue);
+    expect(second, isFalse);
+    expect(third, isTrue);
+  });
 }

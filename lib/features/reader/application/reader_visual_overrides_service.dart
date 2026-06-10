@@ -66,4 +66,26 @@ class ReaderVisualOverridesService {
     );
     await prefs.setString(_visualOverridesKey, jsonEncode(normalized.toJson()));
   }
+
+  Future<List<String>> repairInvalidStoredData() async {
+    final prefs = await _preferencesFuture;
+    final raw = prefs.getString(_visualOverridesKey);
+    if (raw == null || raw.trim().isEmpty) {
+      return const <String>[];
+    }
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) {
+        await prefs.remove(_visualOverridesKey);
+        return const <String>[_visualOverridesKey];
+      }
+      ReaderVisualOverrides.fromJson(
+        decoded.map((key, value) => MapEntry(key.toString(), value)),
+      );
+      return const <String>[];
+    } catch (_) {
+      await prefs.remove(_visualOverridesKey);
+      return const <String>[_visualOverridesKey];
+    }
+  }
 }

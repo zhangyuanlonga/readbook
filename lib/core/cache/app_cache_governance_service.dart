@@ -1,5 +1,6 @@
 import 'dart:developer' as developer;
 
+import '../logging/app_logger.dart';
 import '../../data/datasources/local/app_database.dart';
 import 'cache_budget_policy.dart';
 import 'cover_image_disk_cache.dart';
@@ -42,6 +43,22 @@ class AppCacheGovernanceSnapshot {
       entries.fold<int>(0, (sum, item) => sum + item.currentBytes);
 }
 
+class AppCacheGovernanceRunSummary {
+  const AppCacheGovernanceRunSummary({
+    required this.before,
+    required this.after,
+    required this.cost,
+  });
+
+  final AppCacheGovernanceSnapshot before;
+  final AppCacheGovernanceSnapshot after;
+  final Duration cost;
+
+  int get deletedEntries => before.totalEntries - after.totalEntries;
+
+  int get reclaimedBytes => before.totalBytes - after.totalBytes;
+}
+
 abstract interface class AppPaginationLayoutCacheStore {
   Future<int> countPersistedChapterLayouts();
 
@@ -61,17 +78,22 @@ class AppCacheGovernanceService {
     AppDatabase? database,
     AppPaginationLayoutCacheStore? paginationCacheStore,
     CoverImageDiskCache? coverImageDiskCache,
+    AppLogger? logger,
   }) : _database = database ?? AppDatabase.instance,
        _paginationCacheStore =
            paginationCacheStore ?? const _EmptyPaginationLayoutCacheStore(),
        _coverImageDiskCache =
-           coverImageDiskCache ?? CoverImageDiskCache.instance;
+           coverImageDiskCache ?? CoverImageDiskCache.instance,
+       _logger = logger ?? AppLogger.instance;
 
   final AppDatabase _database;
   final AppPaginationLayoutCacheStore _paginationCacheStore;
   final CoverImageDiskCache _coverImageDiskCache;
+  final AppLogger _logger;
 
-  Future<void> enforceBudgets() async {
+  Future<AppCacheGovernanceRunSummary> enforceBudgets() async {
+    final stopwatch = Stopwatch()..start();
+    final before = await loadSnapshot();
     await _runCleanup(
       kind: AppCacheKind.chapterCaches,
       action:
@@ -99,6 +121,25 @@ class AppCacheGovernanceService {
             stalePeriod: AppCacheBudgetPolicies.coverImages.stalePeriod,
           ),
     );
+    final after = await loadSnapshot();
+    final summary = AppCacheGovernanceRunSummary(
+      before: before,
+      after: after,
+      cost: stopwatch.elapsed,
+    );
+    _logger.info(
+      'Cache governance budget enforcement complete',
+      context: <String, Object?>{
+        'beforeEntries': before.totalEntries,
+        'beforeBytes': before.totalBytes,
+        'afterEntries': after.totalEntries,
+        'afterBytes': after.totalBytes,
+        'deletedEntries': summary.deletedEntries,
+        'reclaimedBytes': summary.reclaimedBytes,
+        'costMs': summary.cost.inMilliseconds,
+      },
+    );
+    return summary;
   }
 
   Future<void> clearRebuildableCaches() async {

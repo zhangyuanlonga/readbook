@@ -19,6 +19,7 @@ import 'presentation/mine_page.dart';
 import 'presentation/private_book_sources_page.dart';
 import 'presentation/reader_background_page.dart';
 import 'presentation/system_settings_page.dart';
+import 'presentation/storage_management_page.dart';
 import '../error/presentation/error_center_page.dart';
 
 final StatefulShellBranch mineShellBranch = StatefulShellBranch(
@@ -141,6 +142,11 @@ final List<RouteBase> mineRoutes = <RouteBase>[
     path: '/system-settings',
     name: 'system-settings',
     builder: (context, state) => const SystemSettingsPage(),
+  ),
+  GoRoute(
+    path: '/storage-management',
+    name: 'storage-management',
+    builder: (context, state) => const StorageManagementPage(),
   ),
   GoRoute(
     path: '/font-management',

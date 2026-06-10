@@ -115,6 +115,39 @@ class AdvancedThemeService {
     }
   }
 
+  Future<List<String>> repairInvalidStoredData() async {
+    final prefs = await _preferencesFuture;
+    final removedKeys = <String>[];
+    final rawSnapshot = prefs.getString(_activeThemeAppearanceSnapshotKey);
+    if (rawSnapshot != null && rawSnapshot.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(rawSnapshot);
+        if (decoded is! Map<String, dynamic>) {
+          throw const FormatException(
+            'Invalid active theme appearance snapshot',
+          );
+        }
+        ActiveThemeAppearanceSnapshot.fromJson(decoded);
+      } catch (_) {
+        await prefs.remove(_activeThemeAppearanceSnapshotKey);
+        removedKeys.add(_activeThemeAppearanceSnapshotKey);
+      }
+    }
+    final rawLegacyThemes = prefs.getString(_themesKey);
+    if (rawLegacyThemes != null && rawLegacyThemes.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(rawLegacyThemes);
+        if (decoded is! List) {
+          throw const FormatException('Invalid legacy advanced themes payload');
+        }
+      } catch (_) {
+        await prefs.remove(_themesKey);
+        removedKeys.add(_themesKey);
+      }
+    }
+    return List<String>.unmodifiable(removedKeys);
+  }
+
   Future<List<AppAdvancedTheme>> loadThemes() async {
     final raw = await _loadPersistedThemesRaw();
     if (raw == null || raw.trim().isEmpty) {

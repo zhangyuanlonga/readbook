@@ -4,9 +4,12 @@ import 'dart:ui' show FrameTiming;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
+import '../../core/cache/app_cache_governance_service.dart';
 import '../../core/app_update/app_update_release.dart';
 import '../../core/app_update/app_update_service.dart';
 import '../../core/logging/app_logger.dart';
+import '../../core/preferences/deprecated_keys_cleaner.dart';
+import '../../data/datasources/local/app_database.dart';
 import 'startup_task_gate_service.dart';
 
 typedef StartupUpdateDialogPresenter =
@@ -16,22 +19,32 @@ class AppStartupCoordinator {
   AppStartupCoordinator({
     required Future<void> Function() sendHeartbeat,
     required Future<void> Function() sendVisitEvent,
+    required Future<void> Function() validateStartupAuthSession,
     required VoidCallback showStartupAnnouncementIfNeeded,
     required Future<BuildContext?> Function() resolveDialogContext,
     required StartupUpdateDialogPresenter showUpdateDialog,
     AppLogger? logger,
     AppUpdateService? appUpdateService,
     StartupTaskGateService? taskGateService,
+    DeprecatedKeysCleaner? deprecatedKeysCleaner,
+    AppCacheGovernanceService? cacheGovernanceService,
+    AppDatabase? database,
     Duration? startupMinDuration,
     Duration? startupDeferredTasksDelay,
   }) : _sendHeartbeat = sendHeartbeat,
        _sendVisitEvent = sendVisitEvent,
+       _validateStartupAuthSession = validateStartupAuthSession,
        _showStartupAnnouncementIfNeeded = showStartupAnnouncementIfNeeded,
        _resolveDialogContext = resolveDialogContext,
        _showUpdateDialog = showUpdateDialog,
        _logger = logger ?? AppLogger.instance,
        _appUpdateService = appUpdateService ?? AppUpdateService(),
        _taskGateService = taskGateService ?? StartupTaskGateService(),
+       _deprecatedKeysCleaner =
+           deprecatedKeysCleaner ?? DeprecatedKeysCleaner(),
+       _cacheGovernanceService =
+           cacheGovernanceService ?? AppCacheGovernanceService(),
+       _database = database ?? AppDatabase.instance,
        _startupMinDuration = startupMinDuration ?? _defaultStartupMinDuration,
        _startupDeferredTasksDelay =
            startupDeferredTasksDelay ?? _defaultStartupDeferredTasksDelay;
@@ -40,19 +53,24 @@ class AppStartupCoordinator {
     milliseconds: 250,
   );
   static const Duration _defaultStartupDeferredTasksDelay = Duration(
-    milliseconds: 1800,
+    seconds: 3,
   );
   static const Duration _startupTaskGap = Duration(milliseconds: 320);
   static const Duration _startupAnnouncementDelay = Duration(milliseconds: 480);
+  static const Duration _storageMaintenanceInterval = Duration(days: 7);
 
   final Future<void> Function() _sendHeartbeat;
   final Future<void> Function() _sendVisitEvent;
+  final Future<void> Function() _validateStartupAuthSession;
   final VoidCallback _showStartupAnnouncementIfNeeded;
   final Future<BuildContext?> Function() _resolveDialogContext;
   final StartupUpdateDialogPresenter _showUpdateDialog;
   final AppLogger _logger;
   final AppUpdateService _appUpdateService;
   final StartupTaskGateService _taskGateService;
+  final DeprecatedKeysCleaner _deprecatedKeysCleaner;
+  final AppCacheGovernanceService _cacheGovernanceService;
+  final AppDatabase _database;
   final Duration _startupMinDuration;
   final Duration _startupDeferredTasksDelay;
 
@@ -188,6 +206,26 @@ class AppStartupCoordinator {
     if (!isMounted()) {
       return;
     }
+    await _runStartupDeferredTask(
+      name: 'deprecatedPreferenceCleanup',
+      task: _cleanupDeprecatedPreferenceKeys,
+    );
+    await _waitDeferredGap(_startupTaskGap, isMounted: isMounted);
+    await _runStartupDeferredTask(
+      name: 'cacheBudgetEnforcement',
+      task: _enforceCacheBudgets,
+    );
+    await _waitDeferredGap(_startupTaskGap, isMounted: isMounted);
+    await _runStartupDeferredTask(
+      name: 'storageMaintenance',
+      task: _runStorageMaintenanceIfNeeded,
+    );
+    await _waitDeferredGap(_startupTaskGap, isMounted: isMounted);
+    await _runStartupDeferredTask(
+      name: 'startupAuthValidation',
+      task: _validateStartupAuthSession,
+    );
+    await _waitDeferredGap(_startupTaskGap, isMounted: isMounted);
     await _runStartupDeferredTask(name: 'heartbeat', task: _sendHeartbeat);
     await _waitDeferredGap(_startupTaskGap, isMounted: isMounted);
     await _runStartupDeferredTask(name: 'visit', task: _sendVisitEvent);
@@ -202,20 +240,82 @@ class AppStartupCoordinator {
     );
   }
 
+  Future<void> _cleanupDeprecatedPreferenceKeys() async {
+    final result = await _deprecatedKeysCleaner.cleanOnce();
+    _logger.info(
+      'Deprecated preference cleanup complete',
+      context: <String, Object?>{
+        'cleaned': result.cleaned,
+        'removedCount': result.removedCount,
+        'removedKeys':
+            result.removedKeys.isEmpty ? null : result.removedKeys.join(','),
+      },
+    );
+  }
+
+  Future<void> _enforceCacheBudgets() async {
+    await _cacheGovernanceService.enforceBudgets();
+  }
+
+  Future<void> _runStorageMaintenanceIfNeeded() async {
+    final shouldRun = await _taskGateService.claimIntervalRun(
+      'storage_maintenance',
+      minInterval: _storageMaintenanceInterval,
+    );
+    if (!shouldRun) {
+      _logger.info(
+        'Storage maintenance skipped by task gate',
+        context: <String, Object?>{
+          'minIntervalDays': _storageMaintenanceInterval.inDays,
+        },
+      );
+      return;
+    }
+    final report = await _database.runStorageMaintenance();
+    _logger.info(
+      'Storage maintenance complete',
+      context: <String, Object?>{
+        'totalDeleted': report.totalDeleted,
+        'orphanedLocalReadingProgresses': report.orphanedLocalReadingProgresses,
+        'orphanedLocalReadingRecords': report.orphanedLocalReadingRecords,
+        'orphanedLocalReadingRecordSessions':
+            report.orphanedLocalReadingRecordSessions,
+        'orphanedLocalReadingBookStatuses':
+            report.orphanedLocalReadingBookStatuses,
+        'orphanedLocalTocSnapshots': report.orphanedLocalTocSnapshots,
+        'orphanedLocalMetadataOverrides': report.orphanedLocalMetadataOverrides,
+        'staleSearchSourceHits': report.staleSearchSourceHits,
+      },
+    );
+  }
+
   Future<void> _runStartupDeferredTask({
     required String name,
     required Future<void> Function() task,
   }) async {
     final stopwatch = Stopwatch()..start();
-    await task();
-    _logger.info(
-      'Startup deferred task complete',
-      context: <String, Object?>{
-        'task': name,
-        'costMs': stopwatch.elapsedMilliseconds,
-        'elapsedMs': elapsedMilliseconds,
-      },
-    );
+    try {
+      await task();
+      _logger.info(
+        'Startup deferred task complete',
+        context: <String, Object?>{
+          'task': name,
+          'costMs': stopwatch.elapsedMilliseconds,
+          'elapsedMs': elapsedMilliseconds,
+        },
+      );
+    } catch (error, stackTrace) {
+      _logger.warn(
+        'Startup deferred task failed',
+        context: <String, Object?>{
+          'task': name,
+          'costMs': stopwatch.elapsedMilliseconds,
+          'elapsedMs': elapsedMilliseconds,
+          'error': error.toString(),
+          'stackTrace': stackTrace.toString(),
+        },
+      );
+    }
   }
 
   Future<void> _waitDeferredGap(

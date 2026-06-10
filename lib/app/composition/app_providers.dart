@@ -173,6 +173,7 @@ typedef AppStartupCoordinatorFactory =
     AppStartupCoordinator Function({
       required Future<void> Function() sendHeartbeat,
       required Future<void> Function() sendVisitEvent,
+      required Future<void> Function() validateStartupAuthSession,
       required VoidCallback showStartupAnnouncementIfNeeded,
       required Future<BuildContext?> Function() resolveDialogContext,
       required StartupUpdateDialogPresenter showUpdateDialog,
@@ -183,6 +184,7 @@ final appStartupCoordinatorFactoryProvider =
       return ({
         required Future<void> Function() sendHeartbeat,
         required Future<void> Function() sendVisitEvent,
+        required Future<void> Function() validateStartupAuthSession,
         required VoidCallback showStartupAnnouncementIfNeeded,
         required Future<BuildContext?> Function() resolveDialogContext,
         required StartupUpdateDialogPresenter showUpdateDialog,
@@ -190,6 +192,7 @@ final appStartupCoordinatorFactoryProvider =
         return AppStartupCoordinator(
           sendHeartbeat: sendHeartbeat,
           sendVisitEvent: sendVisitEvent,
+          validateStartupAuthSession: validateStartupAuthSession,
           showStartupAnnouncementIfNeeded: showStartupAnnouncementIfNeeded,
           resolveDialogContext: resolveDialogContext,
           showUpdateDialog: showUpdateDialog,

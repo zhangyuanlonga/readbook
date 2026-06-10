@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:drift/drift.dart';
 
 import '../../../domain/entities/bookmark.dart';
+import '../../../domain/entities/book_identity.dart';
 import '../../../domain/entities/book_metadata_override.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/chapter.dart';
@@ -508,6 +509,35 @@ class SearchSourceHitUpsert {
   final int hitIncrement;
 }
 
+class AppDatabaseMaintenanceReport {
+  const AppDatabaseMaintenanceReport({
+    required this.orphanedLocalReadingProgresses,
+    required this.orphanedLocalReadingRecords,
+    required this.orphanedLocalReadingRecordSessions,
+    required this.orphanedLocalReadingBookStatuses,
+    required this.orphanedLocalTocSnapshots,
+    required this.orphanedLocalMetadataOverrides,
+    required this.staleSearchSourceHits,
+  });
+
+  final int orphanedLocalReadingProgresses;
+  final int orphanedLocalReadingRecords;
+  final int orphanedLocalReadingRecordSessions;
+  final int orphanedLocalReadingBookStatuses;
+  final int orphanedLocalTocSnapshots;
+  final int orphanedLocalMetadataOverrides;
+  final int staleSearchSourceHits;
+
+  int get totalDeleted =>
+      orphanedLocalReadingProgresses +
+      orphanedLocalReadingRecords +
+      orphanedLocalReadingRecordSessions +
+      orphanedLocalReadingBookStatuses +
+      orphanedLocalTocSnapshots +
+      orphanedLocalMetadataOverrides +
+      staleSearchSourceHits;
+}
+
 @DriftDatabase(
   tables: [
     ChapterCaches,
@@ -543,7 +573,18 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase({QueryExecutor? executor})
     : super(executor ?? openAppDatabaseConnection());
 
-  static final AppDatabase instance = AppDatabase();
+  static AppDatabase? _sharedInstance;
+
+  static AppDatabase get instance => _sharedInstance ??= AppDatabase();
+
+  static Future<void> resetSharedInstance() async {
+    final instance = _sharedInstance;
+    _sharedInstance = null;
+    if (instance == null) {
+      return;
+    }
+    await instance.close();
+  }
 
   @override
   int get schemaVersion => 34;
@@ -2317,6 +2358,21 @@ class AppDatabase extends _$AppDatabase {
     }
 
     await transaction(() async {
+      await (delete(storedBookmarks)
+        ..where((table) => table.bookId.equals(normalizedId))).go();
+      await (delete(storedReadingProgresses)
+        ..where((table) => table.bookId.equals(normalizedId))).go();
+      await (delete(storedReadingRecords)
+        ..where((table) => table.bookId.equals(normalizedId))).go();
+      await (delete(storedReadingRecordDays)
+        ..where((table) => table.bookId.equals(normalizedId))).go();
+      await (delete(storedReadingRecordSessions)
+        ..where((table) => table.bookId.equals(normalizedId))).go();
+      await (delete(storedReadingBookStatuses)
+        ..where((table) => table.bookId.equals(normalizedId))).go();
+      await (delete(storedTocSnapshots)
+        ..where((table) => table.bookId.equals(normalizedId))).go();
+      await deleteBookMetadataOverrideByLocalBookId(normalizedId);
       await _deleteLocalChapterBodiesByBookId(normalizedId);
       await (delete(storedLocalChapters)
         ..where((table) => table.bookId.equals(normalizedId))).go();
@@ -3458,6 +3514,126 @@ class AppDatabase extends _$AppDatabase {
       await (delete(storedReadingRecords)
         ..where((table) => table.bookId.equals(normalizedBookId))).go();
     });
+  }
+
+  Future<AppDatabaseMaintenanceReport> runStorageMaintenance({
+    DateTime? now,
+    Duration staleSearchSourceHitRetention = const Duration(days: 90),
+  }) async {
+    return transaction(() async {
+      final localBookIds = await _listAllLocalBookIds();
+      final orphanedLocalReadingProgresses = await _deleteLocalSourceOrphans(
+        tableName: storedReadingProgresses.tableName,
+        sourceIdColumn: 'source_id',
+        bookIdColumn: 'book_id',
+        retainedBookIds: localBookIds,
+      );
+      final orphanedLocalReadingRecords = await _deleteLocalSourceOrphans(
+        tableName: storedReadingRecords.tableName,
+        sourceIdColumn: 'source_id',
+        bookIdColumn: 'book_id',
+        retainedBookIds: localBookIds,
+      );
+      final orphanedLocalReadingRecordSessions =
+          await _deleteLocalSourceOrphans(
+            tableName: storedReadingRecordSessions.tableName,
+            sourceIdColumn: 'source_id',
+            bookIdColumn: 'book_id',
+            retainedBookIds: localBookIds,
+          );
+      final orphanedLocalReadingBookStatuses = await _deleteLocalSourceOrphans(
+        tableName: storedReadingBookStatuses.tableName,
+        sourceIdColumn: 'source_id',
+        bookIdColumn: 'book_id',
+        retainedBookIds: localBookIds,
+      );
+      final orphanedLocalTocSnapshots = await _deleteLocalSourceOrphans(
+        tableName: storedTocSnapshots.tableName,
+        sourceIdColumn: 'source_id',
+        bookIdColumn: 'book_id',
+        retainedBookIds: localBookIds,
+      );
+      final orphanedLocalMetadataOverrides =
+          await _deleteLocalMetadataOverrides(localBookIds);
+      final staleSearchSourceHits = await _deleteStaleSearchSourceHits(
+        cutoff: (now ?? DateTime.now()).subtract(staleSearchSourceHitRetention),
+      );
+      return AppDatabaseMaintenanceReport(
+        orphanedLocalReadingProgresses: orphanedLocalReadingProgresses,
+        orphanedLocalReadingRecords: orphanedLocalReadingRecords,
+        orphanedLocalReadingRecordSessions: orphanedLocalReadingRecordSessions,
+        orphanedLocalReadingBookStatuses: orphanedLocalReadingBookStatuses,
+        orphanedLocalTocSnapshots: orphanedLocalTocSnapshots,
+        orphanedLocalMetadataOverrides: orphanedLocalMetadataOverrides,
+        staleSearchSourceHits: staleSearchSourceHits,
+      );
+    });
+  }
+
+  Future<List<String>> _listAllLocalBookIds() async {
+    final rows =
+        await (select(storedLocalBooks)
+          ..orderBy([(table) => OrderingTerm.asc(table.id)])).get();
+    return rows
+        .map((row) => row.id.trim())
+        .where((value) => value.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  Future<int> _deleteLocalMetadataOverrides(
+    List<String> retainedBookIds,
+  ) async {
+    if (retainedBookIds.isEmpty) {
+      return (delete(storedBookMetadataOverrides)
+        ..where((table) => table.bookId.isNotNull())).go();
+    }
+    return (delete(storedBookMetadataOverrides)..where(
+      (table) =>
+          table.bookId.isNotNull() & table.bookId.isNotIn(retainedBookIds),
+    )).go();
+  }
+
+  Future<int> _deleteLocalSourceOrphans({
+    required String tableName,
+    required String sourceIdColumn,
+    required String bookIdColumn,
+    required List<String> retainedBookIds,
+  }) async {
+    const localSourceId = BookIdentityScheme.localSourceId;
+    if (retainedBookIds.isEmpty) {
+      await customStatement(
+        'DELETE FROM ${_quoteIdentifier(tableName)} '
+        'WHERE ${_quoteIdentifier(sourceIdColumn)} = ?',
+        <Object>[localSourceId],
+      );
+      return _rowsChanged();
+    }
+
+    final placeholders = List<String>.filled(
+      retainedBookIds.length,
+      '?',
+    ).join(', ');
+    await customStatement(
+      'DELETE FROM ${_quoteIdentifier(tableName)} '
+      'WHERE ${_quoteIdentifier(sourceIdColumn)} = ? '
+      'AND ${_quoteIdentifier(bookIdColumn)} NOT IN ($placeholders)',
+      <Object>[localSourceId, ...retainedBookIds],
+    );
+    return _rowsChanged();
+  }
+
+  Future<int> _deleteStaleSearchSourceHits({required DateTime cutoff}) async {
+    await customStatement(
+      'DELETE FROM ${_quoteIdentifier(searchSourceHits.tableName)} '
+      'WHERE updated_at < ?',
+      <Object>[cutoff.toUtc().millisecondsSinceEpoch],
+    );
+    return _rowsChanged();
+  }
+
+  Future<int> _rowsChanged() async {
+    final row = await customSelect('SELECT changes() AS count').getSingle();
+    return _decodeCount(row.data['count']);
   }
 
   LocalBook _mapRowToLocalBook(StoredLocalBook row) {

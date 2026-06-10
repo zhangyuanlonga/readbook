@@ -13,6 +13,7 @@ import 'tasks/app_task_manager.dart';
 import '../core/app_update/app_update_dialog.dart';
 import '../core/app_update/app_update_release.dart';
 import '../core/auth/auth_event_bus.dart';
+import '../core/auth/startup_auth_session_validator.dart';
 import '../core/logging/app_logger.dart';
 import '../domain/entities/announcement.dart';
 import '../features/mine/application/advanced_theme_provider.dart';
@@ -299,6 +300,8 @@ class _SystemUiOverlayWrapperState
     )(
       sendHeartbeat: _lifecycleCoordinator.sendHeartbeat,
       sendVisitEvent: _lifecycleCoordinator.sendVisitEvent,
+      validateStartupAuthSession:
+          () => StartupAuthSessionValidator().validate().then((_) {}),
       showStartupAnnouncementIfNeeded: _showStartupAnnouncementIfNeeded,
       resolveDialogContext: _resolveStartupDialogContext,
       showUpdateDialog: _showUpdateReleaseDialog,
@@ -379,8 +382,6 @@ class _SystemUiOverlayWrapperState
                 if (!mounted) {
                   return;
                 }
-                // 过期跳转由全局 auth event 统一触发，避免各页面各自 push 登录页。
-                // 使用 push 保留当前业务栈，重新登录后用户可按原路径返回。
                 appRouter.push('/auth');
               },
             )
@@ -389,6 +390,14 @@ class _SystemUiOverlayWrapperState
     messenger.showSnackBar(
       SnackBar(content: Text(event.message), action: action),
     );
+    if (event.type == AuthEventType.sessionExpired) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        appRouter.push('/auth');
+      });
+    }
   }
 
   @override

@@ -891,6 +891,43 @@ class ReaderPreferencesService {
     await prefs.setString(_recentBodyTextColorsKey, jsonEncode(normalized));
   }
 
+  Future<List<String>> repairInvalidStoredData() async {
+    final prefs = await _preferencesFuture;
+    final removedKeys = <String>[];
+
+    if (!_isValidStringListJsonSync(
+      prefs.getString(_customBackgroundImagesKey),
+    )) {
+      if (prefs.containsKey(_customBackgroundImagesKey)) {
+        await prefs.remove(_customBackgroundImagesKey);
+        removedKeys.add(_customBackgroundImagesKey);
+      }
+    }
+
+    if (!_isValidIntListJsonSync(prefs.getString(_recentBodyTextColorsKey))) {
+      if (prefs.containsKey(_recentBodyTextColorsKey)) {
+        await prefs.remove(_recentBodyTextColorsKey);
+        removedKeys.add(_recentBodyTextColorsKey);
+      }
+    }
+
+    for (final key in prefs.getKeys()) {
+      if (key.startsWith(_progressPrefix) &&
+          !_isValidReadingProgressJsonSync(prefs.getString(key))) {
+        await prefs.remove(key);
+        removedKeys.add(key);
+        continue;
+      }
+      if (key.startsWith(_tocSnapshotPrefix) &&
+          !_isValidTocSnapshotJsonSync(prefs.getString(key))) {
+        await prefs.remove(key);
+        removedKeys.add(key);
+      }
+    }
+
+    return List<String>.unmodifiable(removedKeys);
+  }
+
   Future<ReadingProgress?> loadProgress(String bookId) async {
     final normalizedBookId = bookId.trim();
     if (normalizedBookId.isEmpty) {
@@ -922,6 +959,81 @@ class ReaderPreferencesService {
       return progress;
     } on FormatException {
       return null;
+    }
+  }
+
+  bool _isValidStringListJsonSync(String? raw) {
+    final normalized = raw?.trim() ?? '';
+    if (normalized.isEmpty) {
+      return true;
+    }
+    try {
+      return jsonDecode(normalized) is List;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  bool _isValidIntListJsonSync(String? raw) {
+    final normalized = raw?.trim() ?? '';
+    if (normalized.isEmpty) {
+      return true;
+    }
+    try {
+      final decoded = jsonDecode(normalized);
+      if (decoded is! List) {
+        return false;
+      }
+      for (final entry in decoded) {
+        if (entry is int || entry is num) {
+          continue;
+        }
+        if (entry is String && int.tryParse(entry.trim()) != null) {
+          continue;
+        }
+        return false;
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  bool _isValidReadingProgressJsonSync(String? raw) {
+    final normalized = raw?.trim() ?? '';
+    if (normalized.isEmpty) {
+      return true;
+    }
+    try {
+      final decoded = jsonDecode(normalized);
+      if (decoded is! Map) {
+        return false;
+      }
+      ReadingProgress.fromJson(
+        decoded.map((key, value) => MapEntry(key.toString(), value)),
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  bool _isValidTocSnapshotJsonSync(String? raw) {
+    final normalized = raw?.trim() ?? '';
+    if (normalized.isEmpty) {
+      return true;
+    }
+    try {
+      final decoded = jsonDecode(normalized);
+      if (decoded is! Map) {
+        return false;
+      }
+      ReaderTocSnapshot.fromJson(
+        decoded.map((key, value) => MapEntry(key.toString(), value)),
+      );
+      return true;
+    } catch (_) {
+      return false;
     }
   }
 

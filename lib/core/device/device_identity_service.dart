@@ -21,7 +21,7 @@ class DeviceIdentityService {
        _deviceInfo = deviceInfo ?? DeviceInfoPlugin(),
        _uuid = uuid ?? const Uuid();
 
-  static const String _installIdKey = 'app.install_id';
+  static const String installIdKey = 'app.install_id';
 
   final Future<SharedPreferences> _preferencesFuture;
   final DeviceInfoPlugin _deviceInfo;
@@ -31,12 +31,12 @@ class DeviceIdentityService {
 
   Future<String> getInstallId() async {
     final prefs = await _preferencesFuture;
-    final cached = (prefs.getString(_installIdKey) ?? '').trim();
+    final cached = (prefs.getString(installIdKey) ?? '').trim();
     if (cached.isNotEmpty) {
       return cached;
     }
     final generated = _uuid.v4();
-    await prefs.setString(_installIdKey, generated);
+    await prefs.setString(installIdKey, generated);
     return generated;
   }
 

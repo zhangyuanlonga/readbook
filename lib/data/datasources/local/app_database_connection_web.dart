@@ -13,3 +13,11 @@ QueryExecutor openAppDatabaseConnection() {
     return result.resolvedExecutor;
   });
 }
+
+Future<String?> resolveAppDatabaseDirectoryPath() async => null;
+
+Future<String?> resolveAppDatabaseFilePath() async => null;
+
+Future<String?> backupPersistedAppDatabase({String? suffix}) async => null;
+
+Future<bool> deletePersistedAppDatabase() async => false;

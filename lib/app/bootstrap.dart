@@ -3,17 +3,19 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker_android/image_picker_android.dart';
 import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app.dart';
+import 'app_restart_scope.dart';
 import 'router.dart';
 import 'startup_artwork_store.dart';
 import '../features/mine/application/advanced_theme_provider.dart';
 import '../features/mine/application/mine_page_session_service.dart';
 import '../features/mine/providers.dart';
+import '../core/app_data_migrator.dart';
+import '../core/auth/auth_install_recovery_service.dart';
 import '../features/reader/application/reader_font_registry_service.dart';
 import '../core/logging/app_logger.dart';
 import '../core/logging/source_log_store.dart';
@@ -21,6 +23,7 @@ import '../core/storage/managed_file_path_resolver.dart';
 import 'navigation/app_navigation_style_provider.dart';
 import 'platform/app_platform_capabilities.dart';
 import 'platform/desktop_window_bootstrap.dart';
+import 'startup/app_database_integrity_service.dart';
 import 'startup/managed_asset_path_migration_service.dart';
 import 'theme/app_interface_typography_provider.dart';
 import 'theme/app_theme_provider.dart';
@@ -32,6 +35,20 @@ Future<void> bootstrap() async {
   unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
   _configureImagePicker();
   final prefs = await SharedPreferences.getInstance();
+  await AuthInstallRecoveryService(
+    preferences: prefs,
+  ).clearAuthStateIfFreshInstall();
+  await AppDataMigrator(preferences: prefs).migrateIfNeeded();
+  await AppDatabaseIntegrityService().ensureHealthy();
+  primeBootstrappedPreferences(prefs);
+  unawaited(StartupArtworkStore.prime(preferences: prefs));
+  runApp(const AppRestartScope(child: App()));
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    unawaited(_runDeferredBootstrapTasks(prefs));
+  });
+}
+
+void primeBootstrappedPreferences(SharedPreferences prefs) {
   AppNavigationStylePreferenceNotifier.prime(prefs);
   AppNavigationLabelVisibilityNotifier.prime(prefs);
   AppStandardNavigationBarAppearanceNotifier.prime(prefs);
@@ -48,11 +65,6 @@ Future<void> bootstrap() async {
   MinePageVisibilityNotifier.prime(prefs);
   MinePageStartupDestinationNotifier.prime(prefs);
   StartupArtworkStore.primeStartupEnabledSync(prefs);
-  unawaited(StartupArtworkStore.prime(preferences: prefs));
-  runApp(const ProviderScope(child: App()));
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    unawaited(_runDeferredBootstrapTasks(prefs));
-  });
 }
 
 Future<void> _runDeferredBootstrapTasks(SharedPreferences prefs) async {
