@@ -3570,6 +3570,51 @@ class AppDatabase extends _$AppDatabase {
     });
   }
 
+  Future<AppDatabaseMaintenanceReport> inspectStorageMaintenance({
+    DateTime? now,
+    Duration staleSearchSourceHitRetention = const Duration(days: 90),
+  }) async {
+    final localBookIds = await _listAllLocalBookIds();
+    return AppDatabaseMaintenanceReport(
+      orphanedLocalReadingProgresses: await _countLocalSourceOrphans(
+        tableName: storedReadingProgresses.tableName,
+        sourceIdColumn: 'source_id',
+        bookIdColumn: 'book_id',
+        retainedBookIds: localBookIds,
+      ),
+      orphanedLocalReadingRecords: await _countLocalSourceOrphans(
+        tableName: storedReadingRecords.tableName,
+        sourceIdColumn: 'source_id',
+        bookIdColumn: 'book_id',
+        retainedBookIds: localBookIds,
+      ),
+      orphanedLocalReadingRecordSessions: await _countLocalSourceOrphans(
+        tableName: storedReadingRecordSessions.tableName,
+        sourceIdColumn: 'source_id',
+        bookIdColumn: 'book_id',
+        retainedBookIds: localBookIds,
+      ),
+      orphanedLocalReadingBookStatuses: await _countLocalSourceOrphans(
+        tableName: storedReadingBookStatuses.tableName,
+        sourceIdColumn: 'source_id',
+        bookIdColumn: 'book_id',
+        retainedBookIds: localBookIds,
+      ),
+      orphanedLocalTocSnapshots: await _countLocalSourceOrphans(
+        tableName: storedTocSnapshots.tableName,
+        sourceIdColumn: 'source_id',
+        bookIdColumn: 'book_id',
+        retainedBookIds: localBookIds,
+      ),
+      orphanedLocalMetadataOverrides: await _countLocalMetadataOverrides(
+        localBookIds,
+      ),
+      staleSearchSourceHits: await _countStaleSearchSourceHits(
+        cutoff: (now ?? DateTime.now()).subtract(staleSearchSourceHitRetention),
+      ),
+    );
+  }
+
   Future<List<String>> _listAllLocalBookIds() async {
     final rows =
         await (select(storedLocalBooks)
@@ -3629,6 +3674,74 @@ class AppDatabase extends _$AppDatabase {
       <Object>[cutoff.toUtc().millisecondsSinceEpoch],
     );
     return _rowsChanged();
+  }
+
+  Future<int> _countLocalMetadataOverrides(List<String> retainedBookIds) async {
+    if (retainedBookIds.isEmpty) {
+      final row =
+          await customSelect(
+            'SELECT COUNT(*) AS count FROM ${_quoteIdentifier(storedBookMetadataOverrides.tableName)} '
+            'WHERE book_id IS NOT NULL',
+          ).getSingle();
+      return _decodeCount(row.data['count']);
+    }
+    final placeholders = List<String>.filled(
+      retainedBookIds.length,
+      '?',
+    ).join(', ');
+    final row =
+        await customSelect(
+          'SELECT COUNT(*) AS count FROM ${_quoteIdentifier(storedBookMetadataOverrides.tableName)} '
+          'WHERE book_id IS NOT NULL AND book_id NOT IN ($placeholders)',
+          variables: retainedBookIds.map(Variable.withString).toList(),
+        ).getSingle();
+    return _decodeCount(row.data['count']);
+  }
+
+  Future<int> _countLocalSourceOrphans({
+    required String tableName,
+    required String sourceIdColumn,
+    required String bookIdColumn,
+    required List<String> retainedBookIds,
+  }) async {
+    const localSourceId = BookIdentityScheme.localSourceId;
+    if (retainedBookIds.isEmpty) {
+      final row =
+          await customSelect(
+            'SELECT COUNT(*) AS count FROM ${_quoteIdentifier(tableName)} '
+            'WHERE ${_quoteIdentifier(sourceIdColumn)} = ?',
+            variables: <Variable<Object>>[Variable.withString(localSourceId)],
+          ).getSingle();
+      return _decodeCount(row.data['count']);
+    }
+
+    final placeholders = List<String>.filled(
+      retainedBookIds.length,
+      '?',
+    ).join(', ');
+    final row =
+        await customSelect(
+          'SELECT COUNT(*) AS count FROM ${_quoteIdentifier(tableName)} '
+          'WHERE ${_quoteIdentifier(sourceIdColumn)} = ? '
+          'AND ${_quoteIdentifier(bookIdColumn)} NOT IN ($placeholders)',
+          variables: <Variable<Object>>[
+            Variable.withString(localSourceId),
+            ...retainedBookIds.map(Variable.withString),
+          ],
+        ).getSingle();
+    return _decodeCount(row.data['count']);
+  }
+
+  Future<int> _countStaleSearchSourceHits({required DateTime cutoff}) async {
+    final row =
+        await customSelect(
+          'SELECT COUNT(*) AS count FROM ${_quoteIdentifier(searchSourceHits.tableName)} '
+          'WHERE updated_at < ?',
+          variables: <Variable<Object>>[
+            Variable.withInt(cutoff.toUtc().millisecondsSinceEpoch),
+          ],
+        ).getSingle();
+    return _decodeCount(row.data['count']);
   }
 
   Future<int> _rowsChanged() async {

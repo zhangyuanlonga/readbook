@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dart tool/check_architecture_guardrails.dart)",
+      "Bash(flutter build *)"
+    ]
+  }
+}

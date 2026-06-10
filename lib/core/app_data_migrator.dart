@@ -73,6 +73,7 @@ class AppDataMigrator {
         'fromVersion': fromVersion,
         'toVersion': currentAppDataVersion,
         'cleanedKeyCount': cleanedKeys.length,
+        'cleanedKeys': cleanedKeys.isEmpty ? null : cleanedKeys.join(','),
       },
     );
     return AppDataMigrationReport(

@@ -1325,6 +1325,7 @@ class _PrivateSourceTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         onTap: item.visibility == 'shared' ? null : onEdit,
         child: Container(
+          constraints: const BoxConstraints(minHeight: 72),
           padding: const EdgeInsets.fromLTRB(12, 9, 8, 9),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
@@ -1333,25 +1334,20 @@ class _PrivateSourceTile extends StatelessWidget {
             ),
           ),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: <Widget>[
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: <Widget>[
-                    Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: Text(
-                            item.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                      ],
+                    Text(
+                      item.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                     const SizedBox(height: 5),
                     Text(

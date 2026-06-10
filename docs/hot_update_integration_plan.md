@@ -5,27 +5,72 @@
 
 ## 1. 方案选型
 
-### 推荐方案：Shorebird（Flutter 官方背书）
+### 推荐方案：Shorebird（Android + iOS）
 
 **为什么选 Shorebird？**
 - ✅ Flutter 团队核心成员创建
 - ✅ 支持 Android / iOS
-- ✅ 不违反 App Store 政策（只更新 Dart 代码）
 - ✅ 对现有代码零侵入
 - ✅ 免费层足够使用
 
 **官网：** https://shorebird.dev
 
-### 不推荐方案
+---
 
-❌ **CodePush（微软）**
-- 主要为 React Native 设计
-- Flutter 支持不完善
+### iOS 内测阶段使用热更新的优势
 
-❌ **自建热更新**
-- 开发成本高
-- 维护成本高
-- 容易违反应用商店政策
+**当前状态：** iOS 未上架 App Store，用户通过企业签名/个人签名安装 IPA
+
+**使用热更新的好处：**
+- ✅ **无需重新签名分发** - 最大优势！
+- ✅ 小修改 10 分钟生效（vs 重新打包签名分发几小时）
+- ✅ 用户无感知更新
+- ✅ 不受 App Store 审核限制（因为未上架）
+
+**内测阶段特别适合热更新：**
+1. 频繁修改bug和调整
+2. 重新签名分发成本高
+3. 不经过 App Store，无审核风险
+4. 等正式上架后再调整策略
+
+---
+
+### App Store 上架后的策略调整
+
+**时机：** iOS 正式提交 App Store 审核时
+
+**需要注意：**
+- ⚠️ App Store 政策：不允许改变核心功能、不允许绕过审核添加新功能
+- ⚠️ Shorebird 官方声称合规（只更新 Dart 代码）
+- ⚠️ 但苹果审核较严，建议保守使用
+
+**建议策略：**
+1. **审核期间：** 暂停热更新（避免审核时检测到）
+2. **上架后：** 只用于 bug 修复和文案调整（不添加新功能）
+3. **重大更新：** 仍然走正常审核流程
+
+---
+
+### 方案对比
+
+| 场景 | 传统发版 | Shorebird 热更新 |
+|-----|---------|-----------------|
+| **内测阶段**（当前） | 重新签名分发，几小时 | 10分钟生效 ✅ |
+| **App Store 上架后** | 审核 1-7天 | 小修改10分钟 ⚠️ 谨慎使用 |
+| **Android** | 审核 1-3天 | 10分钟生效 ✅ |
+
+---
+
+### 推荐执行路径
+
+**立即行动（当前内测阶段）：**
+1. ✅ Android + iOS 都接入 Shorebird
+2. ✅ 享受热更新便利（无需重新签名分发）
+3. ✅ 快速迭代修复问题
+
+**iOS 上架时：**
+1. ⚠️ 审核期间暂停热更新
+2. ✅ 上架后谨慎使用（只修复bug，不添加功能）
 
 ---
 
@@ -110,9 +155,10 @@ shorebird init
 # shorebird.yaml
 app_id: your-app-id-here  # 自动生成
 
-# 可选：自定义配置
-# auto_update: true        # 启动时自动检查更新
-# update_url: https://...  # 自定义更新服务器（可选）
+# Android 和 iOS 都支持
+platforms:
+  android: true
+  ios: true
 ```
 
 ---
@@ -139,10 +185,12 @@ shorebird release android --artifact aab
 ```bash
 # iOS Release
 shorebird release ios
-
-# 需要配置签名
-# 使用 Xcode 打开项目配置签名
 ```
+
+**iOS 内测阶段：**
+- 构建完成后得到 IPA 文件
+- 企业签名或个人签名
+- 分发给内测用户
 
 **iOS 特殊说明：**
 - 需要 Apple Developer 账号
@@ -167,7 +215,7 @@ Text('设置') → Text('应用设置')
 # Android patch
 shorebird patch android
 
-# iOS patch
+# iOS patch（内测阶段完全可用）
 shorebird patch ios
 ```
 
@@ -176,6 +224,7 @@ shorebird patch ios
 - 用户下次启动时自动检查更新
 - 下载 patch（通常几百 KB）
 - 重启后生效
+- **iOS 内测用户无需重新签名安装！** ⭐
 
 ---
 

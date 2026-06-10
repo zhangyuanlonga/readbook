@@ -7,6 +7,7 @@ import 'package:shuxiang_reading_next/core/device/device_identity.dart';
 import 'package:shuxiang_reading_next/core/device/device_identity_service.dart';
 import 'package:shuxiang_reading_next/core/logging/diagnostic_log_export_service.dart';
 import 'package:shuxiang_reading_next/core/logging/source_log_store.dart';
+import 'package:shuxiang_reading_next/core/storage/storage_health_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -14,6 +15,7 @@ void main() {
   group('DiagnosticLogExportService', () {
     late SourceLogStore store;
     late _FakeDeviceIdentityService identityService;
+    late _FakeStorageHealthService healthService;
     late Directory tempDirectory;
 
     setUp(() async {
@@ -21,6 +23,7 @@ void main() {
       store = SourceLogStore.instance;
       store.clear();
       identityService = _FakeDeviceIdentityService();
+      healthService = _FakeStorageHealthService();
       tempDirectory = await Directory.systemTemp.createTemp(
         'diagnostic_log_export_service_test_',
       );
@@ -47,6 +50,7 @@ void main() {
           await DiagnosticLogExportService(
             store: store,
             deviceIdentityService: identityService,
+            storageHealthService: healthService,
           ).export();
 
       expect(result, isNull);
@@ -66,11 +70,14 @@ void main() {
           await DiagnosticLogExportService(
             store: store,
             deviceIdentityService: identityService,
+            storageHealthService: healthService,
           ).export();
 
       expect(result, isNotNull);
       expect(result!.text, contains('# 诊断日志'));
       expect(result.text, contains('install_id: install-test'));
+      expect(result.text, contains('storage_health_level: notice'));
+      expect(result.text, contains('storage_health_score: 82'));
       expect(result.text, contains('reader failed'));
       expect(result.file, isNotNull);
       final file = File(result.file!.path);
@@ -109,5 +116,20 @@ class _FakePathProviderPlatform extends PathProviderPlatform {
   @override
   Future<String?> getTemporaryPath() async {
     return directory.path;
+  }
+}
+
+class _FakeStorageHealthService extends StorageHealthService {
+  @override
+  Future<StorageHealthReport> buildReport() async {
+    return const StorageHealthReport(
+      level: StorageHealthLevel.notice,
+      score: 82,
+      sharedPreferencesEntryCount: 12,
+      databaseBytes: 4096,
+      cacheBytes: 2048,
+      orphanCandidateCount: 3,
+      warnings: <String>['示例告警'],
+    );
   }
 }

@@ -137,63 +137,66 @@ class CompactCollectionSearchField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return TextField(
-      controller: controller,
-      onChanged: onChanged,
-      style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.15),
-      decoration: InputDecoration(
-        isDense: true,
-        filled: true,
-        fillColor: colorScheme.surfaceContainerLowest.withValues(alpha: 0.92),
-        hintText: hintText,
-        hintStyle: Theme.of(
-          context,
-        ).textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 12,
-          vertical: 11,
-        ),
-        prefixIcon: Icon(
-          Icons.search_rounded,
-          size: 18,
-          color: colorScheme.onSurfaceVariant,
-        ),
-        prefixIconConstraints: const BoxConstraints(
-          minWidth: 38,
-          minHeight: 38,
-        ),
-        suffixIcon:
-            query.trim().isEmpty
-                ? null
-                : IconButton(
-                  tooltip: '清空搜索',
-                  onPressed: onClear,
-                  icon: const Icon(Icons.close_rounded, size: 18),
-                  visualDensity: const VisualDensity(
-                    horizontal: -2,
-                    vertical: -2,
+    return SizedBox(
+      height: 40,
+      child: TextField(
+        controller: controller,
+        onChanged: onChanged,
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.15),
+        decoration: InputDecoration(
+          isDense: true,
+          filled: true,
+          fillColor: colorScheme.surfaceContainerLowest.withValues(alpha: 0.92),
+          hintText: hintText,
+          hintStyle: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 10,
+          ),
+          prefixIcon: Icon(
+            Icons.search_rounded,
+            size: 18,
+            color: colorScheme.onSurfaceVariant,
+          ),
+          prefixIconConstraints: const BoxConstraints(
+            minWidth: 38,
+            minHeight: 40,
+          ),
+          suffixIcon:
+              query.trim().isEmpty
+                  ? null
+                  : IconButton(
+                    tooltip: '清空搜索',
+                    onPressed: onClear,
+                    icon: const Icon(Icons.close_rounded, size: 18),
+                    visualDensity: const VisualDensity(
+                      horizontal: -2,
+                      vertical: -2,
+                    ),
                   ),
-                ),
-        suffixIconConstraints: const BoxConstraints(
-          minWidth: 38,
-          minHeight: 38,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.28),
+          suffixIconConstraints: const BoxConstraints(
+            minWidth: 38,
+            minHeight: 40,
           ),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.28),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide(
+              color: colorScheme.outlineVariant.withValues(alpha: 0.28),
+            ),
           ),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(
-            color: colorScheme.primary.withValues(alpha: 0.7),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide(
+              color: colorScheme.outlineVariant.withValues(alpha: 0.28),
+            ),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide(
+              color: colorScheme.primary.withValues(alpha: 0.7),
+            ),
           ),
         ),
       ),

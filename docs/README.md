@@ -1,8 +1,11 @@
 # Selune 项目文档入口
 
-更新时间：2026-06-06
+更新时间：2026-06-10
 
 本目录只保留对后续开发有决策价值的文档：核心方针、开发规则、平台规则、当前里程碑、长期回归清单。历史草稿、重复计划、一次性工作流文档不再保留，避免后续开发者在旧口径里迷路。
+
+**2026-06-10 重大更新：** 新增存储治理、API治理、热更新、UI/UX设计体系共 10 份核心文档。  
+**快速导航：** [任务分配指南](task_allocation_guide.md) ⭐ **理清文档关系，方便分配任务**
 
 ## 当前执行口径
 
@@ -102,6 +105,25 @@
 - [存储升级验证清单](storage_upgrade_validation_2026-05-21.md)
 - [主题语义化改造计划](theme_semantic_refactor_plan_2026-05-21.md)
 - [品牌视觉规范](brand_guidelines.md)
+
+## 存储与数据治理专项（2026-06-10 新增）
+
+- [存储与数据生命周期完整指南](storage_and_data_lifecycle_guide.md) - 明确用户数据存储位置、生命周期、覆盖安装/卸载行为
+- [存储治理改造计划](storage_governance_improvement_plan.md) - 5 阶段改造：紧急修复、缓存治理、数据兼容、用户体验、监控诊断
+- [用户状态与API请求治理计划](user_session_api_governance_plan.md) - 6 阶段改造：用户状态统一、API拦截器、缓存策略、数据隔离、平台一致性、错误处理
+- [业务和代码标准总体检查清单](business_and_code_standards_checklist.md) - 12 维度全面检查，识别遗漏风险点，优先级清晰
+
+## 版本发布与热更新（2026-06-10 新增）
+
+- [热更新接入方案](hot_update_integration_plan.md) - Shorebird 接入指南，快速发布小修改
+- [版本发布决策指南](version_release_decision_guide.md) - **每次提交代码必读**：快速判断使用正常发版还是热更新
+
+## UI/UX 设计体系（2026-06-10 新增）
+
+- [UI/UX 审计与设计系统](ui_ux_audit_and_design_system.md) - 全面审计现状、建立 Design Token 体系、统一组件规范
+- [交互规范与动效指南](ui_ux_interaction_and_animation_guide.md) - 操作反馈、确认流程、空状态、动画时长与曲线标准
+- [UI/UX 改进实施计划](ui_ux_implementation_plan.md) - 4 阶段改进计划、验收标准、设计审查清单
+- [高级主题体验优化方案](advanced_theme_experience_optimization.md) - **核心付费功能**：发现入口、编辑体验、预览效果、主题市场、付费转化优化
 
 ## 阅读器专项
 
