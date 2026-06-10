@@ -3,12 +3,12 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 allprojects {
     repositories {
-        google()
-        mavenCentral()
+        maven("https://repo.huaweicloud.com/repository/maven/")
         maven("https://maven.aliyun.com/repository/google")
         maven("https://maven.aliyun.com/repository/central")
         maven("https://maven.aliyun.com/repository/public")
-        maven("https://repo.huaweicloud.com/repository/maven/")
+        google()
+        mavenCentral()
     }
 }
 
