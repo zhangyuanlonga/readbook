@@ -19,7 +19,7 @@ on:
       flutter_version:
         description: "Flutter version used by CI"
         required: true
-        default: "3.41.5"
+        default: "3.44.1"
       android_target:
         description: "Android artifact type"
         required: true
@@ -39,40 +39,19 @@ on:
           - split
           - universal
       full_version:
-        description: "Optional full app version, for example 1.1.0+26041801. Overrides build_name/build_number."
-        required: false
-        default: ""
-      build_name:
-        description: "Optional Flutter build-name, for example 1.1.0"
-        required: false
-        default: ""
-      build_number:
-        description: "Optional Flutter build-number, for example 26041801"
-        required: false
-        default: ""
-      build_sequence:
-        description: "Optional daily sequence for automatic build-number, 1-99. Empty means 01."
-        required: false
-        default: ""
-      artifact_name:
-        description: "Output artifact name prefix"
+        description: "Required release version: display version + monotonic build number, for example 1.2.0+26061001."
         required: true
-        default: "Selune"
-      appread_api_base_url:
-        description: "Optional APPREAD_API_BASE_URL dart-define"
-        required: false
         default: ""
-      appread_reader_gateway_base_url:
-        description: "Optional APPREAD_READER_GATEWAY_BASE_URL dart-define"
-        required: false
-        default: ""
-      appread_app_name:
-        description: "APPREAD_APP_NAME dart-define"
-        required: true
-        default: "selune"
 
 permissions:
   contents: read
+
+env:
+  ARTIFACT_NAME: Selune
+  RELEASE_REPOSITORY: zhangyuanlonga/readbook-releases
+  APPREAD_API_BASE_URL: https://www.sxyd.lltask.top/api
+  APPREAD_READER_GATEWAY_BASE_URL: https://rust.lltask.top/api
+  APPREAD_APP_NAME: selune
 
 jobs:
   build:
@@ -89,7 +68,7 @@ jobs:
             supported_platforms: "android,linux,web"
           - id: apple
             label: iOS, macOS
-            os: macos-14
+            os: macos-15
             supported_platforms: "ios,macos"
           - id: windows
             label: Windows
@@ -99,6 +78,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Validate release version
+        shell: bash
+        env:
+          FULL_VERSION: ${{ inputs.full_version }}
+        run: |
+          set -euo pipefail
+          if [[ ! "${FULL_VERSION}" =~ ^[0-9]+(\.[0-9]+){1,2}\+[0-9]+$ ]]; then
+            echo "::error::full_version must look like 1.2.0+26061001."
+            echo "::error::The part before + is the user-visible version; the part after + is the monotonic build number used by Android/iOS/macOS/desktop upgrades."
+            exit 1
+          fi
 
       - name: Resolve selected platforms
         id: platforms
@@ -219,6 +210,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          if command -v xcodebuild >/dev/null 2>&1; then
+            xcodebuild -version
+          fi
           flutter config --enable-linux-desktop
           flutter config --enable-macos-desktop
           flutter config --enable-windows-desktop
@@ -253,14 +247,14 @@ jobs:
         env:
           ANDROID_TARGET: ${{ inputs.android_target }}
           ANDROID_APK_PROFILE: ${{ inputs.android_apk_profile }}
-          APPREAD_API_BASE_URL: ${{ inputs.appread_api_base_url }}
-          APPREAD_READER_GATEWAY_BASE_URL: ${{ inputs.appread_reader_gateway_base_url }}
-          APPREAD_APP_NAME: ${{ inputs.appread_app_name }}
-          ARTIFACT_NAME: ${{ inputs.artifact_name }}
+          APPREAD_API_BASE_URL: ${{ env.APPREAD_API_BASE_URL }}
+          APPREAD_READER_GATEWAY_BASE_URL: ${{ env.APPREAD_READER_GATEWAY_BASE_URL }}
+          APPREAD_APP_NAME: ${{ env.APPREAD_APP_NAME }}
+          ARTIFACT_NAME: ${{ env.ARTIFACT_NAME }}
           FULL_VERSION: ${{ inputs.full_version }}
-          BUILD_NAME: ${{ inputs.build_name }}
-          BUILD_NUMBER: ${{ inputs.build_number }}
-          BUILD_SEQUENCE: ${{ inputs.build_sequence }}
+          BUILD_NAME: ""
+          BUILD_NUMBER: ""
+          BUILD_SEQUENCE: ""
           AUTO_BUILD_NUMBER: "1"
           BUILD_TIMEZONE: Asia/Shanghai
           OUTPUT_ROOT: build/unified_artifacts
@@ -274,7 +268,106 @@ jobs:
         if: steps.platforms.outputs.should_build == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ inputs.artifact_name }}-${{ matrix.id }}-${{ github.run_number }}
+          name: ${{ env.ARTIFACT_NAME }}-${{ matrix.id }}-${{ github.run_number }}
           path: build/unified_artifacts/**
           if-no-files-found: error
           retention-days: 14
+
+  publish-release:
+    name: Publish public release
+    needs: build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    if: ${{ success() && inputs.build_mode == 'release' }}
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: downloaded-artifacts
+          merge-multiple: true
+
+      - name: Prepare release files
+        shell: bash
+        env:
+          FULL_VERSION: ${{ inputs.full_version }}
+          ARTIFACT_NAME: ${{ env.ARTIFACT_NAME }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-files
+          find downloaded-artifacts -type f \
+            \( \
+              -name "*.apk" -o \
+              -name "*.aab" -o \
+              -name "*.ipa" -o \
+              -name "*.dmg" -o \
+              -name "*.zip" -o \
+              -name "*.tar.gz" -o \
+              -name "manifest.txt" \
+            \) -print0 | while IFS= read -r -d '' file; do
+              base="$(basename "${file}")"
+              if [[ "${base}" == "manifest.txt" ]]; then
+                parent="$(basename "$(dirname "${file}")")"
+                cp "${file}" "release-files/${parent}-manifest.txt"
+              else
+                cp "${file}" "release-files/${base}"
+              fi
+            done
+
+          if ! find release-files -type f | grep -q .; then
+            echo "::error::No release files found in downloaded artifacts."
+            find downloaded-artifacts -type f | sort
+            exit 1
+          fi
+
+          {
+            echo "# ${ARTIFACT_NAME} ${FULL_VERSION}"
+            echo
+            echo "本次构建产物由 GitHub Actions 自动发布。"
+            echo
+            echo "版本：${FULL_VERSION}"
+            echo
+            echo "## 文件"
+            find release-files -maxdepth 1 -type f -print | sort | sed 's#release-files/#- #'
+          } > release-notes.md
+
+          echo "Prepared release files:"
+          find release-files -maxdepth 1 -type f -print | sort
+
+      - name: Publish to public release repository
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_REPO_TOKEN }}
+          FULL_VERSION: ${{ inputs.full_version }}
+          ARTIFACT_NAME: ${{ env.ARTIFACT_NAME }}
+          RELEASE_REPOSITORY: ${{ env.RELEASE_REPOSITORY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${GH_TOKEN}" ]]; then
+            echo "::error::Missing RELEASE_REPO_TOKEN secret. Create a token with Contents read/write permission for ${RELEASE_REPOSITORY}."
+            exit 1
+          fi
+
+          release_tag="v${FULL_VERSION/+/-}"
+          release_title="${ARTIFACT_NAME} ${FULL_VERSION}"
+
+          gh release delete "${release_tag}" \
+            --repo "${RELEASE_REPOSITORY}" \
+            --yes \
+            --cleanup-tag >/dev/null 2>&1 || true
+
+          gh release create "${release_tag}" release-files/* \
+            --repo "${RELEASE_REPOSITORY}" \
+            --title "${release_title}" \
+            --notes-file release-notes.md
+
+          {
+            echo "## Public release"
+            echo
+            echo "Repository: https://github.com/${RELEASE_REPOSITORY}"
+            echo
+            echo "Release: https://github.com/${RELEASE_REPOSITORY}/releases/tag/${release_tag}"
+            echo
+            echo "## Download links"
+            gh api "repos/${RELEASE_REPOSITORY}/releases/tags/${release_tag}" \
+              --jq '.assets[] | "- [\(.name)](\(.browser_download_url))"'
+          } >> "${GITHUB_STEP_SUMMARY}"

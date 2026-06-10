@@ -106,9 +106,9 @@ host_os() {
 
 default_platforms_for_host() {
   case "$(host_os)" in
-    darwin) echo "android ios macos web" ;;
-    linux) echo "android linux web" ;;
-    windows) echo "android windows web" ;;
+    darwin) echo "android ios macos" ;;
+    linux) echo "android linux" ;;
+    windows) echo "android windows" ;;
     *) echo "android" ;;
   esac
 }

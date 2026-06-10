@@ -29,9 +29,11 @@ flutter run
 交互式终端下，脚本会在打包前提示确认本次版本号，并通过 `--build-name / --build-number` 覆盖 Flutter 默认版本，无需每次手改 `pubspec.yaml`。
 
 默认（`auto`）会根据当前主机自动选择可构建平台：
-- macOS: `android ios macos web`
-- Linux: `android linux web`
-- Windows: `android windows web`
+- macOS: `android ios macos`
+- Linux: `android linux`
+- Windows: `android windows`
+
+常规用户发版默认不打包 Web。Web 产物不是用户可直接安装的客户端，还需要单独部署到 Web 服务器；只有需要做 Web 预览或独立部署时，才显式填写 `web` 或使用 `all`。
 
 ```bash
 # 默认：auto + release
@@ -66,13 +68,20 @@ BUILD_NAME=1.1.0 BUILD_NUMBER=26041801 \
 同目录下会生成 `manifest.txt`，方便查看每个平台对应的文件名。
 
 GitHub Actions 也提供了手动打包入口：`Actions -> Multiplatform Build -> Run workflow`。
-默认 `platforms=native` 会并行打 Android / Linux、iOS / macOS、Windows，并上传为 Actions artifacts；如需 Web 产物可改成 `platforms=all`，或手动填写 `android,ios,macos,linux,windows,web`。
-Actions 打包不会弹出版本号确认。发布时优先填写 `full_version`，例如 `1.1.0+26041801`；如果不填，则使用 `build_name` / `build_number`，再不填就读取 `pubspec.yaml` 里的版本。
-默认会自动生成 `build_number=YYMMDDNN`，例如 `26060901`。通常只需要填 `build_name=1.2.0`；如果同一天要打第二包，把 `build_sequence` 填成 `2` 即可得到 `26060902`。手动填写 `full_version` 或 `build_number` 时会覆盖自动构建号。
+默认 `platforms=native` 会并行打 Android / Linux、iOS / macOS、Windows，并上传为 Actions artifacts；常规发版不包含 Web。如需 Web 产物可改成 `platforms=all`，或手动填写 `android,ios,macos,linux,windows,web`。
+Actions 打包不会弹出版本号确认。常规发版必须填写 `full_version`，例如 `1.2.0+26061001`。
+`full_version` 是全平台统一版本源，格式为 `展示版本+构建号`：
+- `1.2.0`：用户看到的版本号，对应 Android `versionName`、iOS/macOS `CFBundleShortVersionString`、桌面端展示版本。
+- `26061001`：系统判断升级/覆盖安装的构建号，对应 Android `versionCode`、iOS/macOS `CFBundleVersion`，必须随发版递增。
+
+这两个部分必须一起填，不能只填 `1.2.0`。如果后面的构建号没有递增，Android/iOS/macOS 等平台可能无法覆盖安装或判断新版本。
+线上固定配置已写入 workflow，不需要在运行时填写：`artifact_name=Selune`、`APPREAD_API_BASE_URL=https://www.sxyd.lltask.top/api`、`APPREAD_READER_GATEWAY_BASE_URL=https://rust.lltask.top/api`、`APPREAD_APP_NAME=selune`。
+构建成功后，workflow 会把产物发布到公开发布仓库 `zhangyuanlonga/readbook-releases` 的 Releases，并在 Actions Summary 输出每个平台的下载链接。公开仓库只放安装包和发布说明，不放源码。
 如果要在 GitHub 上打 Android release 包，需要先配置仓库 Secrets：
 
 - `ANDROID_KEY_PROPERTIES`：内容格式参考 `android/key.properties.example`
 - `ANDROID_KEYSTORE_BASE64`：`android/app/appread-release.jks` 的 base64 内容
+- `RELEASE_REPO_TOKEN`：用于把构建产物发布到公开仓库 `zhangyuanlonga/readbook-releases`。建议使用细粒度 Token，只授予该公开仓库 `Contents: Read and write` 权限。
 
 版本规则建议：
 - `BUILD_NAME` / `version_name`：给用户看的展示版本，例如 `1.1.0`
@@ -102,4 +111,19 @@ flutter test
 dart run tool/check_model_codegen_guard.dart
 dart run tool/check_route_string_guard.dart
 dart run tool/run_architecture_green_suite.dart
+```
+
+
+## GitHub Actions：
+
+```bash
+常规发版只改：
+full_version: 1.2.0+26061001
+
+其他保持默认：
+platforms: native
+build_mode: release
+flutter_version: 3.44.1
+android_target: apk
+android_apk_profile: arm64
 ```
