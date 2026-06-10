@@ -144,19 +144,6 @@ class PrivateBookSourcesPage extends ConsumerWidget {
                                     () => unawaited(
                                       _deleteSource(context, ref, item),
                                     ),
-                                onToggle:
-                                    (enabled) => unawaited(
-                                      _runAction(
-                                        context,
-                                        ref,
-                                        () => ref
-                                            .read(
-                                              privateBookSourceServiceProvider,
-                                            )
-                                            .setEnabled(item.id, enabled),
-                                        enabled ? '已启用书源' : '已停用书源',
-                                      ),
-                                    ),
                                 onTest:
                                     () => unawaited(
                                       _testSource(context, ref, item),
@@ -201,12 +188,6 @@ class PrivateBookSourcesPage extends ConsumerWidget {
       subtitle: '私人书源与共享审核',
       actions: <AdaptiveOverflowToolbarItem>[
         AdaptiveOverflowToolbarItem(
-          icon: Icons.refresh_rounded,
-          label: '刷新',
-          priority: 8,
-          onPressed: () => _refresh(ref),
-        ),
-        AdaptiveOverflowToolbarItem(
           icon: Icons.folder_copy_outlined,
           label: '分组',
           priority: 9,
@@ -229,11 +210,6 @@ class PrivateBookSourcesPage extends ConsumerWidget {
           tooltip: '新增书源',
           onPressed: () => unawaited(_openForm(context, ref)),
           icon: const Icon(Icons.add_rounded),
-        ),
-        IconButton(
-          tooltip: '刷新',
-          onPressed: () => _refresh(ref),
-          icon: const Icon(Icons.refresh_rounded),
         ),
       ],
     );
@@ -273,14 +249,16 @@ class PrivateBookSourcesPage extends ConsumerWidget {
         return;
       }
     }
-    final changed = await showAdaptiveActionSurface<bool>(
+    final saved = await showAdaptiveActionSurface<PrivateBookSourceItem?>(
       context: context,
       maxWidth: 680,
       maxHeightFactor: 0.9,
       padding: EdgeInsets.zero,
       builder: (context) => _PrivateSourceForm(item: formItem),
     );
-    if (changed == true) {
+    if (saved != null) {
+      ref.read(_privateBookSourceSearchKeywordProvider.notifier).state = '';
+      ref.read(selectedPrivateBookSourceGroupProvider.notifier).state = null;
       _refresh(ref);
     }
   }
@@ -413,31 +391,6 @@ class PrivateBookSourcesPage extends ConsumerWidget {
           content: Text('书源检测已记录：${_testLabel(result.item.lastTestStatus)}'),
         ),
       );
-    } catch (error) {
-      if (!context.mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(_messageOf(error))));
-    }
-  }
-
-  static Future<void> _runAction(
-    BuildContext context,
-    WidgetRef ref,
-    Future<PrivateBookSourceItem> Function() action,
-    String success,
-  ) async {
-    try {
-      await action();
-      if (!context.mounted) {
-        return;
-      }
-      _refresh(ref);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(success)));
     } catch (error) {
       if (!context.mounted) {
         return;
@@ -680,7 +633,8 @@ class _QuotaCard extends StatelessWidget {
           child: Align(
             alignment: Alignment.centerRight,
             child: _QuotaPill(
-              label: '检测 ${_remainingText(quota.dailyTestRemaining)}',
+              label:
+                  '检测 ${quota.dailyTestUsed}/${_limitText(quota.dailyTestLimit)}',
               foregroundColor: theme.colorScheme.primary,
             ),
           ),
@@ -750,22 +704,15 @@ class _PrivateSourceToolbar extends StatelessWidget {
       onSelected: onGroupSelected,
       onRetry: onRetry,
     );
-    if (metrics.isCompactWindow) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          const _PrivateSourceSearchField(),
-          SizedBox(height: metrics.contentGap),
-          Align(alignment: Alignment.centerRight, child: groupButton),
-        ],
-      );
-    }
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: <Widget>[
         const Expanded(child: _PrivateSourceSearchField()),
-        const SizedBox(width: 12),
-        groupButton,
+        SizedBox(width: metrics.isCompactWindow ? 8 : 12),
+        SizedBox(
+          width: metrics.isCompactWindow ? 112 : 180,
+          child: groupButton,
+        ),
       ],
     );
   }
@@ -912,45 +859,45 @@ class _GroupMenuPill extends StatelessWidget {
     return Material(
       color:
           selected
-              ? colorScheme.primaryContainer.withValues(alpha: 0.42)
-              : colorScheme.surfaceContainerLow.withValues(alpha: 0.9),
-      borderRadius: BorderRadius.circular(999),
+              ? colorScheme.primaryContainer.withValues(alpha: 0.34)
+              : colorScheme.surfaceContainerLowest.withValues(alpha: 0.92),
+      borderRadius: BorderRadius.circular(14),
       child: InkWell(
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(14),
         onTap: loading ? null : onTap,
         child: Container(
           height: 40,
           constraints: const BoxConstraints(maxWidth: 180),
-          padding: const EdgeInsets.symmetric(horizontal: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 10),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color:
                   error
                       ? colorScheme.error.withValues(alpha: 0.5)
-                      : colorScheme.outlineVariant.withValues(alpha: 0.42),
+                      : colorScheme.outlineVariant.withValues(alpha: 0.28),
             ),
           ),
           child: Row(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
-              if (loading)
+              if (loading) ...<Widget>[
                 const SizedBox(
                   width: 16,
                   height: 16,
                   child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              else
-                Icon(Icons.folder_copy_outlined, size: 18, color: foreground),
-              const SizedBox(width: 7),
+                ),
+                const SizedBox(width: 7),
+              ],
               Flexible(
                 child: Text(
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelLarge?.copyWith(
+                  style: theme.textTheme.bodySmall?.copyWith(
                     color: foreground,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
+                    height: 1.15,
                   ),
                 ),
               ),
@@ -1087,7 +1034,6 @@ class _PrivateSourceGroupManagerSheetState
     extends ConsumerState<_PrivateSourceGroupManagerSheet> {
   late final TextEditingController _nameController;
   bool _saving = false;
-  bool _changed = false;
 
   @override
   void initState() {
@@ -1106,6 +1052,7 @@ class _PrivateSourceGroupManagerSheetState
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
     final groupsAsync = ref.watch(privateBookSourceGroupsProvider);
     final metrics = AppAdaptiveMetrics.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
     final maxHeight = MediaQuery.sizeOf(context).height * 0.78;
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -1119,43 +1066,62 @@ class _PrivateSourceGroupManagerSheetState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: Text(
-                    '私人分组',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerLowest.withValues(
+                  alpha: 0.94,
                 ),
-                IconButton(
-                  tooltip: '关闭',
-                  onPressed:
-                      () => Navigator.of(context).pop(_changed ? true : null),
-                  icon: const Icon(Icons.close_rounded),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: colorScheme.outlineVariant.withValues(alpha: 0.28),
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: TextField(
-                    controller: _nameController,
-                    enabled: !_saving,
-                    decoration: const InputDecoration(
-                      labelText: '新增分组',
-                      hintText: '例如：常用、漫画、备用',
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
+                child: Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: TextField(
+                        controller: _nameController,
+                        enabled: !_saving,
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodyMedium?.copyWith(height: 1.15),
+                        decoration: const InputDecoration(
+                          isDense: true,
+                          border: InputBorder.none,
+                          hintText: '新增分组，例如：常用、漫画、备用',
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 2,
+                            vertical: 9,
+                          ),
+                        ),
+                        onSubmitted: (_) => unawaited(_createGroup()),
+                      ),
                     ),
-                    onSubmitted: (_) => unawaited(_createGroup()),
-                  ),
+                    const SizedBox(width: 8),
+                    FilledButton.icon(
+                      onPressed:
+                          _saving ? null : () => unawaited(_createGroup()),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: colorScheme.primary,
+                        foregroundColor: colorScheme.onPrimary,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 13,
+                          vertical: 10,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        textStyle: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(fontWeight: FontWeight.w800),
+                      ),
+                      icon: const Icon(Icons.add_rounded, size: 18),
+                      label: Text(_saving ? '保存中' : '新增'),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 10),
-                FilledButton.icon(
-                  onPressed: _saving ? null : () => unawaited(_createGroup()),
-                  icon: const Icon(Icons.add_rounded),
-                  label: Text(_saving ? '保存中' : '新增'),
-                ),
-              ],
+              ),
             ),
             const SizedBox(height: 14),
             Expanded(
@@ -1308,7 +1274,6 @@ class _PrivateSourceGroupManagerSheetState
   }
 
   void _markChanged() {
-    _changed = true;
     ref.invalidate(privateBookSourceGroupsProvider);
     ref.invalidate(privateBookSourcesProvider);
   }
@@ -1328,7 +1293,6 @@ class _PrivateSourceTile extends StatelessWidget {
     required this.item,
     required this.onEdit,
     required this.onDelete,
-    required this.onToggle,
     required this.onTest,
     required this.onSubmit,
   });
@@ -1336,7 +1300,6 @@ class _PrivateSourceTile extends StatelessWidget {
   final PrivateBookSourceItem item;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
-  final ValueChanged<bool> onToggle;
   final VoidCallback onTest;
   final VoidCallback onSubmit;
 
@@ -1351,7 +1314,6 @@ class _PrivateSourceTile extends StatelessWidget {
     final infoLine = [
       _typeLabel(item.supportedTypes),
       _groupLabel(item.groupName),
-      _visibilityLabel(item.visibility),
       _reviewLabel(item.reviewStatus),
       '检测 $testText',
       if (item.description.isNotEmpty) item.description,
@@ -1389,11 +1351,6 @@ class _PrivateSourceTile extends StatelessWidget {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        _EnabledStatusPill(
-                          enabled: item.enabled,
-                          onTap: () => onToggle(!item.enabled),
-                        ),
                       ],
                     ),
                     const SizedBox(height: 5),
@@ -1418,41 +1375,6 @@ class _PrivateSourceTile extends StatelessWidget {
                 onDelete: onDelete,
               ),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _EnabledStatusPill extends StatelessWidget {
-  const _EnabledStatusPill({required this.enabled, required this.onTap});
-
-  final bool enabled;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final color = enabled ? colorScheme.primary : colorScheme.onSurfaceVariant;
-    return Material(
-      color:
-          enabled
-              ? colorScheme.primaryContainer.withValues(alpha: 0.5)
-              : colorScheme.surfaceContainerHighest.withValues(alpha: 0.74),
-      borderRadius: BorderRadius.circular(999),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(999),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          child: Text(
-            enabled ? '启用' : '停用',
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w800,
-            ),
           ),
         ),
       ),
@@ -1770,6 +1692,10 @@ class _SourceCheckReportSheet extends StatelessWidget {
     final colorScheme = theme.colorScheme;
     final metrics = AppAdaptiveMetrics.of(context);
     final summary = report.summary;
+    final title = summary.valid ? '检测通过' : '检测失败';
+    final summaryMessage = summary.message.trim();
+    final showSummaryMessage =
+        summaryMessage.isNotEmpty && summaryMessage != title;
     return Padding(
       padding: EdgeInsets.fromLTRB(
         metrics.pagePadding,
@@ -1795,17 +1721,7 @@ class _SourceCheckReportSheet extends StatelessWidget {
                       summary.valid ? colorScheme.primary : colorScheme.error,
                 ),
                 const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    summary.valid ? '检测通过' : '检测失败',
-                    style: theme.textTheme.titleLarge,
-                  ),
-                ),
-                IconButton(
-                  tooltip: '关闭',
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.close_rounded),
-                ),
+                Expanded(child: Text(title, style: theme.textTheme.titleLarge)),
               ],
             ),
             const SizedBox(height: 8),
@@ -1820,9 +1736,9 @@ class _SourceCheckReportSheet extends StatelessWidget {
                 color: colorScheme.onSurfaceVariant,
               ),
             ),
-            if (summary.message.isNotEmpty) ...<Widget>[
+            if (showSummaryMessage) ...<Widget>[
               const SizedBox(height: 10),
-              Text(summary.message, style: theme.textTheme.bodyMedium),
+              Text(summaryMessage, style: theme.textTheme.bodyMedium),
             ],
             const SizedBox(height: 14),
             Expanded(
@@ -1890,16 +1806,6 @@ class _SourceCheckLogRow extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        SizedBox(
-          width: 76,
-          child: Text(
-            '[${_formatLogTime(entry.timeMs)}]',
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
-          ),
-        ),
         Text(
           entry.direction == 'in' ? '<-' : '->',
           style: theme.textTheme.bodySmall?.copyWith(color: color),
@@ -1916,22 +1822,199 @@ class _SourceCheckLogRow extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              for (final detail in entry.details)
-                Padding(
-                  padding: const EdgeInsets.only(top: 3),
-                  child: Text(
-                    detail,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
+              if (entry.details.isNotEmpty)
+                _SourceCheckLogDetails(details: entry.details),
             ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          '[${_formatLogTime(entry.timeMs)}]',
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: colorScheme.onSurfaceVariant,
           ),
         ),
       ],
     );
   }
+}
+
+class _SourceCheckLogDetails extends StatelessWidget {
+  const _SourceCheckLogDetails({required this.details});
+
+  final List<String> details;
+
+  @override
+  Widget build(BuildContext context) {
+    final children = <Widget>[];
+    final pendingCompact = <_SourceCheckDetail>[];
+    void flushCompact() {
+      if (pendingCompact.isEmpty) {
+        return;
+      }
+      children.add(_SourceCheckCompactDetails(items: List.of(pendingCompact)));
+      pendingCompact.clear();
+    }
+
+    for (final raw in details) {
+      final detail = _SourceCheckDetail.parse(raw);
+      if (detail.isCompact) {
+        pendingCompact.add(detail);
+      } else {
+        flushCompact();
+        children.add(_SourceCheckLongDetail(detail: detail));
+      }
+    }
+    flushCompact();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 5),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: children
+            .expand((child) => <Widget>[child, const SizedBox(height: 5)])
+            .take(children.length * 2 - 1)
+            .toList(growable: false),
+      ),
+    );
+  }
+}
+
+class _SourceCheckCompactDetails extends StatelessWidget {
+  const _SourceCheckCompactDetails({required this.items});
+
+  final List<_SourceCheckDetail> items;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final gap = constraints.maxWidth >= 280 ? 14.0 : 8.0;
+        final itemWidth = (constraints.maxWidth - gap) / 2;
+        return Wrap(
+          spacing: gap,
+          runSpacing: 4,
+          children: <Widget>[
+            for (final item in items)
+              SizedBox(
+                width: itemWidth,
+                child: _SourceCheckInfoText(item: item, maxLines: 1),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _SourceCheckLongDetail extends StatelessWidget {
+  const _SourceCheckLongDetail({required this.detail});
+
+  final _SourceCheckDetail detail;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SourceCheckInfoText(item: detail, maxLines: 4);
+  }
+}
+
+class _SourceCheckInfoText extends StatelessWidget {
+  const _SourceCheckInfoText({required this.item, required this.maxLines});
+
+  final _SourceCheckDetail item;
+  final int maxLines;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final labelStyle = theme.textTheme.labelSmall?.copyWith(
+      color: colorScheme.onSurfaceVariant,
+    );
+    final valueStyle = theme.textTheme.labelSmall?.copyWith(
+      color: colorScheme.onSurfaceVariant,
+      fontWeight: FontWeight.w600,
+    );
+    if (item.label.isEmpty) {
+      return Text(
+        item.value,
+        maxLines: maxLines,
+        overflow: TextOverflow.ellipsis,
+        style: labelStyle,
+      );
+    }
+    return RichText(
+      maxLines: maxLines,
+      overflow: TextOverflow.ellipsis,
+      text: TextSpan(
+        style: labelStyle,
+        children: <InlineSpan>[
+          TextSpan(text: '${item.label}：'),
+          TextSpan(text: item.value, style: valueStyle),
+        ],
+      ),
+    );
+  }
+}
+
+class _SourceCheckDetail {
+  const _SourceCheckDetail({
+    required this.label,
+    required this.value,
+    required this.isCompact,
+  });
+
+  final String label;
+  final String value;
+  final bool isCompact;
+
+  factory _SourceCheckDetail.parse(String raw) {
+    final text = raw.trim();
+    final separator = _firstDetailSeparator(text);
+    if (separator <= 0) {
+      return _SourceCheckDetail(
+        label: '',
+        value: text,
+        isCompact: _isCompactDetail('', text),
+      );
+    }
+    final label = text.substring(0, separator).trim();
+    final value = text.substring(separator + 1).trim();
+    return _SourceCheckDetail(
+      label: label,
+      value: value,
+      isCompact: _isCompactDetail(label, value),
+    );
+  }
+}
+
+int _firstDetailSeparator(String value) {
+  final chinese = value.indexOf('：');
+  final ascii = value.indexOf(':');
+  if (chinese < 0) {
+    return ascii;
+  }
+  if (ascii < 0) {
+    return chinese;
+  }
+  return chinese < ascii ? chinese : ascii;
+}
+
+bool _isCompactDetail(String label, String value) {
+  final lowerValue = value.toLowerCase();
+  final lowerLabel = label.toLowerCase();
+  if (value.contains('\n') ||
+      lowerValue.contains('http://') ||
+      lowerValue.contains('https://') ||
+      lowerValue.startsWith('{') ||
+      lowerValue.startsWith('[') ||
+      lowerLabel.contains('url') ||
+      label.contains('地址') ||
+      label.contains('请求体') ||
+      lowerLabel == 'body') {
+    return false;
+  }
+  return value.runes.length <= 18;
 }
 
 class _PrivateSourceForm extends ConsumerStatefulWidget {
@@ -2083,7 +2166,7 @@ class _PrivateSourceFormState extends ConsumerState<_PrivateSourceForm> {
                       onPressed:
                           _saving
                               ? null
-                              : () => Navigator.of(context).pop(false),
+                              : () => Navigator.of(context).pop(null),
                       child: const Text('取消'),
                     ),
                     const SizedBox(width: 8),
@@ -2116,17 +2199,18 @@ class _PrivateSourceFormState extends ConsumerState<_PrivateSourceForm> {
       groupName: _groupController.text.trim(),
     );
     try {
+      late final PrivateBookSourceItem saved;
       if (_isEditing) {
-        await ref
+        saved = await ref
             .read(privateBookSourceServiceProvider)
             .update(widget.item!.id, input);
       } else {
-        await ref.read(privateBookSourceServiceProvider).create(input);
+        saved = await ref.read(privateBookSourceServiceProvider).create(input);
       }
       if (!mounted) {
         return;
       }
-      Navigator.of(context).pop(true);
+      Navigator.of(context).pop(saved);
     } catch (error) {
       if (!mounted) {
         return;
@@ -2498,8 +2582,6 @@ class _ErrorCard extends StatelessWidget {
 
 String _limitText(int value) => value < 0 ? '不限' : '$value';
 
-String _remainingText(int value) => value < 0 ? '不限' : '剩 $value';
-
 String _typeLabel(List<String> types) {
   if (types.isEmpty) {
     return '小说';
@@ -2524,15 +2606,6 @@ String _groupLabel(String value) {
 
 bool _isDefaultGroup(PrivateBookSourceGroup group) {
   return group.displayName == '未分组';
-}
-
-String _visibilityLabel(String value) {
-  return switch (value) {
-    'private' => '私人',
-    'submitted' => '审核中',
-    'shared' => '共享',
-    _ => value.isEmpty ? '私人' : value,
-  };
 }
 
 String _reviewLabel(String value) {
@@ -2605,13 +2678,11 @@ List<PrivateBookSourceItem> _filterPrivateSources(
               item.name,
               item.description,
               item.groupName,
-              item.visibility,
               item.reviewStatus,
               item.lastTestStatus,
               item.lastTestMessage,
               _typeLabel(item.supportedTypes),
               _groupLabel(item.groupName),
-              _visibilityLabel(item.visibility),
               _reviewLabel(item.reviewStatus),
               _testLabel(item.lastTestStatus),
             ].join(' ').toLowerCase();
