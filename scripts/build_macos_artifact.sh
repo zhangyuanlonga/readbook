@@ -151,6 +151,10 @@ elif [[ "${BUILD_MODE}" == "profile" ]]; then
   MODE_DIR="Profile"
 fi
 
+if [[ "${OUTPUT_DIR}" != /* ]]; then
+  OUTPUT_DIR="${PROJECT_ROOT}/${OUTPUT_DIR}"
+fi
+
 echo "==> Project root: ${PROJECT_ROOT}"
 echo "==> Flutter cmd : ${FLUTTER_CMD}"
 echo "==> Build mode  : ${BUILD_MODE}"

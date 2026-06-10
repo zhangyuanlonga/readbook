@@ -79,6 +79,10 @@ fi
 
 validate_version_overrides
 
+if [[ "${OUTPUT_DIR}" != /* ]]; then
+  OUTPUT_DIR="${PROJECT_ROOT}/${OUTPUT_DIR}"
+fi
+
 echo "==> Project root: ${PROJECT_ROOT}"
 echo "==> Flutter cmd: ${FLUTTER_CMD}"
 echo "==> Build mode : ${BUILD_MODE}"
