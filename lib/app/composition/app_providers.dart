@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/auth_event_bus.dart';
+import '../../core/auth/session_change_listener.dart';
 import '../../core/auth/auth_token_refresher_impl.dart';
 import '../../core/cache/cover_image_disk_cache.dart';
 import '../../core/logging/app_logger.dart';
@@ -21,7 +22,10 @@ import '../../features/auth/providers.dart' as auth_providers;
 import '../../features/source/application/external_source_import_bridge.dart';
 import '../../features/source/application/source_health_service.dart';
 import '../../features/book/application/book_presentation_query_service.dart';
+import '../../features/mine/application/private_book_source_session_listener.dart';
 import '../../features/mine/providers.dart' as mine_providers;
+import '../../features/reader/application/reader_session_listener.dart';
+import '../../features/search/application/search_history_session_listener.dart';
 import '../../features/source/application/remote_content_task_scheduler_service.dart';
 import '../../features/source/application/remote_content_task_conflict_service.dart';
 import '../lifecycle/auth_account_lifecycle_coordinator.dart';
@@ -158,6 +162,11 @@ final appLifecycleCoordinatorFactoryProvider =
         initializeExternalImportBridge:
             ref.watch(appExternalImportBridgeProvider).initialize,
         authTokenRefresher: authTokenRefresher,
+        sessionChangeListeners: <SessionChangeListener>[
+          SearchHistorySessionListener(),
+          ReaderSessionListener(),
+          const PrivateBookSourceSessionListener(),
+        ],
       );
     });
 

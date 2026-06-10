@@ -194,6 +194,96 @@ void main() {
       await server.close(force: true);
     });
 
+    test('scopes authenticated cache by user id', () async {
+      var count = 0;
+      var userId = 'user-a';
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        count += 1;
+        request.response.statusCode = 200;
+        request.response.write(
+          jsonEncode({
+            'code': 'OK',
+            'message': 'success',
+            'data': {'count': count},
+          }),
+        );
+        await request.response.close();
+      });
+
+      final client = ApiClient(cacheUserIdResolver: () async => userId);
+      final path = 'http://${server.address.host}:${server.port}/cache';
+      final first = await client.request<Map<String, dynamic>>(
+        method: ApiMethod.get,
+        path: path,
+        attachAccessToken: true,
+        cachePolicy: ApiCachePolicy.shortCache,
+        decoder:
+            (data) =>
+                (data as Map).map((key, value) => MapEntry('$key', value)),
+      );
+      final second = await client.request<Map<String, dynamic>>(
+        method: ApiMethod.get,
+        path: path,
+        attachAccessToken: true,
+        cachePolicy: ApiCachePolicy.shortCache,
+        decoder:
+            (data) =>
+                (data as Map).map((key, value) => MapEntry('$key', value)),
+      );
+      userId = 'user-b';
+      final third = await client.request<Map<String, dynamic>>(
+        method: ApiMethod.get,
+        path: path,
+        attachAccessToken: true,
+        cachePolicy: ApiCachePolicy.shortCache,
+        decoder:
+            (data) =>
+                (data as Map).map((key, value) => MapEntry('$key', value)),
+      );
+
+      expect(first['count'], 1);
+      expect(second['count'], 1);
+      expect(third['count'], 2);
+      expect(count, 2);
+      await server.close(force: true);
+    });
+
+    test(
+      'does not attach authorization when token resolver returns null',
+      () async {
+        final refresher = _NullAuthTokenRefresher();
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        server.listen((request) async {
+          expect(
+            request.headers.value(HttpHeaders.authorizationHeader),
+            isNull,
+          );
+          request.response.statusCode = 200;
+          request.response.write(
+            jsonEncode({
+              'code': 'OK',
+              'message': 'success',
+              'data': <String, Object?>{},
+            }),
+          );
+          await request.response.close();
+        });
+
+        final client = ApiClient(authTokenRefresher: refresher);
+        await client.request<Map<String, dynamic>>(
+          method: ApiMethod.get,
+          path: 'http://${server.address.host}:${server.port}/no-token',
+          attachAccessToken: true,
+          decoder:
+              (data) =>
+                  (data as Map).map((key, value) => MapEntry('$key', value)),
+        );
+
+        await server.close(force: true);
+      },
+    );
+
     test('uses default token refresher lazily for 401 retry', () async {
       ApiClient.defaultAuthTokenRefresher = null;
       final client = ApiClient();
@@ -246,6 +336,14 @@ void main() {
       ApiClient.defaultAuthTokenRefresher = null;
     });
   });
+}
+
+class _NullAuthTokenRefresher implements AuthTokenRefresher {
+  @override
+  Future<String?> getAccessToken() async => null;
+
+  @override
+  Future<bool> refreshToken() async => false;
 }
 
 class _FakeAuthTokenRefresher implements AuthTokenRefresher {

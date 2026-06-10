@@ -4,7 +4,10 @@ import 'package:flutter/widgets.dart';
 
 import '../../core/analytics/analytics_service.dart';
 import '../../core/auth/auth_event_bus.dart';
+import '../../core/auth/auth_event_session_change_dispatcher.dart';
+import '../../core/auth/auth_session_store.dart';
 import '../../core/auth/auth_token_refresher_impl.dart';
+import '../../core/auth/session_change_listener.dart';
 import '../../core/device/device_heartbeat_service.dart';
 import '../../core/network/api_client.dart';
 import '../../core/network/auth_token_refresher.dart';
@@ -20,6 +23,8 @@ class AppLifecycleCoordinator {
     Stream<AuthEvent>? authEventStream,
     Future<void> Function()? initializeExternalImportBridge,
     AuthTokenRefresher? authTokenRefresher,
+    Iterable<SessionChangeListener> sessionChangeListeners =
+        const <SessionChangeListener>[],
     DeviceHeartbeatService? deviceHeartbeatService,
     AnalyticsService? analyticsService,
     Future<void> Function()? sendHeartbeat,
@@ -33,6 +38,9 @@ class AppLifecycleCoordinator {
            initializeExternalImportBridge ??
            ExternalImportBridge.instance.initialize,
        _authTokenRefresher = authTokenRefresher,
+       _sessionChangeDispatcher = AuthEventSessionChangeDispatcher(
+         listeners: sessionChangeListeners,
+       ),
        _deviceHeartbeatService = deviceHeartbeatService,
        _analyticsService = analyticsService,
        _sendHeartbeat = sendHeartbeat,
@@ -47,6 +55,7 @@ class AppLifecycleCoordinator {
   final Stream<AuthEvent> _authEventStream;
   final Future<void> Function() _initializeExternalImportBridge;
   final AuthTokenRefresher? _authTokenRefresher;
+  final AuthEventSessionChangeDispatcher _sessionChangeDispatcher;
   final DeviceHeartbeatService? _deviceHeartbeatService;
   final AnalyticsService? _analyticsService;
   final Future<void> Function()? _sendHeartbeat;
@@ -73,10 +82,14 @@ class AppLifecycleCoordinator {
     _initialized = true;
     ApiClient.defaultAuthTokenRefresher ??=
         _authTokenRefresher ?? AuthTokenRefresherImpl();
+    ApiClient.defaultCacheUserIdResolver ??= AuthSessionStore().getUserId;
     _incomingImportSub = _incomingExternalImportStream.listen(
       onIncomingExternalImportPayload,
     );
-    _authEventSub = _authEventStream.listen(onAuthEvent);
+    _authEventSub = _authEventStream.listen((event) {
+      unawaited(_sessionChangeDispatcher.handle(event));
+      onAuthEvent(event);
+    });
     await _initializeExternalImportBridge();
   }
 

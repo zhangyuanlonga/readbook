@@ -10,9 +10,9 @@ import '../membership/membership_service.dart';
 import '../network/api_client.dart';
 import '../network/api_config.dart';
 import '../source_access/source_access_service.dart';
-import 'auth_event_bus.dart';
 import 'auth_session.dart';
 import 'auth_session_store.dart';
+import 'user_session_manager.dart';
 
 class AuthService {
   AuthService({
@@ -23,6 +23,7 @@ class AuthService {
     MembershipService? membershipService,
     SourceAccessService? sourceAccessService,
     AuthSessionStore? sessionStore,
+    UserSessionManager? sessionManager,
   }) : _baseUrl = (baseUrl ?? AppApiConfig.baseUrl).trim(),
        _client =
            client ??
@@ -43,7 +44,10 @@ class AuthService {
            SourceAccessService(
              baseUrl: (baseUrl ?? AppApiConfig.baseUrl).trim(),
            ),
-       _sessionStore = sessionStore ?? AuthSessionStore();
+       _sessionStore = sessionStore ?? AuthSessionStore(),
+       _sessionManager =
+           sessionManager ??
+           UserSessionManager(sessionStore: sessionStore ?? AuthSessionStore());
 
   final ApiClient _client;
   final String _baseUrl;
@@ -52,6 +56,7 @@ class AuthService {
   final MembershipService _membershipService;
   final SourceAccessService _sourceAccessService;
   final AuthSessionStore _sessionStore;
+  final UserSessionManager _sessionManager;
   final AppLogger _logger = AppLogger.instance;
 
   Future<AuthSession> login({
@@ -184,8 +189,7 @@ class AuthService {
             ? await _sessionStore.getRefreshToken()
             : refreshToken.trim();
     if (resolvedRefreshToken == null || resolvedRefreshToken.isEmpty) {
-      await _sessionStore.clear();
-      AuthEventBus.instance.emitLoggedOut('已退出登录。', previousSession);
+      await _sessionManager.logout(previousSession: previousSession);
       return;
     }
     await _client.request<Map<String, dynamic>>(
@@ -196,14 +200,11 @@ class AuthService {
       enableAuthRefresh: false,
       decoder: _decodeMap,
     );
-    await _sessionStore.clear();
-    AuthEventBus.instance.emitLoggedOut('已退出登录。', previousSession);
+    await _sessionManager.logout(previousSession: previousSession);
   }
 
   Future<void> _persistAuthenticatedSession(AuthSession session) async {
-    final previousSession = await _sessionStore.getSession();
-    await _sessionStore.saveSession(session);
-    AuthEventBus.instance.emitLoggedIn('登录成功。', session, previousSession);
+    await _sessionManager.login(session);
     // 登录 / 注册成功后的 UI 必须先拿到新 session，设备席位、访问统计等后置任务失败不能拖慢或覆盖账号卡片刷新。
     unawaited(_runPostAuthBootstrap());
   }

@@ -5,6 +5,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shuxiang_reading_next/features/search/application/search_history_service.dart';
 
 void main() {
+  const localHistoryKey =
+      '${SearchHistoryService.historyPreferenceKey}.local_user';
+
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
@@ -46,13 +49,8 @@ void main() {
     await service.add('历史');
 
     final prefs = await SharedPreferences.getInstance();
-    expect(
-      prefs.get(SearchHistoryService.historyPreferenceKey),
-      isA<List<String>>(),
-    );
-    expect(prefs.getStringList(SearchHistoryService.historyPreferenceKey), [
-      '历史',
-    ]);
+    expect(prefs.get(localHistoryKey), isA<List<String>>());
+    expect(prefs.getStringList(localHistoryKey), ['历史']);
   });
 
   test('remove and clear keep typed key behavior', () async {
@@ -63,13 +61,22 @@ void main() {
     await service.remove(' A ');
 
     final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getStringList(SearchHistoryService.historyPreferenceKey), [
-      'B',
-    ]);
+    expect(prefs.getStringList(localHistoryKey), ['B']);
 
     await service.clear();
 
-    expect(prefs.containsKey(SearchHistoryService.historyPreferenceKey), false);
+    expect(prefs.containsKey(localHistoryKey), false);
     expect(await service.getAll(), isEmpty);
+  });
+
+  test('isolates history by resolved user id', () async {
+    final userA = SearchHistoryService(userIdResolver: () async => 'user-a');
+    final userB = SearchHistoryService(userIdResolver: () async => 'user-b');
+
+    await userA.add('A');
+    await userB.add('B');
+
+    expect(await userA.getAll(), <String>['A']);
+    expect(await userB.getAll(), <String>['B']);
   });
 }

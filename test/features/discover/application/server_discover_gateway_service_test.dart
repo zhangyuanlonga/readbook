@@ -31,6 +31,7 @@ void main() {
             });
       final service = ServerDiscoverGatewayService(
         client: client,
+        catalogClient: client,
         sourceHealthService: _NoopSourceHealthService(),
       );
 
@@ -38,10 +39,9 @@ void main() {
 
       expect(client.calls, hasLength(1));
       expect(client.calls.single.method, ApiMethod.get);
-      expect(client.calls.single.path, 'v1/sources');
-      expect(client.calls.single.queryParameters['enabled'], isTrue);
+      expect(client.calls.single.path, '/v1/discovery/book-sources');
       expect(client.calls.single.queryParameters['page'], 1);
-      expect(client.calls.single.queryParameters['pageSize'], 100);
+      expect(client.calls.single.queryParameters['page_size'], 100);
       expect(sources, hasLength(1));
       final source = sources.single;
       expect(source.id, 'server-gateway:source_a');
@@ -87,6 +87,7 @@ void main() {
             ]);
       final service = ServerDiscoverGatewayService(
         client: client,
+        catalogClient: client,
         sourceHealthService: _NoopSourceHealthService(),
       );
 
@@ -99,11 +100,11 @@ void main() {
       expect(page.hasMore, isTrue);
       expect(page.items.single.name, '第一页书源');
       expect(client.calls[0].queryParameters['page'], 2);
-      expect(client.calls[0].queryParameters['pageSize'], 100);
+      expect(client.calls[0].queryParameters['page_size'], 100);
       expect(search.items.single.name, '远程命中书源');
       expect(client.calls[1].queryParameters['keyword'], '远程命中');
       expect(client.calls[1].queryParameters['page'], 1);
-      expect(client.calls[1].queryParameters['pageSize'], 100);
+      expect(client.calls[1].queryParameters['page_size'], 100);
     });
 
     test('loads source categories on demand', () async {
@@ -297,6 +298,7 @@ class _FakeDiscoverApiClient extends ApiClient {
     int? maxRetries,
     bool enableRetry = true,
     bool enableCache = false,
+    ApiCachePolicy cachePolicy = ApiCachePolicy.realtime,
     Duration? cacheTtl,
     bool attachAccessToken = false,
     bool enableAuthRefresh = true,

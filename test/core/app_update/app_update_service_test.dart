@@ -69,6 +69,7 @@ class _FakeAppUpdateApiClient extends ApiClient {
     int? maxRetries,
     bool enableRetry = true,
     bool enableCache = false,
+    ApiCachePolicy cachePolicy = ApiCachePolicy.realtime,
     Duration? cacheTtl,
     bool attachAccessToken = false,
     bool enableAuthRefresh = true,

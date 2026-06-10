@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../app/preferences/preference_key.dart';
+import '../../../core/auth/auth_session_store.dart';
 
 /// 搜索历史偏好服务。
 ///
@@ -11,13 +12,17 @@ import '../../../app/preferences/preference_key.dart';
 /// JSON 增加解析分支和 Web / 桌面端类型差异。读取时仍兼容旧版本写入的 JSON 字符串，
 /// 这样升级后 Android、iOS、Web JS、macOS、Windows、Linux 都能保留原历史记录。
 class SearchHistoryService {
-  SearchHistoryService({SharedPreferences? preferences})
-    : _preferencesFuture =
-          preferences == null
-              ? SharedPreferences.getInstance()
-              : Future.value(preferences);
+  SearchHistoryService({
+    SharedPreferences? preferences,
+    Future<String?> Function()? userIdResolver,
+  }) : _preferencesFuture =
+           preferences == null
+               ? SharedPreferences.getInstance()
+               : Future.value(preferences),
+       _userIdResolver = userIdResolver ?? AuthSessionStore().getUserId;
 
   final Future<SharedPreferences> _preferencesFuture;
+  final Future<String?> Function() _userIdResolver;
 
   static const String historyPreferenceKey = 'search.history';
   static const PreferenceKey<List<String>> historyPreference =
@@ -25,11 +30,17 @@ class SearchHistoryService {
         historyPreferenceKey,
         defaultValue: <String>[],
       );
+  static const String localUserId = 'local_user';
   static const int _maxHistoryCount = 15;
 
   Future<List<String>> getAll() async {
     final prefs = await _preferencesFuture;
-    return _readHistory(prefs);
+    final key = await _historyKey();
+    final scoped = _readHistory(prefs, key);
+    if (scoped.isNotEmpty) {
+      return scoped;
+    }
+    return _readHistory(prefs, historyPreference.name);
   }
 
   Future<void> add(String keyword) async {
@@ -54,19 +65,22 @@ class SearchHistoryService {
 
   Future<void> clear() async {
     final prefs = await _preferencesFuture;
-    await prefs.remove(historyPreference.name);
+    await prefs.remove(await _historyKey());
   }
 
   Future<void> _save(List<String> history) async {
     final prefs = await _preferencesFuture;
-    await prefs.setStringList(
-      historyPreference.name,
-      _normalizeHistory(history),
-    );
+    await prefs.setStringList(await _historyKey(), _normalizeHistory(history));
   }
 
-  static List<String> _readHistory(SharedPreferences prefs) {
-    final stored = prefs.get(historyPreference.name);
+  Future<String> _historyKey() async {
+    final userId = (await _userIdResolver())?.trim() ?? '';
+    final scope = userId.isEmpty ? localUserId : userId;
+    return '${historyPreference.name}.$scope';
+  }
+
+  static List<String> _readHistory(SharedPreferences prefs, String key) {
+    final stored = prefs.get(key);
     if (stored is List) {
       return _normalizeHistory(stored.whereType<String>());
     }

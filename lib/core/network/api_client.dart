@@ -13,7 +13,10 @@ import 'interceptors.dart';
 
 enum ApiMethod { get, post, put, delete, patch, head }
 
+enum ApiCachePolicy { realtime, shortCache, longCache }
+
 typedef ApiDataDecoder<T> = T Function(Object? data);
+typedef ApiCacheUserIdResolver = Future<String?> Function();
 
 class ApiResponse<T> {
   const ApiResponse({
@@ -60,6 +63,7 @@ class ApiRequestSpec<T> {
     this.maxRetries,
     this.enableRetry = true,
     this.enableCache = false,
+    this.cachePolicy = ApiCachePolicy.realtime,
     this.cacheTtl,
     this.attachAccessToken = false,
     this.enableAuthRefresh = true,
@@ -76,6 +80,7 @@ class ApiRequestSpec<T> {
     int? maxRetries,
     bool enableRetry = true,
     bool enableCache = false,
+    ApiCachePolicy cachePolicy = ApiCachePolicy.realtime,
     Duration? cacheTtl,
     bool attachAccessToken = false,
     bool enableAuthRefresh = true,
@@ -91,6 +96,7 @@ class ApiRequestSpec<T> {
       maxRetries: maxRetries,
       enableRetry: enableRetry,
       enableCache: enableCache,
+      cachePolicy: cachePolicy,
       cacheTtl: cacheTtl,
       attachAccessToken: attachAccessToken,
       enableAuthRefresh: enableAuthRefresh,
@@ -108,6 +114,7 @@ class ApiRequestSpec<T> {
   final int? maxRetries;
   final bool enableRetry;
   final bool enableCache;
+  final ApiCachePolicy cachePolicy;
   final Duration? cacheTtl;
   final bool attachAccessToken;
   final bool enableAuthRefresh;
@@ -140,6 +147,7 @@ final class ApiJsonDecoders {
 
 class ApiClient {
   static AuthTokenRefresher? defaultAuthTokenRefresher;
+  static ApiCacheUserIdResolver? defaultCacheUserIdResolver;
 
   ApiClient({
     Dio? dio,
@@ -148,22 +156,27 @@ class ApiClient {
     Duration defaultTimeout = const Duration(seconds: 12),
     int defaultMaxRetries = 2,
     Duration defaultCacheTtl = const Duration(minutes: 5),
+    Duration defaultLongCacheTtl = const Duration(hours: 6),
     ApiCacheStore? cacheStore,
     Map<String, String> defaultHeaders = const {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
     },
     AuthTokenRefresher? authTokenRefresher,
+    ApiCacheUserIdResolver? cacheUserIdResolver,
   }) : _dio = dio ?? Dio(),
        _logger = logger ?? AppLogger.instance,
        _baseUrl = baseUrl.trim(),
        _defaultTimeout = defaultTimeout,
        _defaultMaxRetries = defaultMaxRetries,
        _defaultCacheTtl = defaultCacheTtl,
+       _defaultLongCacheTtl = defaultLongCacheTtl,
        _cacheStore = cacheStore ?? ApiCacheStore(),
        _defaultHeaders = Map.unmodifiable({...defaultHeaders}),
        _authTokenRefresher =
-           authTokenRefresher ?? ApiClient.defaultAuthTokenRefresher {
+           authTokenRefresher ?? ApiClient.defaultAuthTokenRefresher,
+       _cacheUserIdResolver =
+           cacheUserIdResolver ?? ApiClient.defaultCacheUserIdResolver {
     if (_dio.interceptors.whereType<NetworkLogInterceptor>().isEmpty) {
       _dio.interceptors.add(NetworkLogInterceptor(_logger));
     }
@@ -175,9 +188,11 @@ class ApiClient {
   final Duration _defaultTimeout;
   final int _defaultMaxRetries;
   final Duration _defaultCacheTtl;
+  final Duration _defaultLongCacheTtl;
   final ApiCacheStore _cacheStore;
   final Map<String, String> _defaultHeaders;
   final AuthTokenRefresher? _authTokenRefresher;
+  final ApiCacheUserIdResolver? _cacheUserIdResolver;
 
   Future<T> request<T>({
     required ApiMethod method,
@@ -189,6 +204,7 @@ class ApiClient {
     int? maxRetries,
     bool enableRetry = true,
     bool enableCache = false,
+    ApiCachePolicy cachePolicy = ApiCachePolicy.realtime,
     Duration? cacheTtl,
     bool attachAccessToken = false,
     bool enableAuthRefresh = true,
@@ -202,13 +218,21 @@ class ApiClient {
         _isIdempotent(method) && enableRetry
             ? (maxRetries ?? _defaultMaxRetries) + 1
             : 1;
+    final resolvedCachePolicy =
+        enableCache && cachePolicy == ApiCachePolicy.realtime
+            ? ApiCachePolicy.shortCache
+            : cachePolicy;
+    final shouldUseCache =
+        resolvedCachePolicy != ApiCachePolicy.realtime && _isIdempotent(method);
+    final cacheUserId = await _resolveCacheUserId(attachAccessToken);
     final cacheKey = _cacheKey(
       method: method,
       url: url,
       queryParameters: queryParameters,
+      userId: cacheUserId,
     );
 
-    if (enableCache && _isIdempotent(method)) {
+    if (shouldUseCache) {
       final cached = _cacheStore.get<T>(cacheKey);
       if (cached != null) {
         return cached;
@@ -332,8 +356,12 @@ class ApiClient {
           },
         );
 
-        if (enableCache && _isIdempotent(method)) {
-          _cacheStore.set(cacheKey, data, cacheTtl ?? _defaultCacheTtl);
+        if (shouldUseCache) {
+          _cacheStore.set(
+            cacheKey,
+            data,
+            cacheTtl ?? _defaultTtlForPolicy(resolvedCachePolicy),
+          );
         }
 
         return data;
@@ -392,6 +420,7 @@ class ApiClient {
       maxRetries: spec.maxRetries,
       enableRetry: spec.enableRetry,
       enableCache: spec.enableCache,
+      cachePolicy: spec.cachePolicy,
       cacheTtl: spec.cacheTtl,
       attachAccessToken: spec.attachAccessToken,
       enableAuthRefresh: spec.enableAuthRefresh,
@@ -447,15 +476,39 @@ class ApiClient {
     required ApiMethod method,
     required String url,
     required Map<String, dynamic> queryParameters,
+    required String? userId,
   }) {
+    final scope = (userId ?? '').trim().isEmpty ? 'public' : 'user:$userId';
     if (queryParameters.isEmpty) {
-      return '${_methodText(method)} $url';
+      return '$scope ${_methodText(method)} $url';
     }
     final sorted = SplayTreeMap<String, dynamic>.from(queryParameters);
     final query = sorted.entries
         .map((entry) => '${entry.key}=${entry.value}')
         .join('&');
-    return '${_methodText(method)} $url?$query';
+    return '$scope ${_methodText(method)} $url?$query';
+  }
+
+  Duration _defaultTtlForPolicy(ApiCachePolicy policy) {
+    return switch (policy) {
+      ApiCachePolicy.realtime => Duration.zero,
+      ApiCachePolicy.shortCache => _defaultCacheTtl,
+      ApiCachePolicy.longCache => _defaultLongCacheTtl,
+    };
+  }
+
+  Future<String?> _resolveCacheUserId(bool attachAccessToken) async {
+    if (!attachAccessToken) {
+      return null;
+    }
+    final resolver =
+        _cacheUserIdResolver ?? ApiClient.defaultCacheUserIdResolver;
+    if (resolver == null) {
+      return null;
+    }
+    final userId = await resolver();
+    final normalized = userId?.trim() ?? '';
+    return normalized.isEmpty ? null : normalized;
   }
 
   ApiResponse<Object?> _parseEnvelope(Object? payload) {

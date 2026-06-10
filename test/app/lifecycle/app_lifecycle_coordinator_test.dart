@@ -2,8 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shuxiang_reading_next/app/lifecycle/app_lifecycle_coordinator.dart';
 import 'package:shuxiang_reading_next/core/auth/auth_event_bus.dart';
+import 'package:shuxiang_reading_next/core/auth/auth_session.dart';
+import 'package:shuxiang_reading_next/core/auth/session_change_listener.dart';
 import 'package:shuxiang_reading_next/core/network/api_client.dart';
 import 'package:shuxiang_reading_next/core/network/auth_token_refresher.dart';
 import 'package:shuxiang_reading_next/features/source/application/external_source_import_bridge.dart';
@@ -19,8 +22,13 @@ class _FakeAuthTokenRefresher implements AuthTokenRefresher {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  setUp(() {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
+
   tearDown(() {
     ApiClient.defaultAuthTokenRefresher = null;
+    ApiClient.defaultCacheUserIdResolver = null;
   });
 
   test('initialize wires import and auth streams', () async {
@@ -28,6 +36,7 @@ void main() {
         StreamController<IncomingExternalImportPayload>.broadcast();
     final authController = StreamController<AuthEvent>.broadcast();
     var initializeCalls = 0;
+    final sessionListener = _RecordingSessionChangeListener();
     final coordinator = AppLifecycleCoordinator(
       incomingExternalImportStream: importController.stream,
       authEventStream: authController.stream,
@@ -35,6 +44,7 @@ void main() {
         initializeCalls += 1;
       },
       authTokenRefresher: _FakeAuthTokenRefresher(),
+      sessionChangeListeners: <SessionChangeListener>[sessionListener],
     );
 
     final receivedPayloads = <IncomingExternalImportPayload>[];
@@ -52,6 +62,7 @@ void main() {
     const event = AuthEvent(
       type: AuthEventType.loggedOut,
       message: 'logged out',
+      previousSession: AuthSession(accessToken: 'token', userId: 'user-a'),
     );
 
     importController.add(payload);
@@ -64,6 +75,7 @@ void main() {
     expect(receivedPayloads.single, same(payload));
     expect(receivedEvents, hasLength(1));
     expect(receivedEvents.single, event);
+    expect(sessionListener.logouts, <String?>['user-a']);
 
     coordinator.dispose();
     await importController.close();
@@ -143,4 +155,16 @@ void main() {
 
     expect(visitCalls, 2);
   });
+}
+
+class _RecordingSessionChangeListener implements SessionChangeListener {
+  final List<String?> logouts = <String?>[];
+
+  @override
+  Future<void> onUserLogin(String userId) async {}
+
+  @override
+  Future<void> onUserLogout(String? userId) async {
+    logouts.add(userId);
+  }
 }
