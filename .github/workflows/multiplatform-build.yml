@@ -48,7 +48,7 @@ permissions:
 
 env:
   ARTIFACT_NAME: Selune
-  RELEASE_REPOSITORY: zhangyuanlonga/readbook-releases
+  RELEASE_REPOSITORY: zyl140640/readbook-releases
   APPREAD_API_BASE_URL: https://www.sxyd.lltask.top/api
   APPREAD_READER_GATEWAY_BASE_URL: https://rust.lltask.top/api
   APPREAD_APP_NAME: selune

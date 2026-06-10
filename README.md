@@ -76,12 +76,12 @@ Actions 打包不会弹出版本号确认。常规发版必须填写 `full_versi
 
 这两个部分必须一起填，不能只填 `1.2.0`。如果后面的构建号没有递增，Android/iOS/macOS 等平台可能无法覆盖安装或判断新版本。
 线上固定配置已写入 workflow，不需要在运行时填写：`artifact_name=Selune`、`APPREAD_API_BASE_URL=https://www.sxyd.lltask.top/api`、`APPREAD_READER_GATEWAY_BASE_URL=https://rust.lltask.top/api`、`APPREAD_APP_NAME=selune`。
-构建成功后，workflow 会把产物发布到公开发布仓库 `zhangyuanlonga/readbook-releases` 的 Releases，并在 Actions Summary 输出每个平台的下载链接。公开仓库只放安装包和发布说明，不放源码。
+构建成功后，workflow 会把产物发布到公开发布仓库 `zyl140640/readbook-releases` 的 Releases，并在 Actions Summary 输出每个平台的下载链接。公开仓库只放安装包和发布说明，不放源码。
 如果要在 GitHub 上打 Android release 包，需要先配置仓库 Secrets：
 
 - `ANDROID_KEY_PROPERTIES`：内容格式参考 `android/key.properties.example`
 - `ANDROID_KEYSTORE_BASE64`：`android/app/appread-release.jks` 的 base64 内容
-- `RELEASE_REPO_TOKEN`：用于把构建产物发布到公开仓库 `zhangyuanlonga/readbook-releases`。建议使用细粒度 Token，只授予该公开仓库 `Contents: Read and write` 权限。
+- `RELEASE_REPO_TOKEN`：用于把构建产物发布到公开仓库 `zyl140640/readbook-releases`。建议使用细粒度 Token，只授予该公开仓库 `Contents: Read and write` 权限。
 
 版本规则建议：
 - `BUILD_NAME` / `version_name`：给用户看的展示版本，例如 `1.1.0`
