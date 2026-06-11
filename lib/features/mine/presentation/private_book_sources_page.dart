@@ -1,5 +1,8 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
+import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,8 +16,10 @@ import '../../../app/widgets/adaptive_list_tile.dart';
 import '../../../app/widgets/adaptive_overflow_toolbar.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../core/logging/app_logger.dart';
 import '../../../core/network/api_client.dart';
 import '../application/advanced_theme_provider.dart';
+import '../application/book_source_import_payload.dart';
 import '../application/private_book_source_provider.dart';
 import '../application/private_book_source_service.dart';
 import 'widgets/image_resource_collection_widgets.dart';
@@ -26,6 +31,10 @@ final _privateBookSourceSearchKeywordProvider =
     });
 
 enum _PrivateSourceAction { test, submit, edit, delete }
+
+enum _BookSourceImportMethod { url, file, paste }
+
+const int _maxBookSourceImportBytes = 10 * 1024 * 1024;
 
 class PrivateBookSourcesPage extends ConsumerWidget {
   const PrivateBookSourcesPage({super.key});
@@ -111,7 +120,8 @@ class PrivateBookSourcesPage extends ConsumerWidget {
                       data: (result) {
                         if (result.items.isEmpty) {
                           return _EmptySourcesCard(
-                            onCreate: () => unawaited(_openForm(context, ref)),
+                            onCreate:
+                                () => unawaited(_openCreateForm(context, ref)),
                           );
                         }
                         final visibleItems = _filterPrivateSources(
@@ -197,7 +207,7 @@ class PrivateBookSourcesPage extends ConsumerWidget {
           icon: Icons.add_rounded,
           label: '新增书源',
           priority: 10,
-          onPressed: () => unawaited(_openForm(context, ref)),
+          onPressed: () => unawaited(_openCreateForm(context, ref)),
         ),
       ],
       mobileActions: <Widget>[
@@ -208,7 +218,7 @@ class PrivateBookSourcesPage extends ConsumerWidget {
         ),
         IconButton(
           tooltip: '新增书源',
-          onPressed: () => unawaited(_openForm(context, ref)),
+          onPressed: () => unawaited(_openCreateForm(context, ref)),
           icon: const Icon(Icons.add_rounded),
         ),
       ],
@@ -237,10 +247,27 @@ class PrivateBookSourcesPage extends ConsumerWidget {
     ref.invalidate(sourceQuotaProvider);
   }
 
+  static Future<void> _openCreateForm(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    final method = await showAdaptiveActionSurface<_BookSourceImportMethod>(
+      context: context,
+      maxWidth: 460,
+      padding: EdgeInsets.zero,
+      builder: (context) => const _BookSourceImportMethodSheet(),
+    );
+    if (method == null || !context.mounted) {
+      return;
+    }
+    await _openForm(context, ref, initialImportMethod: method);
+  }
+
   static Future<void> _openForm(
     BuildContext context,
     WidgetRef ref, {
     PrivateBookSourceItem? item,
+    _BookSourceImportMethod initialImportMethod = _BookSourceImportMethod.paste,
   }) async {
     var formItem = item;
     if (item != null && (item.sourceJson.isEmpty && item.sourceCode.isEmpty)) {
@@ -254,7 +281,11 @@ class PrivateBookSourcesPage extends ConsumerWidget {
       maxWidth: 680,
       maxHeightFactor: 0.9,
       padding: EdgeInsets.zero,
-      builder: (context) => _PrivateSourceForm(item: formItem),
+      builder:
+          (context) => _PrivateSourceForm(
+            item: formItem,
+            initialImportMethod: initialImportMethod,
+          ),
     );
     if (saved != null) {
       ref.read(_privateBookSourceSearchKeywordProvider.notifier).state = '';
@@ -424,6 +455,131 @@ class PrivateBookSourcesPage extends ConsumerWidget {
         context,
       ).showSnackBar(SnackBar(content: Text(_messageOf(error))));
     }
+  }
+}
+
+class _BookSourceImportMethodSheet extends StatelessWidget {
+  const _BookSourceImportMethodSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: colorScheme.outlineVariant,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              '选择导入方式',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 12),
+            _BookSourceImportMethodTile(
+              icon: Icons.link_rounded,
+              title: '通过链接导入',
+              subtitle: '适合分享链接和大 JSON',
+              color: colorScheme.primary,
+              onTap:
+                  () => Navigator.of(context).pop(_BookSourceImportMethod.url),
+            ),
+            const Divider(height: 1, indent: 56),
+            _BookSourceImportMethodTile(
+              icon: Icons.folder_open_rounded,
+              title: '从文件选择',
+              subtitle: '读取本地 .json 或 .txt',
+              color: colorScheme.secondary,
+              onTap:
+                  () => Navigator.of(context).pop(_BookSourceImportMethod.file),
+            ),
+            const Divider(height: 1, indent: 56),
+            _BookSourceImportMethodTile(
+              icon: Icons.copy_rounded,
+              title: '粘贴 JSON',
+              subtitle: '从剪贴板读取并预览',
+              color: colorScheme.tertiary,
+              onTap:
+                  () =>
+                      Navigator.of(context).pop(_BookSourceImportMethod.paste),
+            ),
+            const SizedBox(height: 10),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('取消'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BookSourceImportMethodTile extends StatelessWidget {
+  const _BookSourceImportMethodTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        alignment: Alignment.center,
+        child: Icon(icon, color: color),
+      ),
+      title: Text(
+        title,
+        style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w800),
+      ),
+      subtitle: Text(
+        subtitle,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: colorScheme.onSurfaceVariant,
+        ),
+      ),
+      trailing: Icon(
+        Icons.chevron_right_rounded,
+        color: colorScheme.onSurfaceVariant,
+      ),
+      onTap: onTap,
+    );
   }
 }
 
@@ -2014,9 +2170,13 @@ bool _isCompactDetail(String label, String value) {
 }
 
 class _PrivateSourceForm extends ConsumerStatefulWidget {
-  const _PrivateSourceForm({this.item});
+  const _PrivateSourceForm({
+    this.item,
+    this.initialImportMethod = _BookSourceImportMethod.paste,
+  });
 
   final PrivateBookSourceItem? item;
+  final _BookSourceImportMethod initialImportMethod;
 
   @override
   ConsumerState<_PrivateSourceForm> createState() => _PrivateSourceFormState();
@@ -2024,15 +2184,26 @@ class _PrivateSourceForm extends ConsumerStatefulWidget {
 
 class _PrivateSourceFormState extends ConsumerState<_PrivateSourceForm> {
   final _formKey = GlobalKey<FormState>();
+  final AppLogger _logger = AppLogger.instance;
   late final TextEditingController _nameController;
   late final TextEditingController _descriptionController;
   late final TextEditingController _groupController;
   late final TextEditingController _sourceController;
+  late final TextEditingController _urlController;
+  late final TextEditingController _previewController;
+  late _BookSourceImportMethod _selectedImportMethod;
   String _type = 'novel';
   bool _saving = false;
+  bool _loadingSource = false;
   bool _groupEdited = false;
+  String? _loadingSourceLabel;
+  String? _sourceLabel;
+  String? _loadError;
+  int _sourceLineCount = 0;
+  int _sourceSizeBytes = 0;
 
   bool get _isEditing => widget.item != null;
+  bool get _hasLoadedSource => _sourceController.text.trim().isNotEmpty;
 
   @override
   void initState() {
@@ -2049,11 +2220,14 @@ class _PrivateSourceFormState extends ConsumerState<_PrivateSourceForm> {
               ? item!.sourceJson
               : item?.sourceCode ?? '',
     );
-    _sourceController.addListener(_fillGroupFromSourceJson);
+    _urlController = TextEditingController();
+    _previewController = TextEditingController();
+    _selectedImportMethod = widget.initialImportMethod;
     _type =
         item?.supportedTypes.isNotEmpty == true
             ? item!.supportedTypes.first
             : 'novel';
+    _loadInitialPreview();
   }
 
   @override
@@ -2062,6 +2236,8 @@ class _PrivateSourceFormState extends ConsumerState<_PrivateSourceForm> {
     _descriptionController.dispose();
     _groupController.dispose();
     _sourceController.dispose();
+    _urlController.dispose();
+    _previewController.dispose();
     super.dispose();
   }
 
@@ -2091,6 +2267,8 @@ class _PrivateSourceFormState extends ConsumerState<_PrivateSourceForm> {
                   _isEditing ? '编辑书源' : '新增书源',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
+                const SizedBox(height: 16),
+                _buildImportSection(context),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _nameController,
@@ -2134,26 +2312,6 @@ class _PrivateSourceFormState extends ConsumerState<_PrivateSourceForm> {
                   maxLines: 4,
                   decoration: const InputDecoration(labelText: '描述'),
                 ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _sourceController,
-                  minLines: 8,
-                  maxLines: 14,
-                  decoration: const InputDecoration(
-                    labelText: 'Legado JSON',
-                    alignLabelWithHint: true,
-                  ),
-                  validator: (value) {
-                    final raw = value?.trim() ?? '';
-                    if (raw.isEmpty) {
-                      return '请粘贴书源 JSON';
-                    }
-                    if (!PrivateBookSourceInput.isValidJson(raw)) {
-                      return 'JSON 格式不正确';
-                    }
-                    return null;
-                  },
-                ),
                 const SizedBox(height: 18),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
@@ -2167,7 +2325,7 @@ class _PrivateSourceFormState extends ConsumerState<_PrivateSourceForm> {
                     ),
                     const SizedBox(width: 8),
                     FilledButton(
-                      onPressed: _saving ? null : _save,
+                      onPressed: (_saving || _loadingSource) ? null : _save,
                       child: Text(_saving ? '保存中' : '保存'),
                     ),
                   ],
@@ -2180,7 +2338,125 @@ class _PrivateSourceFormState extends ConsumerState<_PrivateSourceForm> {
     );
   }
 
+  Widget _buildImportSection(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow.withValues(alpha: 0.84),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.48),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Text(
+              '书源 JSON',
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 12),
+            SegmentedButton<_BookSourceImportMethod>(
+              segments: const <ButtonSegment<_BookSourceImportMethod>>[
+                ButtonSegment<_BookSourceImportMethod>(
+                  value: _BookSourceImportMethod.url,
+                  icon: Icon(Icons.link_rounded),
+                  label: Text('链接'),
+                ),
+                ButtonSegment<_BookSourceImportMethod>(
+                  value: _BookSourceImportMethod.file,
+                  icon: Icon(Icons.folder_open_rounded),
+                  label: Text('文件'),
+                ),
+                ButtonSegment<_BookSourceImportMethod>(
+                  value: _BookSourceImportMethod.paste,
+                  icon: Icon(Icons.copy_rounded),
+                  label: Text('粘贴'),
+                ),
+              ],
+              selected: <_BookSourceImportMethod>{_selectedImportMethod},
+              onSelectionChanged:
+                  _loadingSource
+                      ? null
+                      : (values) {
+                        setState(() {
+                          _selectedImportMethod = values.first;
+                          _loadError = null;
+                        });
+                      },
+            ),
+            const SizedBox(height: 12),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 180),
+              child: KeyedSubtree(
+                key: ValueKey<_BookSourceImportMethod>(_selectedImportMethod),
+                child: _buildImportMethodPanel(context),
+              ),
+            ),
+            if (_loadingSource) ...<Widget>[
+              const SizedBox(height: 12),
+              LinearProgressIndicator(
+                minHeight: 3,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _loadingSourceLabel ?? '正在读取书源 JSON',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+            if (_loadError != null) ...<Widget>[
+              const SizedBox(height: 12),
+              _ImportErrorBanner(message: _loadError!),
+            ],
+            if (_hasLoadedSource) ...<Widget>[
+              const SizedBox(height: 12),
+              _BookSourcePreviewCard(
+                label: _sourceLabel ?? '已加载 JSON',
+                previewController: _previewController,
+                lineCount: _sourceLineCount,
+                sizeBytes: _sourceSizeBytes,
+                onClear: _loadingSource ? null : _clearLoadedSource,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImportMethodPanel(BuildContext context) {
+    switch (_selectedImportMethod) {
+      case _BookSourceImportMethod.url:
+        return _UrlImportPanel(
+          controller: _urlController,
+          loading: _loadingSource,
+          onImport: () => unawaited(_importFromUrl()),
+        );
+      case _BookSourceImportMethod.file:
+        return _FileImportPanel(
+          loading: _loadingSource,
+          onImport: () => unawaited(_importFromFile()),
+        );
+      case _BookSourceImportMethod.paste:
+        return _ClipboardImportPanel(
+          loading: _loadingSource,
+          onImport: () => unawaited(_importFromClipboard()),
+        );
+    }
+  }
+
   Future<void> _save() async {
+    if (!_validateLoadedSource()) {
+      return;
+    }
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -2220,17 +2496,477 @@ class _PrivateSourceFormState extends ConsumerState<_PrivateSourceForm> {
     }
   }
 
-  void _fillGroupFromSourceJson() {
+  bool _validateLoadedSource() {
+    final raw = _sourceController.text.trim();
+    if (raw.isEmpty) {
+      _setLoadError('请先导入书源 JSON');
+      return false;
+    }
+    if (!PrivateBookSourceInput.isValidJson(raw)) {
+      _setLoadError('JSON 格式不正确');
+      return false;
+    }
+    return true;
+  }
+
+  Future<void> _importFromUrl() async {
+    await _runImport(
+      method: _BookSourceImportMethod.url,
+      loadingLabel: '正在下载书源 JSON',
+      loader: () async {
+        final url = _urlController.text.trim();
+        final uri = Uri.tryParse(url);
+        if (uri == null ||
+            (uri.scheme != 'http' && uri.scheme != 'https') ||
+            uri.host.trim().isEmpty) {
+          throw const FormatException('请输入 http/https 链接');
+        }
+        final dio = Dio(
+          BaseOptions(
+            connectTimeout: const Duration(seconds: 15),
+            receiveTimeout: const Duration(seconds: 30),
+            responseType: ResponseType.plain,
+          ),
+        );
+        final response = await dio.get<String>(
+          uri.toString(),
+          options: Options(
+            responseType: ResponseType.plain,
+            followRedirects: true,
+            validateStatus: (_) => true,
+          ),
+        );
+        final statusCode = response.statusCode ?? 0;
+        if (statusCode < 200 || statusCode >= 300) {
+          throw FormatException('链接请求失败（$statusCode）');
+        }
+        final text = response.data ?? '';
+        if (text.trim().isEmpty) {
+          throw const FormatException('链接返回内容为空');
+        }
+        return _RawBookSourceImport(text: text, label: uri.host);
+      },
+    );
+  }
+
+  Future<void> _importFromFile() async {
+    await _runImport(
+      method: _BookSourceImportMethod.file,
+      loadingLabel: '正在读取本地文件',
+      loader: () async {
+        final file = await openFile(
+          acceptedTypeGroups: const <XTypeGroup>[
+            XTypeGroup(
+              label: 'Book source JSON',
+              extensions: <String>['json', 'txt'],
+              mimeTypes: <String>[
+                'application/json',
+                'text/json',
+                'text/plain',
+              ],
+              uniformTypeIdentifiers: <String>[
+                'public.json',
+                'public.plain-text',
+                'public.text',
+              ],
+            ),
+          ],
+          confirmButtonText: '选择书源文件',
+        );
+        if (file == null) {
+          return null;
+        }
+        final size = await file.length();
+        if (size > _maxBookSourceImportBytes) {
+          throw const FormatException('文件过大，最大支持 10 MB');
+        }
+        final text = await file.readAsString();
+        final label = file.name.trim().isEmpty ? '本地文件' : file.name.trim();
+        return _RawBookSourceImport(text: text, label: label);
+      },
+    );
+  }
+
+  Future<void> _importFromClipboard() async {
+    await _runImport(
+      method: _BookSourceImportMethod.paste,
+      loadingLabel: '正在读取剪贴板',
+      loader: () async {
+        final data = await Clipboard.getData(Clipboard.kTextPlain);
+        final text = data?.text ?? '';
+        if (text.trim().isEmpty) {
+          throw const FormatException('剪贴板没有 JSON 文本');
+        }
+        return _RawBookSourceImport(text: text, label: '剪贴板');
+      },
+    );
+  }
+
+  Future<void> _runImport({
+    required _BookSourceImportMethod method,
+    required String loadingLabel,
+    required Future<_RawBookSourceImport?> Function() loader,
+  }) async {
+    if (_loadingSource) {
+      return;
+    }
+    setState(() {
+      _loadingSource = true;
+      _loadingSourceLabel = loadingLabel;
+      _loadError = null;
+    });
+    try {
+      final loaded = await loader();
+      if (loaded == null) {
+        return;
+      }
+      _ensureImportSize(loaded.text);
+      final payload = await compute(parseBookSourceImportPayload, loaded.text);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _selectedImportMethod = method;
+        _applyLoadedPayload(payload, label: loaded.label);
+      });
+      _logger.info(
+        'Book source JSON loaded',
+        context: <String, Object?>{
+          'method': method.name,
+          'bytes': payload.sizeBytes,
+          'lines': payload.lineCount,
+        },
+      );
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '已加载书源 JSON：${formatBookSourceSize(payload.sizeBytes)}',
+          ),
+        ),
+      );
+    } on FormatException catch (error) {
+      _handleImportFailure(method, error.message);
+    } catch (error) {
+      _handleImportFailure(method, '书源 JSON 读取失败：${_messageOf(error)}');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingSource = false;
+          _loadingSourceLabel = null;
+        });
+      }
+    }
+  }
+
+  void _loadInitialPreview() {
+    final raw = _sourceController.text.trim();
+    if (raw.isEmpty) {
+      return;
+    }
+    try {
+      final payload = BookSourceImportPayload.fromJsonText(raw);
+      _applyLoadedPayload(payload, label: '已保存 JSON', fillMetadata: false);
+    } catch (_) {
+      _previewController.text = buildBookSourcePreview(raw);
+      _sourceLabel = '已保存 JSON';
+      _sourceLineCount = countBookSourceLines(raw);
+      _sourceSizeBytes = bookSourceUtf8SizeOf(raw);
+      _loadError = '已保存 JSON 格式异常，请重新导入';
+    }
+  }
+
+  void _applyLoadedPayload(
+    BookSourceImportPayload payload, {
+    required String label,
+    bool fillMetadata = true,
+  }) {
+    _sourceController.text = payload.sourceJson;
+    _previewController.text = payload.previewText;
+    _sourceLabel = label;
+    _sourceLineCount = payload.lineCount;
+    _sourceSizeBytes = payload.sizeBytes;
+    _loadError = null;
+    if (fillMetadata) {
+      _fillMetadataFromPayload(payload);
+    }
+  }
+
+  void _fillMetadataFromPayload(BookSourceImportPayload payload) {
+    if (_nameController.text.trim().isEmpty &&
+        payload.suggestedName.isNotEmpty) {
+      _nameController.text = payload.suggestedName;
+    }
+    if (_descriptionController.text.trim().isEmpty &&
+        payload.suggestedDescription.isNotEmpty) {
+      _descriptionController.text = payload.suggestedDescription;
+    }
     if (_isEditing || _groupEdited || _groupController.text.trim().isNotEmpty) {
       return;
     }
-    final groupName = PrivateBookSourceInput.defaultGroupNameFromJson(
-      _sourceController.text.trim(),
-    );
-    if (groupName.isEmpty) {
+    if (payload.suggestedGroupName.isEmpty) {
       return;
     }
-    _groupController.text = groupName;
+    _groupController.text = payload.suggestedGroupName;
+  }
+
+  void _clearLoadedSource() {
+    setState(() {
+      _sourceController.clear();
+      _previewController.clear();
+      _sourceLabel = null;
+      _sourceLineCount = 0;
+      _sourceSizeBytes = 0;
+      _loadError = null;
+    });
+  }
+
+  void _ensureImportSize(String value) {
+    if (bookSourceUtf8SizeOf(value) > _maxBookSourceImportBytes) {
+      throw const FormatException('文件过大，最大支持 10 MB');
+    }
+  }
+
+  void _setLoadError(String message) {
+    setState(() {
+      _loadError = message;
+    });
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _handleImportFailure(_BookSourceImportMethod method, String message) {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _loadError = message;
+    });
+    _logger.warn(
+      'Book source JSON import failed',
+      context: <String, Object?>{'method': method.name, 'message': message},
+    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+}
+
+class _RawBookSourceImport {
+  const _RawBookSourceImport({required this.text, required this.label});
+
+  final String text;
+  final String label;
+}
+
+class _UrlImportPanel extends StatelessWidget {
+  const _UrlImportPanel({
+    required this.controller,
+    required this.loading,
+    required this.onImport,
+  });
+
+  final TextEditingController controller;
+  final bool loading;
+  final VoidCallback onImport;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Expanded(
+          child: TextField(
+            controller: controller,
+            enabled: !loading,
+            keyboardType: TextInputType.url,
+            textInputAction: TextInputAction.done,
+            decoration: const InputDecoration(
+              labelText: '书源链接',
+              prefixIcon: Icon(Icons.link_rounded),
+            ),
+            onSubmitted: (_) {
+              if (!loading) {
+                onImport();
+              }
+            },
+          ),
+        ),
+        const SizedBox(width: 10),
+        Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: FilledButton.icon(
+            onPressed: loading ? null : onImport,
+            icon: const Icon(Icons.download_rounded),
+            label: const Text('获取'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FileImportPanel extends StatelessWidget {
+  const _FileImportPanel({required this.loading, required this.onImport});
+
+  final bool loading;
+  final VoidCallback onImport;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: OutlinedButton.icon(
+        onPressed: loading ? null : onImport,
+        icon: const Icon(Icons.upload_file_rounded),
+        label: const Text('选择 JSON 文件'),
+      ),
+    );
+  }
+}
+
+class _ClipboardImportPanel extends StatelessWidget {
+  const _ClipboardImportPanel({required this.loading, required this.onImport});
+
+  final bool loading;
+  final VoidCallback onImport;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: FilledButton.icon(
+        onPressed: loading ? null : onImport,
+        icon: const Icon(Icons.copy_rounded),
+        label: const Text('读取剪贴板 JSON'),
+      ),
+    );
+  }
+}
+
+class _ImportErrorBanner extends StatelessWidget {
+  const _ImportErrorBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.errorContainer.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Icon(
+              Icons.error_outline_rounded,
+              color: colorScheme.onErrorContainer,
+              size: 18,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                message,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onErrorContainer,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BookSourcePreviewCard extends StatelessWidget {
+  const _BookSourcePreviewCard({
+    required this.label,
+    required this.previewController,
+    required this.lineCount,
+    required this.sizeBytes,
+    required this.onClear,
+  });
+
+  final String label;
+  final TextEditingController previewController;
+  final int lineCount;
+  final int sizeBytes;
+  final VoidCallback? onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.58),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Icon(Icons.code_rounded, color: colorScheme.primary, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '$lineCount 行 · ${formatBookSourceSize(sizeBytes)}',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                IconButton(
+                  tooltip: '清除',
+                  onPressed: onClear,
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: previewController,
+              readOnly: true,
+              minLines: 6,
+              maxLines: 12,
+              style: const TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 12,
+                height: 1.35,
+              ),
+              decoration: const InputDecoration(
+                labelText: '预览',
+                alignLabelWithHint: true,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
