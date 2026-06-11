@@ -281,6 +281,13 @@ class AuthService {
     throw const FormatException('Invalid response payload.');
   }
 
+  Map<String, dynamic>? _readStringKeyMap(Object? value) {
+    if (value is! Map) {
+      return null;
+    }
+    return value.map((key, value) => MapEntry(key.toString(), value));
+  }
+
   AuthSession _parseSession(Map<String, dynamic> data) {
     String? readOptionalStringFrom(Map<String, dynamic> source, String key) {
       final raw = source[key]?.toString().trim() ?? '';
@@ -302,6 +309,10 @@ class AuthService {
         rawUser is Map
             ? rawUser.map((key, value) => MapEntry(key.toString(), value))
             : const <String, dynamic>{};
+    final membershipData =
+        _readStringKeyMap(userData['membership']) ??
+        _readStringKeyMap(data['membership']) ??
+        const <String, dynamic>{};
 
     String requireString(
       String key, {
@@ -312,6 +323,9 @@ class AuthService {
         for (final alias in aliases) readOptionalStringFrom(data, alias),
         readOptionalStringFrom(userData, key),
         for (final alias in aliases) readOptionalStringFrom(userData, alias),
+        readOptionalStringFrom(membershipData, key),
+        for (final alias in aliases)
+          readOptionalStringFrom(membershipData, alias),
       ]);
       if (resolved == null) {
         throw FormatException('Missing required field: $key');
@@ -328,23 +342,46 @@ class AuthService {
         for (final alias in aliases) readOptionalStringFrom(data, alias),
         readOptionalStringFrom(userData, key),
         for (final alias in aliases) readOptionalStringFrom(userData, alias),
+        readOptionalStringFrom(membershipData, key),
+        for (final alias in aliases)
+          readOptionalStringFrom(membershipData, alias),
       ]);
     }
 
-    DateTime? readOptionalTime(String key) {
+    DateTime? readOptionalTime(
+      String key, {
+      List<String> aliases = const <String>[],
+    }) {
       return _parseTime(
         firstNonEmpty(<String?>[
           readOptionalStringFrom(data, key),
+          for (final alias in aliases) readOptionalStringFrom(data, alias),
           readOptionalStringFrom(userData, key),
+          for (final alias in aliases) readOptionalStringFrom(userData, alias),
+          readOptionalStringFrom(membershipData, key),
+          for (final alias in aliases)
+            readOptionalStringFrom(membershipData, alias),
         ]),
       );
     }
 
-    bool? readOptionalBool(String key) {
-      for (final raw in <Object?>[data[key], userData[key]]) {
-        final value = _parseBool(raw);
-        if (value != null) {
-          return value;
+    bool? readOptionalBool(
+      String key, {
+      List<String> aliases = const <String>[],
+    }) {
+      for (final source in <Map<String, dynamic>>[
+        data,
+        userData,
+        membershipData,
+      ]) {
+        for (final raw in <Object?>[
+          source[key],
+          for (final alias in aliases) source[alias],
+        ]) {
+          final value = _parseBool(raw);
+          if (value != null) {
+            return value;
+          }
         }
       }
       return null;
@@ -362,11 +399,17 @@ class AuthService {
         'display_name',
         aliases: <String>['username', 'account'],
       ),
-      membershipActive: readOptionalBool('membership_active'),
-      vipLevel: readOptionalString('vip_level'),
+      membershipActive: readOptionalBool(
+        'membership_active',
+        aliases: <String>['active'],
+      ),
+      vipLevel: readOptionalString('vip_level', aliases: <String>['level']),
       planType: readOptionalString('plan_type'),
-      vipStatus: readOptionalString('vip_status'),
-      vipExpireAt: readOptionalTime('vip_expire_at'),
+      vipStatus: readOptionalString('vip_status', aliases: <String>['status']),
+      vipExpireAt: readOptionalTime(
+        'vip_expire_at',
+        aliases: <String>['expire_at'],
+      ),
     );
   }
 
@@ -407,8 +450,22 @@ class AuthService {
       final userData = rawUser.map(
         (key, value) => MapEntry(key.toString(), value),
       );
+      final membershipData =
+          _readStringKeyMap(userData['membership']) ??
+          const <String, dynamic>{};
       String? read(String key) {
         final raw = userData[key]?.toString().trim() ?? '';
+        return raw.isEmpty ? null : raw;
+      }
+
+      String? readMembership(String key, {String? fallbackKey}) {
+        final raw =
+            membershipData[key]?.toString().trim() ??
+            (fallbackKey == null
+                ? null
+                : membershipData[fallbackKey]?.toString().trim()) ??
+            userData[key]?.toString().trim() ??
+            '';
         return raw.isEmpty ? null : raw;
       }
 
@@ -419,11 +476,15 @@ class AuthService {
         account: read('account') ?? read('username'),
         displayName:
             read('display_name') ?? read('username') ?? read('account'),
-        membershipActive: _parseBool(userData['membership_active']),
-        vipLevel: read('vip_level'),
-        planType: read('plan_type'),
-        vipStatus: read('vip_status'),
-        vipExpireAt: _parseTime(read('vip_expire_at')),
+        membershipActive:
+            _parseBool(membershipData['active']) ??
+            _parseBool(userData['membership_active']),
+        vipLevel: readMembership('level', fallbackKey: 'vip_level'),
+        planType: readMembership('plan_type'),
+        vipStatus: readMembership('status', fallbackKey: 'vip_status'),
+        vipExpireAt: _parseTime(
+          readMembership('expire_at', fallbackKey: 'vip_expire_at'),
+        ),
       );
     } catch (_) {
       return null;

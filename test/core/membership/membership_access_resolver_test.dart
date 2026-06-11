@@ -56,7 +56,7 @@ void main() {
           vipStatus: 'expired',
           planType: 'month',
           expireAt: null,
-          source: null,
+          source: 'manual_grant',
           membershipLevel: 'none',
           grantType: null,
           grantSubtype: null,
@@ -72,6 +72,47 @@ void main() {
       expect(access.hasExplicitMembershipState, isTrue);
       expect(access.hasMembership, isFalse);
       expect(access.hasOnlineService, isFalse);
+    },
+  );
+
+  test(
+    'default inactive entitlement falls back to explicit active profile',
+    () {
+      final access = MembershipAccessResolver.resolve(
+        session: const AuthSession(
+          accessToken: 'token',
+          membershipActive: true,
+          vipLevel: 'svip',
+          planType: 'lifetime',
+          vipStatus: 'active',
+        ),
+        profile: _profile(
+          membershipActive: true,
+          vipLevel: 'svip',
+          vipStatus: 'active',
+          planType: 'lifetime',
+        ),
+        entitlement: const MembershipEntitlement(
+          vipLevel: 'none',
+          vipStatus: 'expired',
+          planType: 'month',
+          expireAt: null,
+          source: null,
+          membershipLevel: 'none',
+          grantType: null,
+          grantSubtype: null,
+          grantLabel: null,
+          isCustomExpire: false,
+          isTrial: false,
+          maxDevices: 1,
+          features: <String>[],
+          membershipActive: false,
+        ),
+      );
+
+      expect(access.hasMembership, isTrue);
+      expect(access.hasThemeCustom, isTrue);
+      expect(access.planType, 'lifetime');
     },
   );
 
@@ -106,44 +147,91 @@ void main() {
     expect(access.planType, 'lifetime');
   });
 
-  test('access service stops at explicit inactive entitlement', () async {
-    final profileService = _FakeUserProfileService(
-      profile: _profile(
-        membershipActive: true,
-        vipLevel: 'pro',
-        vipStatus: 'active',
-      ),
-    );
-    final service = MembershipAccessService(
-      sessionStore: await _sessionStore(),
-      membershipService: _FakeMembershipService(
-        entitlement: const MembershipEntitlement(
-          vipLevel: 'none',
-          vipStatus: 'expired',
-          planType: 'month',
-          expireAt: null,
-          source: null,
-          membershipLevel: 'none',
-          grantType: null,
-          grantSubtype: null,
-          grantLabel: null,
-          isCustomExpire: false,
-          isTrial: false,
-          maxDevices: 1,
-          features: <String>[],
-          membershipActive: false,
+  test(
+    'access service stops at non-default explicit inactive entitlement',
+    () async {
+      final profileService = _FakeUserProfileService(
+        profile: _profile(
+          membershipActive: true,
+          vipLevel: 'pro',
+          vipStatus: 'active',
         ),
-      ),
-      userProfileService: profileService,
-    );
+      );
+      final service = MembershipAccessService(
+        sessionStore: await _sessionStore(),
+        membershipService: _FakeMembershipService(
+          entitlement: const MembershipEntitlement(
+            vipLevel: 'none',
+            vipStatus: 'expired',
+            planType: 'month',
+            expireAt: null,
+            source: 'manual_grant',
+            membershipLevel: 'none',
+            grantType: null,
+            grantSubtype: null,
+            grantLabel: null,
+            isCustomExpire: false,
+            isTrial: false,
+            maxDevices: 1,
+            features: <String>[],
+            membershipActive: false,
+          ),
+        ),
+        userProfileService: profileService,
+      );
 
-    final access = await service.fetchCurrentAccess(
-      session: const AuthSession(accessToken: 'token'),
-    );
+      final access = await service.fetchCurrentAccess(
+        session: const AuthSession(accessToken: 'token'),
+      );
 
-    expect(access.hasMembership, isFalse);
-    expect(profileService.fetchCount, 0);
-  });
+      expect(access.hasMembership, isFalse);
+      expect(profileService.fetchCount, 0);
+    },
+  );
+
+  test(
+    'access service checks profile when entitlement is default inactive',
+    () async {
+      final profileService = _FakeUserProfileService(
+        profile: _profile(
+          membershipActive: true,
+          vipLevel: 'svip',
+          vipStatus: 'active',
+          planType: 'lifetime',
+        ),
+      );
+      final service = MembershipAccessService(
+        sessionStore: await _sessionStore(),
+        membershipService: _FakeMembershipService(
+          entitlement: const MembershipEntitlement(
+            vipLevel: 'none',
+            vipStatus: 'expired',
+            planType: 'month',
+            expireAt: null,
+            source: null,
+            membershipLevel: 'none',
+            grantType: null,
+            grantSubtype: null,
+            grantLabel: null,
+            isCustomExpire: false,
+            isTrial: false,
+            maxDevices: 1,
+            features: <String>[],
+            membershipActive: false,
+          ),
+        ),
+        userProfileService: profileService,
+      );
+
+      final access = await service.fetchCurrentAccess(
+        session: const AuthSession(accessToken: 'token'),
+      );
+
+      expect(access.hasMembership, isTrue);
+      expect(access.planType, 'lifetime');
+      expect(profileService.fetchCount, 1);
+    },
+  );
 
   test(
     'access service falls back to profile when entitlement request fails',

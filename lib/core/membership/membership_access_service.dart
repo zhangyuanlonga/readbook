@@ -52,7 +52,8 @@ class MembershipAccessService {
     StackTrace? entitlementStackTrace;
     try {
       entitlement = await _membershipService.fetchEntitlement();
-      if (entitlement.hasExplicitMembershipState) {
+      if (entitlement.hasExplicitMembershipState &&
+          !entitlement.isDefaultInactiveFallback) {
         return MembershipAccessResolver.resolve(
           session: currentSession,
           entitlement: entitlement,

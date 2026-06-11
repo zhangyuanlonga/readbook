@@ -104,14 +104,23 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
       _isLoadingProfile = true;
     });
     try {
-      final profile = await _userProfileService.fetchMe();
+      final profile = await _userProfileService.fetchMe(
+        accessToken: session.accessToken,
+      );
       if (!mounted ||
           loadVersion != _sessionLoadVersion ||
           !_isSameSessionIdentity(_session, session) ||
           !_profileBelongsToSession(profile, session)) {
         return;
       }
+      final nextSession = await _syncSessionWithProfile(session, profile);
+      if (!mounted ||
+          loadVersion != _sessionLoadVersion ||
+          !_isSameSessionIdentity(_session, session)) {
+        return;
+      }
       setState(() {
+        _session = nextSession;
         _profile = profile;
       });
     } catch (_) {
@@ -129,6 +138,23 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
 
   Future<void> _refreshPage() async {
     await _reloadSessionFromStore(showLoading: false);
+  }
+
+  Future<AuthSession> _syncSessionWithProfile(
+    AuthSession session,
+    UserProfile profile,
+  ) async {
+    final currentSession = await _sessionStore.getSession();
+    if (!_isSameSessionIdentity(currentSession, session)) {
+      return session;
+    }
+    final baseSession = currentSession ?? session;
+    final nextSession = _mergeProfileIntoSession(baseSession, profile);
+    if (!_isSameSessionValue(baseSession, nextSession)) {
+      await _sessionStore.saveSession(nextSession);
+      ref.read(mineRemoteAccessSnapshotRevisionProvider.notifier).state++;
+    }
+    return nextSession;
   }
 
   void _handleAuthEvent(AuthEvent event) {
@@ -190,6 +216,98 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
       return 'identity:$identity';
     }
     return null;
+  }
+
+  AuthSession _mergeProfileIntoSession(
+    AuthSession session,
+    UserProfile profile,
+  ) {
+    final hasProfileMembershipState =
+        profile.membershipActive != null ||
+        _hasText(profile.vipLevel) ||
+        _hasText(profile.vipStatus);
+
+    return AuthSession(
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+      accessExpiresAt: session.accessExpiresAt,
+      refreshExpiresAt: session.refreshExpiresAt,
+      userId: _nonEmpty(profile.userId) ?? session.userId,
+      username: _nonEmpty(profile.username) ?? session.username,
+      account: _nonEmpty(profile.account) ?? session.account,
+      displayName:
+          _nonEmpty(profile.displayName) ??
+          _nonEmpty(profile.username) ??
+          session.displayName,
+      membershipActive:
+          hasProfileMembershipState
+              ? profile.membershipActive
+              : session.membershipActive,
+      vipLevel: hasProfileMembershipState ? profile.vipLevel : session.vipLevel,
+      planType:
+          hasProfileMembershipState
+              ? profile.planType ?? session.planType
+              : session.planType,
+      vipStatus:
+          hasProfileMembershipState ? profile.vipStatus : session.vipStatus,
+      vipExpireAt:
+          hasProfileMembershipState ? profile.vipExpireAt : session.vipExpireAt,
+    );
+  }
+
+  bool _isSameSessionValue(AuthSession left, AuthSession right) {
+    return left.accessToken == right.accessToken &&
+        (left.refreshToken ?? '') == (right.refreshToken ?? '') &&
+        left.accessExpiresAt == right.accessExpiresAt &&
+        left.refreshExpiresAt == right.refreshExpiresAt &&
+        (left.userId ?? '') == (right.userId ?? '') &&
+        (left.username ?? '') == (right.username ?? '') &&
+        (left.account ?? '') == (right.account ?? '') &&
+        (left.displayName ?? '') == (right.displayName ?? '') &&
+        left.membershipActive == right.membershipActive &&
+        (left.vipLevel ?? '') == (right.vipLevel ?? '') &&
+        (left.planType ?? '') == (right.planType ?? '') &&
+        (left.vipStatus ?? '') == (right.vipStatus ?? '') &&
+        left.vipExpireAt == right.vipExpireAt;
+  }
+
+  String? _nonEmpty(String? value) {
+    final normalized = value?.trim() ?? '';
+    return normalized.isEmpty ? null : normalized;
+  }
+
+  bool _hasText(String? value) => _nonEmpty(value) != null;
+
+  UserProfile? _membershipProfileFor(
+    AuthSession session,
+    UserProfile? profile,
+  ) {
+    final profileAccess = MembershipAccessResolver.fromProfile(profile);
+    if (profileAccess.hasExplicitMembershipState ||
+        profileAccess.hasMembership) {
+      return profile;
+    }
+    final sessionAccess = MembershipAccessResolver.fromSession(session);
+    if (!sessionAccess.hasExplicitMembershipState &&
+        !sessionAccess.hasMembership) {
+      return profile;
+    }
+    return UserProfile(
+      userId: session.userId ?? '',
+      username: session.username ?? session.account ?? '',
+      account: session.account ?? session.username ?? '',
+      displayName: session.displayName,
+      phone: profile?.phone,
+      email: profile?.email,
+      role: profile?.role,
+      createdAt: profile?.createdAt,
+      membershipActive: session.membershipActive,
+      vipLevel: session.vipLevel,
+      planType: session.planType,
+      vipStatus: session.vipStatus,
+      vipExpireAt: session.vipExpireAt,
+      features: profile?.features ?? const <String>[],
+    );
   }
 
   @override
@@ -345,6 +463,7 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
     }
 
     final profile = _profile;
+    final membershipProfile = _membershipProfileFor(session, profile);
     final displayName =
         profile?.displayIdentity ??
         session.displayIdentity ??
@@ -358,6 +477,7 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
         displayName: displayName,
         userId: userId,
         profile: profile,
+        membershipProfile: membershipProfile,
         localAvatarPath: _localAvatarPath,
       ),
       if (_isLoadingProfile)
@@ -798,12 +918,13 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
     required String displayName,
     required String userId,
     required UserProfile? profile,
+    required UserProfile? membershipProfile,
     required String? localAvatarPath,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     final initial = displayName.trim().isEmpty ? 'U' : displayName.trim()[0];
-    final isValidVip = _isValidVip(profile);
-    final vipLevelStyle = _getVipLevelStyle(profile);
+    final isValidVip = _isValidVip(membershipProfile);
+    final vipLevelStyle = _getVipLevelStyle(membershipProfile);
 
     return Container(
       padding: EdgeInsets.all(AppAdaptiveMetrics.of(context).cardPadding + 2),
@@ -899,7 +1020,7 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
             ],
           ),
           const SizedBox(height: 16),
-          _buildMembershipCard(profile, context),
+          _buildMembershipCard(membershipProfile, context),
         ],
       ),
     );

@@ -64,6 +64,29 @@ void main() {
     expect(entitlement.displayBenefitKind, '活动体验权益');
   });
 
+  test('MembershipEntitlement reads authoritative nested field names', () {
+    final entitlement = MembershipEntitlement.fromJson(<String, dynamic>{
+      'active': true,
+      'level': 'svip',
+      'status': 'active',
+      'plan_type': 'lifetime',
+      'expire_at': null,
+      'source': 'manual_grant',
+      'label': '手动发放',
+      'is_trial': false,
+      'max_devices': 3,
+      'features': <String>['theme_custom', 'online_service'],
+    });
+
+    expect(entitlement.membershipActive, isTrue);
+    expect(entitlement.vipLevel, 'svip');
+    expect(entitlement.membershipLevel, 'svip');
+    expect(entitlement.vipStatus, 'active');
+    expect(entitlement.displaySourceLabel, '手动发放');
+    expect(entitlement.maxDevices, 3);
+    expect(entitlement.features, <String>['theme_custom', 'online_service']);
+  });
+
   test('active membership keeps default member features without payload', () {
     final entitlement = MembershipEntitlement.fromJson(<String, dynamic>{
       'vip_level': 'pro',
@@ -160,6 +183,32 @@ void main() {
       expect(entitlement.isActive, isTrue);
     },
   );
+
+  test('MembershipService reads nested membership payloads', () async {
+    final service = MembershipService(
+      baseUrl: 'https://example.com',
+      client: _MembershipPayloadApiClient(const <String, dynamic>{
+        'membership': <String, dynamic>{
+          'active': true,
+          'level': 'pro',
+          'status': 'active',
+          'plan_type': 'year',
+          'label': '手动发放',
+          'max_devices': 2,
+          'features': <String>['theme_custom'],
+        },
+      }),
+    );
+
+    final entitlement = await service.fetchEntitlement();
+
+    expect(entitlement.isActive, isTrue);
+    expect(entitlement.vipLevel, 'pro');
+    expect(entitlement.vipStatus, 'active');
+    expect(entitlement.planType, 'year');
+    expect(entitlement.displaySourceLabel, '手动发放');
+    expect(entitlement.maxDevices, 2);
+  });
 
   test('profile membership matches account page vip fields', () {
     const profile = UserProfile(

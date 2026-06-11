@@ -6,6 +6,7 @@ import '../../../core/auth/auth_session.dart';
 import '../../../core/auth/auth_session_secret_store.dart';
 import '../../../core/auth/auth_session_store.dart';
 import '../../../core/auth/auth_session_storage_keys.dart';
+import '../../../core/logging/app_logger.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../core/membership/membership_access_resolver.dart';
 import '../../../core/membership/membership_entitlement.dart';
@@ -102,6 +103,7 @@ class MinePageSessionService {
   final RemoteAccessSnapshotService _remoteAccessSnapshotService;
   final AppDatabase _database;
   final ManagedAssetStore _assetStore;
+  final AppLogger _logger = AppLogger.instance;
 
   Future<MinePageSessionSnapshot> loadSession({
     bool refreshRemote = true,
@@ -139,7 +141,11 @@ class MinePageSessionService {
         cachedRemoteSnapshot,
         session: session,
         profile: profile,
-        allowLocalMembershipFallback: cachedRemoteSnapshot == null,
+        allowLocalMembershipFallback: _shouldUseLocalMembershipFallback(
+          cachedRemoteSnapshot,
+          session: session,
+          profile: profile,
+        ),
       );
       return _buildSnapshot(
         session: session,
@@ -166,7 +172,8 @@ class MinePageSessionService {
             profile: profile,
             entitlement: entitlement,
             allowLocalMembershipFallback:
-                !entitlement.hasExplicitMembershipState,
+                !entitlement.hasExplicitMembershipState ||
+                entitlement.isDefaultInactiveFallback,
           ) ??
           remoteSnapshot;
       if (normalizedUserId.isNotEmpty) {
@@ -358,7 +365,36 @@ class MinePageSessionService {
       membershipPlanType: hasMembership ? access.planType : null,
       cachedAt: DateTime.now().toUtc(),
     );
+    if (snapshot != null && snapshot.hasMembership != hasMembership) {
+      _logger.info(
+        'Mine membership access merged',
+        context: {
+          'snapshotMembership': snapshot.hasMembership,
+          'mergedMembership': hasMembership,
+          'allowLocalFallback': allowLocalMembershipFallback,
+          'hasExplicitState': access.hasExplicitMembershipState,
+        },
+      );
+    }
     return merged.normalizedMembershipAccess();
+  }
+
+  bool _shouldUseLocalMembershipFallback(
+    RemoteAccessSnapshot? snapshot, {
+    required AuthSession session,
+    UserProfile? profile,
+  }) {
+    if (snapshot == null) {
+      return true;
+    }
+    if (snapshot.hasMembership) {
+      return false;
+    }
+    final localAccess = MembershipAccessResolver.resolve(
+      session: session,
+      profile: profile,
+    );
+    return localAccess.hasMembership;
   }
 
   RemoteAccessSnapshot _defaultMembershipSnapshot() {
@@ -385,6 +421,10 @@ class MinePageSessionService {
       if (!_profileBelongsToSession(profile, session)) {
         return (session: session, profile: null);
       }
+      final hasProfileMembershipState =
+          profile.membershipActive != null ||
+          (profile.vipLevel?.trim().isNotEmpty ?? false) ||
+          (profile.vipStatus?.trim().isNotEmpty ?? false);
       final nextSession = AuthSession(
         accessToken: session.accessToken,
         refreshToken: session.refreshToken,
@@ -397,11 +437,22 @@ class MinePageSessionService {
             profile.displayName?.trim().isNotEmpty == true
                 ? profile.displayName
                 : profile.username,
-        membershipActive: profile.membershipActive,
-        vipLevel: profile.vipLevel,
-        planType: profile.planType,
-        vipStatus: profile.vipStatus,
-        vipExpireAt: profile.vipExpireAt,
+        membershipActive:
+            hasProfileMembershipState
+                ? profile.membershipActive
+                : session.membershipActive,
+        vipLevel:
+            hasProfileMembershipState ? profile.vipLevel : session.vipLevel,
+        planType:
+            hasProfileMembershipState
+                ? profile.planType ?? session.planType
+                : session.planType,
+        vipStatus:
+            hasProfileMembershipState ? profile.vipStatus : session.vipStatus,
+        vipExpireAt:
+            hasProfileMembershipState
+                ? profile.vipExpireAt
+                : session.vipExpireAt,
       );
       if (_isSameIdentity(session, nextSession)) {
         return (session: session, profile: profile);

@@ -3,6 +3,7 @@ import '../device/device_identity.dart';
 import '../errors/app_exception.dart';
 import '../errors/error_codes.dart';
 import '../errors/error_stage.dart';
+import '../logging/app_logger.dart';
 import '../network/api_client.dart';
 import '../network/api_config.dart';
 import 'membership_device_seat.dart';
@@ -23,6 +24,7 @@ class MembershipService {
   final ApiClient _client;
   final String _baseUrl;
   final DeviceIdentityService _identityService;
+  final AppLogger _logger = AppLogger.instance;
 
   Future<MembershipEntitlement> fetchEntitlement() async {
     _ensureBaseUrl();
@@ -33,7 +35,22 @@ class MembershipService {
       stage: ErrorStage.unknown,
       decoder: _decodeMap,
     );
-    return MembershipEntitlement.fromJson(_extractEntitlementPayload(data));
+    final entitlement = MembershipEntitlement.fromJson(
+      _extractEntitlementPayload(data),
+    );
+    _logger.info(
+      'Membership entitlement parsed',
+      context: {
+        'membershipActive': entitlement.membershipActive,
+        'hasExplicitState': entitlement.hasExplicitMembershipState,
+        'vipLevel': entitlement.vipLevel,
+        'vipStatus': entitlement.vipStatus,
+        'planType': entitlement.planType,
+        'hasExpireAt': entitlement.expireAt != null,
+        'featuresCount': entitlement.features.length,
+      },
+    );
+    return entitlement;
   }
 
   Future<MembershipEntitlement> redeemActivationCode(String code) async {
@@ -250,17 +267,27 @@ class MembershipService {
         _readNestedMap(data['result']);
     final source = nested ?? data;
     final vipLevel =
-        source['vip_level'] ?? data['vip_level'] ?? source['membership_level'];
+        source['level'] ??
+        data['level'] ??
+        source['vip_level'] ??
+        data['vip_level'] ??
+        source['membership_level'];
     final membershipLevel =
         source['membership_level'] ?? data['membership_level'] ?? vipLevel;
     final hasExplicitMembershipState =
         _firstNonEmptyString(<Object?>[
+          source['level'],
+          data['level'],
           source['vip_level'],
           data['vip_level'],
           source['membership_level'],
           data['membership_level'],
+          source['status'],
+          data['status'],
           source['vip_status'],
           data['vip_status'],
+          source['active'],
+          data['active'],
           source['membership_active'],
           data['membership_active'],
         ]) !=
@@ -270,8 +297,13 @@ class MembershipService {
       'vip_level': vipLevel,
       'membership_level': membershipLevel,
       'membership_active':
-          source['membership_active'] ?? data['membership_active'],
+          source['active'] ??
+          data['active'] ??
+          source['membership_active'] ??
+          data['membership_active'],
       'vip_status':
+          source['status'] ??
+          data['status'] ??
           source['vip_status'] ??
           data['vip_status'] ??
           _fallbackVipStatusForLevel(vipLevel, membershipLevel),
@@ -280,7 +312,11 @@ class MembershipService {
       'source': source['source'] ?? data['source'],
       'grant_type': source['grant_type'] ?? data['grant_type'],
       'grant_subtype': source['grant_subtype'] ?? data['grant_subtype'],
-      'grant_label': source['grant_label'] ?? data['grant_label'],
+      'grant_label':
+          source['label'] ??
+          data['label'] ??
+          source['grant_label'] ??
+          data['grant_label'],
       'is_custom_expire':
           source['is_custom_expire'] ?? data['is_custom_expire'],
       'is_trial': source['is_trial'] ?? data['is_trial'],

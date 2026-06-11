@@ -34,6 +34,36 @@ void main() {
     },
   );
 
+  test('UserProfile reads authoritative nested membership payloads', () {
+    final profile = UserProfile.fromJson(<String, dynamic>{
+      'user': <String, dynamic>{
+        'user_id': 'usr_nested',
+        'username': 'reader001',
+        'role': 'user',
+        'created_at': '2026-06-11T00:00:00Z',
+        'membership': <String, dynamic>{
+          'active': true,
+          'level': 'svip',
+          'plan_type': 'lifetime',
+          'status': 'active',
+          'expire_at': null,
+          'source': 'manual_grant',
+          'label': '手动发放',
+          'is_trial': false,
+          'max_devices': 3,
+          'features': <String>['theme_custom', 'online_service'],
+        },
+      },
+    });
+
+    expect(profile.membershipActive, isTrue);
+    expect(profile.vipLevel, 'svip');
+    expect(profile.planType, 'lifetime');
+    expect(profile.vipStatus, 'active');
+    expect(profile.vipExpireAt, isNull);
+    expect(profile.features, <String>['theme_custom', 'online_service']);
+  });
+
   test('UserProfile accepts account-only profile payloads', () {
     final profile = UserProfile.fromJson(<String, dynamic>{
       'user': <String, dynamic>{

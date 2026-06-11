@@ -114,6 +114,105 @@ void main() {
       expect(find.text('永久有效'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'UserProfilePage refresh persists latest membership profile to session',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() async {
+        await tester.binding.setSurfaceSize(null);
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final prefs = await SharedPreferences.getInstance();
+      final secretStore = FakeAuthSessionSecretStore();
+      final sessionStore = AuthSessionStore(
+        preferences: prefs,
+        secretStore: secretStore,
+      );
+      await sessionStore.saveSession(
+        const AuthSession(
+          accessToken: 'member_access',
+          refreshToken: 'member_refresh',
+          userId: 'member_user',
+          username: 'member@example.com',
+          account: 'member@example.com',
+          displayName: 'Member Reader',
+          membershipActive: false,
+          vipLevel: 'none',
+          planType: 'month',
+          vipStatus: 'expired',
+        ),
+      );
+
+      final profileService = _QueuedUserProfileService(<UserProfile>[
+        _profile(
+          userId: 'member_user',
+          username: 'member@example.com',
+          displayName: 'Member Reader',
+          membershipActive: false,
+          vipLevel: 'none',
+          planType: 'month',
+          vipStatus: 'expired',
+        ),
+        _profile(
+          userId: 'member_user',
+          username: 'member@example.com',
+          displayName: 'Member Reader',
+          membershipActive: true,
+          vipLevel: 'svip',
+          planType: 'lifetime',
+          vipStatus: 'active',
+        ),
+      ]);
+      final router = GoRouter(
+        initialLocation: '/profile',
+        routes: <RouteBase>[
+          GoRoute(
+            path: '/profile',
+            builder: (context, state) => const UserProfilePage(),
+          ),
+          GoRoute(path: '/mine', builder: (context, state) => const Scaffold()),
+          GoRoute(
+            path: '/membership',
+            builder: (context, state) => const Scaffold(),
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: <Override>[
+            authSessionStoreProvider.overrideWithValue(sessionStore),
+            authSessionSecretStoreProvider.overrideWithValue(secretStore),
+            userProfileServiceProvider.overrideWithValue(profileService),
+            minePageSessionServiceProvider.overrideWithValue(
+              _UserProfileTestMinePageSessionService(sessionStore),
+            ),
+          ],
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(profileService.fetchCount, 1);
+      expect(find.text('开通会员，享阅读特权'), findsOneWidget);
+
+      await tester.tap(find.text('刷新资料'));
+      await tester.pump();
+      await tester.pumpAndSettle();
+
+      expect(profileService.fetchCount, 2);
+      expect(find.text('永久有效'), findsOneWidget);
+
+      final stored = await sessionStore.getSession();
+      expect(stored?.membershipActive, isTrue);
+      expect(stored?.vipLevel, 'svip');
+      expect(stored?.planType, 'lifetime');
+      expect(stored?.vipStatus, 'active');
+    },
+  );
 }
 
 class _SwitchingUserProfileService extends UserProfileService {
@@ -156,6 +255,24 @@ class _SwitchingUserProfileService extends UserProfileService {
         membershipActive: false,
       ),
     );
+  }
+}
+
+class _QueuedUserProfileService extends UserProfileService {
+  _QueuedUserProfileService(this._profiles)
+    : super(baseUrl: 'https://example.com');
+
+  final List<UserProfile> _profiles;
+  int fetchCount = 0;
+
+  @override
+  Future<UserProfile> fetchMe({
+    String? accessToken,
+    bool enableAuthRefresh = true,
+  }) async {
+    fetchCount += 1;
+    final index = (fetchCount - 1).clamp(0, _profiles.length - 1);
+    return _profiles[index];
   }
 }
 

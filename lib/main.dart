@@ -17,3 +17,11 @@ Future<void> main() async {
 
 // ANDROID_TARGET=apk SPLIT_PER_ABI=1 ./scripts/build_unified_artifacts.sh android release
 // ```
+
+//  ```bash
+// # Shorebird 热更新：当前移动端基线 1.3.0+26061101
+// /Users/zhangyuanlong/.shorebird/bin/shorebird patch \
+//   --platforms=android,ios \
+//   --release-version=1.3.0+26061101 \
+//   --no-codesign
+// ```

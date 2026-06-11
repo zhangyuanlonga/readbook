@@ -38,6 +38,29 @@ class MembershipEntitlement {
       (vipStatus.trim().toLowerCase() == 'active' &&
           !_isInactiveLevel(vipLevel));
 
+  bool get isDefaultInactiveFallback {
+    if (isActive || membershipActive != false) {
+      return false;
+    }
+    final normalizedVipLevel = vipLevel.trim().toLowerCase();
+    final normalizedMembershipLevel = membershipLevel.trim().toLowerCase();
+    final normalizedStatus = vipStatus.trim().toLowerCase();
+    final normalizedPlanType = planType.trim().toLowerCase();
+    return _isInactiveLevel(normalizedVipLevel) &&
+        _isInactiveLevel(normalizedMembershipLevel) &&
+        (normalizedStatus.isEmpty || normalizedStatus == 'expired') &&
+        (normalizedPlanType.isEmpty || normalizedPlanType == 'month') &&
+        expireAt == null &&
+        _isBlank(source) &&
+        _isBlank(grantType) &&
+        _isBlank(grantSubtype) &&
+        _isBlank(grantLabel) &&
+        !isCustomExpire &&
+        !isTrial &&
+        maxDevices == 1 &&
+        features.isEmpty;
+  }
+
   bool get isCampaignTrial => (grantSubtype?.trim() ?? '') == 'campaign_trial';
 
   bool get isSystemTrial => (grantSubtype?.trim() ?? '') == 'system_trial';
@@ -119,11 +142,17 @@ class MembershipEntitlement {
             : int.tryParse(maxDevicesRaw?.toString() ?? '') ?? 1;
 
     final vipLevel = _firstNonEmpty(<Object?>[
+      json['level'],
       json['vip_level'],
       json['membership_level'],
     ]);
-    final vipStatus = _firstNonEmpty(<Object?>[json['vip_status']]);
-    final membershipActive = _optionalBool(json['membership_active']);
+    final vipStatus = _firstNonEmpty(<Object?>[
+      json['status'],
+      json['vip_status'],
+    ]);
+    final membershipActive = _optionalBool(
+      json['active'] ?? json['membership_active'],
+    );
     final hasExplicitMembershipState =
         json['_has_explicit_membership_state'] == true ||
         membershipActive != null ||
@@ -141,6 +170,7 @@ class MembershipEntitlement {
               : json['source']!.toString().trim(),
       membershipLevel:
           (json['membership_level']?.toString().trim() ??
+                  json['level']?.toString().trim() ??
                   json['vip_level']?.toString().trim() ??
                   'none')
               .trim(),
@@ -153,9 +183,10 @@ class MembershipEntitlement {
               ? null
               : json['grant_subtype']!.toString().trim(),
       grantLabel:
-          (json['grant_label']?.toString().trim().isEmpty ?? true)
+          ((json['label'] ?? json['grant_label'])?.toString().trim().isEmpty ??
+                  true)
               ? null
-              : json['grant_label']!.toString().trim(),
+              : (json['label'] ?? json['grant_label'])!.toString().trim(),
       isCustomExpire: json['is_custom_expire'] == true,
       isTrial: json['is_trial'] == true,
       maxDevices: maxDevices <= 0 ? 1 : maxDevices,
@@ -206,4 +237,6 @@ class MembershipEntitlement {
         return false;
     }
   }
+
+  static bool _isBlank(String? value) => (value?.trim() ?? '').isEmpty;
 }

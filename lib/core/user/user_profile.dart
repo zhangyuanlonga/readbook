@@ -89,6 +89,7 @@ class UserProfile {
     if (!_hasText(data['account']) && _hasText(data['username'])) {
       data['account'] = data['username'];
     }
+    _inlineMembershipFields(data);
 
     return UserProfile._fromUserJson(data);
   }
@@ -98,6 +99,28 @@ class UserProfile {
 
   static bool _hasText(Object? value) {
     return (value?.toString().trim() ?? '').isNotEmpty;
+  }
+
+  static void _inlineMembershipFields(Map<String, dynamic> data) {
+    final membership = _readStringKeyMap(data['membership']);
+    if (membership == null) {
+      return;
+    }
+    data['membership_active'] ??= membership['active'];
+    data['vip_level'] ??= membership['level'];
+    data['plan_type'] ??= membership['plan_type'];
+    data['vip_status'] ??= membership['status'];
+    data['vip_expire_at'] ??= membership['expire_at'];
+    data['source'] ??= membership['source'];
+    data['max_devices'] ??= membership['max_devices'];
+    data['features'] ??= membership['features'];
+  }
+
+  static Map<String, dynamic>? _readStringKeyMap(Object? value) {
+    if (value is! Map) {
+      return null;
+    }
+    return value.map((key, value) => MapEntry(key.toString(), value));
   }
 
   static String _requiredUserIdFromJson(Object? value) =>

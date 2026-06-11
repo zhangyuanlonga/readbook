@@ -151,6 +151,64 @@ void main() {
     expect(membershipService.fetchCount, 1);
   });
 
+  test(
+    'uses current account membership over inactive cached remote snapshot',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      final database = AppDatabase(executor: NativeDatabase.memory());
+      addTearDown(database.close);
+      final remoteSnapshotService = RemoteAccessSnapshotService(
+        preferences: prefs,
+        database: database,
+      );
+      await remoteSnapshotService.save(
+        'user_cached_member',
+        RemoteAccessSnapshot(
+          serverSourceGatewayEnabled: true,
+          hasMembership: false,
+          hasThemeCustom: false,
+          serverSourceGatewayLimit: 10,
+          cachedAt: DateTime.utc(2026, 6, 1),
+        ),
+      );
+      final store = AuthSessionStore(
+        preferences: prefs,
+        secretStore: FakeAuthSessionSecretStore(),
+      );
+      await store.saveSession(
+        const AuthSession(
+          accessToken: 'token',
+          userId: 'user_cached_member',
+          username: 'tester',
+          membershipActive: true,
+          vipLevel: 'svip',
+          planType: 'lifetime',
+          vipStatus: 'active',
+        ),
+      );
+
+      final service = MinePageSessionService(
+        authSessionStore: store,
+        mobileFeatureService: _FakeMobileFeatureService(),
+        membershipService: _FakeMembershipService(),
+        userProfileService: _FakeUserProfileService(
+          userId: 'user_cached_member',
+          username: 'tester',
+          account: 'tester',
+          displayName: 'Tester',
+        ),
+        remoteAccessSnapshotService: remoteSnapshotService,
+        database: database,
+      );
+
+      final snapshot = await service.loadSession(refreshRemote: false);
+
+      expect(snapshot.hasMembership, isTrue);
+      expect(snapshot.hasThemeCustom, isTrue);
+      expect(snapshot.membershipPlanType, 'lifetime');
+    },
+  );
+
   test('does not let stale profile sync overwrite a newer session', () async {
     final prefs = await SharedPreferences.getInstance();
     final store = AuthSessionStore(
@@ -263,6 +321,49 @@ void main() {
   );
 
   test(
+    'keeps account profile membership when entitlement is default inactive',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      final store = AuthSessionStore(
+        preferences: prefs,
+        secretStore: FakeAuthSessionSecretStore(),
+      );
+      await store.saveSession(
+        const AuthSession(
+          accessToken: 'token',
+          userId: 'user_profile_wins',
+          username: 'tester',
+        ),
+      );
+
+      final service = MinePageSessionService(
+        authSessionStore: store,
+        mobileFeatureService: _FakeMobileFeatureService(),
+        membershipService: _InactiveMembershipService(),
+        userProfileService: _FakeUserProfileService(
+          userId: 'user_profile_wins',
+          username: 'tester',
+          account: 'tester',
+          displayName: 'Tester',
+          vipLevel: 'svip',
+          planType: 'lifetime',
+          vipStatus: 'active',
+          membershipActive: true,
+        ),
+        remoteAccessSnapshotService: RemoteAccessSnapshotService(
+          preferences: prefs,
+        ),
+      );
+
+      final snapshot = await service.loadSession(refreshRemote: true);
+
+      expect(snapshot.hasMembership, isTrue);
+      expect(snapshot.hasThemeCustom, isTrue);
+      expect(snapshot.membershipPlanType, 'lifetime');
+    },
+  );
+
+  test(
     'explicit inactive entitlement is not overridden by stale profile membership',
     () async {
       final prefs = await SharedPreferences.getInstance();
@@ -281,7 +382,7 @@ void main() {
       final service = MinePageSessionService(
         authSessionStore: store,
         mobileFeatureService: _FakeMobileFeatureService(),
-        membershipService: _InactiveMembershipService(),
+        membershipService: _RevokedMembershipService(),
         userProfileService: _FakeUserProfileService(
           userId: 'user_profile_stale_member',
           username: 'tester',
@@ -531,6 +632,31 @@ class _InactiveMembershipService extends MembershipService {
       isTrial: false,
       maxDevices: 1,
       features: <String>[],
+      membershipActive: false,
+    );
+  }
+}
+
+class _RevokedMembershipService extends MembershipService {
+  _RevokedMembershipService() : super(baseUrl: 'https://example.com');
+
+  @override
+  Future<MembershipEntitlement> fetchEntitlement() async {
+    return const MembershipEntitlement(
+      vipLevel: 'none',
+      vipStatus: 'expired',
+      planType: 'month',
+      membershipLevel: 'none',
+      grantType: null,
+      grantSubtype: null,
+      grantLabel: null,
+      isCustomExpire: false,
+      expireAt: null,
+      source: 'manual_grant',
+      isTrial: false,
+      maxDevices: 1,
+      features: <String>[],
+      membershipActive: false,
     );
   }
 }
@@ -591,6 +717,7 @@ class _FakeUserProfileService extends UserProfileService {
     required this.username,
     required this.account,
     required this.displayName,
+    this.membershipActive,
     this.vipLevel,
     this.planType,
     this.vipStatus,
@@ -600,6 +727,7 @@ class _FakeUserProfileService extends UserProfileService {
   final String username;
   final String account;
   final String displayName;
+  final bool? membershipActive;
   final String? vipLevel;
   final String? planType;
   final String? vipStatus;
@@ -618,6 +746,7 @@ class _FakeUserProfileService extends UserProfileService {
       email: null,
       role: null,
       createdAt: null,
+      membershipActive: membershipActive,
       vipLevel: vipLevel,
       planType: planType,
       vipStatus: vipStatus,

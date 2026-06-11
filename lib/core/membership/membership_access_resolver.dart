@@ -147,6 +147,13 @@ class MembershipAccessResolver {
     ];
 
     if (entitlementAccess.hasExplicitMembershipState) {
+      if (entitlement?.isDefaultInactiveFallback == true &&
+          profileAccess.hasMembership) {
+        return _withMetadataFallback(profileAccess, <MembershipAccessSnapshot>[
+          sessionAccess,
+          entitlementAccess,
+        ]);
+      }
       return _withMetadataFallback(entitlementAccess, fallbacks);
     }
     if (profileAccess.hasExplicitMembershipState) {
