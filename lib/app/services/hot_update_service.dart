@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:shorebird_code_push/shorebird_code_push.dart';
 
+import '../../core/logging/app_logger.dart';
+import '../../core/navigation/global_navigator.dart';
+
 /// 热更新检查服务 - 启动时检查并显示 UI 提示
 class HotUpdateService {
   HotUpdateService._();
@@ -8,40 +11,87 @@ class HotUpdateService {
   static final instance = HotUpdateService._();
 
   final ShorebirdUpdater _updater = ShorebirdUpdater();
+  final AppLogger _logger = AppLogger.instance;
 
   /// 启动时检查更新
   Future<void> checkAndPromptUpdate(BuildContext context) async {
     try {
-      if (!_updater.isAvailable) {
+      final isAvailable = _updater.isAvailable;
+      _logger.info(
+        'Hot update check started',
+        context: <String, Object?>{'isAvailable': isAvailable},
+      );
+      if (!isAvailable) {
         return;
       }
 
       // 检查是否有新 patch
       final status = await _updater.checkForUpdate();
+      _logger.info(
+        'Hot update status resolved',
+        context: <String, Object?>{'status': status.name},
+      );
 
       if (status == UpdateStatus.unavailable ||
           status == UpdateStatus.upToDate) {
         return;
       }
 
-      if (!context.mounted) return;
+      if (!context.mounted) {
+        _logger.warn(
+          'Hot update fallback context unmounted',
+          context: <String, Object?>{'status': status.name},
+        );
+        return;
+      }
+      final dialogContext = await _resolveDialogContext(context);
+      if (dialogContext == null || !dialogContext.mounted) {
+        _logger.warn(
+          'Hot update dialog context unavailable',
+          context: <String, Object?>{'status': status.name},
+        );
+        return;
+      }
 
       if (status == UpdateStatus.restartRequired) {
-        await _showRestartDialog(context);
+        await _showRestartDialog(dialogContext);
         return;
       }
 
       // 显示更新对话框
-      final shouldUpdate = await _showUpdateDialog(context);
+      final shouldUpdate = await _showUpdateDialog(dialogContext);
+      _logger.info(
+        'Hot update prompt completed',
+        context: <String, Object?>{'accepted': shouldUpdate == true},
+      );
 
       if (shouldUpdate == true) {
-        if (!context.mounted) return;
-        await _downloadAndApplyUpdate(context);
+        if (!dialogContext.mounted) return;
+        await _downloadAndApplyUpdate(dialogContext);
       }
     } catch (e) {
       // 静默失败，不影响应用正常使用
+      _logger.warn(
+        'Hot update check failed',
+        context: <String, Object?>{'error': e.toString()},
+      );
       debugPrint('热更新检查失败: $e');
     }
+  }
+
+  Future<BuildContext?> _resolveDialogContext(BuildContext fallback) async {
+    for (var attempt = 0; attempt < 12; attempt += 1) {
+      final rootContext = globalRootNavigatorKey.currentContext;
+      if (rootContext != null && rootContext.mounted) {
+        return rootContext;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+    }
+    if (fallback.mounted &&
+        Navigator.maybeOf(fallback, rootNavigator: true) != null) {
+      return fallback;
+    }
+    return null;
   }
 
   /// 显示更新对话框
@@ -69,6 +119,7 @@ class HotUpdateService {
 
   /// 下载并应用更新
   Future<void> _downloadAndApplyUpdate(BuildContext context) async {
+    _logger.info('Hot update download started');
     // 显示下载进度
     showDialog(
       context: context,
@@ -89,6 +140,7 @@ class HotUpdateService {
     try {
       // 下载更新
       await _updater.update();
+      _logger.info('Hot update downloaded');
 
       if (!context.mounted) return;
 
@@ -98,6 +150,10 @@ class HotUpdateService {
       // 提示重启
       await _showRestartDialog(context);
     } catch (e) {
+      _logger.warn(
+        'Hot update download failed',
+        context: <String, Object?>{'error': e.toString()},
+      );
       if (!context.mounted) return;
 
       Navigator.pop(context);

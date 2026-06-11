@@ -21,6 +21,7 @@ import '../features/source/application/external_import_catalog.dart';
 import '../features/source/application/external_import_diagnostics.dart';
 import '../features/source/application/external_source_import_bridge.dart';
 import 'widgets/app_task_status.dart';
+import 'widgets/app_splash_screen.dart';
 import 'widgets/import_export_copy.dart';
 import 'widgets/import_export_task_overlay.dart';
 import 'lifecycle/auth_account_lifecycle_coordinator.dart';
@@ -30,7 +31,6 @@ import 'router.dart';
 import 'startup/app_announcement_coordinator.dart';
 import 'startup/app_startup_coordinator.dart';
 import 'startup_artwork_store.dart';
-import 'startup_artwork_image_provider.dart';
 import 'theme/app_advanced_theme_tokens.dart';
 import 'theme/app_theme.dart';
 import 'theme/app_interface_typography_provider.dart';
@@ -636,15 +636,9 @@ class _SystemUiOverlayWrapperState
   }
 
   SystemUiOverlayStyle _startupOverlayStyle(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final base =
-        brightness == Brightness.dark
-            ? SystemUiOverlayStyle.light
-            : SystemUiOverlayStyle.dark;
-    final navColor = Theme.of(context).colorScheme.surface;
-    return base.copyWith(
+    return SystemUiOverlayStyle.dark.copyWith(
       statusBarColor: Colors.transparent,
-      systemNavigationBarColor: navColor,
+      systemNavigationBarColor: Colors.white,
       systemNavigationBarDividerColor: Colors.transparent,
     );
   }
@@ -655,7 +649,7 @@ class _StartupGuardPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const _StartupGuardArtwork();
+    return const ColoredBox(color: Colors.white, child: AppSplashBrandMark());
   }
 }
 
@@ -875,116 +869,6 @@ class _StartupAnnouncementBanner extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _StartupGuardArtwork extends StatefulWidget {
-  const _StartupGuardArtwork();
-
-  @override
-  State<_StartupGuardArtwork> createState() => _StartupGuardArtworkState();
-}
-
-class _StartupGuardArtworkState extends State<_StartupGuardArtwork> {
-  static const String _fallbackStartupArtwork =
-      'assets/branding/selune_launch_scene.png';
-  int _seenRevision = -1;
-  ImageProvider? _imageProvider;
-  Object? _imageKey;
-  Timer? _artworkPollTimer;
-
-  @override
-  void initState() {
-    super.initState();
-    _syncArtwork(precache: false);
-    _artworkPollTimer = Timer.periodic(const Duration(milliseconds: 50), (_) {
-      if (!mounted) {
-        return;
-      }
-      if (_seenRevision != StartupArtworkStore.revision ||
-          StartupArtworkStore.isPriming) {
-        _syncArtwork();
-      }
-      if (!StartupArtworkStore.isPriming &&
-          _seenRevision == StartupArtworkStore.revision) {
-        _artworkPollTimer?.cancel();
-        _artworkPollTimer = null;
-      }
-    });
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _syncArtwork();
-  }
-
-  @override
-  void dispose() {
-    _artworkPollTimer?.cancel();
-    super.dispose();
-  }
-
-  void _syncArtwork({bool precache = true}) {
-    if (StartupArtworkStore.isPriming &&
-        StartupArtworkStore.primedImagePath == null &&
-        _imageProvider != null) {
-      return;
-    }
-    final revision = StartupArtworkStore.revision;
-    final hasExpectedProvider = _imageProvider != null;
-    if (_seenRevision == revision && hasExpectedProvider) {
-      return;
-    }
-    _seenRevision = revision;
-    final resolvedPath = StartupArtworkStore.primedImagePath?.trim();
-    final fileProvider = resolveStartupArtworkFileProvider(resolvedPath);
-    final ImageProvider nextProvider =
-        fileProvider ?? const AssetImage(_fallbackStartupArtwork);
-    final nextKey = resolvedPath ?? _fallbackStartupArtwork;
-    _imageProvider = nextProvider;
-    _imageKey = nextKey;
-    if (precache) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          precacheImage(nextProvider, context);
-        }
-      });
-    }
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_seenRevision != StartupArtworkStore.revision) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _syncArtwork();
-        }
-      });
-    }
-    final imageProvider =
-        _imageProvider ??
-        (StartupArtworkStore.isPriming
-            ? null
-            : const AssetImage(_fallbackStartupArtwork));
-    return ColoredBox(
-      color: const Color(0xFFF6F8FB),
-      child: SizedBox.expand(
-        child:
-            imageProvider == null
-                ? const SizedBox.expand()
-                : Image(
-                  key: ValueKey<Object?>(_imageKey),
-                  image: imageProvider,
-                  fit: BoxFit.fill,
-                  alignment: Alignment.center,
-                  filterQuality: FilterQuality.high,
-                ),
       ),
     );
   }

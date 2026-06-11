@@ -12,7 +12,6 @@ import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
-import '../../../app/widgets/adaptive_list_tile.dart';
 import '../../../app/widgets/adaptive_overflow_toolbar.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
 import '../../../app/widgets/app_task_bottom_sheet.dart';
@@ -201,7 +200,7 @@ class PrivateBookSourcesPage extends ConsumerWidget {
       subtitle: '私人书源与共享审核',
       actions: <AdaptiveOverflowToolbarItem>[
         AdaptiveOverflowToolbarItem(
-          icon: Icons.folder_copy_outlined,
+          icon: Icons.library_books_outlined,
           label: '分组',
           priority: 9,
           onPressed: () => unawaited(_openGroupManager(context, ref)),
@@ -217,7 +216,7 @@ class PrivateBookSourcesPage extends ConsumerWidget {
         IconButton(
           tooltip: '分组',
           onPressed: () => unawaited(_openGroupManager(context, ref)),
-          icon: const Icon(Icons.folder_copy_outlined),
+          icon: const Icon(Icons.library_books_outlined),
         ),
         IconButton(
           tooltip: '新增书源',
@@ -1295,13 +1294,14 @@ class _PrivateSourceGroupManagerSheetState
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
     final groupsAsync = ref.watch(privateBookSourceGroupsProvider);
     final metrics = AppAdaptiveMetrics.of(context);
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final maxHeight = MediaQuery.sizeOf(context).height * 0.78;
     return Padding(
       padding: EdgeInsets.fromLTRB(
-        metrics.pagePadding,
+        16,
         metrics.contentGap,
-        metrics.pagePadding,
+        16,
         bottomInset + metrics.sectionGap,
       ),
       child: ConstrainedBox(
@@ -1309,62 +1309,84 @@ class _PrivateSourceGroupManagerSheetState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            DecoratedBox(
-              decoration: BoxDecoration(
-                color: colorScheme.surfaceContainerLowest.withValues(
-                  alpha: 0.94,
-                ),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: colorScheme.outlineVariant.withValues(alpha: 0.28),
-                ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
-                child: Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: TextField(
-                        controller: _nameController,
-                        enabled: !_saving,
-                        style: Theme.of(
-                          context,
-                        ).textTheme.bodyMedium?.copyWith(height: 1.15),
-                        decoration: const InputDecoration(
-                          isDense: true,
-                          border: InputBorder.none,
-                          hintText: '新增分组，例如：常用、漫画、备用',
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 2,
-                            vertical: 9,
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: SizedBox(
+                    height: 48,
+                    child: TextField(
+                      controller: _nameController,
+                      enabled: !_saving,
+                      style: theme.textTheme.bodyMedium?.copyWith(height: 1.15),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        filled: true,
+                        fillColor: colorScheme.surfaceContainerLowest
+                            .withValues(alpha: 0.94),
+                        hintText: '新增分组，例如：常用、漫画、备用',
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 13,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(
+                            color: colorScheme.outlineVariant.withValues(
+                              alpha: 0.48,
+                            ),
                           ),
                         ),
-                        onSubmitted: (_) => unawaited(_createGroup()),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(
+                            color: colorScheme.outlineVariant.withValues(
+                              alpha: 0.48,
+                            ),
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(
+                            color: colorScheme.primary.withValues(alpha: 0.78),
+                            width: 1.4,
+                          ),
+                        ),
                       ),
+                      onSubmitted: (_) => unawaited(_createGroup()),
                     ),
-                    const SizedBox(width: 8),
-                    FilledButton.icon(
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Tooltip(
+                  message: _saving ? '保存中' : '新增分组',
+                  child: SizedBox.square(
+                    dimension: 48,
+                    child: FilledButton(
                       onPressed:
                           _saving ? null : () => unawaited(_createGroup()),
                       style: FilledButton.styleFrom(
-                        backgroundColor: colorScheme.primary,
-                        foregroundColor: colorScheme.onPrimary,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 13,
-                          vertical: 10,
-                        ),
+                        fixedSize: const Size.square(48),
+                        minimumSize: const Size.square(48),
+                        padding: EdgeInsets.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(14),
                         ),
-                        textStyle: Theme.of(context).textTheme.labelMedium
-                            ?.copyWith(fontWeight: FontWeight.w800),
                       ),
-                      icon: const Icon(Icons.add_rounded, size: 18),
-                      label: Text(_saving ? '保存中' : '新增'),
+                      child:
+                          _saving
+                              ? SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: colorScheme.onPrimary,
+                                ),
+                              )
+                              : const Icon(Icons.add_rounded, size: 26),
                     ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ),
             const SizedBox(height: 14),
             Expanded(
@@ -1380,38 +1402,118 @@ class _PrivateSourceGroupManagerSheetState
                   }
                   return ListView.separated(
                     itemCount: groups.length,
-                    separatorBuilder: (_, _) => const Divider(height: 1),
+                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    padding: const EdgeInsets.fromLTRB(0, 8, 0, 12),
                     itemBuilder: (context, index) {
                       final group = groups[index];
                       final isDefault = _isDefaultGroup(group);
-                      return AdaptiveListTile(
-                        key: ValueKey(group.id),
-                        leading: const Icon(Icons.folder_outlined),
-                        title: Text(
-                          group.displayName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleSmall
-                              ?.copyWith(fontWeight: FontWeight.w800),
-                        ),
-                        subtitle: Text(isDefault ? '默认兜底分组' : '私人书源分组'),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: <Widget>[
-                            IconButton(
-                              tooltip: '重命名',
-                              onPressed: () => unawaited(_renameGroup(group)),
-                              icon: const Icon(Icons.edit_outlined),
+                      return Material(
+                        color: Theme.of(context).colorScheme.surfaceContainerLow
+                            .withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(12),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () {},
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 12,
                             ),
-                            IconButton(
-                              tooltip: '删除',
-                              onPressed:
-                                  isDefault
-                                      ? null
-                                      : () => unawaited(_deleteGroup(group)),
-                              icon: const Icon(Icons.delete_outline),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .outlineVariant
+                                    .withValues(alpha: 0.2),
+                              ),
                             ),
-                          ],
+                            child: Row(
+                              children: <Widget>[
+                                Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color:
+                                        isDefault
+                                            ? Theme.of(
+                                              context,
+                                            ).colorScheme.primaryContainer
+                                            : Theme.of(context)
+                                                .colorScheme
+                                                .surfaceContainerHighest,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Icon(
+                                    isDefault
+                                        ? Icons.folder_special_outlined
+                                        : Icons.folder_outlined,
+                                    size: 20,
+                                    color:
+                                        isDefault
+                                            ? Theme.of(
+                                              context,
+                                            ).colorScheme.onPrimaryContainer
+                                            : Theme.of(
+                                              context,
+                                            ).colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: <Widget>[
+                                      Text(
+                                        group.displayName,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.titleSmall?.copyWith(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        isDefault ? '默认书源分组' : '私人书源分组',
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.labelSmall?.copyWith(
+                                          color:
+                                              Theme.of(
+                                                context,
+                                              ).colorScheme.onSurfaceVariant,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                IconButton(
+                                  tooltip: '重命名',
+                                  onPressed:
+                                      () => unawaited(_renameGroup(group)),
+                                  icon: const Icon(
+                                    Icons.edit_outlined,
+                                    size: 20,
+                                  ),
+                                ),
+                                IconButton(
+                                  tooltip: '删除',
+                                  onPressed:
+                                      isDefault
+                                          ? null
+                                          : () =>
+                                              unawaited(_deleteGroup(group)),
+                                  icon: const Icon(
+                                    Icons.delete_outline,
+                                    size: 20,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       );
                     },
@@ -1611,16 +1713,20 @@ class _PrivateSourceTile extends StatelessWidget {
                   _buildChip(
                     context,
                     _reviewLabel(item.reviewStatus),
-                    _reviewStatusColor(item.reviewStatus, colorScheme)
-                        .withValues(alpha: 0.12),
+                    _reviewStatusColor(
+                      item.reviewStatus,
+                      colorScheme,
+                    ).withValues(alpha: 0.12),
                     _reviewStatusColor(item.reviewStatus, colorScheme),
                   ),
                   if (testStatus.isNotEmpty || testMessage.isNotEmpty)
                     _buildChip(
                       context,
                       '检测 ${_testLabel(testStatus)}${testMessage.isEmpty ? '' : ' $testMessage'}',
-                      _testStatusColor(testStatus, colorScheme)
-                          .withValues(alpha: 0.12),
+                      _testStatusColor(
+                        testStatus,
+                        colorScheme,
+                      ).withValues(alpha: 0.12),
                       _testStatusColor(testStatus, colorScheme),
                     ),
                   if (item.description.isNotEmpty)
@@ -1654,9 +1760,9 @@ class _PrivateSourceTile extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: foregroundColor,
-              fontWeight: FontWeight.w500,
-            ),
+          color: foregroundColor,
+          fontWeight: FontWeight.w500,
+        ),
       ),
     );
   }

@@ -242,6 +242,240 @@
 
 ---
 
+### 六、性能与流畅度审查
+
+#### 6.1 构建性能 ✓/✗
+
+- [ ] 是否使用 const 构造函数（减少重建）
+- [ ] 是否避免在 build() 方法中创建对象
+- [ ] ListView 是否使用 .builder（而不是直接传 children）
+- [ ] 图片是否使用 cached_network_image（避免重复下载）
+- [ ] 是否避免不必要的 setState（使用 Riverpod）
+
+**检查工具：**
+```dart
+// DevTools -> Performance -> 查看重建次数
+// showPerformanceOverlay: true 查看 FPS
+```
+
+**不合格示例：**
+- build() 中创建 TextEditingController
+- ListView(children: [...]) 用于长列表
+- 不使用 const 修饰静态 Widget
+
+---
+
+#### 6.2 内存优化 ✓/✗
+
+- [ ] 大图片是否压缩/缩略图加载
+- [ ] 长列表是否使用虚拟滚动（ListView.builder）
+- [ ] 是否及时释放资源（dispose controller）
+- [ ] 是否避免内存泄漏（取消监听）
+
+**不合格示例：**
+- 原图直接显示（未压缩）
+- 监听器未取消（如 StreamSubscription）
+
+---
+
+#### 6.3 启动性能 ✓/✗
+
+- [ ] 首屏时间是否 <2 秒
+- [ ] 是否使用懒加载（避免启动时初始化所有服务）
+- [ ] 启动屏是否优雅（纯色 + Logo）
+
+**不合格示例：**
+- 启动时同步初始化大量服务
+- 首屏白屏时间过长
+
+---
+
+### 七、Material 3 组件使用
+
+#### 7.1 组件迁移 ✓/✗
+
+- [ ] 按钮是否使用 FilledButton / OutlinedButton / TextButton
+- [ ] 卡片是否使用 surfaceContainerLow / surfaceContainerHigh
+- [ ] 底部导航是否使用 NavigationBar（不用旧的 BottomNavigationBar）
+- [ ] 是否避免使用已废弃组件（ElevatedButton 可用但不推荐）
+
+**迁移清单：**
+```dart
+// ❌ 旧的（避免使用）
+ElevatedButton()  // 改用 FilledButton
+RaisedButton()    // 已废弃
+FlatButton()      // 已废弃
+
+// ✅ Material 3
+FilledButton()    // 主要操作
+OutlinedButton()  // 次要操作
+TextButton()      // 辅助操作
+```
+
+**注意：** 可以保持自定义圆角等风格，不必完全遵循 MD3 标准
+
+---
+
+#### 7.2 颜色系统 ✓/✗
+
+- [ ] 是否使用 colorScheme（而不是硬编码）
+- [ ] 卡片背景是否使用 surface 系列
+- [ ] 文字颜色是否使用 onSurface 系列
+
+**正确示例：**
+```dart
+// ✅ 使用 colorScheme
+color: Theme.of(context).colorScheme.primary
+color: colorScheme.surfaceContainerLow.withValues(alpha: 0.5)
+
+// ❌ 硬编码
+color: Color(0xFF123456)
+```
+
+---
+
+### 八、状态管理审查（Riverpod 2.0）
+
+#### 8.1 Provider 使用 ✓/✗
+
+- [ ] 是否使用 ConsumerWidget（而不是 StatefulWidget）
+- [ ] 是否避免不必要的重建（使用 select）
+- [ ] 是否正确使用 autoDispose（避免内存泄漏）
+- [ ] 异步数据是否使用 AsyncValue（处理 loading/error/data）
+
+**正确示例：**
+```dart
+// ✅ 正确
+class MyWidget extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final data = ref.watch(myProvider);
+    return data.when(
+      data: (value) => Text(value),
+      loading: () => CircularProgressIndicator(),
+      error: (e, st) => Text('错误: $e'),
+    );
+  }
+}
+
+// ❌ 错误：用 StatefulWidget 管理全局状态
+class MyWidget extends StatefulWidget {
+  // 用 setState 管理应该用 Provider 的状态
+}
+```
+
+---
+
+#### 8.2 Provider 命名 ✓/✗
+
+- [ ] Provider 是否以 Provider 结尾
+- [ ] StateNotifier 是否以 Notifier 结尾
+- [ ] 是否避免 provider 嵌套过深（建议 ≤3 层）
+
+**命名示例：**
+```dart
+// ✅ 正确
+final bookListProvider = ...
+final userStateNotifier = ...
+
+// ❌ 错误
+final books = ...  // 不明确
+final userData = ...  // 不知道是什么类型
+```
+
+---
+
+### 九、错误处理最佳实践
+
+#### 9.1 错误分类 ✓/✗
+
+- [ ] 是否区分网络错误、服务器错误、认证错误
+- [ ] 是否提供友好的错误提示
+- [ ] 是否提供重试按钮
+
+**错误分类表：**
+
+| 错误类型 | 提示文案 | 行动建议 |
+|---------|---------|---------|
+| **网络错误** | "网络连接失败" | [重试] 按钮 |
+| **服务器错误** | "服务暂时不可用" | [重试] 或 [稍后再试] |
+| **认证过期** | "登录已过期，请重新登录" | [去登录] |
+| **权限不足** | "需要存储权限才能保存" | [去设置] |
+| **数据格式错误** | "数据格式不正确" | [重试] 或 [联系客服] |
+
+**实现示例：**
+```dart
+String getErrorMessage(dynamic error) {
+  if (error is DioException) {
+    switch (error.type) {
+      case DioExceptionType.connectionTimeout:
+        return '网络连接超时，请检查网络';
+      case DioExceptionType.badResponse:
+        if (error.response?.statusCode == 401) {
+          return '登录已过期，请重新登录';
+        }
+        return '服务暂时不可用，请稍后再试';
+      default:
+        return '网络连接失败';
+    }
+  }
+  return '操作失败，请重试';
+}
+```
+
+---
+
+### 十、动画性能审查
+
+#### 10.1 性能检查 ✓/✗
+
+- [ ] 动画是否保持 60fps
+- [ ] 是否避免在动画中 build 复杂 Widget
+- [ ] 长列表动画是否使用 AnimatedList
+- [ ] 是否使用 RepaintBoundary 隔离重绘区域
+
+**性能检查：**
+```dart
+// 开启性能叠加层（开发时）
+MaterialApp(
+  showPerformanceOverlay: true,
+  home: MyApp(),
+)
+```
+
+**优化示例：**
+```dart
+// ✅ 正确：隔离重绘区域
+RepaintBoundary(
+  child: AnimatedBuilder(
+    animation: controller,
+    builder: (context, child) {
+      return Transform.rotate(
+        angle: controller.value,
+        child: child,
+      );
+    },
+    child: ExpensiveWidget(), // 不会重建
+  ),
+)
+```
+
+---
+
+#### 10.2 动画时长 ✓/✗
+
+- [ ] 页面过渡是否 200-400ms
+- [ ] 微交互是否 150-300ms
+- [ ] 是否避免过长动画（>600ms）
+
+**推荐时长：**
+- 页面过渡：300ms
+- 对话框：250ms
+- 微交互：200ms
+- 展开/收起：300ms
+
+---
+
 ## 🎯 优化方向（按优先级）
 
 ### P0 - 影响核心体验（必须做）
