@@ -3,41 +3,6 @@ name: Multiplatform Build
 on:
   workflow_dispatch:
     inputs:
-      platforms:
-        description: "Targets: native/mobile+desktop, mobile, desktop, all, or comma-separated android,ios,macos,linux,windows,web"
-        required: true
-        default: "native"
-      build_mode:
-        description: "Flutter build mode"
-        required: true
-        default: "release"
-        type: choice
-        options:
-          - release
-          - profile
-          - debug
-      flutter_version:
-        description: "Flutter version used by CI"
-        required: true
-        default: "3.44.1"
-      android_target:
-        description: "Android artifact type"
-        required: true
-        default: "apk"
-        type: choice
-        options:
-          - apk
-          - appbundle
-          - both
-      android_apk_profile:
-        description: "Android APK profile"
-        required: true
-        default: "arm64"
-        type: choice
-        options:
-          - arm64
-          - split
-          - universal
       full_version:
         description: "Required release version: display version + monotonic build number, for example 1.2.0+26061001."
         required: true
@@ -49,9 +14,11 @@ permissions:
 env:
   ARTIFACT_NAME: Selune
   RELEASE_REPOSITORY: zyl140640/readbook-releases
-  APPREAD_API_BASE_URL: https://www.sxyd.lltask.top/api
-  APPREAD_READER_GATEWAY_BASE_URL: https://rust.lltask.top/api
-  APPREAD_APP_NAME: selune
+  BUILD_PLATFORMS: native
+  BUILD_MODE: release
+  FLUTTER_VERSION: 3.44.1
+  ANDROID_TARGET: apk
+  ANDROID_APK_PROFILE: arm64
   PUB_HOSTED_URL: https://pub.flutter-io.cn
   FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn
 
@@ -97,7 +64,7 @@ jobs:
         id: platforms
         shell: bash
         env:
-          REQUESTED_PLATFORMS: ${{ inputs.platforms }}
+          REQUESTED_PLATFORMS: ${{ env.BUILD_PLATFORMS }}
           SUPPORTED_PLATFORMS: ${{ matrix.supported_platforms }}
         run: |
           set -euo pipefail
@@ -188,7 +155,7 @@ jobs:
         if: steps.platforms.outputs.should_build == 'true'
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: ${{ inputs.flutter_version }}
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
 
@@ -221,7 +188,7 @@ jobs:
           flutter config --enable-windows-desktop
 
       - name: Restore Android release signing files
-        if: runner.os == 'Linux' && steps.platforms.outputs.should_build == 'true' && contains(steps.platforms.outputs.selected, 'android') && inputs.build_mode == 'release'
+        if: runner.os == 'Linux' && steps.platforms.outputs.should_build == 'true' && contains(steps.platforms.outputs.selected, 'android')
         shell: bash
         env:
           ANDROID_KEY_PROPERTIES: ${{ secrets.ANDROID_KEY_PROPERTIES }}
@@ -248,11 +215,8 @@ jobs:
         if: steps.platforms.outputs.should_build == 'true'
         shell: bash
         env:
-          ANDROID_TARGET: ${{ inputs.android_target }}
-          ANDROID_APK_PROFILE: ${{ inputs.android_apk_profile }}
-          APPREAD_API_BASE_URL: ${{ env.APPREAD_API_BASE_URL }}
-          APPREAD_READER_GATEWAY_BASE_URL: ${{ env.APPREAD_READER_GATEWAY_BASE_URL }}
-          APPREAD_APP_NAME: ${{ env.APPREAD_APP_NAME }}
+          ANDROID_TARGET: ${{ env.ANDROID_TARGET }}
+          ANDROID_APK_PROFILE: ${{ env.ANDROID_APK_PROFILE }}
           ARTIFACT_NAME: ${{ env.ARTIFACT_NAME }}
           FULL_VERSION: ${{ inputs.full_version }}
           BUILD_NAME: ""
@@ -265,7 +229,7 @@ jobs:
           ALLOW_PARTIAL: "0"
         run: |
           set -euo pipefail
-          ./scripts/build_unified_artifacts.sh "${{ steps.platforms.outputs.selected }}" "${{ inputs.build_mode }}"
+          ./scripts/build_unified_artifacts.sh "${{ steps.platforms.outputs.selected }}" "${{ env.BUILD_MODE }}"
 
       - name: Upload artifacts
         if: steps.platforms.outputs.should_build == 'true'
@@ -281,7 +245,7 @@ jobs:
     needs: build
     runs-on: ubuntu-22.04
     timeout-minutes: 30
-    if: ${{ success() && inputs.build_mode == 'release' }}
+    if: ${{ success() }}
     steps:
       - name: Download build artifacts
         uses: actions/download-artifact@v4
