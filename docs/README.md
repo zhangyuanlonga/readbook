@@ -120,7 +120,8 @@
 
 ## UI/UX 设计体系（2026-06-10 新增）
 
-- [UI/UX 设计体系总结（基于实际代码）](ui_ux_design_system_actual.md) - **实际代码审计**：圆角20dp、间距规范、Material 3、高级主题能力
+- [UI/UX 全面审查标准与优化方向](ui_ux_review_standards_and_optimization.md) ⭐ **可执行清单**：5大审查维度、7个优化方向、全页面审查模板
+- [UI/UX 设计体系总结（基于实际代码）](ui_ux_design_system_actual.md) - 实际代码审计：圆角20dp、间距规范、Material 3、高级主题能力
 - [交互规范与动效指南](ui_ux_interaction_and_animation_guide.md) - 操作反馈、确认流程、空状态、动画时长与曲线标准
 - [UI/UX 改进实施计划](ui_ux_implementation_plan.md) - 4 阶段改进计划、验收标准、设计审查清单
 - [高级主题体验优化方案](advanced_theme_experience_optimization.md) - **核心付费功能**：发现入口、编辑体验、预览效果、主题市场、付费转化优化
