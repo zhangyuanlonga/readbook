@@ -1,21 +1,33 @@
 import 'package:dio/dio.dart';
 
+import '../logging/app_logger.dart';
 import 'auth_token_refresher.dart';
 
+/// Dio [RequestOptions.extra] key that controls automatic bearer token attach.
 const String apiAttachAccessTokenExtraKey = 'attachAccessToken';
+
+/// Dio [RequestOptions.extra] key that controls one-time refresh on HTTP 401.
 const String apiEnableAuthRefreshExtraKey = 'enableAuthRefresh';
 
 const String _authRetryAttemptExtraKey = 'authRetryAttempt';
 
+/// Attaches the current access token and retries once after a refreshable 401.
+///
+/// The interceptor keeps token handling centralized for [ApiClient] and any
+/// direct Dio clients that still need streaming support, such as SSE endpoints.
+/// Token values are never written to logs.
 class AuthInterceptor extends Interceptor {
   AuthInterceptor({
     required Dio dio,
     required AuthTokenRefresher? Function() authTokenRefresherResolver,
+    AppLogger? logger,
   }) : _dio = dio,
-       _authTokenRefresherResolver = authTokenRefresherResolver;
+       _authTokenRefresherResolver = authTokenRefresherResolver,
+       _logger = logger ?? AppLogger.instance;
 
   final Dio _dio;
   final AuthTokenRefresher? Function() _authTokenRefresherResolver;
+  final AppLogger _logger;
 
   @override
   void onRequest(
@@ -34,6 +46,7 @@ class AuthInterceptor extends Interceptor {
     final token = await _resolveAccessToken();
     if (token != null) {
       _setAuthorizationHeader(options.headers, token);
+      _logger.debug('Token attached', context: _requestContext(options));
     }
     handler.next(options);
   }
@@ -62,6 +75,10 @@ class AuthInterceptor extends Interceptor {
         handler.next(response);
         return;
       }
+      _logger.info(
+        'Token refreshed for 401',
+        context: _requestContext(response.requestOptions),
+      );
       final retryResponse = await _retry(response.requestOptions, token);
       handler.resolve(retryResponse);
     } on DioException catch (error) {
@@ -147,6 +164,13 @@ class AuthInterceptor extends Interceptor {
 
   bool _readBool(Object? value, {required bool fallback}) {
     return value is bool ? value : fallback;
+  }
+
+  Map<String, Object?> _requestContext(RequestOptions options) {
+    return <String, Object?>{
+      'method': options.method,
+      'url': options.uri.toString(),
+    };
   }
 
   bool _hasAuthorizationHeader(Map<String, dynamic> headers) {

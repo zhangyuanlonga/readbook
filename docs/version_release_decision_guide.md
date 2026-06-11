@@ -349,39 +349,133 @@ class Books extends Table {
 
 ## 发布流程
 
-### 正常发版流程
+### 当前 Shorebird 基线记录
+
+- Shorebird app：`Selune`
+- Shorebird app_id：`8f2dce99-c6fb-48c8-bd98-9d1235665622`
+- 当前移动端有效基线：`1.3.0+26061101`
+- 历史误发基线：`1.1.0+26041801`
+
+`1.1.0+26041801` 不需要主动删除。旧 release 不会影响 `latest`，也不会影响 `1.3.0+26061101` 后续打 patch；只要后续不要分发旧包、不要对旧 release 发 patch 即可。如果确认没有任何用户安装过旧基线，可以在 Shorebird Console 里按需清理；如果有任何测试用户装过，保留它更安全，因为删除基线可能让该版本失去后续 patch 关系。当前 CLI 没有 `releases delete` 命令。
+
+### 正常发版流程：移动端 Shorebird 基线
+
+适用场景：大版本、小版本、原生/插件/权限/资源/数据库 schema 变更，或需要让用户安装一个新的全量包。
+
+版本号必须高于线上版本，格式固定为 `展示版本+构建号`。例如线上 `1.2.0+26061001`，下一版使用 `1.3.0+26061101`。
 
 ```bash
-# 1. 代码提交
-git add .
-git commit -m "feat: 添加相机功能"
-git push
+# 1. 确认环境
+export PATH="$HOME/.shorebird/bin:$PATH"
+shorebird doctor
+shorebird account apps
 
-# 2. 构建基线版本
-shorebird release android
-shorebird release ios
+# 2. 更新 pubspec.yaml
+# version: 1.3.0+26061101
 
-# 3. 发布到应用商店
-# - Android: Google Play Console
-# - iOS: App Store Connect
+# 3. Android 基线：生成 APK 和 AAB，并上传 Shorebird release
+shorebird release android \
+  --artifact apk \
+  --build-name 1.3.0 \
+  --build-number 26061101
 
-# 4. 等待审核（1-7天）
+# 4. iOS 基线：不签名，只上传 Shorebird release 并生成 .xcarchive
+shorebird release ios \
+  --no-codesign \
+  --build-name 1.3.0 \
+  --build-number 26061101
 ```
 
-### 热更新流程
+Android 产物位置：
+
+```text
+build/app/outputs/flutter-apk/app-release.apk
+build/app/outputs/bundle/release/app-release.aab
+```
+
+iOS 使用全能签时，Shorebird `--no-codesign` 会跳过 IPA，需要从 `.xcarchive` 手动封未签名 IPA：
 
 ```bash
-# 1. 代码提交
-git add .
-git commit -m "fix: 修复登出清理bug"
-git push
+VERSION="1.3.0+26061101"
+APP_PATH="build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app"
+IPA_STAGING="build/ios/unsigned_ipa"
+IPA_PATH="build/ios/Selune-unsigned-${VERSION}.ipa"
 
-# 2. 发布 patch
-shorebird patch android
-shorebird patch ios
+rm -rf "$IPA_STAGING"
+rm -f "$IPA_PATH"
+mkdir -p "$IPA_STAGING/Payload"
+ditto "$APP_PATH" "$IPA_STAGING/Payload/Runner.app"
+(cd "$IPA_STAGING" && zip -qry "../Selune-unsigned-${VERSION}.ipa" Payload)
 
-# 3. 完成！用户下次启动时自动更新
-# 无需审核，10分钟生效
+# 应输出：code object is not signed at all
+codesign -dv --verbose=4 "$IPA_STAGING/Payload/Runner.app" 2>&1 || true
+```
+
+发给用户安装的是：
+
+```text
+Android APK: build/app/outputs/flutter-apk/app-release.apk
+iOS unsigned IPA: build/ios/Selune-unsigned-1.3.0+26061101.ipa
+```
+
+### 正常发版流程：桌面端传统包
+
+Shorebird 当前用于移动端基线。macOS 是 preview，Windows/Linux 不支持。桌面端仍使用统一脚本走传统全量发版：
+
+```bash
+FULL_VERSION=1.3.0+26061101 \
+./scripts/build_unified_artifacts.sh macos release
+```
+
+如需一次性打非 Shorebird 的传统全平台包，仍可使用：
+
+```bash
+FULL_VERSION=1.3.0+26061101 \
+./scripts/build_unified_artifacts.sh android,ios,macos release
+```
+
+注意：传统脚本打出的 Android/iOS 包可以安装，但不会自动成为 Shorebird 可 patch 的基线。移动端正式分发包优先使用 `shorebird release` 产物。
+
+### 热更新流程：移动端 patch
+
+适用场景：已经有用户安装了当前 Shorebird 基线，只改 Dart 业务逻辑、UI、文案、接口策略等，不改原生、插件、资源和数据库 schema。
+
+```bash
+# 1. 确认当前线上基线
+export PATH="$HOME/.shorebird/bin:$PATH"
+shorebird releases list
+
+# 2. 发布 patch 到当前移动端基线
+shorebird patch \
+  --platforms=android,ios \
+  --release-version=1.3.0+26061101 \
+  --no-codesign
+
+# 3. 验证 patch 列表和 Console 下载/错误数据
+shorebird patches list --release-version=1.3.0+26061101
+```
+
+发布 patch 后，用户下次启动会自动检查和下载；通常需要重启应用后生效。iOS 内测用户不需要重新全能签安装。
+
+### 发布后校验
+
+```bash
+shorebird doctor
+shorebird releases list
+
+# Android APK 版本
+aapt dump badging build/app/outputs/flutter-apk/app-release.apk | head
+
+# iOS unsigned IPA 中 .app 的版本和显示名
+/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' \
+  build/ios/unsigned_ipa/Payload/Runner.app/Info.plist
+/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' \
+  build/ios/unsigned_ipa/Payload/Runner.app/Info.plist
+/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' \
+  build/ios/unsigned_ipa/Payload/Runner.app/Info.plist
+
+# iOS 未签名状态
+codesign -dv --verbose=4 build/ios/unsigned_ipa/Payload/Runner.app 2>&1 || true
 ```
 
 ---
@@ -421,14 +515,22 @@ shorebird patch ios
 # hotfix（热更新）
 git checkout -b hotfix/login-bug
 # 修复bug
-shorebird patch android
-shorebird patch ios
+shorebird patch \
+  --platforms=android,ios \
+  --release-version=1.3.0+26061101 \
+  --no-codesign
 
 # release（正常发版）
-git checkout -b release/v1.2.0
+git checkout -b release/v1.4.0
 # 开发新功能
-shorebird release android
-shorebird release ios
+shorebird release android \
+  --artifact apk \
+  --build-name 1.4.0 \
+  --build-number 26070001
+shorebird release ios \
+  --no-codesign \
+  --build-name 1.4.0 \
+  --build-number 26070001
 ```
 
 ---
@@ -461,4 +563,4 @@ shorebird release ios
 
 ---
 
-**最后更新：** 2026-06-10
+**最后更新：** 2026-06-11

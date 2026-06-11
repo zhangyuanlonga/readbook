@@ -3,6 +3,8 @@
 创建时间：2026-06-10  
 适用场景：小修小改快速发布，避免全平台发版
 
+> 接入完成后的日常发版、热更新和全能签无签名 IPA 流程，以 [版本发布决策指南](version_release_decision_guide.md) 的“发布流程”为准；本文保留方案背景和接入说明。
+
 ## 1. 方案选型
 
 ### 推荐方案：Shorebird
@@ -277,33 +279,35 @@ platforms:
 #### 3.6 构建基线版本（Android）
 
 ```bash
-# Release APK
-shorebird release android
-
-# 或者 AAB（Google Play）
-shorebird release android --artifact aab
+# Release APK，同时生成可上传/备份的 AAB
+shorebird release android \
+  --artifact apk \
+  --build-name 1.3.0 \
+  --build-number 26061101
 ```
 
 **注意：**
 - 首次发布会生成基线版本
-- 记录 release version（如 1.0.0+1）
-- 这个版本需要发布到应用商店
+- 记录 release version（如 1.3.0+26061101）
+- 移动端正式分发包必须来自 `shorebird release`，不能用普通 `flutter build` 产物代替基线
 
 #### 3.7 构建基线版本（iOS）
 
 ```bash
-# iOS Release
-shorebird release ios
+# iOS Release；项目当前不使用本机签名，后续交给全能签
+shorebird release ios \
+  --no-codesign \
+  --build-name 1.3.0 \
+  --build-number 26061101
 ```
 
 **iOS 内测阶段：**
-- 构建完成后得到 IPA 文件
-- 企业签名或个人签名
-- 分发给内测用户
+- `--no-codesign` 会生成 `.xcarchive`，Shorebird 会跳过 IPA
+- 需要按 [版本发布决策指南](version_release_decision_guide.md) 从 `.xcarchive` 手动封未签名 IPA
+- 未签名 IPA 交给全能签签名并分发给用户
 
 **iOS 特殊说明：**
-- 需要 Apple Developer 账号
-- 需要配置 Provisioning Profile
+- 本机不需要 Apple Developer 账号或 Provisioning Profile 才能生成未签名基线包
 - 首次构建时间较长
 
 ---
@@ -321,11 +325,10 @@ Text('设置') → Text('应用设置')
 #### 3.9 发布 patch
 
 ```bash
-# Android patch
-shorebird patch android
-
-# iOS patch（内测阶段完全可用）
-shorebird patch ios
+shorebird patch \
+  --platforms=android,ios \
+  --release-version=1.3.0+26061101 \
+  --no-codesign
 ```
 
 **发布后：**
@@ -654,4 +657,4 @@ shorebird patch android --staging-percentage 100
 
 ---
 
-**最后更新：** 2026-06-10
+**最后更新：** 2026-06-11

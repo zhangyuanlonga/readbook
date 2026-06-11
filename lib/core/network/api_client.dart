@@ -150,6 +150,10 @@ class ApiClient {
   static AuthTokenRefresher? defaultAuthTokenRefresher;
   static ApiCacheUserIdResolver? defaultCacheUserIdResolver;
 
+  /// Installs the shared auth interceptor on a Dio instance once.
+  ///
+  /// Use this for direct Dio clients that cannot go through [ApiClient], for
+  /// example SSE streaming endpoints that need `ResponseType.stream`.
   static void installAuthInterceptor(
     Dio dio, {
     AuthTokenRefresher? Function()? authTokenRefresherResolver,
@@ -229,6 +233,9 @@ class ApiClient {
     bool enableCache = false,
     ApiCachePolicy cachePolicy = ApiCachePolicy.realtime,
     Duration? cacheTtl,
+
+    /// Authenticated requests are the default. Public endpoints should pass
+    /// `attachAccessToken: false` explicitly to avoid leaking stale sessions.
     bool attachAccessToken = true,
     bool enableAuthRefresh = true,
     ErrorStage stage = ErrorStage.unknown,

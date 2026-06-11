@@ -18,6 +18,21 @@ class AppLogger {
   final AppErrorMonitoringService _monitoring =
       AppErrorMonitoringService.instance;
 
+  /// Records verbose diagnostic information without reporting it as an error.
+  void debug(String message, {Map<String, Object?> context = const {}}) {
+    final sanitizedMessage = AppErrorMonitoringService.sanitizeMessage(message);
+    final sanitizedContext = AppErrorMonitoringService.sanitizeContext(context);
+    _store.add(
+      AppLogEntry(
+        timestamp: DateTime.now(),
+        level: AppLogLevel.info,
+        message: sanitizedMessage,
+        context: sanitizedContext,
+      ),
+    );
+    _logger.d(_joinMessage(sanitizedMessage, sanitizedContext));
+  }
+
   void info(String message, {Map<String, Object?> context = const {}}) {
     final sanitizedMessage = AppErrorMonitoringService.sanitizeMessage(message);
     final sanitizedContext = AppErrorMonitoringService.sanitizeContext(context);
