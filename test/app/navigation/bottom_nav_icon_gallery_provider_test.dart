@@ -57,51 +57,102 @@ void main() {
     ActiveAdvancedThemeIdNotifier.prime(prefs);
   });
 
-  test('effective gallery prefers active advanced theme binding', () async {
-    final prefs = await SharedPreferences.getInstance();
-    final assetStore = await _createAssetStore();
-    final themeService = AdvancedThemeService(
-      preferences: prefs,
-      assetStore: assetStore,
-    );
-    final galleryService = BottomNavIconGalleryService(
-      preferences: prefs,
-      assetStore: assetStore,
-    );
-    await galleryService.saveGalleries(<BottomNavIconGallery>[
-      _gallery(id: 'gallery_active', name: '当前默认图集'),
-      _gallery(id: 'gallery_theme', name: '主题图集'),
-    ]);
-    await galleryService.saveActiveGalleryId('gallery_active');
-    await themeService.saveTheme(
-      AppAdvancedTheme(
-        id: 'theme_nav_override',
-        name: '底栏覆盖主题',
-        createdAt: DateTime.parse('2026-05-06T00:00:00.000Z'),
-        updatedAt: DateTime.parse('2026-05-06T00:00:00.000Z'),
-        lightConfig: AppAdvancedThemeModeConfig(),
-        darkConfig: AppAdvancedThemeModeConfig(),
-        bottomNavGalleryId: 'gallery_theme',
-      ),
-    );
-    await themeService.saveActiveThemeId('theme_nav_override');
-    ActiveAdvancedThemeIdNotifier.prime(prefs);
+  test(
+    'effective gallery prefers explicit active gallery over theme binding',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      final assetStore = await _createAssetStore();
+      final themeService = AdvancedThemeService(
+        preferences: prefs,
+        assetStore: assetStore,
+      );
+      final galleryService = BottomNavIconGalleryService(
+        preferences: prefs,
+        assetStore: assetStore,
+      );
+      await galleryService.saveGalleries(<BottomNavIconGallery>[
+        _gallery(id: 'gallery_active', name: '当前默认图集'),
+        _gallery(id: 'gallery_theme', name: '主题图集'),
+      ]);
+      await galleryService.saveActiveGalleryId('gallery_active');
+      await themeService.saveTheme(
+        AppAdvancedTheme(
+          id: 'theme_nav_override',
+          name: '底栏覆盖主题',
+          createdAt: DateTime.parse('2026-05-06T00:00:00.000Z'),
+          updatedAt: DateTime.parse('2026-05-06T00:00:00.000Z'),
+          lightConfig: AppAdvancedThemeModeConfig(),
+          darkConfig: AppAdvancedThemeModeConfig(),
+          bottomNavGalleryId: 'gallery_theme',
+        ),
+      );
+      await themeService.saveActiveThemeId('theme_nav_override');
+      ActiveAdvancedThemeIdNotifier.prime(prefs);
 
-    final container = ProviderContainer(
-      overrides: <Override>[
-        advancedThemeServiceProvider.overrideWithValue(themeService),
-        bottomNavIconGalleryServiceProvider.overrideWithValue(galleryService),
-      ],
-    );
-    addTearDown(container.dispose);
+      final container = ProviderContainer(
+        overrides: <Override>[
+          advancedThemeServiceProvider.overrideWithValue(themeService),
+          bottomNavIconGalleryServiceProvider.overrideWithValue(galleryService),
+        ],
+      );
+      addTearDown(container.dispose);
 
-    final gallery = await container.read(
-      effectiveBottomNavIconGalleryProvider.future,
-    );
+      final gallery = await container.read(
+        effectiveBottomNavIconGalleryProvider.future,
+      );
 
-    expect(gallery?.id, 'gallery_theme');
-    expect(gallery?.name, '主题图集');
-  });
+      expect(gallery?.id, 'gallery_active');
+      expect(gallery?.name, '当前默认图集');
+    },
+  );
+
+  test(
+    'effective gallery uses theme binding without explicit active gallery',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      final assetStore = await _createAssetStore();
+      final themeService = AdvancedThemeService(
+        preferences: prefs,
+        assetStore: assetStore,
+      );
+      final galleryService = BottomNavIconGalleryService(
+        preferences: prefs,
+        assetStore: assetStore,
+      );
+      await galleryService.saveGalleries(<BottomNavIconGallery>[
+        _gallery(id: 'gallery_active', name: '当前默认图集'),
+        _gallery(id: 'gallery_theme', name: '主题图集'),
+      ]);
+      await themeService.saveTheme(
+        AppAdvancedTheme(
+          id: 'theme_nav_override',
+          name: '底栏覆盖主题',
+          createdAt: DateTime.parse('2026-05-06T00:00:00.000Z'),
+          updatedAt: DateTime.parse('2026-05-06T00:00:00.000Z'),
+          lightConfig: AppAdvancedThemeModeConfig(),
+          darkConfig: AppAdvancedThemeModeConfig(),
+          bottomNavGalleryId: 'gallery_theme',
+        ),
+      );
+      await themeService.saveActiveThemeId('theme_nav_override');
+      ActiveAdvancedThemeIdNotifier.prime(prefs);
+
+      final container = ProviderContainer(
+        overrides: <Override>[
+          advancedThemeServiceProvider.overrideWithValue(themeService),
+          bottomNavIconGalleryServiceProvider.overrideWithValue(galleryService),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final gallery = await container.read(
+        effectiveBottomNavIconGalleryProvider.future,
+      );
+
+      expect(gallery?.id, 'gallery_theme');
+      expect(gallery?.name, '主题图集');
+    },
+  );
 
   test(
     'effective gallery falls back to active gallery without theme binding',
