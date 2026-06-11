@@ -39,6 +39,7 @@ class AppUpdateService {
           'version_code': versionCode,
           'platform': identity.platform,
         },
+        attachAccessToken: false,
         stage: ErrorStage.unknown,
       ),
     );

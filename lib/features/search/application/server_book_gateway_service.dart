@@ -8,6 +8,7 @@ import '../../../core/errors/error_stage.dart';
 import '../../../core/logging/app_logger.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_config.dart';
+import '../../../core/network/auth_interceptor.dart';
 import '../../../core/network/interceptors.dart';
 import '../../../domain/entities/book_detail.dart';
 import '../../../domain/entities/chapter.dart';
@@ -24,6 +25,7 @@ class ServerBookGatewayService {
                 (baseUrl ?? AppApiConfig.effectiveReaderGatewayBaseUrl).trim(),
             defaultTimeout: const Duration(seconds: 70),
           ) {
+    ApiClient.installAuthInterceptor(_dio);
     if (_dio.interceptors.whereType<NetworkLogInterceptor>().isEmpty) {
       _dio.interceptors.add(NetworkLogInterceptor(AppLogger.instance));
     }
@@ -233,17 +235,16 @@ class ServerBookGatewayService {
       'Accept': 'text/event-stream',
       'Cache-Control': 'no-cache',
     };
-    final accessToken =
-        await ApiClient.defaultAuthTokenRefresher?.getAccessToken();
-    if ((accessToken ?? '').isNotEmpty) {
-      headers['Authorization'] = 'Bearer $accessToken';
-    }
 
     final response = await _dio.get<ResponseBody>(
       url,
       options: Options(
         responseType: ResponseType.stream,
         headers: headers,
+        extra: const <String, Object?>{
+          apiAttachAccessTokenExtraKey: true,
+          apiEnableAuthRefreshExtraKey: true,
+        },
         sendTimeout: const Duration(seconds: 8),
         connectTimeout: const Duration(seconds: 8),
         receiveTimeout: const Duration(seconds: 75),

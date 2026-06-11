@@ -9,6 +9,11 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('ApiClient', () {
+    setUp(() {
+      ApiClient.defaultAuthTokenRefresher = null;
+      ApiClient.defaultCacheUserIdResolver = null;
+    });
+
     test('unwraps data when code is OK', () async {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       server.listen((request) async {
@@ -194,6 +199,68 @@ void main() {
       await server.close(force: true);
     });
 
+    test('attaches authorization by default when token is available', () async {
+      final refresher = _FakeAuthTokenRefresher();
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        expect(
+          request.headers.value(HttpHeaders.authorizationHeader),
+          'Bearer expired-token',
+        );
+        request.response.statusCode = 200;
+        request.response.write(
+          jsonEncode({
+            'code': 'OK',
+            'message': 'success',
+            'data': {'ok': true},
+          }),
+        );
+        await request.response.close();
+      });
+
+      final client = ApiClient(authTokenRefresher: refresher);
+      final result = await client.request<Map<String, dynamic>>(
+        method: ApiMethod.get,
+        path: 'http://${server.address.host}:${server.port}/default-token',
+        decoder:
+            (data) =>
+                (data as Map).map((key, value) => MapEntry('$key', value)),
+      );
+
+      expect(result['ok'], true);
+      await server.close(force: true);
+    });
+
+    test('does not attach authorization when request opts out', () async {
+      final refresher = _FakeAuthTokenRefresher();
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        expect(request.headers.value(HttpHeaders.authorizationHeader), isNull);
+        request.response.statusCode = 200;
+        request.response.write(
+          jsonEncode({
+            'code': 'OK',
+            'message': 'success',
+            'data': {'ok': true},
+          }),
+        );
+        await request.response.close();
+      });
+
+      final client = ApiClient(authTokenRefresher: refresher);
+      final result = await client.request<Map<String, dynamic>>(
+        method: ApiMethod.get,
+        path: 'http://${server.address.host}:${server.port}/public',
+        attachAccessToken: false,
+        decoder:
+            (data) =>
+                (data as Map).map((key, value) => MapEntry('$key', value)),
+      );
+
+      expect(result['ok'], true);
+      await server.close(force: true);
+    });
+
     test('scopes authenticated cache by user id', () async {
       var count = 0;
       var userId = 'user-a';
@@ -280,6 +347,61 @@ void main() {
                   (data as Map).map((key, value) => MapEntry('$key', value)),
         );
 
+        await server.close(force: true);
+      },
+    );
+
+    test(
+      'refreshes explicit authorization header when automatic attach is off',
+      () async {
+        final refresher = _FakeAuthTokenRefresher();
+        var count = 0;
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        server.listen((request) async {
+          count += 1;
+          final authorization = request.headers.value(
+            HttpHeaders.authorizationHeader,
+          );
+          if (count == 1) {
+            expect(authorization, 'Bearer manual-expired-token');
+            request.response.statusCode = 401;
+            request.response.write(
+              jsonEncode({
+                'code': 'UNAUTHORIZED',
+                'message': 'expired',
+                'data': {},
+              }),
+            );
+          } else {
+            expect(authorization, 'Bearer refreshed-token');
+            request.response.statusCode = 200;
+            request.response.write(
+              jsonEncode({
+                'code': 'OK',
+                'message': 'success',
+                'data': {'ok': true},
+              }),
+            );
+          }
+          await request.response.close();
+        });
+
+        final client = ApiClient(authTokenRefresher: refresher);
+        final result = await client.request<Map<String, dynamic>>(
+          method: ApiMethod.get,
+          path: 'http://${server.address.host}:${server.port}/manual-auth',
+          headers: const <String, String>{
+            'Authorization': 'Bearer manual-expired-token',
+          },
+          attachAccessToken: false,
+          decoder:
+              (data) =>
+                  (data as Map).map((key, value) => MapEntry('$key', value)),
+        );
+
+        expect(result['ok'], true);
+        expect(refresher.refreshCallCount, 1);
+        expect(count, 2);
         await server.close(force: true);
       },
     );

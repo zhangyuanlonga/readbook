@@ -52,6 +52,7 @@ class FeedbackService {
         if (accessToken != null && accessToken.isNotEmpty)
           'Authorization': 'Bearer $accessToken',
       },
+      attachAccessToken: false,
       enableAuthRefresh: accessToken != null && accessToken.isNotEmpty,
       stage: ErrorStage.unknown,
       decoder: _decodeMap,
@@ -99,6 +100,7 @@ class FeedbackService {
         if (accessToken != null && accessToken.isNotEmpty)
           'Authorization': 'Bearer $accessToken',
       },
+      attachAccessToken: false,
       enableAuthRefresh: accessToken != null && accessToken.isNotEmpty,
       stage: ErrorStage.unknown,
       decoder: _decodeMap,
@@ -128,6 +130,7 @@ class FeedbackService {
         if (accessToken != null && accessToken.isNotEmpty)
           'Authorization': 'Bearer $accessToken',
       },
+      attachAccessToken: false,
       enableAuthRefresh: accessToken != null && accessToken.isNotEmpty,
       stage: ErrorStage.unknown,
       decoder: _decodeMap,

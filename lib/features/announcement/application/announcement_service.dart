@@ -31,6 +31,7 @@ class AnnouncementService {
         method: ApiMethod.get,
         path: '/v1/announcements',
         queryParameters: {'page': page, 'page_size': pageSize},
+        attachAccessToken: false,
         enableCache: useCache,
         cacheTtl: const Duration(minutes: 5),
         stage: ErrorStage.unknown,
@@ -70,6 +71,7 @@ class AnnouncementService {
         final data = await _client.request<Object?>(
           method: ApiMethod.get,
           path: '/v1/announcements/latest',
+          attachAccessToken: false,
           enableCache: useCache,
           cacheTtl: _latestCacheTtl,
           stage: ErrorStage.unknown,
@@ -121,6 +123,7 @@ class AnnouncementService {
     final data = await _client.request<Map<String, dynamic>>(
       method: ApiMethod.get,
       path: '/v1/announcements/$normalized',
+      attachAccessToken: false,
       enableCache: useCache,
       cacheTtl: const Duration(minutes: 10),
       stage: ErrorStage.unknown,

@@ -12,7 +12,8 @@ class DeviceHeartbeatService {
     DeviceIdentityService? identityService,
   }) : _baseUrl = (baseUrl ?? AppApiConfig.baseUrl).trim(),
        _client =
-           client ?? ApiClient(baseUrl: (baseUrl ?? AppApiConfig.baseUrl).trim()),
+           client ??
+           ApiClient(baseUrl: (baseUrl ?? AppApiConfig.baseUrl).trim()),
        _identityService = identityService ?? DeviceIdentityService();
 
   final ApiClient _client;
@@ -26,6 +27,7 @@ class DeviceHeartbeatService {
       method: ApiMethod.post,
       path: '/v1/devices/heartbeat',
       body: identity.toHeartbeatPayload(),
+      attachAccessToken: false,
       stage: ErrorStage.unknown,
       decoder: (data) => _decodeMap(data),
     );

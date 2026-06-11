@@ -58,6 +58,7 @@ class AnalyticsService {
         if (accessToken != null && accessToken.isNotEmpty)
           'Authorization': 'Bearer $accessToken',
       },
+      attachAccessToken: false,
       stage: ErrorStage.unknown,
       enableAuthRefresh: accessToken != null && accessToken.isNotEmpty,
       decoder: _decodeMap,

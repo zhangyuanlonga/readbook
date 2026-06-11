@@ -8,6 +8,7 @@ import '../errors/error_codes.dart';
 import '../errors/error_stage.dart';
 import '../errors/gateway_failure.dart';
 import '../logging/app_logger.dart';
+import 'auth_interceptor.dart';
 import 'auth_token_refresher.dart';
 import 'interceptors.dart';
 
@@ -65,7 +66,7 @@ class ApiRequestSpec<T> {
     this.enableCache = false,
     this.cachePolicy = ApiCachePolicy.realtime,
     this.cacheTtl,
-    this.attachAccessToken = false,
+    this.attachAccessToken = true,
     this.enableAuthRefresh = true,
     this.stage = ErrorStage.unknown,
   });
@@ -82,7 +83,7 @@ class ApiRequestSpec<T> {
     bool enableCache = false,
     ApiCachePolicy cachePolicy = ApiCachePolicy.realtime,
     Duration? cacheTtl,
-    bool attachAccessToken = false,
+    bool attachAccessToken = true,
     bool enableAuthRefresh = true,
     ErrorStage stage = ErrorStage.unknown,
   }) {
@@ -149,6 +150,23 @@ class ApiClient {
   static AuthTokenRefresher? defaultAuthTokenRefresher;
   static ApiCacheUserIdResolver? defaultCacheUserIdResolver;
 
+  static void installAuthInterceptor(
+    Dio dio, {
+    AuthTokenRefresher? Function()? authTokenRefresherResolver,
+  }) {
+    if (dio.interceptors.whereType<AuthInterceptor>().isNotEmpty) {
+      return;
+    }
+    dio.interceptors.add(
+      AuthInterceptor(
+        dio: dio,
+        authTokenRefresherResolver:
+            authTokenRefresherResolver ??
+            () => ApiClient.defaultAuthTokenRefresher,
+      ),
+    );
+  }
+
   ApiClient({
     Dio? dio,
     AppLogger? logger,
@@ -177,6 +195,11 @@ class ApiClient {
            authTokenRefresher ?? ApiClient.defaultAuthTokenRefresher,
        _cacheUserIdResolver =
            cacheUserIdResolver ?? ApiClient.defaultCacheUserIdResolver {
+    ApiClient.installAuthInterceptor(
+      _dio,
+      authTokenRefresherResolver:
+          () => _authTokenRefresher ?? ApiClient.defaultAuthTokenRefresher,
+    );
     if (_dio.interceptors.whereType<NetworkLogInterceptor>().isEmpty) {
       _dio.interceptors.add(NetworkLogInterceptor(_logger));
     }
@@ -206,13 +229,11 @@ class ApiClient {
     bool enableCache = false,
     ApiCachePolicy cachePolicy = ApiCachePolicy.realtime,
     Duration? cacheTtl,
-    bool attachAccessToken = false,
+    bool attachAccessToken = true,
     bool enableAuthRefresh = true,
     ErrorStage stage = ErrorStage.unknown,
     T Function(Object? data)? decoder,
   }) async {
-    final authTokenRefresher =
-        _authTokenRefresher ?? ApiClient.defaultAuthTokenRefresher;
     final url = _resolveUrl(path);
     final attempts =
         _isIdempotent(method) && enableRetry
@@ -240,16 +261,6 @@ class ApiClient {
     }
 
     final resolvedHeaders = <String, String>{..._defaultHeaders, ...headers};
-    if (attachAccessToken &&
-        !resolvedHeaders.containsKey('Authorization') &&
-        authTokenRefresher != null) {
-      final token = await authTokenRefresher.getAccessToken();
-      if (token != null && token.isNotEmpty) {
-        resolvedHeaders['Authorization'] = 'Bearer $token';
-      }
-    }
-
-    var didRefresh = false;
 
     for (var attempt = 1; attempt <= attempts; attempt++) {
       final start = DateTime.now();
@@ -265,42 +276,16 @@ class ApiClient {
             sendTimeout: timeout ?? _defaultTimeout,
             connectTimeout: timeout ?? _defaultTimeout,
             receiveTimeout: timeout ?? _defaultTimeout,
+            extra: <String, Object?>{
+              apiAttachAccessTokenExtraKey: attachAccessToken,
+              apiEnableAuthRefreshExtraKey: enableAuthRefresh,
+            },
             validateStatus:
                 (statusCode) => statusCode != null && statusCode < 600,
           ),
         );
 
         var statusCode = response.statusCode ?? 0;
-        if (statusCode == 401 &&
-            enableAuthRefresh &&
-            !didRefresh &&
-            authTokenRefresher != null) {
-          didRefresh = true;
-          final refreshed = await authTokenRefresher.refreshToken();
-          if (refreshed) {
-            final token = await authTokenRefresher.getAccessToken();
-            if (token != null && token.isNotEmpty) {
-              resolvedHeaders['Authorization'] = 'Bearer $token';
-              response = await _dio.request<String>(
-                url,
-                data: body,
-                queryParameters:
-                    queryParameters.isEmpty ? null : queryParameters,
-                options: Options(
-                  method: _methodText(method),
-                  responseType: ResponseType.plain,
-                  headers: resolvedHeaders,
-                  sendTimeout: timeout ?? _defaultTimeout,
-                  connectTimeout: timeout ?? _defaultTimeout,
-                  receiveTimeout: timeout ?? _defaultTimeout,
-                  validateStatus:
-                      (statusCode) => statusCode != null && statusCode < 600,
-                ),
-              );
-              statusCode = response.statusCode ?? 0;
-            }
-          }
-        }
         if (statusCode >= 500) {
           final shouldRetry = attempt < attempts;
           _logApiFailure(
