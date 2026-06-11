@@ -3,7 +3,14 @@
     "allow": [
       "Bash(dart tool/check_architecture_guardrails.dart)",
       "Bash(flutter build *)",
-      "WebFetch(domain:docs.shorebird.dev)"
+      "WebFetch(domain:docs.shorebird.dev)",
+      "Read(//Users/zhangyuanlong/storage/FlutterProject/read-admin/internal/application/booksource/**)",
+      "Read(//Users/zhangyuanlong/storage/FlutterProject/read-admin/**)",
+      "Bash(go build *)"
+    ],
+    "additionalDirectories": [
+      "/Users/zhangyuanlong/storage/FlutterProject/read-admin/internal/application/booksource",
+      "/Users/zhangyuanlong/storage/FlutterProject/read-admin/internal/transport/http"
     ]
   }
 }

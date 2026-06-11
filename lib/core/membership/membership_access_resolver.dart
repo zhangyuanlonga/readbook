@@ -103,7 +103,7 @@ class MembershipAccessResolver {
     if (profile == null) {
       return unknown;
     }
-    final hasMembership = profile.hasActiveMembership;
+    final hasMembership = profile.membershipActive ?? false;
     return MembershipAccessSnapshot(
       hasMembership: hasMembership,
       hasExplicitMembershipState:
@@ -120,7 +120,7 @@ class MembershipAccessResolver {
     if (session == null) {
       return unknown;
     }
-    final hasMembership = session.hasActiveMembership;
+    final hasMembership = session.membershipActive ?? false;
     return MembershipAccessSnapshot(
       hasMembership: hasMembership,
       hasExplicitMembershipState:

@@ -66,16 +66,6 @@ class UserProfile {
     return loginIdentity;
   }
 
-  bool get hasActiveMembership {
-    final explicit = membershipActive;
-    if (explicit != null) {
-      return explicit;
-    }
-    final level = vipLevel?.trim().toLowerCase() ?? '';
-    final status = vipStatus?.trim().toLowerCase() ?? '';
-    return status == 'active' && !_isInactiveLevel(level);
-  }
-
   factory UserProfile.fromJson(Map<String, dynamic> json) {
     final rawUser = json['user'];
     if (rawUser is! Map) {
@@ -180,18 +170,4 @@ class UserProfile {
         .toList(growable: false);
   }
 
-  static bool _isInactiveLevel(String level) {
-    switch (level) {
-      case '':
-      case 'none':
-      case 'free':
-      case 'basic':
-      case 'normal':
-      case 'guest':
-      case 'expired':
-        return true;
-      default:
-        return false;
-    }
-  }
 }

@@ -239,6 +239,18 @@ class AuthService {
     }
 
     try {
+      await _membershipService.fetchEntitlement();
+    } catch (error, stackTrace) {
+      _logger.warn(
+        'Post-auth entitlement sync failed',
+        context: {
+          'error': error.toString(),
+          'stackTrace': stackTrace.toString(),
+        },
+      );
+    }
+
+    try {
       await _sourceAccessService.fetchMyScope();
     } catch (error, stackTrace) {
       _logger.warn(

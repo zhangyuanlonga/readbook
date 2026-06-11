@@ -171,9 +171,7 @@ class MinePageSessionService {
             session: session,
             profile: profile,
             entitlement: entitlement,
-            allowLocalMembershipFallback:
-                !entitlement.hasExplicitMembershipState ||
-                entitlement.isDefaultInactiveFallback,
+            allowLocalMembershipFallback: false,
           ) ??
           remoteSnapshot;
       if (normalizedUserId.isNotEmpty) {

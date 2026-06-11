@@ -54,12 +54,17 @@ Future<T?> showAdaptiveActionSurface<T>({
       isDismissible: barrierDismissible,
       enableDrag: barrierDismissible,
       builder:
-          (surfaceContext) => AdaptiveActionSurface(
-            mode: AdaptiveActionSurfaceMode.mobileSheet,
-            maxWidth: maxWidth,
-            maxHeightFactor: maxHeightFactor,
-            padding: padding,
-            child: builder(surfaceContext),
+          (surfaceContext) => Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(surfaceContext).viewInsets.bottom,
+            ),
+            child: AdaptiveActionSurface(
+              mode: AdaptiveActionSurfaceMode.mobileSheet,
+              maxWidth: maxWidth,
+              maxHeightFactor: maxHeightFactor,
+              padding: padding,
+              child: builder(surfaceContext),
+            ),
           ),
     ),
     AdaptiveActionSurfaceMode.desktopDialog => showDialog<T>(

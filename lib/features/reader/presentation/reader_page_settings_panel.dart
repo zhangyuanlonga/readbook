@@ -40,7 +40,7 @@ extension _ReaderPageSettingsPanelExtension on _ReaderPageState {
         keyboardInset +
             (useEdgeToEdgeSheet
                 ? 0
-                : max(panelSpec.outerPadding.bottom, safeBottom * 0.55)),
+                : max(panelSpec.outerPadding.bottom, safeBottom)),
       ),
       child: Align(
         alignment: panelSpec.alignment,

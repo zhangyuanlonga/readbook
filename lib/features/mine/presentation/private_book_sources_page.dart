@@ -1712,12 +1712,13 @@ class _PrivateSourceTile extends StatelessWidget {
                   ),
                   _buildChip(
                     context,
-                    _reviewLabel(item.reviewStatus),
+                    _reviewLabel(item.reviewStatus, item.visibility),
                     _reviewStatusColor(
                       item.reviewStatus,
+                      item.visibility,
                       colorScheme,
                     ).withValues(alpha: 0.12),
-                    _reviewStatusColor(item.reviewStatus, colorScheme),
+                    _reviewStatusColor(item.reviewStatus, item.visibility, colorScheme),
                   ),
                   if (testStatus.isNotEmpty || testMessage.isNotEmpty)
                     _buildChip(
@@ -1767,7 +1768,13 @@ class _PrivateSourceTile extends StatelessWidget {
     );
   }
 
-  Color _reviewStatusColor(String status, ColorScheme colorScheme) {
+  Color _reviewStatusColor(String status, String visibility, ColorScheme colorScheme) {
+    // 私有书源使用主题色
+    if (visibility == 'private') {
+      return colorScheme.primary;
+    }
+
+    // 提交审核的书源根据审核状态显示颜色
     switch (status) {
       case 'pending':
         return Colors.orange;
@@ -3693,7 +3700,13 @@ bool _isDefaultGroup(PrivateBookSourceGroup group) {
   return group.displayName == '未分组';
 }
 
-String _reviewLabel(String value) {
+String _reviewLabel(String value, String visibility) {
+  // 私有书源不显示审核状态
+  if (visibility == 'private') {
+    return '私有';
+  }
+
+  // 提交审核的书源显示审核状态
   return switch (value) {
     'pending' => '待审核',
     'approved' => '已通过',
@@ -3768,7 +3781,7 @@ List<PrivateBookSourceItem> _filterPrivateSources(
               item.lastTestMessage,
               _typeLabel(item.supportedTypes),
               _groupLabel(item.groupName),
-              _reviewLabel(item.reviewStatus),
+              _reviewLabel(item.reviewStatus, item.visibility),
               _testLabel(item.lastTestStatus),
             ].join(' ').toLowerCase();
         return text.contains(normalized);

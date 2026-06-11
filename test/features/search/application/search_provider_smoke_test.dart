@@ -80,7 +80,7 @@ void main() {
       final currentSession = await service.getCurrentSession();
 
       expect(currentSession?.accessToken, 'access_member');
-      expect(currentSession?.hasActiveMembership, isTrue);
+      expect(currentSession?.membershipActive, isTrue);
     },
   );
 }
