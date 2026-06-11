@@ -2,8 +2,9 @@
 
 创建时间：2026-06-10  
 配套文档：
-- [UI/UX审计与设计系统](ui_ux_audit_and_design_system.md)
+- [UI/UX 设计体系总结（实际代码）](ui_ux_design_system_actual.md)
 - [交互规范与动效指南](ui_ux_interaction_and_animation_guide.md)
+- [全面审查标准与优化方向](ui_ux_review_standards_and_optimization.md)
 
 ## 七、实施计划
 
@@ -53,7 +54,8 @@
 
 - [ ] **添加骨架屏**
   - 首次加载显示骨架屏
-  - 使用 shimmer 效果
+  - 使用 shimmer 效果（推荐 shimmer: ^3.0.0）
+  - 提升加载体验
 
 - [ ] **优化空状态**
   - 使用 AppEmptyState 组件
@@ -183,19 +185,23 @@
   - 区分网络错误、服务器错误、权限错误
   - 提供重试按钮
 
-#### 3.3 品牌动画添加
+#### 3.3 品牌动画添加（推荐）
 
 - [ ] **启动屏动画**
-  - "月光划过"效果
-  - 时长：2秒
+  - 品牌特色动画效果
+  - 时长：1-2秒
+  - 提升品牌识别度
 
 - [ ] **欢迎页动画**
-  - 渐显元素
-  - 配合月光主题
+  - 渐显元素动画
+  - 配合应用主题
 
 - [ ] **特殊节点动画**
-  - 注册成功
-  - 首次导入书籍
+  - 注册成功庆祝动画
+  - 首次导入书籍引导
+  - 增强用户情感连接
+
+**可选：** 如果有专业动画需求，可添加 lottie: ^3.0.0
 
 ---
 
@@ -320,8 +326,8 @@
 ### 设计工具
 
 **Figma：** 设计稿和组件库  
-**Zeplin：** 设计交付和标注  
-**LottieFiles：** 动画资源
+**Zeplin：** 设计交付和标注（可选）  
+**在线配色工具：** Coolors.co、Material Theme Builder
 
 ### 开发工具
 
@@ -337,9 +343,13 @@
 
 ### 动画参考
 
-**Lottie：** https://lottiefiles.com  
-**Dribbble：** https://dribbble.com (搜索 "reading app animation")  
-**Motion Design：** https://www.motiondesign.dev
+**Lottie：** https://lottiefiles.com（专业动画资源）  
+**Dribbble：** https://dribbble.com（搜索 "reading app animation"）  
+**Material Motion：** https://m3.material.io/styles/motion
+
+**推荐依赖：**
+- shimmer: ^3.0.0（骨架屏）
+- lottie: ^3.0.0（可选，专业动画）
 
 ---
 
@@ -367,9 +377,9 @@
 
 ## 相关文档
 
-- [UI/UX审计与设计系统](ui_ux_audit_and_design_system.md)
+- [UI/UX 设计体系总结（实际代码）](ui_ux_design_system_actual.md)
 - [交互规范与动效指南](ui_ux_interaction_and_animation_guide.md)
-- [品牌设计规范](brand_guidelines.md)
+- [全面审查标准与优化方向](ui_ux_review_standards_and_optimization.md)
 - [UI与自适应设计规则](ui_adaptive_design_rules.md)
 
 ---

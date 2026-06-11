@@ -1,151 +1,199 @@
-# Selune 项目文档入口
+# 项目文档索引
 
-更新时间：2026-06-10
+**最后更新：** 2026-06-11  
+**文档总数：** 59 个（已分类整理）
 
-本目录只保留对后续开发有决策价值的文档：核心方针、开发规则、平台规则、当前里程碑、长期回归清单。历史草稿、重复计划、一次性工作流文档不再保留，避免后续开发者在旧口径里迷路。
+---
 
-**2026-06-10 重大更新：** 新增存储治理、API治理、热更新、UI/UX设计体系共 10 份核心文档。  
-**快速导航：** [任务分配指南](task_allocation_guide.md) ⭐ **理清文档关系，方便分配任务**
+## 📁 文档目录结构
 
-## 当前执行口径
+```
+docs/
+├── standards/           # 开发规范（7个）
+├── governance/          # 治理计划（9个）
+├── ui_ux/              # UI/UX设计（5个）
+├── features/           # 功能文档（17个）
+│   ├── book_source/    # 书源功能（5个）
+│   ├── reader/         # 阅读器（7个）
+│   ├── ui_component/   # UI组件（4个）
+│   └── multiplatform/  # 多平台（1个）
+├── operations/         # 运维发版（3个）
+└── archive/            # 归档文档（15个）
+    └── milestones/     # 已完成里程碑
+```
 
-当前里程碑已经重排并扩展为 6 个阶段：M1 是已完成的成熟库与架构治理基线，M2 是已完成验收的手搓实现替换与稳定性治理，M3 是当前优先的核心业务链多端兼容与验收，M4 聚焦本地内容、资源与性能，M5 聚焦长期门禁、发布验收与 AI 接力，M6 是阅读器全平台可用与架构收敛专项。旧 M1-M3 已删除，不再作为执行入口；旧 M4 已升为新 M1，旧 M5 已升为新 M2。
+---
 
-后续里程碑任务不再只按“做完某个功能”拆分，默认按 **业务链兼容 + 测试验收** 拆分。也就是说，一个任务写成“兼容 Web / Desktop 登录”时，完成标准不是 Web / Desktop 页面能点通，而是要同时回答：
+## 📋 核心规范文档（standards/）
 
-- 移动端、Web、Desktop 的业务设计是否合理。
-- Android / iOS 既有登录、会话恢复、退出登录是否不回退。
-- Web 是否可构建、可刷新恢复，并且不支持能力有清晰降级。
-- macOS / Windows / Linux 是否按桌面习惯处理窗口、键鼠、外部浏览器、凭证和退出登录。
-- 代码是否遵守分层、capability、adapter、route helper、storage 和注释规则。
-- 自动测试、构建、手工 smoke 或未验证原因是否记录完整。
+### 开发规范
 
-因此，“当前里程碑”中的每一项都应理解为兼容任务和测试任务的组合。任务执行时必须同时检查三条线：
+- [项目核心原则](standards/project_core_principles.md) - 项目的核心价值观和设计原则
+- [开发架构护栏](standards/development_architecture_guardrails.md) - 架构设计的边界和约束
+- [业务开发规范](standards/business_development_rules.md) - 业务逻辑开发规范
+- [代码开发规范](standards/code_development_rules.md) - 代码风格和质量标准
+- [平台开发规范](standards/platform_development_rules.md) - 跨平台开发规范
+- [UI 自适应设计规则](standards/ui_adaptive_design_rules.md) - 响应式 UI 适配规范
+- [业务与代码标准检查清单](standards/business_and_code_standards_checklist.md) - 开发自查清单
 
-- **业务合理线**：入口、状态、错误、降级、会话、数据落点和用户路径合理。
-- **多端兼容线**：Android、iOS、Web JS、macOS、Windows、Linux 的能力边界和影响面清楚。
-- **代码正确线**：架构分层、平台隔离、测试、构建、中文维护注释和文档同步到位。
+---
 
-多端 UI 的长期口径固定为：项目用 **响应式布局** 作为实现手段，通过断点、弹性布局和平台能力判断，让界面随可用空间变化；最终目标是形成 **自适应应用**，也就是 Android / iOS、Web 大屏、macOS、Windows、Linux 都有符合自身使用习惯的交互体验。桌面端和 Web 大屏必须重点处理窗口拖拽、宽窄变化、侧边栏宽度、顶栏工具折叠和内容列数变化；移动端必须优先保持 Android / iOS 已成熟的触控路径、导航、弹层和安全区体验。后续桌面端任务不能把移动端页面简单拉宽，移动端任务也不能反向依赖桌面端侧边栏、顶栏或键鼠入口。
+## 🏗️ 治理计划（governance/）
 
-## 任务拆分规则
+### 存储治理
 
-后续开发或 AI 接力时，只领取带编号的最小 checkbox 任务，例如 `M2-04-03`。不要领取“完成 M2-04”或“完成整个 M3”这种大任务。
+- [存储与数据生命周期指南](governance/storage_and_data_lifecycle_guide.md) ⭐ **核心**：数据存储规范、生命周期管理
+- [存储治理改进计划](governance/storage_governance_improvement_plan.md) - 存储问题修复和优化
+- [存储治理规范](governance/storage_governance_spec_2026-05-21.md) - 存储使用规范
+- [存储治理基线矩阵](governance/storage_governance_baseline_matrix_2026-06-04.md) - 存储治理快照
+- [存储清单](governance/storage_inventory_2026-05-20.md) - 存储使用盘点
+- [存储升级验证](governance/storage_upgrade_validation_2026-05-21.md) - 存储迁移验证
 
-- [x] 每个里程碑必须把阶段任务拆成可单独完成的小任务。
-- [x] 每个小任务前必须有 `- [ ]` 或 `- [x]`，方便后续继续执行。
-- [x] 一个小任务应该能在一次开发回合内完成、验证并记录收尾。
-- [x] 如果执行时发现小任务仍然过大，先拆分文档，再继续做代码。
-- [x] 文档可以写得粗糙，但任务边界必须清楚，不能把很多隐藏小任务塞进一个 checkbox。
+### 其他治理
 
-## 单端任务保护规则
+- [用户状态与 API 治理计划](governance/user_session_api_governance_plan.md) ⭐ **重要**：用户登录状态、API 请求治理
+- [项目架构统一计划](governance/project_architecture_unification_plan.md) - 架构统一方向
+- [搜索模式资源治理设计](governance/search_modes_resource_governance_design_2026-06-02.md) - 搜索功能治理
 
-2026-06-04 书架桌面端工具栏调整暴露出一个教训：即使代码文件是移动端和桌面端共用的，执行“桌面端”任务时也不能为了复用、抽取或顺手整理而改动移动端交互路径。后续所有单端任务必须先锁定适用端和排除端。
+---
 
-- [x] 任务写明“桌面端 / Web / macOS / Windows / Linux”时，默认排除 Android / iOS 的 AppBar、底部导航、底部弹层、触控手势、移动端菜单和移动端业务入口。
-- [x] 任务写明“移动端”时，默认排除桌面端侧边栏、顶栏、键鼠菜单、popover、窗口布局和桌面专属快捷路径。
-- [x] 如果必须修改共用页面文件，只允许新增被断点、capability、adapter 或明确平台语义门禁保护的分支；不得把移动端已有逻辑改成新的共享逻辑来服务桌面端。
-- [x] 不为了桌面端复用去重写移动端已稳定的排序弹层、搜索入口、更多菜单、选择模式、导航返回或数据路径。
-- [x] 发现实现需要触碰排除端时，先停下说明影响面；除非用户明确同意，否则不继续扩大范围。
-- [x] 收尾必须做 diff 审计：列出实际改动文件，并确认移动端专属文件或移动端交互路径是否保持原样。
+## 🎨 UI/UX 设计体系（ui_ux/）
 
-## 任务收尾矩阵
+- [UI/UX 全面审查标准与优化方向](ui_ux/ui_ux_review_standards_and_optimization.md) ⭐ **可执行清单**：5大审查维度、全页面审查模板
+- [UI/UX 设计体系总结（基于实际代码）](ui_ux/ui_ux_design_system_actual.md) - 实际代码审计：圆角、间距、Material 3
+- [UI/UX 改进实施计划](ui_ux/ui_ux_implementation_plan.md) - 4 阶段改进计划、推荐依赖（shimmer、lottie）
+- [交互规范与动效指南](ui_ux/ui_ux_interaction_and_animation_guide.md) - 操作反馈、动画标准
+- [高级主题体验优化方案](ui_ux/advanced_theme_experience_optimization.md) - **核心付费功能**：主题市场、付费转化
 
-每个功能、兼容或治理任务收尾时，至少记录以下内容。没有条件真实验证的平台，必须写明原因和后续补验方式，不能用“未涉及”跳过。
+---
 
-| 项目 | 必填结论 |
-| --- | --- |
-| 业务链 | 本次影响搜索、详情、阅读、书架、登录、设置、本地内容、缓存等哪条链 |
-| 修改范围 | 页面、provider、service、repository、storage、route、theme、platform capability 是否修改 |
-| Android | 已验证 / 代码级不回退 / 未验证原因 / 发布前补验要求 |
-| iOS | 已验证 / 代码级不回退 / 未验证原因 / 发布前补验要求 |
-| Web JS | 构建、刷新恢复、路由、浏览器存储、不支持能力降级 |
-| macOS | 构建、启动、窗口、键鼠、文件路径、外部打开、凭证能力 |
-| Windows | 已验证 / CI 补验 / 未验证原因，不能用 macOS 结果代替 |
-| Linux | 已验证 / CI 补验 / 未验证原因，不能用 macOS 结果代替 |
-| 测试与构建 | flutter analyze、目标单测、Web build、桌面构建、移动端构建或 smoke；如果本次跑了任一桌面 build，必须同步记录 Android / iOS build 结果或真实阻塞原因 |
-| 注释与文档 | 新增或修改的复杂代码是否有标准中文维护注释，相关 docs 是否同步 |
+## 🚀 功能文档（features/）
 
-## 必读规则
+### 书源功能（features/book_source/）
 
-- [项目核心方针](project_core_principles.md)
-- [业务开发规则](business_development_rules.md)
-- [代码与架构编写规则](code_development_rules.md)
-- [UI 与自适应设计规则](ui_adaptive_design_rules.md)
-- [Web / Desktop / Mobile 平台规则](platform_development_rules.md)
-- [Web / Desktop / Mobile 业务逻辑兼容规则](multiplatform_business_logic_compatibility_rules_2026-06-03.md)
-- [项目架构统一计划](project_architecture_unification_plan.md)
-- [多端架构开发约束](development_architecture_guardrails.md)
+- [书源导入功能优化方案](features/book_source/book_source_import_improvement_plan.md) ⭐ **进行中**：链接/文件/粘贴导入
+- [书源导入 UI 设计详细说明](features/book_source/book_source_import_ui_design.md) ⭐ **给 Codex**：完整实现代码
+- [书源 UI 设计规范](features/book_source/book_source_ui_design_spec.md) - 书源页面设计规范
+- [书源分享搜索流程](features/book_source/book_source_sharing_search_flow.md) - 书源分享和搜索
+- [书源移动端优化总结](features/book_source/book_source_mobile_optimization_summary.md) - 移动端优化
 
-## 当前里程碑
+### 阅读器（features/reader/）
 
-里程碑按“已完成治理基线 -> 手搓替换 -> 业务兼容 -> 本地内容资源 -> 长期门禁 -> 阅读器全平台专项”推进。M2 已完成验收，当前优先执行 M3；M6 用于承接阅读器全平台可用和架构收敛任务，执行时仍必须继承 M3 / M4 / M5 的业务链、多端和门禁规则。Windows 并行环境正在处理 M3 登录 / session 可拆部分，本机后续领取任务时应避开同一文件和同一业务状态链。每次只领取一个最小 checkbox 任务。
+- [阅读器自动阅读执行计划](features/reader/reader_auto_read_execution_plan_2026-05-24.md)
+- [阅读器本地内容重构执行计划](features/reader/reader_local_content_refactor_execution_plan_2026-05-21.md)
+- [阅读器多模态架构重构执行计划](features/reader/reader_multimodal_architecture_refactor_execution_plan_2026-05-25.md)
+- [阅读器多模态开发者笔记](features/reader/reader_multimodal_developer_notes_2026-05-25.md)
+- [阅读器多模态手动回归检查清单](features/reader/reader_multimodal_manual_regression_checklist_2026-05-25.md)
+- [阅读器多模态性能和回滚基线](features/reader/reader_multimodal_performance_and_rollback_baseline_2026-05-25.md)
+- [本地阅读导入解析标准化计划](features/reader/local_reading_import_parse_standardization_plan_2026-06-07.md)
 
-- [里程碑 01：已完成的成熟库与架构治理基线](milestone_01_completed_mature_library_architecture_governance_2026-06-04.md)
-- [里程碑 02：手搓实现替换与稳定性治理](milestone_02_handrolled_replacement_stability_2026-06-04.md)
-- [M2 手搓与不稳定实现候选看板](m2_handrolled_stability_candidate_backlog_2026-06-04.md)
-- [依赖 Override 治理矩阵](dependency_override_governance_matrix_2026-06-04.md)
-- [Storage Guard Baseline 治理矩阵](storage_governance_baseline_matrix_2026-06-04.md)
-- [里程碑 03：核心业务链多端兼容与验收](milestone_03_multiplatform_business_compatibility_acceptance_2026-06-04.md)
-- [里程碑 04：本地内容、资源与性能成熟化](milestone_04_local_content_resource_performance_maturity_2026-06-04.md)
-- [里程碑 05：长期门禁、发布验收与 AI 接力](milestone_05_long_term_guard_ai_handoff_2026-06-04.md)
-- [里程碑 06：阅读器全平台可用与架构收敛](milestone_06_reader_cross_platform_availability_2026-06-05.md)
-- [AI 后续执行序列与维护优先级](ai_maintenance_execution_sequence_2026-06-04.md)
-- [缓存治理优化计划](cache_governance_optimization_plan_2026-06-02.md)
-- [代码库工程治理专项 Backlog](codebase_engineering_governance_backlog_2026-06-02.md)
-- [桌面端工程提效与底座优化里程碑](desktop_engineering_productivity_milestone_2026-06-01.md)
-- [桌面端 UI 第一里程碑：外壳导航与我的页展示基线](desktop_ui_phase1_shell_mine_milestone_2026-05-31.md)
+### UI 组件（features/ui_component/）
 
-## 业务与专项规则
+- [页面 UI 组件治理计划](features/ui_component/page_ui_component_governance_plan_2026-05-12.md)
+- [主题语义重构计划](features/ui_component/theme_semantic_refactor_plan_2026-05-21.md)
+- [全项目页面统一审计计划](features/ui_component/full_project_page_unification_audit_plan_2026-06-06.md)
+- [全局页面路由清单](features/ui_component/global_page_route_inventory_2026-05-12.md)
 
-- [全项目页面统一化审计与整改任务](full_project_page_unification_audit_plan_2026-06-06.md)
-- [U5-LIB 成熟库与统一组件替换执行计划](u5_lib_mature_component_replacement_plan_2026-06-07.md)
-- [页面 UI 组件治理任务计划](page_ui_component_governance_plan_2026-05-12.md)
-- [存储治理定版规范](storage_governance_spec_2026-05-21.md)
-- [存储升级验证清单](storage_upgrade_validation_2026-05-21.md)
-- [主题语义化改造计划](theme_semantic_refactor_plan_2026-05-21.md)
-- [品牌视觉规范](brand_guidelines.md)
+### 多平台（features/multiplatform/）
 
-## 存储与数据治理专项（2026-06-10 新增）
+- [多平台业务逻辑兼容规则](features/multiplatform/multiplatform_business_logic_compatibility_rules_2026-06-03.md)
 
-- [存储与数据生命周期完整指南](storage_and_data_lifecycle_guide.md) - 明确用户数据存储位置、生命周期、覆盖安装/卸载行为
-- [存储治理改造计划](storage_governance_improvement_plan.md) - 5 阶段改造：紧急修复、缓存治理、数据兼容、用户体验、监控诊断
-- [用户状态与API请求治理计划](user_session_api_governance_plan.md) - 6 阶段改造：用户状态统一、API拦截器、缓存策略、数据隔离、平台一致性、错误处理
-- [业务和代码标准总体检查清单](business_and_code_standards_checklist.md) - 12 维度全面检查，识别遗漏风险点，优先级清晰
+---
 
-## 版本发布与热更新（2026-06-10 新增）
+## 🔧 运维与发版（operations/）
 
-- [热更新接入方案](hot_update_integration_plan.md) - Shorebird 接入指南，快速发布小修改
-- [版本发布决策指南](version_release_decision_guide.md) - **每次提交代码必读**：快速判断使用正常发版还是热更新
+- [热更新接入方案](operations/hot_update_integration_plan.md) ⭐ **核心**：Shorebird 热更新接入
+- [版本发布决策指南](operations/version_release_decision_guide.md) ⭐ **重要**：正常发版 vs 热更新决策
+- [任务分配指南](operations/task_allocation_guide.md) - AI 协作任务分配
 
-## UI/UX 设计体系（2026-06-10 新增）
+---
 
-- [UI/UX 全面审查标准与优化方向](ui_ux_review_standards_and_optimization.md) ⭐ **可执行清单**：5大审查维度、7个优化方向、全页面审查模板
-- [UI/UX 设计体系总结（基于实际代码）](ui_ux_design_system_actual.md) - 实际代码审计：圆角20dp、间距规范、Material 3、高级主题能力
-- [交互规范与动效指南](ui_ux_interaction_and_animation_guide.md) - 操作反馈、确认流程、空状态、动画时长与曲线标准
-- [UI/UX 改进实施计划](ui_ux_implementation_plan.md) - 4 阶段改进计划、验收标准、设计审查清单
-- [高级主题体验优化方案](advanced_theme_experience_optimization.md) - **核心付费功能**：发现入口、编辑体验、预览效果、主题市场、付费转化优化
+## 📦 归档文档（archive/milestones/）
 
-## 阅读器专项
+### 已完成里程碑（15个）
 
-- [书源共享与搜索范围业务流程](book_source_sharing_search_flow.md)
-- [本地阅读导入到解析规范化计划](local_reading_import_parse_standardization_plan_2026-06-07.md)
-- [阅读器本地内容重构执行计划](reader_local_content_refactor_execution_plan_2026-05-21.md)
-- [阅读器自动阅读执行计划](reader_auto_read_execution_plan_2026-05-24.md)
-- [阅读器多模态架构重构执行计划](reader_multimodal_architecture_refactor_execution_plan_2026-05-25.md)
-- [阅读器多模态手工回归清单](reader_multimodal_manual_regression_checklist_2026-05-25.md)
-- [阅读器多模态开发备注](reader_multimodal_developer_notes_2026-05-25.md)
-- [阅读器多模态性能与回滚基线](reader_multimodal_performance_and_rollback_baseline_2026-05-25.md)
+- milestone_01 ~ milestone_06：项目里程碑文档
+- 各类已完成的治理和优化计划
+- 历史执行计划和基线文档
 
-## 工程清单
+**说明：** 归档文档保留作为历史记录，不再主动更新
 
-- [全局页面路由清单](global_page_route_inventory_2026-05-12.md)
-- [存储盘点](storage_inventory_2026-05-20.md)
+---
 
-## 文档维护规则
+## 📝 文档管理
 
-- 新增长期规则时，优先补充到“必读规则”中的文档。
-- 新增阶段任务时，使用“当前里程碑”文档；完成后只保留对后续仍有价值的结论。
-- 新文档必须在本入口登记，否则视为临时草稿。
-- 过期草案、重复清单、一次性流程文档应删除，不另建“归档垃圾桶”。
-- 删除文档前先确认没有工具脚本依赖它；若脚本依赖，应先补齐替代文档。
+### 主目录文档（3个）
+
+- **README.md** - 本文档，文档索引
+- **document_cleanup_checklist.md** - 文档清理清单
+- **project_documentation_full_audit.md** - 项目文档全面审查报告
+
+---
+
+## 🎯 快速导航
+
+### 新成员入门
+1. [项目核心原则](standards/project_core_principles.md) - 理解项目价值观
+2. [开发架构护栏](standards/development_architecture_guardrails.md) - 了解架构约束
+3. [业务与代码标准检查清单](standards/business_and_code_standards_checklist.md) - 开发自查
+
+### 开发规范
+- [代码开发规范](standards/code_development_rules.md) - 代码风格
+- [业务开发规范](standards/business_development_rules.md) - 业务逻辑
+- [平台开发规范](standards/platform_development_rules.md) - 跨平台
+- [UI 自适应设计规则](standards/ui_adaptive_design_rules.md) - UI 适配
+
+### 核心治理
+- [存储与数据生命周期指南](governance/storage_and_data_lifecycle_guide.md) - 数据管理
+- [用户状态与 API 治理计划](governance/user_session_api_governance_plan.md) - API 治理
+
+### UI/UX 设计
+- [全面审查标准](ui_ux/ui_ux_review_standards_and_optimization.md) - 审查清单
+- [设计体系总结](ui_ux/ui_ux_design_system_actual.md) - 设计规范
+- [实施计划](ui_ux/ui_ux_implementation_plan.md) - 改进计划
+
+### 进行中功能
+- [书源导入优化](features/book_source/book_source_import_improvement_plan.md) - 正在开发
+- [书源导入 UI 设计](features/book_source/book_source_import_ui_design.md) - 开发指南
+
+### 运维发版
+- [热更新接入方案](operations/hot_update_integration_plan.md) - Shorebird
+- [版本发布决策指南](operations/version_release_decision_guide.md) - 发版决策
+
+---
+
+## 📊 文档统计
+
+- **总文档数：** 59 个
+- **核心规范：** 7 个
+- **治理计划：** 9 个
+- **UI/UX 设计：** 5 个
+- **功能文档：** 17 个
+- **运维文档：** 3 个
+- **归档文档：** 15 个
+- **其他：** 3 个
+
+---
+
+## 🔄 文档更新记录
+
+### 2026-06-11
+- ✅ 删除 6 个无用/误导文档
+- ✅ 整理文档目录结构（分类到子目录）
+- ✅ 归档 15 个已完成里程碑文档
+- ✅ 新增书源导入功能文档
+- ✅ 更新 UI/UX 实施计划（恢复推荐依赖）
+
+### 2026-06-10
+- 新增 UI/UX 设计体系文档
+- 新增存储与数据治理文档
+- 新增用户状态与 API 治理文档
+
+---
+
+**维护说明：**
+- 每次新增/删除文档时更新此索引
+- 归档文档不需要更新索引
+- 保持分类清晰，便于查找
+
+**最后更新：** 2026-06-11
