@@ -15,9 +15,12 @@ import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/adaptive_list_tile.dart';
 import '../../../app/widgets/adaptive_overflow_toolbar.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
+import '../../../app/widgets/app_task_bottom_sheet.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/platform/app_platform_capabilities.dart';
 import '../../../core/logging/app_logger.dart';
 import '../../../core/network/api_client.dart';
+import '../../source/application/external_import_catalog.dart';
 import '../application/advanced_theme_provider.dart';
 import '../application/book_source_import_payload.dart';
 import '../application/private_book_source_provider.dart';
@@ -251,12 +254,7 @@ class PrivateBookSourcesPage extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
   ) async {
-    final method = await showAdaptiveActionSurface<_BookSourceImportMethod>(
-      context: context,
-      maxWidth: 460,
-      padding: EdgeInsets.zero,
-      builder: (context) => const _BookSourceImportMethodSheet(),
-    );
+    final method = await _selectBookSourceImportMethod(context);
     if (method == null || !context.mounted) {
       return;
     }
@@ -292,6 +290,137 @@ class PrivateBookSourcesPage extends ConsumerWidget {
       ref.read(selectedPrivateBookSourceGroupProvider.notifier).state = null;
       _refresh(ref);
     }
+  }
+
+  static Future<_BookSourceImportMethod?> _selectBookSourceImportMethod(
+    BuildContext context,
+  ) {
+    return showAdaptiveActionSurface<_BookSourceImportMethod>(
+      context: context,
+      maxWidth: 460,
+      padding: EdgeInsets.zero,
+      builder: (context) => const _BookSourceImportMethodSheet(),
+    );
+  }
+
+  static Future<_PreparedBookSourceImport> _prepareUrlImport(String url) async {
+    final raw = await _loadRawImportFromUrl(url);
+    return _prepareLoadedImport(method: _BookSourceImportMethod.url, raw: raw);
+  }
+
+  static Future<_PreparedBookSourceImport> _prepareLoadedImport({
+    required _BookSourceImportMethod method,
+    required _RawBookSourceImport raw,
+  }) async {
+    _ensureCreateImportSize(raw.text);
+    final payload = await compute(parseBookSourceImportPayload, raw.text);
+    final imported = _PreparedBookSourceImport(
+      label: raw.label,
+      payload: payload,
+    );
+    AppLogger.instance.info(
+      'Book source JSON loaded',
+      context: <String, Object?>{
+        'method': method.name,
+        'bytes': payload.sizeBytes,
+        'lines': payload.lineCount,
+      },
+    );
+    return imported;
+  }
+
+  static Future<_RawBookSourceImport> _loadRawImportFromUrl(String url) async {
+    final uri = Uri.tryParse(url.trim());
+    if (uri == null ||
+        (uri.scheme != 'http' && uri.scheme != 'https') ||
+        uri.host.trim().isEmpty) {
+      throw const FormatException('请输入 http/https 链接');
+    }
+    final dio = Dio(
+      BaseOptions(
+        connectTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(seconds: 30),
+        responseType: ResponseType.plain,
+      ),
+    );
+    final response = await dio.get<String>(
+      uri.toString(),
+      options: Options(
+        responseType: ResponseType.plain,
+        followRedirects: true,
+        validateStatus: (_) => true,
+      ),
+    );
+    final statusCode = response.statusCode ?? 0;
+    if (statusCode < 200 || statusCode >= 300) {
+      throw FormatException('链接请求失败（$statusCode）');
+    }
+    final text = response.data ?? '';
+    if (text.trim().isEmpty) {
+      throw const FormatException('链接返回内容为空');
+    }
+    return _RawBookSourceImport(text: text, label: uri.host);
+  }
+
+  static Future<_RawBookSourceImport?> _loadRawImportFromFile() async {
+    final file = await openFile(
+      acceptedTypeGroups: const <XTypeGroup>[
+        ExternalImportCatalog.bookSourceJsonTypeGroup,
+      ],
+      confirmButtonText: '选择书源文件',
+    );
+    if (file == null) {
+      return null;
+    }
+    final size = await file.length();
+    if (size > _maxBookSourceImportBytes) {
+      throw const FormatException('文件过大，最大支持 10 MB');
+    }
+    final text = await file.readAsString();
+    final label = file.name.trim().isEmpty ? '本地文件' : file.name.trim();
+    return _RawBookSourceImport(text: text, label: label);
+  }
+
+  static Future<_RawBookSourceImport> _loadRawImportFromClipboard() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text ?? '';
+    if (text.trim().isEmpty) {
+      throw const FormatException('剪贴板没有 JSON 文本');
+    }
+    return _RawBookSourceImport(text: text, label: '剪贴板');
+  }
+
+  static void _ensureCreateImportSize(String value) {
+    if (bookSourceUtf8SizeOf(value) > _maxBookSourceImportBytes) {
+      throw const FormatException('文件过大，最大支持 10 MB');
+    }
+  }
+
+  static void _showImportSuccess(
+    BuildContext context,
+    _PreparedBookSourceImport imported,
+  ) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '已加载书源 JSON：${formatBookSourceSize(imported.payload.sizeBytes)}',
+        ),
+      ),
+    );
+  }
+
+  static void _showImportFailure(
+    BuildContext context, {
+    required _BookSourceImportMethod method,
+    required String message,
+  }) {
+    AppLogger.instance.warn(
+      'Book source JSON import failed',
+      context: <String, Object?>{'method': method.name, 'message': message},
+    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   static Future<PrivateBookSourceItem?> _loadSourceDetailForEdit(
@@ -464,7 +593,6 @@ class _BookSourceImportMethodSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     return SafeArea(
       top: false,
       child: Padding(
@@ -473,22 +601,11 @@ class _BookSourceImportMethodSheet extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: colorScheme.outlineVariant,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
             Text(
               '选择导入方式',
               textAlign: TextAlign.center,
               style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 12),
@@ -496,7 +613,6 @@ class _BookSourceImportMethodSheet extends StatelessWidget {
               icon: Icons.link_rounded,
               title: '通过链接导入',
               subtitle: '适合分享链接和大 JSON',
-              color: colorScheme.primary,
               onTap:
                   () => Navigator.of(context).pop(_BookSourceImportMethod.url),
             ),
@@ -505,7 +621,6 @@ class _BookSourceImportMethodSheet extends StatelessWidget {
               icon: Icons.folder_open_rounded,
               title: '从文件选择',
               subtitle: '读取本地 .json 或 .txt',
-              color: colorScheme.secondary,
               onTap:
                   () => Navigator.of(context).pop(_BookSourceImportMethod.file),
             ),
@@ -514,15 +629,9 @@ class _BookSourceImportMethodSheet extends StatelessWidget {
               icon: Icons.copy_rounded,
               title: '粘贴 JSON',
               subtitle: '从剪贴板读取并预览',
-              color: colorScheme.tertiary,
               onTap:
                   () =>
                       Navigator.of(context).pop(_BookSourceImportMethod.paste),
-            ),
-            const SizedBox(height: 10),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('取消'),
             ),
           ],
         ),
@@ -536,44 +645,22 @@ class _BookSourceImportMethodTile extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.subtitle,
-    required this.color,
     required this.onTap,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
-  final Color color;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final colorScheme = Theme.of(context).colorScheme;
     return ListTile(
       contentPadding: EdgeInsets.zero,
-      leading: Container(
-        width: 42,
-        height: 42,
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        alignment: Alignment.center,
-        child: Icon(icon, color: color),
-      ),
-      title: Text(
-        title,
-        style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w800),
-      ),
-      subtitle: Text(
-        subtitle,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: theme.textTheme.bodySmall?.copyWith(
-          color: colorScheme.onSurfaceVariant,
-        ),
-      ),
+      leading: Icon(icon),
+      title: Text(title),
+      subtitle: Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
       trailing: Icon(
         Icons.chevron_right_rounded,
         color: colorScheme.onSurfaceVariant,
@@ -1463,74 +1550,142 @@ class _PrivateSourceTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final testText =
-        item.lastTestStatus.isEmpty && item.lastTestMessage.isEmpty
-            ? '未检测'
-            : '${_testLabel(item.lastTestStatus)}${item.lastTestMessage.isEmpty ? '' : ' · ${item.lastTestMessage}'}';
-    final infoLine = [
-      _typeLabel(item.supportedTypes),
-      _groupLabel(item.groupName),
-      _reviewLabel(item.reviewStatus),
-      '检测 $testText',
-      if (item.description.isNotEmpty) item.description,
-    ].join(' · ');
+    final testStatus = item.lastTestStatus;
+    final testMessage = item.lastTestMessage;
+
     return Material(
-      color: colorScheme.surfaceContainerLow.withValues(alpha: 0.82),
+      color: colorScheme.surfaceContainerLow.withValues(alpha: 0.5),
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: item.visibility == 'shared' ? null : onEdit,
         child: Container(
-          constraints: const BoxConstraints(minHeight: 72),
-          padding: const EdgeInsets.fromLTRB(12, 9, 8, 9),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: colorScheme.outlineVariant.withValues(alpha: 0.32),
+              color: colorScheme.outlineVariant.withValues(alpha: 0.2),
             ),
           ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: <Widget>[
-                    Text(
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: Text(
                       item.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(height: 5),
-                    Text(
-                      infoLine,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        height: 1.25,
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                  _PrivateSourceMoreButton(
+                    item: item,
+                    onTest: onTest,
+                    onSubmit: onSubmit,
+                    onEdit: onEdit,
+                    onDelete: onDelete,
+                  ),
+                ],
               ),
-              const SizedBox(width: 4),
-              _PrivateSourceMoreButton(
-                item: item,
-                onTest: onTest,
-                onSubmit: onSubmit,
-                onEdit: onEdit,
-                onDelete: onDelete,
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: <Widget>[
+                  _buildChip(
+                    context,
+                    _typeLabel(item.supportedTypes),
+                    colorScheme.primary.withValues(alpha: 0.12),
+                    colorScheme.primary,
+                  ),
+                  _buildChip(
+                    context,
+                    _groupLabel(item.groupName),
+                    colorScheme.surfaceContainerHighest,
+                    colorScheme.onSurfaceVariant,
+                  ),
+                  _buildChip(
+                    context,
+                    _reviewLabel(item.reviewStatus),
+                    _reviewStatusColor(item.reviewStatus, colorScheme)
+                        .withValues(alpha: 0.12),
+                    _reviewStatusColor(item.reviewStatus, colorScheme),
+                  ),
+                  if (testStatus.isNotEmpty || testMessage.isNotEmpty)
+                    _buildChip(
+                      context,
+                      '检测 ${_testLabel(testStatus)}${testMessage.isEmpty ? '' : ' $testMessage'}',
+                      _testStatusColor(testStatus, colorScheme)
+                          .withValues(alpha: 0.12),
+                      _testStatusColor(testStatus, colorScheme),
+                    ),
+                  if (item.description.isNotEmpty)
+                    _buildChip(
+                      context,
+                      item.description,
+                      colorScheme.surfaceContainerHighest,
+                      colorScheme.onSurfaceVariant,
+                    ),
+                ],
               ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildChip(
+    BuildContext context,
+    String label,
+    Color backgroundColor,
+    Color foregroundColor,
+  ) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: foregroundColor,
+              fontWeight: FontWeight.w500,
+            ),
+      ),
+    );
+  }
+
+  Color _reviewStatusColor(String status, ColorScheme colorScheme) {
+    switch (status) {
+      case 'pending':
+        return Colors.orange;
+      case 'approved':
+        return Colors.green;
+      case 'rejected':
+        return Colors.red;
+      default:
+        return colorScheme.onSurfaceVariant;
+    }
+  }
+
+  Color _testStatusColor(String status, ColorScheme colorScheme) {
+    if (status.isEmpty) return colorScheme.onSurfaceVariant;
+    switch (status) {
+      case 'pass':
+      case 'success':
+        return Colors.green;
+      case 'fail':
+      case 'error':
+        return Colors.red;
+      default:
+        return Colors.orange;
+    }
   }
 }
 
@@ -2184,7 +2339,6 @@ class _PrivateSourceForm extends ConsumerStatefulWidget {
 
 class _PrivateSourceFormState extends ConsumerState<_PrivateSourceForm> {
   final _formKey = GlobalKey<FormState>();
-  final AppLogger _logger = AppLogger.instance;
   late final TextEditingController _nameController;
   late final TextEditingController _descriptionController;
   late final TextEditingController _groupController;
@@ -2196,7 +2350,8 @@ class _PrivateSourceFormState extends ConsumerState<_PrivateSourceForm> {
   bool _saving = false;
   bool _loadingSource = false;
   bool _groupEdited = false;
-  String? _loadingSourceLabel;
+  bool _previewExpanded = false;
+  String? _loadedUrl;
   String? _sourceLabel;
   String? _loadError;
   int _sourceLineCount = 0;
@@ -2243,6 +2398,8 @@ class _PrivateSourceFormState extends ConsumerState<_PrivateSourceForm> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
     final groupsAsync = ref.watch(privateBookSourceGroupsProvider);
     final metrics = AppAdaptiveMetrics.of(context);
@@ -2263,73 +2420,126 @@ class _PrivateSourceFormState extends ConsumerState<_PrivateSourceForm> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text(
-                  _isEditing ? '编辑书源' : '新增书源',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 16),
-                _buildImportSection(context),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _nameController,
-                  decoration: const InputDecoration(labelText: '名称'),
-                  validator:
-                      (value) =>
-                          value == null || value.trim().isEmpty
-                              ? '请填写名称'
-                              : null,
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: _type,
-                  decoration: const InputDecoration(labelText: '类型'),
-                  items: const <DropdownMenuItem<String>>[
-                    DropdownMenuItem(value: 'novel', child: Text('小说')),
-                    DropdownMenuItem(value: 'comic', child: Text('漫画')),
-                    DropdownMenuItem(value: 'audio', child: Text('音频')),
-                    DropdownMenuItem(value: 'video', child: Text('视频')),
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Text(
+                        _isEditing ? '编辑书源' : '新增书源',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: _saving ? '保存中' : '保存',
+                      onPressed: (_saving || _loadingSource) ? null : _save,
+                      color: colorScheme.primary,
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        disabledBackgroundColor: Colors.transparent,
+                      ),
+                      icon:
+                          _saving
+                              ? const SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                              : const Icon(Icons.check_rounded),
+                    ),
                   ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() {
-                        _type = value;
-                      });
-                    }
-                  },
-                ),
-                const SizedBox(height: 12),
-                _PrivateGroupAutocompleteField(
-                  controller: _groupController,
-                  groupsAsync: groupsAsync,
-                  onChanged: () {
-                    _groupEdited = true;
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _descriptionController,
-                  minLines: 2,
-                  maxLines: 4,
-                  decoration: const InputDecoration(labelText: '描述'),
                 ),
                 const SizedBox(height: 18),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: <Widget>[
-                    TextButton(
-                      onPressed:
-                          _saving
-                              ? null
-                              : () => Navigator.of(context).pop(null),
-                      child: const Text('取消'),
+                const _PrivateSourceSectionHeader(title: '基础信息'),
+                const SizedBox(height: 12),
+                _PrivateSourceField(
+                  label: '名称',
+                  child: TextFormField(
+                    controller: _nameController,
+                    textInputAction: TextInputAction.next,
+                    decoration: _privateSourceInputDecoration(
+                      hintText: '请输入书源名称',
                     ),
-                    const SizedBox(width: 8),
-                    FilledButton(
-                      onPressed: (_saving || _loadingSource) ? null : _save,
-                      child: Text(_saving ? '保存中' : '保存'),
-                    ),
-                  ],
+                    validator:
+                        (value) =>
+                            value == null || value.trim().isEmpty
+                                ? '请填写名称'
+                                : null,
+                  ),
                 ),
+                const SizedBox(height: 12),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final typeField = _PrivateSourceField(
+                      label: '类型',
+                      child: DropdownButtonFormField<String>(
+                        initialValue: _type,
+                        decoration: _privateSourceInputDecoration(),
+                        items: const <DropdownMenuItem<String>>[
+                          DropdownMenuItem(value: 'novel', child: Text('小说')),
+                          DropdownMenuItem(value: 'comic', child: Text('漫画')),
+                          DropdownMenuItem(value: 'audio', child: Text('音频')),
+                          DropdownMenuItem(value: 'video', child: Text('视频')),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() {
+                              _type = value;
+                            });
+                          }
+                        },
+                      ),
+                    );
+                    final groupField = _PrivateSourceField(
+                      label: '分组',
+                      child: _PrivateGroupAutocompleteField(
+                        controller: _groupController,
+                        groupsAsync: groupsAsync,
+                        decoration: _privateSourceInputDecoration(
+                          hintText: '选择已有分组，或输入新分组名',
+                        ),
+                        onChanged: () {
+                          _groupEdited = true;
+                        },
+                      ),
+                    );
+                    if (constraints.maxWidth >= 560) {
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Expanded(child: typeField),
+                          const SizedBox(width: 12),
+                          Expanded(child: groupField),
+                        ],
+                      );
+                    }
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        typeField,
+                        const SizedBox(height: 12),
+                        groupField,
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+                _PrivateSourceField(
+                  label: '描述',
+                  child: TextFormField(
+                    controller: _descriptionController,
+                    minLines: 2,
+                    maxLines: 4,
+                    textInputAction: TextInputAction.newline,
+                    decoration: _privateSourceInputDecoration(
+                      hintText: '可填写用途、来源或备注',
+                      alignLabelWithHint: true,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                _buildImportSection(context),
               ],
             ),
           ),
@@ -2341,136 +2551,201 @@ class _PrivateSourceFormState extends ConsumerState<_PrivateSourceForm> {
   Widget _buildImportSection(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow.withValues(alpha: 0.84),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.48),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        _PrivateSourceSectionHeader(
+          title: '书源 JSON',
+          trailing: TextButton.icon(
+            onPressed: _saving || _loadingSource ? null : _changeImportMethod,
+            icon: const Icon(Icons.swap_horiz_rounded, size: 18),
+            label: Text(_importMethodLabel(_selectedImportMethod)),
+            style: TextButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+            ),
+          ),
         ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            Text(
-              '书源 JSON',
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
+        const SizedBox(height: 10),
+        _buildJsonMethodInput(context),
+        if (_loadingSource) ...<Widget>[
+          const SizedBox(height: 12),
+          LinearProgressIndicator(
+            minHeight: 3,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '正在读取书源 JSON',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
             ),
-            const SizedBox(height: 12),
-            SegmentedButton<_BookSourceImportMethod>(
-              segments: const <ButtonSegment<_BookSourceImportMethod>>[
-                ButtonSegment<_BookSourceImportMethod>(
-                  value: _BookSourceImportMethod.url,
-                  icon: Icon(Icons.link_rounded),
-                  label: Text('链接'),
-                ),
-                ButtonSegment<_BookSourceImportMethod>(
-                  value: _BookSourceImportMethod.file,
-                  icon: Icon(Icons.folder_open_rounded),
-                  label: Text('文件'),
-                ),
-                ButtonSegment<_BookSourceImportMethod>(
-                  value: _BookSourceImportMethod.paste,
-                  icon: Icon(Icons.copy_rounded),
-                  label: Text('粘贴'),
-                ),
-              ],
-              selected: <_BookSourceImportMethod>{_selectedImportMethod},
-              onSelectionChanged:
-                  _loadingSource
-                      ? null
-                      : (values) {
-                        setState(() {
-                          _selectedImportMethod = values.first;
-                          _loadError = null;
-                        });
-                      },
-            ),
-            const SizedBox(height: 12),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 180),
-              child: KeyedSubtree(
-                key: ValueKey<_BookSourceImportMethod>(_selectedImportMethod),
-                child: _buildImportMethodPanel(context),
-              ),
-            ),
-            if (_loadingSource) ...<Widget>[
-              const SizedBox(height: 12),
-              LinearProgressIndicator(
-                minHeight: 3,
-                borderRadius: BorderRadius.circular(999),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _loadingSourceLabel ?? '正在读取书源 JSON',
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-            if (_loadError != null) ...<Widget>[
-              const SizedBox(height: 12),
-              _ImportErrorBanner(message: _loadError!),
-            ],
-            if (_hasLoadedSource) ...<Widget>[
-              const SizedBox(height: 12),
-              _BookSourcePreviewCard(
-                label: _sourceLabel ?? '已加载 JSON',
-                previewController: _previewController,
-                lineCount: _sourceLineCount,
-                sizeBytes: _sourceSizeBytes,
-                onClear: _loadingSource ? null : _clearLoadedSource,
-              ),
-            ],
-          ],
-        ),
-      ),
+          ),
+        ],
+        if (_loadError != null) ...<Widget>[
+          const SizedBox(height: 12),
+          _ImportErrorBanner(message: _loadError!),
+        ],
+        if (_hasLoadedSource) ...<Widget>[
+          const SizedBox(height: 12),
+          _BookSourcePreviewCard(
+            label: _sourceLabel ?? '已加载 JSON',
+            previewController: _previewController,
+            lineCount: _sourceLineCount,
+            sizeBytes: _sourceSizeBytes,
+            expanded: _previewExpanded,
+            onToggleExpanded: () {
+              setState(() {
+                _previewExpanded = !_previewExpanded;
+              });
+            },
+            onClear: _clearLoadedSource,
+          ),
+        ],
+      ],
     );
   }
 
-  Widget _buildImportMethodPanel(BuildContext context) {
+  Widget _buildJsonMethodInput(BuildContext context) {
     switch (_selectedImportMethod) {
       case _BookSourceImportMethod.url:
-        return _UrlImportPanel(
+        return _UrlJsonSourceInput(
           controller: _urlController,
-          loading: _loadingSource,
-          onImport: () => unawaited(_importFromUrl()),
+          enabled: !_saving && !_loadingSource,
+          hasLoadedSource: _hasLoadedSource,
         );
       case _BookSourceImportMethod.file:
-        return _FileImportPanel(
-          loading: _loadingSource,
-          onImport: () => unawaited(_importFromFile()),
+        return AppTaskActionCard(
+          title: _hasLoadedSource ? '重新选择书源文件' : '添加书源文件',
+          description: '支持选择 .json 或 .txt 文件。',
+          icon: Icons.folder_open_rounded,
+          dashedBorder: !_hasLoadedSource,
+          onTap:
+              _saving || _loadingSource
+                  ? null
+                  : () => unawaited(_loadFileSource()),
         );
       case _BookSourceImportMethod.paste:
-        return _ClipboardImportPanel(
-          loading: _loadingSource,
-          onImport: () => unawaited(_importFromClipboard()),
+        return AppTaskActionCard(
+          title: _hasLoadedSource ? '重新读取剪贴板' : '粘贴 JSON',
+          description: '从系统剪贴板读取书源 JSON 文本。',
+          icon: Icons.copy_rounded,
+          dashedBorder: !_hasLoadedSource,
+          onTap:
+              _saving || _loadingSource
+                  ? null
+                  : () => unawaited(_loadClipboardSource()),
         );
     }
   }
 
-  Future<void> _save() async {
-    if (!_validateLoadedSource()) {
+  Future<void> _changeImportMethod() async {
+    final method = await PrivateBookSourcesPage._selectBookSourceImportMethod(
+      context,
+    );
+    if (method == null || !mounted) {
       return;
     }
-    if (!_formKey.currentState!.validate()) {
+    setState(() {
+      _selectedImportMethod = method;
+      _loadedUrl = null;
+      _clearLoadedSourceValues();
+    });
+  }
+
+  Future<void> _loadFileSource() {
+    final localFileImport =
+        ref.read(appPlatformCapabilitiesProvider).localFileImport;
+    if (!localFileImport.isSupported) {
+      _setLoadError(localFileImport.reason ?? '当前平台暂不支持从本地文件选择器导入。');
+      return Future<void>.value();
+    }
+    return _loadActionSource(
+      method: _BookSourceImportMethod.file,
+      loader: PrivateBookSourcesPage._loadRawImportFromFile,
+    );
+  }
+
+  Future<void> _loadClipboardSource() {
+    return _loadActionSource(
+      method: _BookSourceImportMethod.paste,
+      loader: PrivateBookSourcesPage._loadRawImportFromClipboard,
+    );
+  }
+
+  Future<void> _loadActionSource({
+    required _BookSourceImportMethod method,
+    required Future<_RawBookSourceImport?> Function() loader,
+  }) async {
+    if (_loadingSource) {
+      return;
+    }
+    setState(() {
+      _loadingSource = true;
+      _loadError = null;
+    });
+    try {
+      final raw = await loader();
+      if (raw == null) {
+        return;
+      }
+      final imported = await PrivateBookSourcesPage._prepareLoadedImport(
+        method: method,
+        raw: raw,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _applyPreparedImport(imported);
+      });
+      PrivateBookSourcesPage._showImportSuccess(context, imported);
+    } on FormatException catch (error) {
+      _handleImportFailure(method, error.message);
+    } catch (error) {
+      _handleImportFailure(method, '书源 JSON 读取失败：${_messageOf(error)}');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingSource = false;
+        });
+      }
+    }
+  }
+
+  void _handleImportFailure(_BookSourceImportMethod method, String message) {
+    setState(() {
+      _loadError = message;
+    });
+    PrivateBookSourcesPage._showImportFailure(
+      context,
+      method: method,
+      message: message,
+    );
+  }
+
+  Future<void> _save() async {
+    if (_saving) {
       return;
     }
     setState(() {
       _saving = true;
     });
-    final input = PrivateBookSourceInput(
-      name: _nameController.text.trim(),
-      supportedTypes: <String>[_type],
-      sourceCode: _sourceController.text.trim(),
-      description: _descriptionController.text.trim(),
-      groupName: _groupController.text.trim(),
-    );
     try {
+      final sourceReady = await _ensureSourceReadyForSave();
+      if (!sourceReady) {
+        return;
+      }
+      if (!_formKey.currentState!.validate()) {
+        return;
+      }
+      final input = PrivateBookSourceInput(
+        name: _nameController.text.trim(),
+        supportedTypes: <String>[_type],
+        sourceCode: _sourceController.text.trim(),
+        description: _descriptionController.text.trim(),
+        groupName: _groupController.text.trim(),
+      );
       late final PrivateBookSourceItem saved;
       if (_isEditing) {
         saved = await ref
@@ -2487,12 +2762,76 @@ class _PrivateSourceFormState extends ConsumerState<_PrivateSourceForm> {
       if (!mounted) {
         return;
       }
-      setState(() {
-        _saving = false;
-      });
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(_messageOf(error))));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+        });
+      }
+    }
+  }
+
+  Future<bool> _ensureSourceReadyForSave() async {
+    if (_selectedImportMethod == _BookSourceImportMethod.url) {
+      return _loadUrlSourceForSave();
+    }
+    return _validateLoadedSource();
+  }
+
+  Future<bool> _loadUrlSourceForSave() async {
+    final url = _urlController.text.trim();
+    if (url.isEmpty) {
+      _setLoadError('请输入书源链接');
+      return false;
+    }
+    if (_sourceController.text.trim().isNotEmpty && _loadedUrl == url) {
+      return _validateLoadedSource();
+    }
+    setState(() {
+      _loadingSource = true;
+      _loadError = null;
+    });
+    try {
+      final imported = await PrivateBookSourcesPage._prepareUrlImport(url);
+      if (!mounted) {
+        return false;
+      }
+      setState(() {
+        _loadedUrl = url;
+        _applyPreparedImport(imported);
+      });
+      PrivateBookSourcesPage._showImportSuccess(context, imported);
+      return true;
+    } on FormatException catch (error) {
+      setState(() {
+        _loadError = error.message;
+      });
+      PrivateBookSourcesPage._showImportFailure(
+        context,
+        method: _BookSourceImportMethod.url,
+        message: error.message,
+      );
+      return false;
+    } catch (error) {
+      final message = '书源 JSON 读取失败：${_messageOf(error)}';
+      setState(() {
+        _loadError = message;
+      });
+      PrivateBookSourcesPage._showImportFailure(
+        context,
+        method: _BookSourceImportMethod.url,
+        message: message,
+      );
+      return false;
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingSource = false;
+        });
+      }
     }
   }
 
@@ -2507,155 +2846,6 @@ class _PrivateSourceFormState extends ConsumerState<_PrivateSourceForm> {
       return false;
     }
     return true;
-  }
-
-  Future<void> _importFromUrl() async {
-    await _runImport(
-      method: _BookSourceImportMethod.url,
-      loadingLabel: '正在下载书源 JSON',
-      loader: () async {
-        final url = _urlController.text.trim();
-        final uri = Uri.tryParse(url);
-        if (uri == null ||
-            (uri.scheme != 'http' && uri.scheme != 'https') ||
-            uri.host.trim().isEmpty) {
-          throw const FormatException('请输入 http/https 链接');
-        }
-        final dio = Dio(
-          BaseOptions(
-            connectTimeout: const Duration(seconds: 15),
-            receiveTimeout: const Duration(seconds: 30),
-            responseType: ResponseType.plain,
-          ),
-        );
-        final response = await dio.get<String>(
-          uri.toString(),
-          options: Options(
-            responseType: ResponseType.plain,
-            followRedirects: true,
-            validateStatus: (_) => true,
-          ),
-        );
-        final statusCode = response.statusCode ?? 0;
-        if (statusCode < 200 || statusCode >= 300) {
-          throw FormatException('链接请求失败（$statusCode）');
-        }
-        final text = response.data ?? '';
-        if (text.trim().isEmpty) {
-          throw const FormatException('链接返回内容为空');
-        }
-        return _RawBookSourceImport(text: text, label: uri.host);
-      },
-    );
-  }
-
-  Future<void> _importFromFile() async {
-    await _runImport(
-      method: _BookSourceImportMethod.file,
-      loadingLabel: '正在读取本地文件',
-      loader: () async {
-        final file = await openFile(
-          acceptedTypeGroups: const <XTypeGroup>[
-            XTypeGroup(
-              label: 'Book source JSON',
-              extensions: <String>['json', 'txt'],
-              mimeTypes: <String>[
-                'application/json',
-                'text/json',
-                'text/plain',
-              ],
-              uniformTypeIdentifiers: <String>[
-                'public.json',
-                'public.plain-text',
-                'public.text',
-              ],
-            ),
-          ],
-          confirmButtonText: '选择书源文件',
-        );
-        if (file == null) {
-          return null;
-        }
-        final size = await file.length();
-        if (size > _maxBookSourceImportBytes) {
-          throw const FormatException('文件过大，最大支持 10 MB');
-        }
-        final text = await file.readAsString();
-        final label = file.name.trim().isEmpty ? '本地文件' : file.name.trim();
-        return _RawBookSourceImport(text: text, label: label);
-      },
-    );
-  }
-
-  Future<void> _importFromClipboard() async {
-    await _runImport(
-      method: _BookSourceImportMethod.paste,
-      loadingLabel: '正在读取剪贴板',
-      loader: () async {
-        final data = await Clipboard.getData(Clipboard.kTextPlain);
-        final text = data?.text ?? '';
-        if (text.trim().isEmpty) {
-          throw const FormatException('剪贴板没有 JSON 文本');
-        }
-        return _RawBookSourceImport(text: text, label: '剪贴板');
-      },
-    );
-  }
-
-  Future<void> _runImport({
-    required _BookSourceImportMethod method,
-    required String loadingLabel,
-    required Future<_RawBookSourceImport?> Function() loader,
-  }) async {
-    if (_loadingSource) {
-      return;
-    }
-    setState(() {
-      _loadingSource = true;
-      _loadingSourceLabel = loadingLabel;
-      _loadError = null;
-    });
-    try {
-      final loaded = await loader();
-      if (loaded == null) {
-        return;
-      }
-      _ensureImportSize(loaded.text);
-      final payload = await compute(parseBookSourceImportPayload, loaded.text);
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _selectedImportMethod = method;
-        _applyLoadedPayload(payload, label: loaded.label);
-      });
-      _logger.info(
-        'Book source JSON loaded',
-        context: <String, Object?>{
-          'method': method.name,
-          'bytes': payload.sizeBytes,
-          'lines': payload.lineCount,
-        },
-      );
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '已加载书源 JSON：${formatBookSourceSize(payload.sizeBytes)}',
-          ),
-        ),
-      );
-    } on FormatException catch (error) {
-      _handleImportFailure(method, error.message);
-    } catch (error) {
-      _handleImportFailure(method, '书源 JSON 读取失败：${_messageOf(error)}');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _loadingSource = false;
-          _loadingSourceLabel = null;
-        });
-      }
-    }
   }
 
   void _loadInitialPreview() {
@@ -2675,6 +2865,10 @@ class _PrivateSourceFormState extends ConsumerState<_PrivateSourceForm> {
     }
   }
 
+  void _applyPreparedImport(_PreparedBookSourceImport imported) {
+    _applyLoadedPayload(imported.payload, label: imported.label);
+  }
+
   void _applyLoadedPayload(
     BookSourceImportPayload payload, {
     required String label,
@@ -2685,6 +2879,7 @@ class _PrivateSourceFormState extends ConsumerState<_PrivateSourceForm> {
     _sourceLabel = label;
     _sourceLineCount = payload.lineCount;
     _sourceSizeBytes = payload.sizeBytes;
+    _previewExpanded = false;
     _loadError = null;
     if (fillMetadata) {
       _fillMetadataFromPayload(payload);
@@ -2711,19 +2906,18 @@ class _PrivateSourceFormState extends ConsumerState<_PrivateSourceForm> {
 
   void _clearLoadedSource() {
     setState(() {
-      _sourceController.clear();
-      _previewController.clear();
-      _sourceLabel = null;
-      _sourceLineCount = 0;
-      _sourceSizeBytes = 0;
-      _loadError = null;
+      _clearLoadedSourceValues();
     });
   }
 
-  void _ensureImportSize(String value) {
-    if (bookSourceUtf8SizeOf(value) > _maxBookSourceImportBytes) {
-      throw const FormatException('文件过大，最大支持 10 MB');
-    }
+  void _clearLoadedSourceValues() {
+    _sourceController.clear();
+    _previewController.clear();
+    _sourceLabel = null;
+    _sourceLineCount = 0;
+    _sourceSizeBytes = 0;
+    _previewExpanded = false;
+    _loadError = null;
   }
 
   void _setLoadError(String message) {
@@ -2734,22 +2928,13 @@ class _PrivateSourceFormState extends ConsumerState<_PrivateSourceForm> {
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
   }
+}
 
-  void _handleImportFailure(_BookSourceImportMethod method, String message) {
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _loadError = message;
-    });
-    _logger.warn(
-      'Book source JSON import failed',
-      context: <String, Object?>{'method': method.name, 'message': message},
-    );
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
-  }
+class _PreparedBookSourceImport {
+  const _PreparedBookSourceImport({required this.label, required this.payload});
+
+  final String label;
+  final BookSourceImportPayload payload;
 }
 
 class _RawBookSourceImport {
@@ -2759,87 +2944,125 @@ class _RawBookSourceImport {
   final String label;
 }
 
-class _UrlImportPanel extends StatelessWidget {
-  const _UrlImportPanel({
-    required this.controller,
-    required this.loading,
-    required this.onImport,
-  });
+InputDecoration _privateSourceInputDecoration({
+  String? hintText,
+  Widget? prefixIcon,
+  Widget? suffixIcon,
+  String? helperText,
+  bool alignLabelWithHint = false,
+}) {
+  return InputDecoration(
+    hintText: hintText,
+    prefixIcon: prefixIcon,
+    suffixIcon: suffixIcon,
+    helperText: helperText,
+    alignLabelWithHint: alignLabelWithHint,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+  );
+}
 
-  final TextEditingController controller;
-  final bool loading;
-  final VoidCallback onImport;
+class _PrivateSourceSectionHeader extends StatelessWidget {
+  const _PrivateSourceSectionHeader({required this.title, this.trailing});
+
+  final String title;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Expanded(
-          child: TextField(
-            controller: controller,
-            enabled: !loading,
-            keyboardType: TextInputType.url,
-            textInputAction: TextInputAction.done,
-            decoration: const InputDecoration(
-              labelText: '书源链接',
-              prefixIcon: Icon(Icons.link_rounded),
+          child: Text(
+            title,
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w800,
             ),
-            onSubmitted: (_) {
-              if (!loading) {
-                onImport();
-              }
-            },
           ),
         ),
-        const SizedBox(width: 10),
-        Padding(
-          padding: const EdgeInsets.only(top: 2),
-          child: FilledButton.icon(
-            onPressed: loading ? null : onImport,
-            icon: const Icon(Icons.download_rounded),
-            label: const Text('获取'),
-          ),
-        ),
+        if (trailing != null) trailing!,
       ],
     );
   }
 }
 
-class _FileImportPanel extends StatelessWidget {
-  const _FileImportPanel({required this.loading, required this.onImport});
+class _PrivateSourceField extends StatelessWidget {
+  const _PrivateSourceField({required this.label, required this.child});
 
-  final bool loading;
-  final VoidCallback onImport;
+  final String label;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: OutlinedButton.icon(
-        onPressed: loading ? null : onImport,
-        icon: const Icon(Icons.upload_file_rounded),
-        label: const Text('选择 JSON 文件'),
-      ),
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Padding(
+          padding: const EdgeInsetsDirectional.only(start: 2, bottom: 6),
+          child: Text(
+            label,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        child,
+      ],
     );
   }
 }
 
-class _ClipboardImportPanel extends StatelessWidget {
-  const _ClipboardImportPanel({required this.loading, required this.onImport});
+String _importMethodLabel(_BookSourceImportMethod method) {
+  return switch (method) {
+    _BookSourceImportMethod.url => '链接',
+    _BookSourceImportMethod.file => '文件',
+    _BookSourceImportMethod.paste => '粘贴',
+  };
+}
 
-  final bool loading;
-  final VoidCallback onImport;
+class _UrlJsonSourceInput extends StatelessWidget {
+  const _UrlJsonSourceInput({
+    required this.controller,
+    required this.enabled,
+    required this.hasLoadedSource,
+  });
+
+  final TextEditingController controller;
+  final bool enabled;
+  final bool hasLoadedSource;
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: FilledButton.icon(
-        onPressed: loading ? null : onImport,
-        icon: const Icon(Icons.copy_rounded),
-        label: const Text('读取剪贴板 JSON'),
-      ),
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        _PrivateSourceField(
+          label: '链接',
+          child: TextFormField(
+            controller: controller,
+            enabled: enabled,
+            keyboardType: TextInputType.url,
+            textInputAction: TextInputAction.done,
+            decoration: _privateSourceInputDecoration(
+              hintText: 'https://example.com/source.json',
+              prefixIcon: const Icon(Icons.link_rounded),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          hasLoadedSource
+              ? '当前链接已解析；修改链接后保存会重新解析。'
+              : '填写链接后点击保存，系统会下载并解析 JSON。',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -2891,6 +3114,8 @@ class _BookSourcePreviewCard extends StatelessWidget {
     required this.previewController,
     required this.lineCount,
     required this.sizeBytes,
+    required this.expanded,
+    required this.onToggleExpanded,
     required this.onClear,
   });
 
@@ -2898,6 +3123,8 @@ class _BookSourcePreviewCard extends StatelessWidget {
   final TextEditingController previewController;
   final int lineCount;
   final int sizeBytes;
+  final bool expanded;
+  final VoidCallback onToggleExpanded;
   final VoidCallback? onClear;
 
   @override
@@ -2922,47 +3149,63 @@ class _BookSourcePreviewCard extends StatelessWidget {
                 Icon(Icons.code_rounded, color: colorScheme.primary, size: 20),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  '$lineCount 行 · ${formatBookSourceSize(sizeBytes)}',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w700,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '$lineCount 行 · ${formatBookSourceSize(sizeBytes)}',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(width: 4),
                 IconButton(
-                  tooltip: '清除',
-                  onPressed: onClear,
-                  icon: const Icon(Icons.close_rounded),
+                  tooltip: expanded ? '收起预览' : '查看预览',
+                  onPressed: onToggleExpanded,
+                  icon: Icon(
+                    expanded
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.visibility_outlined,
+                  ),
                 ),
+                if (onClear != null)
+                  IconButton(
+                    tooltip: '清除',
+                    onPressed: onClear,
+                    icon: const Icon(Icons.close_rounded),
+                  ),
               ],
             ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: previewController,
-              readOnly: true,
-              minLines: 6,
-              maxLines: 12,
-              style: const TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 12,
-                height: 1.35,
+            if (expanded) ...<Widget>[
+              const SizedBox(height: 10),
+              TextField(
+                controller: previewController,
+                readOnly: true,
+                minLines: 6,
+                maxLines: 12,
+                style: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 12,
+                  height: 1.35,
+                ),
+                decoration: _privateSourceInputDecoration(
+                  alignLabelWithHint: true,
+                ),
               ),
-              decoration: const InputDecoration(
-                labelText: '预览',
-                alignLabelWithHint: true,
-              ),
-            ),
+            ],
           ],
         ),
       ),
@@ -2975,11 +3218,13 @@ class _PrivateGroupAutocompleteField extends StatefulWidget {
     required this.controller,
     required this.groupsAsync,
     required this.onChanged,
+    this.decoration = const InputDecoration(),
   });
 
   final TextEditingController controller;
   final AsyncValue<List<PrivateBookSourceGroup>> groupsAsync;
   final VoidCallback onChanged;
+  final InputDecoration decoration;
 
   @override
   State<_PrivateGroupAutocompleteField> createState() =>
@@ -3034,29 +3279,31 @@ class _PrivateGroupAutocompleteFieldState
         return TextFormField(
           controller: textController,
           focusNode: focusNode,
-          decoration: InputDecoration(
-            labelText: '私人分组',
-            hintText: '选择已有分组，或输入新分组名',
+          decoration: widget.decoration.copyWith(
+            hintText: widget.decoration.hintText ?? '选择已有分组，或输入新分组名',
             helperText:
-                loading
+                widget.decoration.helperText ??
+                (loading
                     ? '正在读取分组'
                     : hasError
                     ? '分组读取失败，可直接输入新分组名'
-                    : '不存在的分组名会在保存时自动创建',
-            suffixIcon: IconButton(
-              tooltip: '查看已有分组',
-              onPressed:
-                  groupNames.isEmpty
-                      ? null
-                      : () {
-                        focusNode.requestFocus();
-                        textController.selection = TextSelection(
-                          baseOffset: 0,
-                          extentOffset: textController.text.length,
-                        );
-                      },
-              icon: const Icon(Icons.arrow_drop_down_rounded),
-            ),
+                    : null),
+            suffixIcon:
+                widget.decoration.suffixIcon ??
+                IconButton(
+                  tooltip: '查看已有分组',
+                  onPressed:
+                      groupNames.isEmpty
+                          ? null
+                          : () {
+                            focusNode.requestFocus();
+                            textController.selection = TextSelection(
+                              baseOffset: 0,
+                              extentOffset: textController.text.length,
+                            );
+                          },
+                  icon: const Icon(Icons.arrow_drop_down_rounded),
+                ),
           ),
           onChanged: (_) => widget.onChanged(),
         );

@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(dart tool/check_architecture_guardrails.dart)",
-      "Bash(flutter build *)"
+      "Bash(flutter build *)",
+      "WebFetch(domain:docs.shorebird.dev)"
     ]
   }
 }

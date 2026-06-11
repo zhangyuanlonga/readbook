@@ -83,9 +83,8 @@ void main() {
 }
 
 class _FakeStartupAuthService extends AuthService {
-  _FakeStartupAuthService({this.refreshResult, this.refreshError});
+  _FakeStartupAuthService({this.refreshError});
 
-  final AuthSession? refreshResult;
   final Object? refreshError;
 
   @override
@@ -93,13 +92,12 @@ class _FakeStartupAuthService extends AuthService {
     if (refreshError != null) {
       throw refreshError!;
     }
-    return refreshResult ??
-        AuthSession(
-          accessToken: 'refreshed_access',
-          refreshToken: refreshToken,
-          accessExpiresAt: DateTime.now().toUtc().add(const Duration(hours: 1)),
-          refreshExpiresAt: DateTime.now().toUtc().add(const Duration(days: 1)),
-          userId: 'user_1',
-        );
+    return AuthSession(
+      accessToken: 'refreshed_access',
+      refreshToken: refreshToken,
+      accessExpiresAt: DateTime.now().toUtc().add(const Duration(hours: 1)),
+      refreshExpiresAt: DateTime.now().toUtc().add(const Duration(days: 1)),
+      userId: 'user_1',
+    );
   }
 }

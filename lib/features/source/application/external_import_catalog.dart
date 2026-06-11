@@ -45,6 +45,17 @@ class ExternalImportCatalog {
     ],
   );
 
+  static const XTypeGroup bookSourceJsonTypeGroup = XTypeGroup(
+    label: 'Book source JSON',
+    extensions: <String>['json', 'txt'],
+    mimeTypes: <String>['application/json', 'text/json', 'text/plain'],
+    uniformTypeIdentifiers: <String>[
+      'public.json',
+      'public.plain-text',
+      'public.text',
+    ],
+  );
+
   static const XTypeGroup advancedThemeZipTypeGroup = XTypeGroup(
     label: 'Advanced theme bundle',
     extensions: <String>['zip'],

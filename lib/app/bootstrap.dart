@@ -7,8 +7,8 @@ import 'package:image_picker_android/image_picker_android.dart';
 import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'app.dart';
 import 'app_restart_scope.dart';
+import 'app_with_splash.dart';
 import 'router.dart';
 import 'startup_artwork_store.dart';
 import '../features/mine/application/advanced_theme_provider.dart';
@@ -42,7 +42,7 @@ Future<void> bootstrap() async {
   await AppDatabaseIntegrityService().ensureHealthy();
   primeBootstrappedPreferences(prefs);
   unawaited(StartupArtworkStore.prime(preferences: prefs));
-  runApp(const AppRestartScope(child: App()));
+  runApp(const AppRestartScope(child: AppWithSplash()));
   WidgetsBinding.instance.addPostFrameCallback((_) {
     unawaited(_runDeferredBootstrapTasks(prefs));
   });
