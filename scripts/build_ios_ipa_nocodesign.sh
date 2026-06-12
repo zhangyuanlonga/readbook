@@ -22,6 +22,33 @@ SKIP_PUB_GET="${SKIP_PUB_GET:-0}"
 SKIP_POD_INSTALL="${SKIP_POD_INSTALL:-0}"
 PREPARE_APPLE_PODS="${PREPARE_APPLE_PODS:-1}"
 
+usage() {
+  cat <<USAGE
+Usage:
+  ./scripts/build_ios_ipa_nocodesign.sh
+
+Environment variables:
+  FLUTTER_CMD      Flutter command path (default: flutter)
+  APP_NAME         Built iOS .app name without .app (default: Runner)
+  OUTPUT_DIR       Output artifacts folder (default: build/ios/ipa)
+  ARTIFACT_NAME    Final artifact display name prefix (default: Selune)
+  BUILD_MODE       release | profile (default: release)
+  BUILD_NAME       Override Flutter --build-name
+  BUILD_NUMBER     Override Flutter --build-number
+  APPREAD_API_BASE_URL Optional backend API base URL override
+  APPREAD_READER_GATEWAY_BASE_URL Optional reader gateway base URL override
+  APPREAD_APP_NAME Optional app identifier override
+  SKIP_CLEAN       1 to skip flutter clean
+  SKIP_PUB_GET     1 to skip flutter pub get
+  SKIP_POD_INSTALL 1 to skip pod install
+
+Examples:
+  ./scripts/build_ios_ipa_nocodesign.sh
+  BUILD_MODE=profile ./scripts/build_ios_ipa_nocodesign.sh
+  BUILD_NAME=1.1.0 BUILD_NUMBER=26041801 ./scripts/build_ios_ipa_nocodesign.sh
+USAGE
+}
+
 trim_whitespace() {
   local value="$1"
   value="${value#"${value%%[![:space:]]*}"}"
@@ -62,8 +89,14 @@ append_dart_defines() {
   fi
 }
 
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  usage
+  exit 0
+fi
+
 if [[ "${BUILD_MODE}" != "release" && "${BUILD_MODE}" != "profile" ]]; then
   echo "Error: BUILD_MODE must be 'release' or 'profile'. Current: ${BUILD_MODE}" >&2
+  usage >&2
   exit 1
 fi
 

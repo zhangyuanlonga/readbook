@@ -75,7 +75,7 @@ Actions 打包不会弹出版本号确认。常规发版必须填写 `full_versi
 - `26061001`：系统判断升级/覆盖安装的构建号，对应 Android `versionCode`、iOS/macOS `CFBundleVersion`，必须随发版递增。
 
 这两个部分必须一起填，不能只填 `1.2.0`。如果后面的构建号没有递增，Android/iOS/macOS 等平台可能无法覆盖安装或判断新版本。
-线上固定配置已写入 workflow，不需要在运行时填写：`artifact_name=Selune`、`APPREAD_API_BASE_URL=https://www.sxyd.lltask.top/api`、`APPREAD_READER_GATEWAY_BASE_URL=https://rust.lltask.top/api`、`APPREAD_APP_NAME=selune`。
+线上接口配置默认写在代码内，不需要在打包时填写：Go 后端默认 `https://www.sxyd.lltask.top/api/`，Rust 书源网关默认 `https://rust.lltask.top/api/`，`APPREAD_APP_NAME` 默认 `selune`。只有临时切换环境时，才通过 `APPREAD_API_BASE_URL` / `APPREAD_READER_GATEWAY_BASE_URL` / `APPREAD_APP_NAME` 覆盖。
 构建成功后，workflow 会把产物发布到公开发布仓库 `zyl140640/readbook-releases` 的 Releases，并在 Actions Summary 输出每个平台的下载链接。公开仓库只放安装包和发布说明，不放源码。
 如果要在 GitHub 上打 Android release 包，需要先配置仓库 Secrets：
 
@@ -86,10 +86,10 @@ Actions 打包不会弹出版本号确认。常规发版必须填写 `full_versi
 版本规则建议：
 - `BUILD_NAME` / `version_name`：给用户看的展示版本，例如 `1.1.0`
 - `BUILD_NUMBER` / `version_code`：给系统比较版本大小的整数构建号，Actions 默认按 `YYMMDDNN` 生成，例如 `26060901`
-- `APPREAD_API_BASE_URL`：打包时注入的后端地址，例如 `https://www.sxyd.lltask.top/api`
-- `APPREAD_READER_GATEWAY_BASE_URL`：在线书源 / 服务器书源网关地址，默认 `https://rust.lltask.top/api/`
+- `APPREAD_API_BASE_URL`：可选的后端地址覆盖项，默认使用代码内置线上地址 `https://www.sxyd.lltask.top/api/`
+- `APPREAD_READER_GATEWAY_BASE_URL`：可选的在线书源 / 服务器书源网关地址覆盖项，默认使用代码内置线上地址 `https://rust.lltask.top/api/`
 - `PDFIUM_DOWNLOAD_BASE_URL`：PDF 阅读原生库下载基地址，默认 `https://ghfast.top/https://github.com/bblanchon/pdfium-binaries/releases/download`
-- `APPREAD_APP_NAME`：可选，默认 `selune`
+- `APPREAD_APP_NAME`：可选覆盖项，默认 `selune`
 
 错误监控默认只启用本地诊断日志，不会上报远端。需要接入 Sentry 时，构建或运行命令显式传入：
 
@@ -121,9 +121,9 @@ dart run tool/run_architecture_green_suite.dart
 full_version: 1.2.0+26061001
 
 其他保持默认：
-platforms: native
-build_mode: release
-flutter_version: 3.44.1
-android_target: apk
-android_apk_profile: arm64
+BUILD_PLATFORMS: native
+BUILD_MODE: release
+FLUTTER_VERSION: 3.44.1
+ANDROID_TARGET: apk
+ANDROID_APK_PROFILE: arm64
 ```

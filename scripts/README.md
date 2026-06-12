@@ -9,9 +9,9 @@ This directory contains shell scripts for building multi-platform Flutter applic
 | `build_unified_artifacts.sh` | **Main entry point** - Multi-platform unified build | All platforms to single output directory |
 | `build_android_artifacts.sh` | Android APK/AAB build | `build/app/outputs/` |
 | `build_ios_ipa_nocodesign.sh` | iOS IPA without code signing | `build/ios/ipa/` |
-| `build_macos_artifact.sh` | macOS DMG application | `build/macos/Build/Products/Release/` |
-| `build_linux_artifact.sh` | Linux AppImage | `build/linux/x64/release/bundle/` |
-| `build_windows_artifact.sh` | Windows MSIX installer | `build/windows/x64/runner/Release/` |
+| `build_macos_artifact.sh` | macOS `.app` zip artifact | `build/macos/artifacts/` |
+| `build_linux_artifact.sh` | Linux bundle tar.gz artifact | `build/linux/artifacts/` |
+| `build_windows_artifact.sh` | Windows runner zip artifact | `build/windows/artifacts/` |
 
 ## Prerequisites
 
@@ -26,9 +26,9 @@ This directory contains shell scripts for building multi-platform Flutter applic
 
 ### Environment Variables
 
-**Required for production builds:**
-- `APPREAD_API_BASE_URL` - Backend API base URL (e.g., `https://www.sxyd.lltask.top/api`)
-- `APPREAD_READER_GATEWAY_BASE_URL` - Book source gateway URL (e.g., `https://rust.lltask.top/api/`)
+**Optional production URL overrides:**
+- `APPREAD_API_BASE_URL` - Backend API base URL override. If omitted, the app uses the production default in code: `https://www.sxyd.lltask.top/api/`
+- `APPREAD_READER_GATEWAY_BASE_URL` - Book source gateway URL override. If omitted, the app uses the production default in code: `https://rust.lltask.top/api/`
 
 **Version control:**
 - `BUILD_NAME` - User-visible version (e.g., `1.3.0`)
@@ -93,17 +93,12 @@ Single entry point to build all platforms and consolidate output into one timest
 
 ```
 build/unified_artifacts/<timestamp>-<mode>/
-├── android/
-│   ├── app-arm64-v8a-release.apk
-│   └── app-release.aab
-├── ios/
-│   └── Runner.ipa
-├── macos/
-│   └── Selune.dmg
-├── linux/
-│   └── shuxiang_reading_next-1.3.0-linux-x64.AppImage
-├── windows/
-│   └── shuxiang_reading_next.msix
+├── Selune-Android-arm64-v8a-1.3.0-26061101.apk
+├── Selune-Android-1.3.0-26061101.aab
+├── Selune-iOS-1.3.0-26061101.ipa
+├── Selune-macOS-1.3.0-26061101.zip
+├── Selune-Linux-1.3.0-26061101.tar.gz
+├── Selune-Windows-1.3.0-26061101.zip
 └── manifest.txt    # Lists all built artifacts
 ```
 
@@ -160,7 +155,7 @@ ANDROID_APK_PROFILE=universal ./scripts/build_android_artifacts.sh
 ./scripts/build_ios_ipa_nocodesign.sh
 ```
 
-**Output:** `build/ios/ipa/Runner.ipa`
+**Output:** `build/ios/ipa/<timestamp>-<mode>/Selune-iOS-<version>.ipa`
 
 **Note:** This builds an IPA without code signing. For App Store distribution, use Xcode or proper signing configuration.
 
@@ -174,7 +169,7 @@ ANDROID_APK_PROFILE=universal ./scripts/build_android_artifacts.sh
 ./scripts/build_macos_artifact.sh
 ```
 
-**Output:** `build/macos/Build/Products/Release/<AppName>.dmg`
+**Output:** `build/macos/artifacts/<timestamp>-<mode>/Selune-macOS-<version>.zip`
 
 **Requirements:** macOS with Xcode 15+
 
@@ -186,7 +181,7 @@ ANDROID_APK_PROFILE=universal ./scripts/build_android_artifacts.sh
 ./scripts/build_linux_artifact.sh
 ```
 
-**Output:** `build/linux/x64/release/bundle/<app-name>-<version>-linux-x64.AppImage`
+**Output:** `build/linux/artifacts/<timestamp>-<mode>/Selune-Linux-<version>.tar.gz`
 
 **Requirements:**
 - Linux with GTK 3 development libraries
@@ -206,7 +201,7 @@ ANDROID_APK_PROFILE=universal ./scripts/build_android_artifacts.sh
 ./scripts/build_windows_artifact.sh
 ```
 
-**Output:** `build/windows/x64/runner/Release/<app-name>.msix`
+**Output:** `build/windows/artifacts/<timestamp>-<mode>/Selune-Windows-<version>.zip`
 
 **Requirements:** Windows with Visual Studio 2019+ (C++ development tools)
 
@@ -334,9 +329,13 @@ See `.github/workflows/multiplatform-build.yml`
 
 **Input:**
 - `full_version`: `1.3.0+26061101` (required)
-- `platforms`: `native` (default)
-- `build_mode`: `release` (default)
-- `flutter_version`: `3.44.1` (default)
+
+**Workflow defaults in `.github/workflows/multiplatform-build.yml`:**
+- `BUILD_PLATFORMS`: `native`
+- `BUILD_MODE`: `release`
+- `FLUTTER_VERSION`: `3.44.1`
+- `ANDROID_TARGET`: `apk`
+- `ANDROID_APK_PROFILE`: `arm64`
 
 **Secrets Required:**
 - `ANDROID_KEY_PROPERTIES`
@@ -352,9 +351,9 @@ See `.github/workflows/multiplatform-build.yml`
 | Android APK | 3-5 min | GitHub Actions (Ubuntu) |
 | Android AAB | 3-5 min | GitHub Actions (Ubuntu) |
 | iOS IPA | 8-12 min | GitHub Actions (macOS-15) |
-| macOS DMG | 5-8 min | GitHub Actions (macOS-15) |
-| Linux AppImage | 4-6 min | GitHub Actions (Ubuntu) |
-| Windows MSIX | 4-6 min | GitHub Actions (Windows) |
+| macOS zip | 5-8 min | GitHub Actions (macOS-15) |
+| Linux tar.gz | 4-6 min | GitHub Actions (Ubuntu) |
+| Windows zip | 4-6 min | GitHub Actions (Windows) |
 | Web | 2-4 min | GitHub Actions (Ubuntu) |
 
 **Total parallel build time (GitHub Actions):** ~12-15 min across 3 runners
@@ -375,11 +374,11 @@ See `.github/workflows/multiplatform-build.yml`
 
 ### Linux Build Fails
 - **Missing dependencies:** Install GTK 3 dev libraries (see Linux Build section)
-- **AppImage creation:** Ensure `appimagetool` is available
+- **Archive creation:** Ensure `tar` is available
 
 ### Windows Build Fails
 - **Visual Studio not found:** Install Visual Studio 2019+ with C++ development tools
-- **MSIX packaging:** Ensure Windows SDK is installed
+- **Zip packaging:** Ensure Python 3 or the Windows `py -3` launcher is available
 
 ### Version Prompt Hangs in CI
 - Set `VERSION_PROMPT=0` to disable interactive prompts
@@ -404,9 +403,9 @@ See `.github/workflows/multiplatform-build.yml`
 ### Distribution
 - **Android:** arm64 APK for direct distribution, AAB for Google Play
 - **iOS:** IPA requires proper code signing for TestFlight/App Store
-- **macOS:** DMG for direct distribution, notarization required for Gatekeeper
-- **Linux:** AppImage for universal Linux distribution
-- **Windows:** MSIX for Microsoft Store or sideloading
+- **macOS:** zipped `.app`; notarization is still required for Gatekeeper-friendly distribution
+- **Linux:** tar.gz bundle for direct distribution
+- **Windows:** zipped runner folder for direct distribution
 
 ### Testing Builds
 - Test on physical devices when possible

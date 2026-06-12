@@ -8,7 +8,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 FLUTTER_CMD="${FLUTTER_CMD:-flutter}"
-TARGET="${1:-${TARGET:-apk}}"            # apk | appbundle | both
+ANDROID_TARGET="${ANDROID_TARGET:-}"
+TARGET="${1:-${TARGET:-${ANDROID_TARGET:-apk}}}" # apk | appbundle/aab | both
 BUILD_MODE="${2:-${BUILD_MODE:-release}}" # debug | profile | release
 SPLIT_PER_ABI="${SPLIT_PER_ABI:-}"       # legacy alias for APK_PROFILE=split
 APK_PROFILE="${APK_PROFILE:-}"           # arm64 | split | universal
@@ -68,11 +69,12 @@ Usage:
   ./scripts/build_android_artifacts.sh [target] [build_mode]
 
 Arguments:
-  target      apk | appbundle | both (default: apk)
+  target      apk | appbundle/aab | both (default: apk)
   build_mode  debug | profile | release (default: release)
 
 Environment variables:
   FLUTTER_CMD   Flutter command path (default: flutter)
+  ANDROID_TARGET apk | appbundle/aab | both (default: apk, alias for target argument)
   APK_PROFILE   APK output profile: arm64 | split | universal (default: arm64)
                 arm64 uses --target-platform android-arm64 to preserve the raw versionCode.
                 split uses --split-per-abi, which lets Android append ABI-specific versionCode offsets.
@@ -81,6 +83,9 @@ Environment variables:
   ARTIFACT_NAME Final artifact display name prefix (default: Selune)
   BUILD_NAME    Override Flutter --build-name
   BUILD_NUMBER  Override Flutter --build-number
+  APPREAD_API_BASE_URL Optional backend API base URL override
+  APPREAD_READER_GATEWAY_BASE_URL Optional reader gateway base URL override
+  APPREAD_APP_NAME Optional app identifier override
   SKIP_CLEAN    1 to skip flutter clean
   SKIP_PUB_GET  1 to skip flutter pub get
 
@@ -98,8 +103,12 @@ if [[ "${TARGET}" == "-h" || "${TARGET}" == "--help" ]]; then
   exit 0
 fi
 
+if [[ "${TARGET}" == "aab" ]]; then
+  TARGET="appbundle"
+fi
+
 if [[ "${TARGET}" != "apk" && "${TARGET}" != "appbundle" && "${TARGET}" != "both" ]]; then
-  echo "Error: target must be apk | appbundle | both. Current: ${TARGET}" >&2
+  echo "Error: target must be apk | appbundle/aab | both. Current: ${TARGET}" >&2
   usage
   exit 1
 fi

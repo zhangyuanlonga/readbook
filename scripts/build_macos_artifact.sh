@@ -105,6 +105,9 @@ Environment variables:
   ARTIFACT_NAME Final artifact display name prefix (default: Selune)
   BUILD_NAME   Override Flutter --build-name
   BUILD_NUMBER Override Flutter --build-number
+  APPREAD_API_BASE_URL Optional backend API base URL override
+  APPREAD_READER_GATEWAY_BASE_URL Optional reader gateway base URL override
+  APPREAD_APP_NAME Optional app identifier override
   SKIP_CLEAN   1 to skip flutter clean
   SKIP_PUB_GET 1 to skip flutter pub get
   SKIP_POD_INSTALL 1 to skip pod install in macos/

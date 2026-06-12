@@ -10,7 +10,7 @@ FLUTTER_CMD="${FLUTTER_CMD:-flutter}"
 PLATFORMS_INPUT="${1:-${PLATFORMS:-auto}}"
 BUILD_MODE="${2:-${BUILD_MODE:-release}}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-${PROJECT_ROOT}/build/unified_artifacts}"
-ANDROID_TARGET="${ANDROID_TARGET:-apk}"  # apk | appbundle | both
+ANDROID_TARGET="${ANDROID_TARGET:-apk}"  # apk | appbundle/aab | both
 ANDROID_APK_PROFILE="${ANDROID_APK_PROFILE:-arm64}" # arm64 | split | universal
 SPLIT_PER_ABI="${SPLIT_PER_ABI:-}"       # legacy alias for ANDROID_APK_PROFILE=split
 APP_NAME="${APP_NAME:-Runner}"           # iOS APP_NAME
@@ -49,7 +49,7 @@ Arguments:
 Environment variables:
   FLUTTER_CMD      Flutter command path (default: flutter)
   OUTPUT_ROOT      Unified output root (default: build/unified_artifacts)
-  ANDROID_TARGET   apk | appbundle | both (default: apk)
+  ANDROID_TARGET   apk | appbundle/aab | both (default: apk)
   ANDROID_APK_PROFILE Android APK profile: arm64 | split | universal (default: arm64)
   SPLIT_PER_ABI    Legacy alias. Set to 1 for ANDROID_APK_PROFILE=split
   APP_NAME         iOS app bundle name (default: Runner)
@@ -60,6 +60,9 @@ Environment variables:
   AUTO_BUILD_NUMBER 1 to generate build-number as YYMMDDNN when BUILD_NUMBER is empty
   BUILD_SEQUENCE   Optional daily build sequence for AUTO_BUILD_NUMBER, 1-99
   BUILD_TIMEZONE   Timezone used by AUTO_BUILD_NUMBER (default: Asia/Shanghai)
+  APPREAD_API_BASE_URL Optional backend API base URL override
+  APPREAD_READER_GATEWAY_BASE_URL Optional reader gateway base URL override
+  APPREAD_APP_NAME Optional app identifier override
   VERSION_PROMPT   1 to ask interactively before build when TTY is available
   SKIP_CLEAN       1 to skip flutter clean
   SKIP_PUB_GET     1 to skip flutter pub get
@@ -402,8 +405,12 @@ if [[ "${BUILD_MODE}" != "debug" && "${BUILD_MODE}" != "profile" && "${BUILD_MOD
   exit 1
 fi
 
+if [[ "${ANDROID_TARGET}" == "aab" ]]; then
+  ANDROID_TARGET="appbundle"
+fi
+
 if [[ "${ANDROID_TARGET}" != "apk" && "${ANDROID_TARGET}" != "appbundle" && "${ANDROID_TARGET}" != "both" ]]; then
-  echo "Error: ANDROID_TARGET must be apk | appbundle | both. Current: ${ANDROID_TARGET}" >&2
+  echo "Error: ANDROID_TARGET must be apk | appbundle/aab | both. Current: ${ANDROID_TARGET}" >&2
   exit 1
 fi
 
