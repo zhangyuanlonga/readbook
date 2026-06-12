@@ -387,90 +387,39 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
           );
         }
 
-        if (_usesPaperCurlAnimation) {
-          return ReaderPaperCurlPagedView(
-            key: _paperCurlViewKey,
-            chapterId: _chapterId,
-            pageCount: pageCount,
-            currentPageIndex: _currentPageIndex,
-            onTurnStarted: (_) {
-              _markReaderInteractionBusy(_ReaderInteractionState.animating);
-              _recordFirstPageTurnCompleted(mode: 'paper_curl');
-            },
-            onTurnRejected: (_) {
-              _scheduleReaderInteractionSettle();
-            },
-            onPageCommitted: _commitPaperCurlPage,
-            pageBuilder: (context, pageIndex) {
-              return _buildPagedPageContainer(
-                colors: colors,
-                pageIndex: pageIndex,
-                total: pageCount,
-                pageSize: constraints.biggest,
-                pagedViewModel: pagedViewModel,
-                includeBackgroundDecoration: true,
-              );
-            },
-          );
-        }
-
-        final motion = _pagedTextRenderer.motionSpecForStyle(
-          _currentPagedAnimationStyle(),
+        final animationStyle = _currentPagedAnimationStyle();
+        final motion = _pagedTextRenderer.motionSpecForStyle(animationStyle);
+        final curlState = ReaderPagedViewportCurlState(
+          isAnimating: _isCurlAutoTurning,
+          isPreview: _isCurlPreviewActive,
+          direction: _curlAutoDirection,
+          fromIndex: _curlAnimationFromIndex,
+          toIndex: _curlAnimationToIndex,
+          previewProgress: _curlPreviewProgress,
+          commitOnAnimationEnd: _curlCommitOnAnimationEnd,
+          isCrossChapter: _isCurlCrossChapterTurn,
         );
         final transitionPlan = _pagedViewportTransitionResolver.resolve(
-          requestedAnimationStyle: _currentPagedAnimationStyle(),
+          requestedAnimationStyle: animationStyle,
           pageCount: pageCount,
           currentPageIndex: _currentPageIndex,
           pagedTransition: _pagedTransition,
-          curlState: ReaderPagedViewportCurlState(
-            isAnimating: _isCurlAutoTurning,
-            isPreview: _isCurlPreviewActive,
-            direction: _curlAutoDirection,
-            fromIndex: _curlAnimationFromIndex,
-            toIndex: _curlAnimationToIndex,
-            previewProgress: _curlPreviewProgress,
-            commitOnAnimationEnd: _curlCommitOnAnimationEnd,
-            isCrossChapter: _isCurlCrossChapterTurn,
-          ),
+          curlState: curlState,
         );
         final pageSize = constraints.biggest;
-        Widget buildPage({required int pageIndex}) {
-          return _buildPagedPageContainer(
-            colors: colors,
-            pageIndex: pageIndex,
-            total: pageCount,
-            pageSize: pageSize,
-            pagedViewModel: pagedViewModel,
-            includeBackgroundDecoration:
-                transitionPlan.includeBackgroundDecorationOnPrimaryPage,
-          );
-        }
-
-        if (transitionPlan.renderMode ==
-            ReaderPagedViewportRenderMode.staticPage) {
-          return _wrapSelectionArea(
-            child: ReaderTextPagedView(
-              model: pagedViewModel,
-              pageController: _resolveStaticPagedTextPageController(pageCount),
-              pageBuilder: (context, pageIndex) {
-                return buildPage(pageIndex: pageIndex);
-              },
-              onPageChanged: (pageIndex) {
-                if (!mounted) {
-                  return;
-                }
-                _updateReaderState(() {
-                  _currentPageIndex = pageIndex;
-                });
-                _syncActiveReadingRecordSessionProgress();
-                _scheduleProgressSave();
-              },
-              onScrollInteractionChanged: _handlePagedScrollInteractionChanged,
-            ),
-          );
-        }
-
-        final pageStack = ReaderPagedViewportTransitionStack(
+        final viewportInput = ReaderPagedViewportInput(
+          chapterId: _chapterId,
+          pageIndex: _currentPageIndex,
+          pageCount: pageCount,
+          pageSize: pageSize,
+          animationStyle: animationStyle,
+          viewportMetricsHash:
+              _paginationSpecResolver
+                  .buildSignature(chapterId: _chapterId, spec: paginationSpec)
+                  .hashCode,
+        );
+        return ReaderPagedAnimationSurface(
+          model: pagedViewModel,
           plan: transitionPlan,
           pageBuilder:
               ({
@@ -487,6 +436,45 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
           pagedTransitionAnimation: _pagedTransitionController,
           curlAnimation: _curlAutoTurnController,
           switchInCurve: motion.switchInCurve,
+          staticPageController: _resolveStaticPagedTextPageController(
+            pageCount,
+          ),
+          onStaticPageChanged: (pageIndex) {
+            if (!mounted) {
+              return;
+            }
+            _updateReaderState(() {
+              _currentPageIndex = pageIndex;
+            });
+            _syncActiveReadingRecordSessionProgress();
+            _scheduleProgressSave();
+          },
+          onStaticScrollInteractionChanged:
+              _handlePagedScrollInteractionChanged,
+          paperCurlKey: _paperCurlViewKey,
+          paperCurlSurface: ReaderPaperCurlPagedSurface(
+            surfaceToken: viewportInput,
+            pageCount: pageCount,
+            currentPageIndex: _currentPageIndex,
+            pageBuilder:
+                (context, pageIndex) => _buildPagedPageContainer(
+                  colors: colors,
+                  pageIndex: pageIndex,
+                  total: pageCount,
+                  pageSize: pageSize,
+                  pagedViewModel: pagedViewModel,
+                  includeBackgroundDecoration: true,
+                ),
+          ),
+          onPaperCurlTurnStarted: (_) {
+            _markReaderInteractionBusy(_ReaderInteractionState.animating);
+            _recordFirstPageTurnCompleted(mode: 'paper_curl');
+          },
+          onPaperCurlTurnRejected: (_) {
+            _scheduleReaderInteractionSettle();
+          },
+          onPaperCurlPageCommitted: _commitPaperCurlPage,
+          curlState: curlState,
           curlColors: CurlRendererColors(
             backgroundColor: colors.background,
             dividerColor: colors.divider,
@@ -496,7 +484,6 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
           disabledSelectionWrapper:
               (child) => SelectionContainer.disabled(child: child),
         );
-        return ReaderTextPagedView(model: pagedViewModel, content: pageStack);
       },
     );
   }

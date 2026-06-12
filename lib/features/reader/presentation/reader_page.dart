@@ -133,7 +133,7 @@ import '../application/reader_session_state.dart';
 import '../application/reader_session_state_resolver.dart';
 import '../application/reader_streaming_pagination_controller.dart';
 import '../application/reader_source_switch_coordinator.dart';
-import '../application/reader_source_switch_target_resolver.dart';
+import '../application/reader_source_switch_service.dart';
 import '../application/reader_reading_record_coordinator.dart';
 import '../application/reading_record_service.dart';
 import '../application/reader_error_center_service.dart';
@@ -158,12 +158,12 @@ import 'reader_annotated_text.dart';
 import 'reader_audio_view.dart';
 import 'reader_annotation_interaction.dart';
 import 'reader_body_region.dart';
-import 'reader_chrome_widgets.dart';
 import 'reader_content_loading_controller.dart';
 import 'reader_content_loading_presenter.dart';
 import 'reader_feedback_widgets.dart';
 import 'reader_layout_context.dart';
 import 'paged_animation/curl_paged_animation_renderer.dart';
+import 'paged_animation/reader_paged_animation_surface.dart';
 import 'reader_pdf_view.dart';
 import 'reader_paper_curl_paged_view.dart';
 import 'reader_page_lifecycle_delegate.dart';
@@ -180,7 +180,9 @@ import 'reader_runtime_controller.dart';
 import 'reader_tap_zone_resolver.dart';
 import 'reader_text_paged_view.dart';
 import 'reader_viewport_builder.dart';
+import 'widgets/chrome/reader_chrome_widgets.dart';
 import 'sheets/reader_settings/reader_settings_components.dart';
+import 'sheets/reader_settings/reader_settings_sections.dart';
 import 'widgets/reader_typography_slider_row.dart';
 
 part 'reader_page_widget.dart';
@@ -353,8 +355,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   late final ProviderContainer _readerSessionProviderContainer;
   final ReaderSourceSwitchCoordinator _sourceSwitchCoordinator =
       const ReaderSourceSwitchCoordinator();
-  final ReaderSourceSwitchTargetResolver _sourceSwitchTargetResolver =
-      const ReaderSourceSwitchTargetResolver();
+  final ReaderSourceSwitchService _sourceSwitchService =
+      const ReaderSourceSwitchService();
   final ReaderProgressCommitController _progressCommitController =
       const ReaderProgressCommitController();
   final ScrollTextReaderRenderer _scrollTextRenderer =

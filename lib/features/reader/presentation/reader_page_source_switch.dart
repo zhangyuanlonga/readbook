@@ -681,15 +681,22 @@ extension _ReaderPageSourceSwitchExtension on _ReaderPageState {
         }
         return false;
       }
-      final switchTarget = _sourceSwitchTargetResolver.resolve(
-        currentChapters: snapshot.chapters,
-        targetChapters: chapters,
-        previousChapterTitle: snapshot.chapterTitle,
-        previousChapterIndex: snapshot.currentIndex,
-        previousLogicalPosition:
-            snapshot.contentSession?.sessionState?.logicalPosition,
+      final switchPlan = _sourceSwitchService.buildPlan(
+        current: ReaderSourceSwitchCurrentState(
+          bookId: snapshot.bookId,
+          chapters: snapshot.chapters,
+          chapterTitle: snapshot.chapterTitle,
+          chapterIndex: snapshot.currentIndex,
+          logicalPosition:
+              snapshot.contentSession?.sessionState?.logicalPosition,
+        ),
+        destination: ReaderSourceSwitchDestination(
+          book: candidate.book,
+          detailResult: detailResult,
+        ),
         lagTolerance: _ReaderPageState._kSwitchSourceLagTolerance,
       );
+      final switchTarget = switchPlan.target;
       final positionDecision = switchTarget.positionDecision;
 
       if ((positionDecision.isBehindCurrentReading ||
@@ -714,7 +721,7 @@ extension _ReaderPageSourceSwitchExtension on _ReaderPageState {
       }
 
       final targetIndex = switchTarget.targetChapterIndex;
-      final targetChapter = chapters[targetIndex];
+      final targetChapter = switchPlan.targetChapter;
 
       setState(() {
         _activeBookId = candidate.book.id.trim();
@@ -742,7 +749,7 @@ extension _ReaderPageSourceSwitchExtension on _ReaderPageState {
       _cancelBackgroundRefreshConflictForCurrentBook();
 
       final loaded = await _loadCurrentChapter(
-        initialScrollRatio: switchTarget.logicalPosition.chapterPositionRatio,
+        initialScrollRatio: switchPlan.progressMigration.chapterPositionRatio,
       );
       if (!loaded) {
         throw StateError('切换后正文加载失败。');

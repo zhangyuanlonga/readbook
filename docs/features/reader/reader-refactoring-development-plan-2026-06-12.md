@@ -91,7 +91,7 @@
 ### 阶段 1：设置页 UI 拆分（1-2 天）
 
 - [x] 新建 `lib/features/reader/presentation/sheets/reader_settings/`。
-- [ ] 将设置页拆成 section widget：字体、主题/背景、布局、翻页、自动阅读、音频、漫画/图片、高级。
+- [x] 将设置页拆成 section widget：字体、主题/背景、布局、翻页、自动阅读、音频、漫画/图片；当前代码暂无独立高级分支，后续出现高级入口时单独拆。
 - [x] 抽出通用设置项组件：标题、卡片、开关行、分隔线、标签行、分组入口。
 - [x] 保持 `ReaderSettings`、`ReaderPreferencesService`、设置保存逻辑不变。
 - [x] 复用现有 `ReaderSettingsGroups` 和 `ReaderSettingsPresenter`，避免重复写展示映射。
@@ -106,7 +106,7 @@
 ### 阶段 2：主阅读页纯展示层拆分（2-3 天）
 
 - [x] 从 `reader_page.dart` 和 part 文件中优先拆无副作用支持模型/小组件，已新增 `reader_page_support_models.dart`。
-- [ ] 将 chrome/overlay 相关 widget 收到 `presentation/widgets/chrome/` 和 `presentation/widgets/overlay/`。
+- [x] 将 chrome/overlay 相关 widget 收到 `presentation/widgets/chrome/` 和 `presentation/widgets/overlay/`。
 - [x] 保留 `_ReaderPageState` 的核心字段和导航方法，暂不迁 Riverpod。
 - [x] 新拆组件/模型仍在同一 library 边界内，未新增主状态读取路径。
 - [x] 禁止在此阶段改翻页算法、章节定位、书源切换逻辑。
@@ -118,9 +118,9 @@
 
 ### 阶段 3：翻页与视口边界收口（2-4 天）
 
-- [ ] 统一分页动画入口，明确 `paged_animation/` 下各 renderer 的职责。
+- [x] 统一分页动画入口，明确 `paged_animation/` 下各 renderer 的职责。
 - [x] 为视口创建稳定输入模型，例如 chapter id、page index、page count、animation style、viewport metrics。
-- [ ] `reader_paper_curl_paged_view.dart` 只保留组件内部动画/快照状态，不直接耦合业务状态。
+- [x] `reader_paper_curl_paged_view.dart` 只保留组件内部动画/快照状态，不直接耦合业务状态。
 - [x] 给纸页、仿真、cover、translate、vertical、none 建立最小回归清单和 transition resolver 单测入口。
 - [ ] 复查 Android 上的纸页闪字、仿真误切、动画结束后一帧串页问题。
 
@@ -147,7 +147,7 @@
 ### 阶段 5：换源与内容 View 边界整理（3-5 天）
 
 - [x] 梳理换源相关文件：coordinator、shared、position resolver、source switch controller。
-- [ ] 抽出统一的换源服务边界，输入当前书、当前章节/位置、目标源，输出章节匹配结果和进度迁移结果。
+- [x] 抽出统一的换源服务边界，输入当前书、当前章节/位置、目标源，输出章节匹配结果和进度迁移结果。
 - [x] 保留当前章节匹配策略，不在重构阶段顺手改匹配算法。
 - [x] 为换源请求建立 `ReaderSwitchSourceRequestContext`，减少页面散参，后续再继续收口应用服务。
 - [x] 只在新代码里使用清晰命名；旧 resolver/coordinator 不单独大规模改名。
@@ -261,14 +261,19 @@
 - [x] 阶段 0 已补齐 smoke 清单、Android 真机重点、iOS/桌面影响面和 part 职责表。
 - [x] 阶段 1 已建立 `presentation/sheets/reader_settings/` 目录。
 - [x] 阶段 1 已抽出设置页通用组件：`ReaderSettingsSectionCard`、`ReaderSettingsGroupEntryCard`、`ReaderSettingsToggleRow`、`ReaderSettingsDivider`、`ReaderSettingsCompactTitle`、`ReaderSettingsCard`、`ReaderSettingsLabeledRow`。
+- [x] 阶段 1 已新增 `reader_settings_sections.dart`，为字体、主题/背景、布局、翻页/行为、自动阅读、音频、漫画/图片建立独立 section widget 边界；本轮先完成边界包裹，内部复杂行会后续继续从大函数迁出。当前代码暂无独立高级 section 分支。
 - [x] 本次没有修改 `ReaderSettings`、`ReaderPreferencesService`、设置保存逻辑、翻页动画核心、章节导航、书源切换。
 
 ### 阶段 2-7 执行记录
 
 - [x] 阶段 2 已新增 `reader_page_support_models.dart`，把主阅读页尾部支持模型和小组件移出 `reader_page.dart`。
+- [x] 阶段 2 已将 `reader_chrome_widgets.dart` 和 `reader_overlay_widgets.dart` 移入 `presentation/widgets/chrome/`、`presentation/widgets/overlay/`，resolver/presenter 仍保留在 presentation 根目录。
 - [x] 阶段 3 已新增 `ReaderPagedViewportInput`，用于描述分页视口稳定输入，并补充单测。
+- [x] 阶段 3 已新增 `ReaderPagedAnimationSurface`，统一静态分页、普通两页动画、仿真 curl 和纸页 curl 的入口；`paged_animation/` renderer 明确只负责无状态两页视觉效果。
+- [x] 阶段 3 已将 `ReaderPaperCurlPagedView` 改为接收 opaque `ReaderPaperCurlPagedSurface`，内部只保留 turnable_page 控制器、截图和动画队列状态，不再直接依赖章节业务字段。
 - [x] 阶段 4 已扩展 `ReaderSettingsGroups`，覆盖翻页、自动阅读、听书、漫画/图片分组，并补充拆分/合并单测。
 - [x] 阶段 5 已新增 `ReaderSwitchSourceRequestContext`，为手动换源和自动换源门禁提供统一请求上下文，并补充 coordinator 单测。
+- [x] 阶段 5 已新增 `ReaderSourceSwitchService`，统一承接当前书/章节/位置和目标源详情，输出目标章节匹配结果与进度迁移计划；页面只负责加载详情、落库同步和 UI 提示，章节匹配算法保持不变。
 - [x] 阶段 6 已新增 `ReaderSharedUiStateBoundary`，先用不可变快照承接设置面板、目录、加载、换源、错误恢复状态决策，并补充单测。
 - [x] 阶段 7 已在 application 层新增 `ReaderSettingsGroupedAccess` 扩展，提供 `settings.grouped` 和 `settings.mergeGroups(...)`，不让 domain 反向依赖 feature。
 - [x] 本轮没有修改 `ReaderSettings.toJson/fromJson` 字段、没有改本地/云端设置 payload、没有改翻页 renderer 算法、没有改章节匹配/定位算法。

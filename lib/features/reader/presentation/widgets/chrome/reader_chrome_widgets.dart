@@ -3,9 +3,9 @@ import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/material.dart';
 
-import '../../../domain/entities/reader_settings.dart';
-import '../application/reader_layout_resolver.dart';
-import 'reader_shell.dart';
+import '../../../../../domain/entities/reader_settings.dart';
+import '../../../application/reader_layout_resolver.dart';
+import '../../reader_shell.dart';
 
 /// Public palette for reader chrome widgets.
 ///

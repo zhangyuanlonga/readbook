@@ -5,6 +5,12 @@ import 'paged_animation_renderer.dart';
 import 'translate_paged_animation_renderer.dart';
 import 'vertical_paged_animation_renderer.dart';
 
+/// Resolves lightweight two-page visual renderers.
+///
+/// `paperCurl` is intentionally not implemented here because it owns snapshot
+/// capture and a `turnable_page` controller. The unified entry point is
+/// `ReaderPagedAnimationSurface`, which decides whether to use this registry,
+/// the simulated curl renderer, or the paper-curl snapshot surface.
 class PagedAnimationRendererRegistry {
   const PagedAnimationRendererRegistry();
 

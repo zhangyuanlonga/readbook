@@ -2637,7 +2637,45 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                         ],
                       );
 
-                      final selectedCards = switch (activeSettingsGroupKey) {
+                      List<Widget> wrapSettingsSection({
+                        required String? groupKey,
+                        required bool showInterfaceSettings,
+                        required List<Widget> children,
+                      }) {
+                        if (children.isEmpty) {
+                          return children;
+                        }
+                        return switch (groupKey) {
+                          'typography' => <Widget>[
+                            ReaderTypographySettingsSection(children: children),
+                          ],
+                          'quick_margins' ||
+                          'info_layout' ||
+                          'info' => <Widget>[
+                            ReaderLayoutSettingsSection(children: children),
+                          ],
+                          'interaction' || 'behavior' => <Widget>[
+                            ReaderPageTurnSettingsSection(children: children),
+                          ],
+                          'auto_read' => <Widget>[
+                            ReaderAutoReadSettingsSection(children: children),
+                          ],
+                          'audio' => <Widget>[
+                            ReaderAudioSettingsSection(children: children),
+                          ],
+                          'manga' => <Widget>[
+                            ReaderMangaSettingsSection(children: children),
+                          ],
+                          null when showInterfaceSettings => <Widget>[
+                            ReaderThemeBackgroundSettingsSection(
+                              children: children,
+                            ),
+                          ],
+                          _ => children,
+                        };
+                      }
+
+                      final rawSelectedCards = switch (activeSettingsGroupKey) {
                         null =>
                           showInterfaceSettings
                               ? <Widget>[
@@ -3807,6 +3845,11 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                         ],
                         _ => const <Widget>[],
                       };
+                      final selectedCards = wrapSettingsSection(
+                        groupKey: activeSettingsGroupKey,
+                        showInterfaceSettings: showInterfaceSettings,
+                        children: rawSelectedCards,
+                      );
                       final sheetTitle = _readerSettingsPresenter.sectionTitle(
                         groupKey: activeSettingsGroupKey,
                         showInterfaceSettings: showInterfaceSettings,

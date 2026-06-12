@@ -4,22 +4,45 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:turnable_page/turnable_page.dart';
 
-class ReaderPaperCurlPagedView extends StatefulWidget {
-  const ReaderPaperCurlPagedView({
-    super.key,
-    required this.chapterId,
+typedef ReaderPaperCurlPageBuilder =
+    Widget Function(BuildContext context, int pageIndex);
+
+class ReaderPaperCurlPagedSurface {
+  const ReaderPaperCurlPagedSurface({
+    required this.surfaceToken,
     required this.pageCount,
     required this.currentPageIndex,
     required this.pageBuilder,
+  });
+
+  /// Opaque paging-surface identity used to reset stale animation snapshots.
+  ///
+  /// The paper-curl component owns animation and snapshot state only; it should
+  /// not know whether this token came from a chapter, a local file, or another
+  /// reader surface.
+  final Object surfaceToken;
+  final int pageCount;
+  final int currentPageIndex;
+  final ReaderPaperCurlPageBuilder pageBuilder;
+
+  int get safePageIndex {
+    if (pageCount <= 0) {
+      return 0;
+    }
+    return currentPageIndex.clamp(0, pageCount - 1).toInt();
+  }
+}
+
+class ReaderPaperCurlPagedView extends StatefulWidget {
+  const ReaderPaperCurlPagedView({
+    super.key,
+    required this.surface,
     required this.onPageCommitted,
     this.onTurnStarted,
     this.onTurnRejected,
   });
 
-  final String chapterId;
-  final int pageCount;
-  final int currentPageIndex;
-  final Widget Function(BuildContext context, int pageIndex) pageBuilder;
+  final ReaderPaperCurlPagedSurface surface;
   final ValueChanged<int> onPageCommitted;
   final ValueChanged<int>? onTurnStarted;
   final ValueChanged<int>? onTurnRejected;
@@ -50,8 +73,8 @@ class ReaderPaperCurlPagedViewState extends State<ReaderPaperCurlPagedView> {
   @override
   void didUpdateWidget(covariant ReaderPaperCurlPagedView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.chapterId != widget.chapterId ||
-        oldWidget.pageCount != widget.pageCount) {
+    if (oldWidget.surface.surfaceToken != widget.surface.surfaceToken ||
+        oldWidget.surface.pageCount != widget.surface.pageCount) {
       _resetOverlay();
     }
   }
@@ -63,15 +86,16 @@ class ReaderPaperCurlPagedViewState extends State<ReaderPaperCurlPagedView> {
   }
 
   bool turnPage(int direction) {
-    if (isAnimating || widget.pageCount <= 0) {
+    final surface = widget.surface;
+    if (isAnimating || surface.pageCount <= 0) {
       widget.onTurnRejected?.call(direction);
       return false;
     }
 
     final safeDirection = direction >= 0 ? 1 : -1;
-    final currentIndex = widget.currentPageIndex.clamp(0, widget.pageCount - 1);
+    final currentIndex = surface.safePageIndex;
     final targetIndex = currentIndex + safeDirection;
-    if (targetIndex < 0 || targetIndex >= widget.pageCount) {
+    if (targetIndex < 0 || targetIndex >= surface.pageCount) {
       widget.onTurnRejected?.call(safeDirection);
       return false;
     }
@@ -205,13 +229,14 @@ class ReaderPaperCurlPagedViewState extends State<ReaderPaperCurlPagedView> {
       return;
     }
     final pendingIndex = _pendingPageIndex;
-    if (!mounted || pendingIndex == null || widget.pageCount <= 0) {
+    final pageCount = widget.surface.pageCount;
+    if (!mounted || pendingIndex == null || pageCount <= 0) {
       _resetOverlay();
       return;
     }
     final generation = _captureGeneration;
     _waitingForCommittedPagePaint = true;
-    widget.onPageCommitted(pendingIndex.clamp(0, widget.pageCount - 1));
+    widget.onPageCommitted(pendingIndex.clamp(0, pageCount - 1));
     _resetOverlayAfterCommittedPagePaint(generation);
   }
 
@@ -292,12 +317,12 @@ class ReaderPaperCurlPagedViewState extends State<ReaderPaperCurlPagedView> {
 
   @override
   Widget build(BuildContext context) {
-    final pageCount = widget.pageCount;
+    final surface = widget.surface;
+    final pageCount = surface.pageCount;
     if (pageCount <= 0) {
       return const SizedBox.shrink();
     }
-    final safePageIndex =
-        widget.currentPageIndex.clamp(0, pageCount - 1).toInt();
+    final safePageIndex = surface.safePageIndex;
     final pendingPageIndex = _pendingPageIndex;
     final snapshots = _snapshotPages;
 
@@ -318,21 +343,21 @@ class ReaderPaperCurlPagedViewState extends State<ReaderPaperCurlPagedView> {
                     offset: hiddenTargetOffset,
                     child: RepaintBoundary(
                       key: _targetPageKey,
-                      child: widget.pageBuilder(context, pendingPageIndex),
+                      child: surface.pageBuilder(context, pendingPageIndex),
                     ),
                   ),
                 ),
               ),
             RepaintBoundary(
               key: _currentPageKey,
-              child: widget.pageBuilder(context, safePageIndex),
+              child: surface.pageBuilder(context, safePageIndex),
             ),
             if (_overlayVisible && _controller != null && snapshots != null)
               Positioned.fill(
                 child: IgnorePointer(
                   child: _PaperCurlSnapshotOverlay(
-                    key: ValueKey<String>(
-                      'paper_curl_overlay_${widget.chapterId}_$_overlayGeneration',
+                    key: ValueKey<Object>(
+                      Object.hash(surface.surfaceToken, _overlayGeneration),
                     ),
                     controller: _controller!,
                     snapshots: snapshots,

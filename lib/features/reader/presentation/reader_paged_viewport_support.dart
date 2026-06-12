@@ -19,6 +19,7 @@ enum ReaderPagedViewportRenderMode {
   staticPage,
   animatedTransition,
   curlTransition,
+  paperCurlSurface,
 }
 
 enum ReaderPagedViewportSelectionMode { enabled, disabled }
@@ -51,6 +52,22 @@ class ReaderPagedViewportInput {
         pageSize == other.pageSize &&
         animationStyle == other.animationStyle &&
         viewportMetricsHash == other.viewportMetricsHash;
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is ReaderPagedViewportInput && isSamePagingSurface(other);
+  }
+
+  @override
+  int get hashCode {
+    return Object.hash(
+      chapterId,
+      pageCount,
+      pageSize,
+      animationStyle,
+      viewportMetricsHash,
+    );
   }
 }
 
@@ -165,6 +182,17 @@ class ReaderPagedViewportTransitionResolver {
         renderMode: ReaderPagedViewportRenderMode.staticPage,
         selectionMode: selectionMode,
         includeBackgroundDecorationOnPrimaryPage: false,
+      );
+    }
+
+    if (renderedAnimationStyle == ReaderPageAnimationStyle.paperCurl) {
+      return ReaderPagedViewportTransitionPlan(
+        pageCount: pageCount,
+        safePageIndex: safePageIndex,
+        renderedAnimationStyle: renderedAnimationStyle,
+        renderMode: ReaderPagedViewportRenderMode.paperCurlSurface,
+        selectionMode: ReaderPagedViewportSelectionMode.disabled,
+        includeBackgroundDecorationOnPrimaryPage: true,
       );
     }
 
@@ -300,6 +328,10 @@ class ReaderPagedViewportTransitionStack extends StatelessWidget {
       ReaderPagedViewportRenderMode.animatedTransition =>
         _buildAnimatedTransition(),
       ReaderPagedViewportRenderMode.curlTransition => _buildCurlTransition(),
+      ReaderPagedViewportRenderMode.paperCurlSurface => _buildStaticPage(
+        includeBackgroundDecoration:
+            plan.includeBackgroundDecorationOnPrimaryPage,
+      ),
     };
 
     return plan.disablesSelection

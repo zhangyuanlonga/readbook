@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shuxiang_reading_next/domain/entities/reader_settings.dart';
 import 'package:shuxiang_reading_next/features/reader/application/reader_layout_resolver.dart';
-import 'package:shuxiang_reading_next/features/reader/presentation/reader_chrome_widgets.dart';
+import 'package:shuxiang_reading_next/features/reader/presentation/widgets/chrome/reader_chrome_widgets.dart';
 
 void main() {
   group('ReaderInfoBar', () {

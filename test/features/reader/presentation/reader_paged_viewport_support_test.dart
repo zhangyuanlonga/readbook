@@ -2,7 +2,14 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shuxiang_reading_next/domain/entities/reader_settings.dart';
 import 'package:shuxiang_reading_next/features/reader/application/paged_transition_controller.dart';
+import 'package:shuxiang_reading_next/features/reader/application/reader_content_session.dart';
+import 'package:shuxiang_reading_next/features/reader/application/reader_pagination_spec.dart';
+import 'package:shuxiang_reading_next/features/reader/application/reader_surface_metrics.dart';
+import 'package:shuxiang_reading_next/features/reader/presentation/paged_animation/reader_paged_animation_surface.dart';
+import 'package:shuxiang_reading_next/features/reader/presentation/reader_paper_curl_paged_view.dart';
 import 'package:shuxiang_reading_next/features/reader/presentation/reader_paged_viewport_support.dart';
+import 'package:shuxiang_reading_next/features/reader/presentation/reader_shell.dart';
+import 'package:shuxiang_reading_next/features/reader/presentation/reader_text_paged_view.dart';
 
 void main() {
   group('ReaderPagedViewportInput', () {
@@ -37,6 +44,8 @@ void main() {
       expect(input.safePageIndex, 7);
       expect(input.hasPages, isTrue);
       expect(input.isSamePagingSurface(sameSurface), isTrue);
+      expect(input, sameSurface);
+      expect(input.hashCode, sameSurface.hashCode);
       expect(input.isSamePagingSurface(differentSurface), isFalse);
     });
 
@@ -185,6 +194,19 @@ void main() {
       expect(plan.fromPageIndex, 7);
       expect(plan.toPageIndex, 7);
     });
+
+    test('routes paper curl through dedicated paper surface mode', () {
+      final plan = resolver.resolve(
+        requestedAnimationStyle: ReaderPageAnimationStyle.paperCurl,
+        pageCount: 8,
+        currentPageIndex: 2,
+        pagedTransition: const PagedTransitionState(),
+      );
+
+      expect(plan.renderMode, ReaderPagedViewportRenderMode.paperCurlSurface);
+      expect(plan.selectionMode, ReaderPagedViewportSelectionMode.disabled);
+      expect(plan.includeBackgroundDecorationOnPrimaryPage, isTrue);
+    });
   });
 
   group('ReaderPagedPageFrame', () {
@@ -300,5 +322,115 @@ void main() {
       expect(find.text('page 1 / true'), findsWidgets);
       expect(find.text('page 2 / true'), findsOneWidget);
     });
+
+    testWidgets('unified surface routes paper curl to snapshot component', (
+      tester,
+    ) async {
+      const resolver = ReaderPagedViewportTransitionResolver();
+      final plan = resolver.resolve(
+        requestedAnimationStyle: ReaderPageAnimationStyle.paperCurl,
+        pageCount: 3,
+        currentPageIndex: 1,
+        pagedTransition: const PagedTransitionState(),
+      );
+
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: ReaderPagedAnimationSurface(
+            model: _pagedModel,
+            plan: plan,
+            pageBuilder:
+                ({
+                  required int pageIndex,
+                  required bool includeBackgroundDecoration,
+                }) => Text('fallback $pageIndex'),
+            pagedTransitionAnimation: const AlwaysStoppedAnimation<double>(0),
+            curlAnimation: const AlwaysStoppedAnimation<double>(0),
+            switchInCurve: Curves.linear,
+            paperCurlSurface: ReaderPaperCurlPagedSurface(
+              surfaceToken: 'chapter-a',
+              pageCount: 3,
+              currentPageIndex: 1,
+              pageBuilder: (context, pageIndex) => Text('paper $pageIndex'),
+            ),
+            onPaperCurlPageCommitted: (_) {},
+          ),
+        ),
+      );
+
+      expect(find.byType(ReaderPaperCurlPagedView), findsOneWidget);
+      expect(find.text('paper 1'), findsOneWidget);
+      expect(find.text('fallback 1'), findsNothing);
+    });
   });
 }
+
+ReaderContentSession _session() {
+  return const ReaderContentSession(
+    contentMode: ReaderContentMode.text,
+    bookId: 'book',
+    sourceId: 'source',
+    detailUrl: 'detail',
+    bookTitle: 'book',
+    chapterId: 'chapter',
+  );
+}
+
+final _pagedModel = ReaderTextPagedViewModel(
+  contentSession: _session(),
+  settings: const ReaderSettings(),
+  surfaceMetrics: _metrics,
+  paginationSpec: _paginationSpec,
+  palette: _palette,
+  pageCount: 3,
+  currentPageIndex: 1,
+);
+
+const _palette = ReaderPresentationPalette(
+  backgroundColor: Color(0xFFFFFFFF),
+  surfaceColor: Color(0xFFFFFFFF),
+  primaryTextColor: Color(0xFF000000),
+  secondaryTextColor: Color(0x99000000),
+);
+
+const _metrics = ReaderSurfaceMetrics(
+  viewportSize: Size(320, 640),
+  safeInsets: EdgeInsets.zero,
+  bodyPadding: EdgeInsets.zero,
+  headerPadding: EdgeInsets.zero,
+  footerPadding: EdgeInsets.zero,
+  scrollBodyPadding: EdgeInsets.zero,
+  pinnedHeaderHeight: 0,
+  pagedHeaderReserve: 0,
+  pagedFooterReserve: 0,
+  bottomProgressReserve: 0,
+  effectivePagePadding: EdgeInsets.zero,
+  contentRect: Rect.fromLTWH(0, 0, 320, 640),
+  contentWidth: 320,
+  contentHeight: 640,
+);
+
+const _paginationSpec = ReaderPaginationSpec(
+  contentWidth: 320,
+  contentHeight: 640,
+  contentRectLeft: 0,
+  contentRectTop: 0,
+  pagePaddingTop: 0,
+  pagePaddingRight: 0,
+  pagePaddingBottom: 0,
+  pagePaddingLeft: 0,
+  pinnedHeaderHeight: 0,
+  fontSize: 18,
+  lineHeight: 1.6,
+  paragraphSpacing: 0,
+  paragraphIndent: 2,
+  letterSpacing: ReaderSettings.defaultLetterSpacing,
+  textFullJustifyEnabled: true,
+  bodyTextItalicEnabled: false,
+  fontWeightLevel: ReaderFontWeightLevel.regular,
+  fontSource: ReaderFontSource.system,
+  systemFontPreset: ReaderSystemFontPreset.defaultSans,
+  fontWeightValue: null,
+  fontFamilyKey: null,
+);

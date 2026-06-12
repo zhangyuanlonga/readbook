@@ -1,5 +1,5 @@
 import '../../../domain/entities/reader_settings.dart';
-import 'reader_chrome_widgets.dart';
+import 'widgets/chrome/reader_chrome_widgets.dart';
 import 'reader_shell.dart';
 
 class ReaderChromeSnapshot {
