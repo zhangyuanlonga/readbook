@@ -55,6 +55,20 @@ class ReaderSwitchSourceScopePlan {
   final bool isMangaType;
 }
 
+class ReaderSwitchSourceRequestContext {
+  const ReaderSwitchSourceRequestContext({
+    required this.isSwitchSourceLoading,
+    required this.canSwitchSource,
+    required this.sourceId,
+    required this.detailUrl,
+  });
+
+  final bool isSwitchSourceLoading;
+  final bool canSwitchSource;
+  final String? sourceId;
+  final String? detailUrl;
+}
+
 class ReaderSourceSwitchCoordinator {
   const ReaderSourceSwitchCoordinator();
 
@@ -96,6 +110,24 @@ class ReaderSourceSwitchCoordinator {
     required String? sourceId,
     required String? detailUrl,
   }) {
+    return validateManualSwitchRequestContext(
+      ReaderSwitchSourceRequestContext(
+        isSwitchSourceLoading: isSwitchSourceLoading,
+        canSwitchSource: canSwitchSource,
+        sourceId: sourceId,
+        detailUrl: detailUrl,
+      ),
+    );
+  }
+
+  ReaderSwitchSourceRequestValidationResult validateManualSwitchRequestContext(
+    ReaderSwitchSourceRequestContext context,
+  ) {
+    final isSwitchSourceLoading = context.isSwitchSourceLoading;
+    final canSwitchSource = context.canSwitchSource;
+    final sourceId = context.sourceId;
+    final detailUrl = context.detailUrl;
+
     if (isSwitchSourceLoading) {
       return const ReaderSwitchSourceRequestValidationResult.blocked(
         message: '',
@@ -128,6 +160,28 @@ class ReaderSourceSwitchCoordinator {
     required String? sourceId,
     required String? detailUrl,
   }) {
+    return canAutoSwitchOnFailureContext(
+      ReaderSwitchSourceRequestContext(
+        isSwitchSourceLoading: isSwitchSourceLoading,
+        canSwitchSource: canSwitchSource,
+        sourceId: sourceId,
+        detailUrl: detailUrl,
+      ),
+      autoSwitchSourceOnFailureEnabled: autoSwitchSourceOnFailureEnabled,
+      isAutoSwitchingSource: isAutoSwitchingSource,
+    );
+  }
+
+  bool canAutoSwitchOnFailureContext(
+    ReaderSwitchSourceRequestContext context, {
+    required bool autoSwitchSourceOnFailureEnabled,
+    required bool isAutoSwitchingSource,
+  }) {
+    final canSwitchSource = context.canSwitchSource;
+    final isSwitchSourceLoading = context.isSwitchSourceLoading;
+    final sourceId = context.sourceId;
+    final detailUrl = context.detailUrl;
+
     if (!canSwitchSource || !autoSwitchSourceOnFailureEnabled) {
       return false;
     }

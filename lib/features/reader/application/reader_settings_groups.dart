@@ -138,6 +138,66 @@ class ReaderVisualDecorationSettings {
   final double bodyTextUnderlineDashGapRatio;
 }
 
+class ReaderPageTurnSettings {
+  const ReaderPageTurnSettings({
+    required this.pageTurnMode,
+    required this.pageAnimationStyle,
+    required this.pageTurnStepRatio,
+    required this.volumeKeyPageEnabled,
+  });
+
+  final ReaderPageTurnMode pageTurnMode;
+  final ReaderPageAnimationStyle pageAnimationStyle;
+  final double pageTurnStepRatio;
+  final bool volumeKeyPageEnabled;
+}
+
+class ReaderAutoReadSettings {
+  const ReaderAutoReadSettings({
+    required this.enabled,
+    required this.speed,
+    required this.mode,
+    required this.speedLevel,
+    required this.pauseMode,
+    required this.endBehavior,
+  });
+
+  final bool enabled;
+  final double speed;
+  final ReaderAutoReadMode mode;
+  final int speedLevel;
+  final ReaderAutoReadPauseMode pauseMode;
+  final ReaderAutoReadEndBehavior endBehavior;
+}
+
+class ReaderAudioSettings {
+  const ReaderAudioSettings({
+    required this.defaultSpeed,
+    required this.rememberSpeed,
+    required this.seekStepSeconds,
+    required this.autoPlay,
+  });
+
+  final double defaultSpeed;
+  final bool rememberSpeed;
+  final int seekStepSeconds;
+  final bool autoPlay;
+}
+
+class ReaderMangaSettings {
+  const ReaderMangaSettings({
+    required this.readMode,
+    required this.imageSpacing,
+    required this.imagePadding,
+    required this.loadStrategy,
+  });
+
+  final ReaderMangaReadMode readMode;
+  final double imageSpacing;
+  final double imagePadding;
+  final ReaderMangaLoadStrategy loadStrategy;
+}
+
 class ReaderSettingsGroups {
   const ReaderSettingsGroups({
     required this.typography,
@@ -145,6 +205,10 @@ class ReaderSettingsGroups {
     required this.chapterHeader,
     required this.infoBar,
     required this.visualDecoration,
+    required this.pageTurn,
+    required this.autoRead,
+    required this.audio,
+    required this.manga,
   });
 
   final ReaderTypographySettings typography;
@@ -152,6 +216,10 @@ class ReaderSettingsGroups {
   final ReaderChapterHeaderSettings chapterHeader;
   final ReaderInfoBarSettings infoBar;
   final ReaderVisualDecorationSettings visualDecoration;
+  final ReaderPageTurnSettings pageTurn;
+  final ReaderAutoReadSettings autoRead;
+  final ReaderAudioSettings audio;
+  final ReaderMangaSettings manga;
 }
 
 class ReaderSettingsGroupingService {
@@ -223,6 +291,32 @@ class ReaderSettingsGroupingService {
         bodyTextUnderlineDashLength: settings.bodyTextUnderlineDashLength,
         bodyTextUnderlineDashGapRatio: settings.bodyTextUnderlineDashGapRatio,
       ),
+      pageTurn: ReaderPageTurnSettings(
+        pageTurnMode: settings.pageTurnMode,
+        pageAnimationStyle: settings.pageAnimationStyle,
+        pageTurnStepRatio: settings.pageTurnStepRatio,
+        volumeKeyPageEnabled: settings.volumeKeyPageEnabled,
+      ),
+      autoRead: ReaderAutoReadSettings(
+        enabled: settings.autoReadEnabled,
+        speed: settings.autoReadSpeed,
+        mode: settings.autoReadMode,
+        speedLevel: settings.autoReadSpeedLevel,
+        pauseMode: settings.autoReadPauseMode,
+        endBehavior: settings.autoReadEndBehavior,
+      ),
+      audio: ReaderAudioSettings(
+        defaultSpeed: settings.audioDefaultSpeed,
+        rememberSpeed: settings.audioRememberSpeed,
+        seekStepSeconds: settings.audioSeekStepSeconds,
+        autoPlay: settings.audioAutoPlay,
+      ),
+      manga: ReaderMangaSettings(
+        readMode: settings.mangaReadMode,
+        imageSpacing: settings.mangaImageSpacing,
+        imagePadding: settings.mangaImagePadding,
+        loadStrategy: settings.mangaLoadStrategy,
+      ),
     );
   }
 
@@ -233,6 +327,10 @@ class ReaderSettingsGroupingService {
     ReaderChapterHeaderSettings? chapterHeader,
     ReaderInfoBarSettings? infoBar,
     ReaderVisualDecorationSettings? visualDecoration,
+    ReaderPageTurnSettings? pageTurn,
+    ReaderAutoReadSettings? autoRead,
+    ReaderAudioSettings? audio,
+    ReaderMangaSettings? manga,
   }) {
     return base.copyWith(
       fontSize: typography?.fontSize,
@@ -292,6 +390,54 @@ class ReaderSettingsGroupingService {
           visualDecoration?.bodyTextUnderlineDashLength,
       bodyTextUnderlineDashGapRatio:
           visualDecoration?.bodyTextUnderlineDashGapRatio,
+      pageTurnMode: pageTurn?.pageTurnMode,
+      pageAnimationStyle: pageTurn?.pageAnimationStyle,
+      pageTurnStepRatio: pageTurn?.pageTurnStepRatio,
+      volumeKeyPageEnabled: pageTurn?.volumeKeyPageEnabled,
+      autoReadEnabled: autoRead?.enabled,
+      autoReadSpeed: autoRead?.speed,
+      autoReadMode: autoRead?.mode,
+      autoReadSpeedLevel: autoRead?.speedLevel,
+      autoReadPauseMode: autoRead?.pauseMode,
+      autoReadEndBehavior: autoRead?.endBehavior,
+      audioDefaultSpeed: audio?.defaultSpeed,
+      audioRememberSpeed: audio?.rememberSpeed,
+      audioSeekStepSeconds: audio?.seekStepSeconds,
+      audioAutoPlay: audio?.autoPlay,
+      mangaReadMode: manga?.readMode,
+      mangaImageSpacing: manga?.imageSpacing,
+      mangaImagePadding: manga?.imagePadding,
+      mangaLoadStrategy: manga?.loadStrategy,
+    );
+  }
+}
+
+extension ReaderSettingsGroupedAccess on ReaderSettings {
+  ReaderSettingsGroups get grouped =>
+      const ReaderSettingsGroupingService().split(this);
+
+  ReaderSettings mergeGroups({
+    ReaderTypographySettings? typography,
+    ReaderBodyLayoutSettings? bodyLayout,
+    ReaderChapterHeaderSettings? chapterHeader,
+    ReaderInfoBarSettings? infoBar,
+    ReaderVisualDecorationSettings? visualDecoration,
+    ReaderPageTurnSettings? pageTurn,
+    ReaderAutoReadSettings? autoRead,
+    ReaderAudioSettings? audio,
+    ReaderMangaSettings? manga,
+  }) {
+    return const ReaderSettingsGroupingService().merge(
+      base: this,
+      typography: typography,
+      bodyLayout: bodyLayout,
+      chapterHeader: chapterHeader,
+      infoBar: infoBar,
+      visualDecoration: visualDecoration,
+      pageTurn: pageTurn,
+      autoRead: autoRead,
+      audio: audio,
+      manga: manga,
     );
   }
 }

@@ -5,6 +5,56 @@ import 'package:shuxiang_reading_next/features/reader/application/paged_transiti
 import 'package:shuxiang_reading_next/features/reader/presentation/reader_paged_viewport_support.dart';
 
 void main() {
+  group('ReaderPagedViewportInput', () {
+    test('clamps page index and compares stable paging surface', () {
+      const input = ReaderPagedViewportInput(
+        chapterId: 'chapter-1',
+        pageIndex: 99,
+        pageCount: 8,
+        pageSize: Size(320, 640),
+        animationStyle: ReaderPageAnimationStyle.paperCurl,
+        viewportMetricsHash: 1001,
+      );
+
+      const sameSurface = ReaderPagedViewportInput(
+        chapterId: 'chapter-1',
+        pageIndex: 2,
+        pageCount: 8,
+        pageSize: Size(320, 640),
+        animationStyle: ReaderPageAnimationStyle.paperCurl,
+        viewportMetricsHash: 1001,
+      );
+
+      const differentSurface = ReaderPagedViewportInput(
+        chapterId: 'chapter-1',
+        pageIndex: 2,
+        pageCount: 8,
+        pageSize: Size(360, 640),
+        animationStyle: ReaderPageAnimationStyle.paperCurl,
+        viewportMetricsHash: 1001,
+      );
+
+      expect(input.safePageIndex, 7);
+      expect(input.hasPages, isTrue);
+      expect(input.isSamePagingSurface(sameSurface), isTrue);
+      expect(input.isSamePagingSurface(differentSurface), isFalse);
+    });
+
+    test('keeps empty viewport safe page at zero', () {
+      const input = ReaderPagedViewportInput(
+        chapterId: 'empty',
+        pageIndex: 3,
+        pageCount: 0,
+        pageSize: Size(320, 640),
+        animationStyle: ReaderPageAnimationStyle.none,
+        viewportMetricsHash: 0,
+      );
+
+      expect(input.safePageIndex, 0);
+      expect(input.hasPages, isFalse);
+    });
+  });
+
   group('ReaderPagedViewportTransitionResolver', () {
     const resolver = ReaderPagedViewportTransitionResolver();
 

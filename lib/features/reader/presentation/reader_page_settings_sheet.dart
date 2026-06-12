@@ -1265,324 +1265,61 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                       required String title,
                       String? subtitle,
                       required List<Widget> children,
-                    }) {
-                      final colorScheme = Theme.of(context).colorScheme;
-                      final textTheme = Theme.of(context).textTheme;
-
-                      return Container(
-                        width: double.infinity,
-                        margin: EdgeInsets.only(bottom: compactScaleValue(8)),
-                        padding: EdgeInsets.fromLTRB(
-                          compactScaleValue(10),
-                          compactScaleValue(10),
-                          compactScaleValue(10),
-                          compactScaleValue(10),
-                        ),
-                        decoration: BoxDecoration(
-                          color: interactiveCardColor(
-                            colorScheme.surfaceContainerLow,
-                            alpha: 0.54,
-                          ),
-                          borderRadius: BorderRadius.circular(
-                            compactScaleValue(16),
-                          ),
-                          border: Border.all(
-                            color: colorScheme.outlineVariant.withValues(
-                              alpha: 0.42,
-                            ),
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Container(
-                                  width: compactScaleValue(26),
-                                  height: compactScaleValue(26),
-                                  decoration: BoxDecoration(
-                                    color: colorScheme.primaryContainer
-                                        .withValues(alpha: 0.76),
-                                    borderRadius: BorderRadius.circular(
-                                      compactScaleValue(9),
-                                    ),
-                                  ),
-                                  child: Icon(
-                                    icon,
-                                    size: compactScaleValue(14),
-                                    color: colorScheme.onPrimaryContainer,
-                                  ),
-                                ),
-                                SizedBox(width: compactScaleValue(8)),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        title,
-                                        style: textTheme.titleSmall?.copyWith(
-                                          fontWeight: FontWeight.w700,
-                                          fontSize:
-                                              (textTheme.titleSmall?.fontSize ??
-                                                  14) *
-                                              compactSheetScale *
-                                              0.92,
-                                        ),
-                                      ),
-                                      if (subtitle != null &&
-                                          subtitle.trim().isNotEmpty) ...[
-                                        SizedBox(height: compactScaleValue(1)),
-                                        Text(
-                                          subtitle,
-                                          style: textTheme.bodySmall?.copyWith(
-                                            color: colorScheme.onSurfaceVariant,
-                                            height: 1.35,
-                                            fontSize:
-                                                (textTheme
-                                                        .bodySmall
-                                                        ?.fontSize ??
-                                                    12) *
-                                                compactSheetScale *
-                                                0.92,
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                            SizedBox(height: compactScaleValue(10)),
-                            ...children,
-                          ],
-                        ),
-                      );
-                    }
+                    }) => ReaderSettingsSectionCard(
+                      icon: icon,
+                      title: title,
+                      subtitle: subtitle,
+                      compactScale: compactSheetScale,
+                      interactionPreviewActive: isSliderInteracting,
+                      children: children,
+                    );
 
                     Widget buildSettingsGroupEntryCard({
                       required IconData icon,
                       required String title,
                       required String subtitle,
                       required VoidCallback onTap,
-                    }) {
-                      final colorScheme = Theme.of(context).colorScheme;
-                      return InkWell(
-                        borderRadius: BorderRadius.circular(
-                          compactScaleValue(16),
-                        ),
-                        onTap: onTap,
-                        child: Ink(
-                          padding: EdgeInsets.fromLTRB(
-                            compactScaleValue(12),
-                            compactScaleValue(10),
-                            compactScaleValue(12),
-                            compactScaleValue(10),
-                          ),
-                          decoration: BoxDecoration(
-                            color: interactiveCardColor(
-                              colorScheme.surfaceContainerLow,
-                              alpha: 0.54,
-                            ),
-                            borderRadius: BorderRadius.circular(
-                              compactScaleValue(16),
-                            ),
-                            border: Border.all(
-                              color: colorScheme.outlineVariant.withValues(
-                                alpha: 0.38,
-                              ),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: compactScaleValue(28),
-                                height: compactScaleValue(28),
-                                decoration: BoxDecoration(
-                                  color: colorScheme.primaryContainer
-                                      .withValues(alpha: 0.72),
-                                  borderRadius: BorderRadius.circular(
-                                    compactScaleValue(10),
-                                  ),
-                                ),
-                                child: Icon(
-                                  icon,
-                                  size: compactScaleValue(14),
-                                  color: colorScheme.onPrimaryContainer,
-                                ),
-                              ),
-                              SizedBox(width: compactScaleValue(9)),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      title,
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.titleSmall?.copyWith(
-                                        fontWeight: FontWeight.w700,
-                                        fontSize:
-                                            (Theme.of(context)
-                                                    .textTheme
-                                                    .titleSmall
-                                                    ?.fontSize ??
-                                                14) *
-                                            compactSheetScale *
-                                            0.92,
-                                      ),
-                                    ),
-                                    SizedBox(height: compactScaleValue(2)),
-                                    Text(
-                                      subtitle,
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.bodySmall?.copyWith(
-                                        color: colorScheme.onSurfaceVariant,
-                                        height: 1.3,
-                                        fontSize:
-                                            (Theme.of(context)
-                                                    .textTheme
-                                                    .bodySmall
-                                                    ?.fontSize ??
-                                                12) *
-                                            compactSheetScale *
-                                            0.92,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              SizedBox(width: compactScaleValue(6)),
-                              Icon(
-                                Icons.chevron_right_rounded,
-                                color: colorScheme.onSurfaceVariant,
-                                size: compactScaleValue(18),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    }
+                    }) => ReaderSettingsGroupEntryCard(
+                      icon: icon,
+                      title: title,
+                      subtitle: subtitle,
+                      onTap: onTap,
+                      compactScale: compactSheetScale,
+                      interactionPreviewActive: isSliderInteracting,
+                    );
 
                     Widget buildCompactToggleRow({
                       required String label,
                       required bool value,
                       required ValueChanged<bool>? onChanged,
                       bool isSaving = false,
-                    }) {
-                      return Padding(
-                        padding: EdgeInsets.symmetric(
-                          vertical: compactScaleValue(1),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                label,
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.bodyMedium?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize:
-                                      (Theme.of(
-                                            context,
-                                          ).textTheme.bodyMedium?.fontSize ??
-                                          14) *
-                                      compactSheetScale *
-                                      0.94,
-                                ),
-                              ),
-                            ),
-                            if (isSaving)
-                              const Padding(
-                                padding: EdgeInsets.only(right: 8),
-                                child: SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                ),
-                              ),
-                            Switch.adaptive(value: value, onChanged: onChanged),
-                          ],
-                        ),
-                      );
-                    }
+                    }) => ReaderSettingsToggleRow(
+                      label: label,
+                      value: value,
+                      onChanged: onChanged,
+                      isSaving: isSaving,
+                      compactScale: compactSheetScale,
+                    );
 
-                    Widget buildSectionDivider() {
-                      return Padding(
-                        padding: EdgeInsets.symmetric(
-                          vertical: compactScaleValue(2.5),
-                        ),
-                        child: Divider(
-                          height: 1,
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.outlineVariant.withValues(alpha: 0.4),
-                        ),
-                      );
-                    }
+                    Widget buildSectionDivider() =>
+                        ReaderSettingsDivider(compactScale: compactSheetScale);
 
                     Widget buildTextReaderSettingsSheet() {
                       Widget buildCompactSectionTitle(
                         String title, {
                         Widget? trailing,
-                      }) {
-                        final colorScheme = Theme.of(context).colorScheme;
-                        return Row(
-                          children: [
-                            Text(
-                              title,
-                              style: Theme.of(
-                                context,
-                              ).textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color: colorScheme.onSurface,
-                                fontSize:
-                                    (Theme.of(
-                                          context,
-                                        ).textTheme.titleSmall?.fontSize ??
-                                        14) *
-                                    compactSheetScale *
-                                    0.9,
-                              ),
-                            ),
-                            const Spacer(),
-                            if (trailing != null) trailing,
-                          ],
-                        );
-                      }
+                      }) => ReaderSettingsCompactTitle(
+                        title: title,
+                        trailing: trailing,
+                        compactScale: compactSheetScale,
+                      );
 
-                      Widget buildCompactSettingsCard(List<Widget> children) {
-                        final colorScheme = Theme.of(context).colorScheme;
-                        return Container(
-                          width: double.infinity,
-                          margin: EdgeInsets.only(bottom: compactScaleValue(8)),
-                          padding: EdgeInsets.fromLTRB(
-                            compactScaleValue(12),
-                            compactScaleValue(12),
-                            compactScaleValue(12),
-                            compactScaleValue(12),
-                          ),
-                          decoration: BoxDecoration(
-                            color: interactiveCardColor(
-                              colorScheme.surfaceContainerLow,
-                              alpha: 0.54,
-                            ),
-                            borderRadius: BorderRadius.circular(
-                              compactScaleValue(18),
-                            ),
-                            border: Border.all(
-                              color: colorScheme.outlineVariant.withValues(
-                                alpha: 0.32,
-                              ),
-                            ),
-                          ),
-                          child: Column(children: children),
-                        );
-                      }
+                      Widget buildCompactSettingsCard(List<Widget> children) =>
+                          ReaderSettingsCard(
+                            compactScale: compactSheetScale,
+                            interactionPreviewActive: isSliderInteracting,
+                            children: children,
+                          );
 
                       Widget buildOwnershipHintCard(String groupKey) {
                         final descriptor = _readerSettingsPresenter
@@ -2236,40 +1973,11 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                       Widget buildCompactLabeledSettingRow({
                         required String label,
                         required Widget child,
-                      }) {
-                        return Padding(
-                          padding: EdgeInsets.only(
-                            bottom: compactScaleValue(10),
-                          ),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              SizedBox(
-                                width: compactScaleValue(68),
-                                child: Text(
-                                  label,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(
-                                    context,
-                                  ).textTheme.bodyMedium?.copyWith(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize:
-                                        (Theme.of(
-                                              context,
-                                            ).textTheme.bodyMedium?.fontSize ??
-                                            14) *
-                                        compactSheetScale *
-                                        0.92,
-                                  ),
-                                ),
-                              ),
-                              SizedBox(width: compactScaleValue(10)),
-                              Expanded(child: child),
-                            ],
-                          ),
-                        );
-                      }
+                      }) => ReaderSettingsLabeledRow(
+                        label: label,
+                        compactScale: compactSheetScale,
+                        child: child,
+                      );
 
                       Widget buildBrightnessFollowChip({
                         required bool value,

@@ -1,6 +1,6 @@
 # 项目文档索引
 
-**最后更新：** 2026-06-11  
+**最后更新：** 2026-06-12
 **文档总数：** 59 个（已分类整理）
 
 ---
@@ -83,6 +83,7 @@ docs/
 
 ### 阅读器（features/reader/）
 
+- [阅读器重构开发计划](features/reader/reader-refactoring-development-plan-2026-06-12.md) ⭐ **执行入口**：合并架构/设计/UX 审查后的阶段任务
 - [高级主题体验优化方案](features/reader/advanced_theme_experience_optimization.md) - **核心付费功能**：主题市场、付费转化
 - [阅读器自动阅读执行计划](features/reader/reader_auto_read_execution_plan_2026-05-24.md)
 - [阅读器本地内容重构执行计划](features/reader/reader_local_content_refactor_execution_plan_2026-05-21.md)
@@ -213,4 +214,4 @@ docs/
 - 归档文档不需要更新索引
 - 保持分类清晰，便于查找
 
-**最后更新：** 2026-06-11
+**最后更新：** 2026-06-12

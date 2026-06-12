@@ -23,6 +23,37 @@ enum ReaderPagedViewportRenderMode {
 
 enum ReaderPagedViewportSelectionMode { enabled, disabled }
 
+class ReaderPagedViewportInput {
+  const ReaderPagedViewportInput({
+    required this.chapterId,
+    required this.pageIndex,
+    required this.pageCount,
+    required this.pageSize,
+    required this.animationStyle,
+    required this.viewportMetricsHash,
+  });
+
+  final String chapterId;
+  final int pageIndex;
+  final int pageCount;
+  final Size pageSize;
+  final ReaderPageAnimationStyle animationStyle;
+  final int viewportMetricsHash;
+
+  int get safePageIndex =>
+      pageIndex.clamp(0, math.max(0, pageCount - 1)).toInt();
+
+  bool get hasPages => pageCount > 0;
+
+  bool isSamePagingSurface(ReaderPagedViewportInput other) {
+    return chapterId == other.chapterId &&
+        pageCount == other.pageCount &&
+        pageSize == other.pageSize &&
+        animationStyle == other.animationStyle &&
+        viewportMetricsHash == other.viewportMetricsHash;
+  }
+}
+
 class ReaderPagedViewportCurlState {
   const ReaderPagedViewportCurlState({
     this.isAnimating = false,

@@ -61,6 +61,24 @@ void main() {
         bodyTextUnderlineGap: 4,
         bodyTextUnderlineDashLength: 5,
         bodyTextUnderlineDashGapRatio: 6,
+        pageTurnMode: ReaderPageTurnMode.scroll,
+        pageAnimationStyle: ReaderPageAnimationStyle.cover,
+        pageTurnStepRatio: 0.7,
+        volumeKeyPageEnabled: false,
+        autoReadEnabled: true,
+        autoReadSpeed: 80,
+        autoReadMode: ReaderAutoReadMode.page,
+        autoReadSpeedLevel: 8,
+        autoReadPauseMode: ReaderAutoReadPauseMode.chapterEnd,
+        autoReadEndBehavior: ReaderAutoReadEndBehavior.nextBook,
+        audioDefaultSpeed: 1.35,
+        audioRememberSpeed: false,
+        audioSeekStepSeconds: 30,
+        audioAutoPlay: true,
+        mangaReadMode: ReaderMangaReadMode.paged,
+        mangaImageSpacing: 18,
+        mangaImagePadding: 12,
+        mangaLoadStrategy: ReaderMangaLoadStrategy.smooth,
       );
 
       final groups = service.split(settings);
@@ -83,6 +101,25 @@ void main() {
         groups.visualDecoration.bodyTextDecorationStyle,
         ReaderBodyTextDecorationStyle.dashed,
       );
+      expect(groups.pageTurn.pageTurnMode, ReaderPageTurnMode.scroll);
+      expect(
+        groups.pageTurn.pageAnimationStyle,
+        ReaderPageAnimationStyle.cover,
+      );
+      expect(groups.pageTurn.pageTurnStepRatio, closeTo(0.7, 0.0001));
+      expect(groups.pageTurn.volumeKeyPageEnabled, isFalse);
+      expect(groups.autoRead.enabled, isTrue);
+      expect(groups.autoRead.mode, ReaderAutoReadMode.page);
+      expect(groups.autoRead.pauseMode, ReaderAutoReadPauseMode.chapterEnd);
+      expect(groups.autoRead.endBehavior, ReaderAutoReadEndBehavior.nextBook);
+      expect(groups.audio.defaultSpeed, closeTo(1.35, 0.0001));
+      expect(groups.audio.rememberSpeed, isFalse);
+      expect(groups.audio.seekStepSeconds, 30);
+      expect(groups.audio.autoPlay, isTrue);
+      expect(groups.manga.readMode, ReaderMangaReadMode.paged);
+      expect(groups.manga.imageSpacing, 18);
+      expect(groups.manga.imagePadding, 12);
+      expect(groups.manga.loadStrategy, ReaderMangaLoadStrategy.smooth);
     });
 
     test('merges grouped settings back without losing unrelated fields', () {
@@ -120,16 +157,94 @@ void main() {
           horizontalOffset: 0.5,
           verticalOffset: 18,
         ),
+        pageTurn: const ReaderPageTurnSettings(
+          pageTurnMode: ReaderPageTurnMode.scroll,
+          pageAnimationStyle: ReaderPageAnimationStyle.fade,
+          pageTurnStepRatio: 0.75,
+          volumeKeyPageEnabled: false,
+        ),
+        autoRead: const ReaderAutoReadSettings(
+          enabled: false,
+          speed: 90,
+          mode: ReaderAutoReadMode.page,
+          speedLevel: 9,
+          pauseMode: ReaderAutoReadPauseMode.chapterEnd,
+          endBehavior: ReaderAutoReadEndBehavior.nextBook,
+        ),
+        audio: const ReaderAudioSettings(
+          defaultSpeed: 1.25,
+          rememberSpeed: false,
+          seekStepSeconds: 20,
+          autoPlay: true,
+        ),
+        manga: const ReaderMangaSettings(
+          readMode: ReaderMangaReadMode.paged,
+          imageSpacing: 14,
+          imagePadding: 10,
+          loadStrategy: ReaderMangaLoadStrategy.smooth,
+        ),
       );
 
       expect(merged.brightness, 0.65);
-      expect(merged.autoReadEnabled, isTrue);
-      expect(merged.pageTurnMode, ReaderPageTurnMode.tapAndSwipe);
       expect(merged.fontSize, 20);
       expect(merged.bodyMarginRight, 11);
       expect(merged.showChapterHeader, isTrue);
       expect(merged.chapterHeaderHorizontalOffset, 0.5);
       expect(merged.chapterHeaderVerticalOffset, 18);
+      expect(merged.pageTurnMode, ReaderPageTurnMode.scroll);
+      expect(merged.pageAnimationStyle, ReaderPageAnimationStyle.fade);
+      expect(merged.pageTurnStepRatio, closeTo(0.75, 0.0001));
+      expect(merged.volumeKeyPageEnabled, isFalse);
+      expect(merged.autoReadEnabled, isFalse);
+      expect(merged.autoReadSpeed, closeTo(90, 0.0001));
+      expect(merged.autoReadMode, ReaderAutoReadMode.page);
+      expect(merged.autoReadSpeedLevel, 9);
+      expect(merged.autoReadPauseMode, ReaderAutoReadPauseMode.chapterEnd);
+      expect(merged.autoReadEndBehavior, ReaderAutoReadEndBehavior.nextBook);
+      expect(merged.audioDefaultSpeed, closeTo(1.25, 0.0001));
+      expect(merged.audioRememberSpeed, isFalse);
+      expect(merged.audioSeekStepSeconds, 20);
+      expect(merged.audioAutoPlay, isTrue);
+      expect(merged.mangaReadMode, ReaderMangaReadMode.paged);
+      expect(merged.mangaImageSpacing, 14);
+      expect(merged.mangaImagePadding, 10);
+      expect(merged.mangaLoadStrategy, ReaderMangaLoadStrategy.smooth);
     });
+
+    test(
+      'exposes grouped access without changing serialized settings shape',
+      () {
+        const settings = ReaderSettings(
+          fontSize: 22,
+          pageAnimationStyle: ReaderPageAnimationStyle.translate,
+          audioAutoPlay: true,
+        );
+
+        final grouped = settings.grouped;
+        final merged = settings.mergeGroups(
+          pageTurn: ReaderPageTurnSettings(
+            pageTurnMode: grouped.pageTurn.pageTurnMode,
+            pageAnimationStyle: ReaderPageAnimationStyle.cover,
+            pageTurnStepRatio: grouped.pageTurn.pageTurnStepRatio,
+            volumeKeyPageEnabled: grouped.pageTurn.volumeKeyPageEnabled,
+          ),
+        );
+
+        expect(grouped.typography.fontSize, 22);
+        expect(
+          grouped.pageTurn.pageAnimationStyle,
+          ReaderPageAnimationStyle.translate,
+        );
+        expect(grouped.audio.autoPlay, isTrue);
+        expect(merged.pageAnimationStyle, ReaderPageAnimationStyle.cover);
+        expect(merged.fontSize, 22);
+
+        final serialized = merged.toJson();
+        expect(serialized.containsKey('pageAnimationStyle'), isTrue);
+        expect(serialized.containsKey('grouped'), isFalse);
+        expect(serialized.containsKey('pageTurn'), isFalse);
+        expect(serialized['pageAnimationStyle'], 'cover');
+      },
+    );
   });
 }
