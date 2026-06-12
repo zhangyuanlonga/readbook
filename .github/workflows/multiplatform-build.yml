@@ -31,10 +31,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - id: android-linux-web
-            label: Android, Linux, Web
+          - id: android
+            label: Android
             os: ubuntu-22.04
-            supported_platforms: "android,linux,web"
+            supported_platforms: "android"
+          - id: linux
+            label: Linux
+            os: ubuntu-22.04
+            supported_platforms: "linux"
           - id: apple
             label: iOS, macOS
             os: macos-15
@@ -73,7 +77,7 @@ jobs:
             echo "$1" | tr '[:upper:]' '[:lower:]' | tr ',' ' '
           }
 
-          allowed=(all android ios macos linux windows web)
+          allowed=(all android ios macos linux windows)
           expand_platform_token() {
             local token="$1"
             case "${token}" in
@@ -118,7 +122,7 @@ jobs:
           selected=()
           for platform in "${requested[@]}"; do
             if ! contains_platform "${platform}" "${allowed[@]}"; then
-              echo "::error::Unsupported platform '${platform}'. Use native, mobile, desktop, all, android, ios, macos, linux, windows, or web."
+              echo "::error::Unsupported platform '${platform}'. GitHub release builds do not package Web; use native, mobile, desktop, all, android, ios, macos, linux, or windows."
               exit 1
             fi
           done
@@ -145,7 +149,7 @@ jobs:
           echo "Selected platforms: ${selected_csv}"
 
       - name: Setup Java
-        if: steps.platforms.outputs.should_build == 'true'
+        if: steps.platforms.outputs.should_build == 'true' && contains(steps.platforms.outputs.selected, 'android')
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -160,7 +164,7 @@ jobs:
           cache: true
 
       - name: Install Linux desktop dependencies
-        if: runner.os == 'Linux' && steps.platforms.outputs.should_build == 'true'
+        if: runner.os == 'Linux' && steps.platforms.outputs.should_build == 'true' && contains(steps.platforms.outputs.selected, 'linux')
         shell: bash
         run: |
           set -euo pipefail
@@ -176,7 +180,7 @@ jobs:
             pkg-config
 
       - name: Enable desktop targets
-        if: steps.platforms.outputs.should_build == 'true'
+        if: steps.platforms.outputs.should_build == 'true' && (contains(steps.platforms.outputs.selected, 'linux') || contains(steps.platforms.outputs.selected, 'macos') || contains(steps.platforms.outputs.selected, 'windows'))
         shell: bash
         run: |
           set -euo pipefail

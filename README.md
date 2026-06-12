@@ -68,7 +68,7 @@ BUILD_NAME=1.1.0 BUILD_NUMBER=26041801 \
 同目录下会生成 `manifest.txt`，方便查看每个平台对应的文件名。
 
 GitHub Actions 也提供了手动打包入口：`Actions -> Multiplatform Build -> Run workflow`。
-默认 `platforms=native` 会并行打 Android / Linux、iOS / macOS、Windows，并上传为 Actions artifacts；常规发版不包含 Web。如需 Web 产物可改成 `platforms=all`，或手动填写 `android,ios,macos,linux,windows,web`。
+默认 `BUILD_PLATFORMS=native` 会并行打 Android、Linux、iOS / macOS、Windows，并上传为 Actions artifacts；GitHub 发版不打包 Web。Web 需要更新服务器时，使用本地脚本单独打包并走 Web 部署链路。
 Actions 打包不会弹出版本号确认。常规发版必须填写 `full_version`，例如 `1.2.0+26061001`。
 `full_version` 是全平台统一版本源，格式为 `展示版本+构建号`：
 - `1.2.0`：用户看到的版本号，对应 Android `versionName`、iOS/macOS `CFBundleShortVersionString`、桌面端展示版本。

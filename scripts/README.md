@@ -327,6 +327,8 @@ See `.github/workflows/multiplatform-build.yml`
 
 **Trigger:** Actions → Multiplatform Build → Run workflow
 
+**Scope:** GitHub release builds package native installable clients only: Android, iOS, macOS, Linux, and Windows. Web is intentionally excluded from GitHub release builds; build it locally with the unified script when the Web server needs an update.
+
 **Input:**
 - `full_version`: `1.3.0+26061101` (required)
 
@@ -354,9 +356,8 @@ See `.github/workflows/multiplatform-build.yml`
 | macOS zip | 5-8 min | GitHub Actions (macOS-15) |
 | Linux tar.gz | 4-6 min | GitHub Actions (Ubuntu) |
 | Windows zip | 4-6 min | GitHub Actions (Windows) |
-| Web | 2-4 min | GitHub Actions (Ubuntu) |
 
-**Total parallel build time (GitHub Actions):** ~12-15 min across 3 runners
+**Total parallel build time (GitHub Actions):** ~12-15 min across 4 runners
 
 ---
 

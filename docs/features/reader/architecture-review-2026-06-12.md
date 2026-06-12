@@ -21,6 +21,35 @@
 
 ---
 
+## 执行结论（裁剪版）
+
+这份审计指出的问题大体成立，阅读器确实存在超大页面、`part` 文件耦合、设置页过重、presentation 目录过平等维护风险。但原方案写得过满，不建议按“完整 Clean Architecture 迁移 + 全面 Riverpod 改造 + 禁用 resolver/coordinator/facade”的方式一次性执行。
+
+**建议做，但要做减法。** 当前阅读器刚修过纸页切换、章节跳转、设置弹层等敏感交互，最安全的策略是先冻结行为，再按功能边界做低风险拆分。目标不是立刻把评分刷到 8/10，而是让后续修 bug 不再每次都碰 6000 行主文件。
+
+### 立即做
+
+- 收敛 `reader_page.dart` 的 `part` 边界，只拆“纯 UI / 纯适配 / 纯计算”文件，避免改动阅读状态主流程。
+- 拆 `reader_page_settings_sheet.dart`，因为设置页体量大且经常被改，收益最高。
+- 建立阅读器关键路径 smoke test / golden-free widget test，先保护 Android/iOS 纸页、滚动、章节跳转、设置弹层行为。
+- 整理 `presentation/widgets/`、`presentation/sheets/` 目录，把新代码放到清晰位置，旧代码逐步迁移。
+
+### 暂缓做
+
+- 暂缓把 `lib/domain/entities/reader_*` 全量搬进 `features/reader/domain/`，这会影响导入路径和跨功能引用，收益不如先拆主页面。
+- 暂缓一刀切把 StatefulWidget 改成 Riverpod。动画、手势、滚动、页面控制器这类局部 UI 状态保留 StatefulWidget 更合理。
+- 暂缓强行删除 resolver/coordinator/facade/presenter 命名。先要求新增代码命名清晰，旧代码在碰到对应功能时顺手合并。
+- 暂缓大规模 repository/data 层迁移。阅读器的数据来源包含本地书、服务器书源、缓存、进度、主题，先画清边界再搬。
+
+### 执行原则
+
+- 每个阶段只改一个边界，不顺手重构无关链路。
+- 每个阶段完成后必须能跑 Android 真机阅读 smoke，并补一次 iOS/桌面影响面检查。
+- 禁止为了目录好看改变阅读行为；拆分后的首要验收是用户感知零变化。
+- 新增文件可以先不追求 <500 行，但必须比原文件职责更单一。
+
+---
+
 ## 🔍 主要问题
 
 ### 1. ❌ Clean Architecture 分层缺失
@@ -353,28 +382,56 @@ test/features/reader/
 
 ---
 
-## 📋 重构 Checklist
+## 阶段任务（可勾选版）
 
-### Phase 1: 基础重构（1-2 周）
-- [ ] 拆分 `reader_page.dart` 为多个文件
-- [ ] 创建 `domain/` 和 `data/` 层
-- [ ] 移动 domain entities 到 feature 内
-- [ ] 定义 repository 接口
+### 阶段 0：冻结行为与风险基线（0.5-1 天）
 
-### Phase 2: 状态管理迁移（1-2 周）
-- [ ] 创建 Riverpod controllers
-- [ ] 迁移 20 个 StatefulWidget 到 ConsumerWidget
-- [ ] 重构 application 层服务
+- [ ] 记录当前阅读器关键路径：本地书进入、在线书进入、上一章/下一章、纸页、仿真、滚动、设置弹层、目录弹层、书源切换。
+- [ ] 整理一份最小手工验收清单，明确 Android 真机必测，iOS/桌面按影响面补测。
+- [ ] 为 `reader_page.dart` 当前 `part` 文件画出职责表，标记哪些能先独立、哪些不能碰。
+- [ ] 建立重构分支规则：每个 PR/提交只拆一个功能边界，禁止混入视觉和业务行为调整。
 
-### Phase 3: 组件优化（1 周）
-- [ ] 重组 widgets/ 目录
-- [ ] 拆分超大 sheet 文件
-- [ ] 提取可复用组件
+### 阶段 1：设置页先拆，收益最大（1-2 天）
 
-### Phase 4: 测试与文档（1 周）
-- [ ] 补充单元测试
-- [ ] 补充 widget 测试
-- [ ] 更新架构文档
+- [ ] 将 `reader_page_settings_sheet.dart` 按区域拆成 `appearance`、`layout`、`page_turning`、`advanced` 等 sheet section widget。
+- [ ] 保持所有设置项 provider / service 调用不变，只移动 UI 结构，不改业务语义。
+- [ ] 抽出通用设置行、滑块行、开关行，复用已有 `ReaderTypographySliderRow` 风格。
+- [ ] 验收：应用外观、字体、背景、翻页动画、纸页设置、底部弹层高度在 Android 真机表现不变。
+
+### 阶段 2：主阅读页拆“纯展示层”（2-3 天）
+
+- [ ] 从 `reader_page.dart` / `part` 中优先拆出无副作用 widget：顶部信息、底部信息、页码角标、加载/错误态、背景层。
+- [ ] 将 `reader_chrome_widgets.dart`、`reader_overlay_widgets.dart` 归档到 `presentation/widgets/chrome/` 与 `presentation/widgets/overlay/`。
+- [ ] 保留 `_ReaderPageState` 的核心状态和导航方法，暂不迁 Riverpod。
+- [ ] 验收：纸页、仿真、覆盖动画、点击翻页、上下章节点、菜单显隐无行为变化。
+
+### 阶段 3：翻页与视口边界收口（2-4 天）
+
+- [ ] 把分页动画相关入口统一到 `presentation/paged_animation/`，明确纸页、仿真、平移、覆盖、滚动各自的 renderer 边界。
+- [ ] 将 `reader_paper_curl_paged_view.dart` 只保留组件内部局部状态，不让它直接依赖主页面业务状态。
+- [ ] 抽出阅读视口输入模型，例如 page index、chapter id、blocks、theme、animation type。
+- [ ] 补一组 Android 真机回归：纸页不闪字、仿真不误切、快速连续翻页不串页、上下章边界不失效。
+
+### 阶段 4：状态边界渐进迁移（3-5 天）
+
+- [ ] 只迁移“跨组件共享且非动画”的状态到 controller/provider，例如目录显隐、设置面板显隐、书源切换状态、内容加载状态。
+- [ ] 保留动画控制器、滚动控制器、手势临时状态在 StatefulWidget 内。
+- [ ] 新增状态对象时使用不可变模型，避免多个 widget 直接修改同一份可变字段。
+- [ ] 验收：热重载、进入退出阅读器、切章节、切书源、后台回来恢复阅读位置正常。
+
+### 阶段 5：数据与 domain 边界只做新功能准入（后续迭代）
+
+- [ ] 新增阅读器数据能力时，先定义 reader feature 内的接口，不再把新 reader entity 放到全局目录。
+- [ ] 盘点 `lib/domain/entities/reader_*` 的跨模块引用，确认没有外部强依赖后再分批迁移。
+- [ ] 暂不强迁现有 repository/data 层；等本地书、在线书、缓存、进度四条链路边界稳定后再做。
+- [ ] 验收：迁移只改 import 和落点，不改序列化字段、不改数据库表、不改接口 payload。
+
+### 阶段 6：清理命名与测试补齐（长期维护）
+
+- [ ] 新增代码统一命名：页面状态用 controller，纯业务用 service，展示转换用 presenter/mapper 二选一。
+- [ ] 旧 resolver/coordinator/facade 不单独开大清理任务，只在对应功能被修改时合并或改名。
+- [ ] 为阅读器补最小单元测试：分页输入、章节边界、设置持久化、书源切换错误态。
+- [ ] 更新本文件已完成勾选项，并记录每阶段实际验证平台。
 
 ---
 
@@ -389,13 +446,14 @@ test/features/reader/
 
 ## 总结
 
-阅读器功能当前存在**严重的架构问题**，主要体现在：
+阅读器功能当前存在明确的维护风险，主要体现在：
 
 1. **God Class 反模式**: `reader_page.dart` 6245 行不可维护
-2. **分层缺失**: 缺少 domain/data 层，违反 Clean Architecture
-3. **状态管理混乱**: Riverpod 使用率仅 9%
-4. **组件拆分不足**: widgets 目录几乎为空
+2. **设置页过重**: `reader_page_settings_sheet.dart` 4430 行，后续 UI 调整风险高
+3. **分层边界不清**: reader 的 domain/data 边界需要逐步收敛，但不适合一次性迁移
+4. **状态边界混杂**: 业务状态、动画状态、手势状态混在主页面里，需要渐进拆分
+5. **组件目录不清晰**: `presentation/` 根目录过平，widgets/sheets/chrome/overlay 等边界需要补齐
 
-**建议立即启动重构**，优先处理 Priority 1 的紧急问题，否则后续维护成本会持续增加。
+**建议启动渐进式治理**，优先执行阶段 0-3：冻结行为、拆设置页、拆纯展示层、收口翻页与视口边界。阶段 4-6 放到后续迭代，不建议在当前发版前做全量状态迁移或 domain/data 大搬家。
 
-重构完成后，预期架构评分可提升至 **8/10** 以上。
+完成阶段 0-3 后，预期收益不是“架构评分立刻变高”，而是阅读器后续修 bug 的影响面明显变小，尤其是 Android 翻页、设置弹层、章节切换这些高频问题会更容易定位。
