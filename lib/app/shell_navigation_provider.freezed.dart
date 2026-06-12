@@ -208,7 +208,7 @@ return $default(_that.showBookshelf,_that.showDiscover,_that.showStats);case _:
 
 
 class _AppShellNavigationState extends AppShellNavigationState {
-  const _AppShellNavigationState({this.showBookshelf = true, this.showDiscover = true, this.showStats = true}): super._();
+  const _AppShellNavigationState({this.showBookshelf = true, this.showDiscover = false, this.showStats = false}): super._();
   
 
 @override@JsonKey() final  bool showBookshelf;

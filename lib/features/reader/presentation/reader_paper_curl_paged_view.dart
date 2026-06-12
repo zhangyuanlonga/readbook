@@ -256,33 +256,49 @@ class ReaderPaperCurlPagedViewState extends State<ReaderPaperCurlPagedView> {
     final pendingPageIndex = _pendingPageIndex;
     final snapshots = _snapshotPages;
 
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        if (pendingPageIndex != null && snapshots == null)
-          RepaintBoundary(
-            key: _targetPageKey,
-            child: widget.pageBuilder(context, pendingPageIndex),
-          ),
-        RepaintBoundary(
-          key: _currentPageKey,
-          child: widget.pageBuilder(context, safePageIndex),
-        ),
-        if (_overlayVisible && _controller != null && snapshots != null)
-          Positioned.fill(
-            child: IgnorePointer(
-              child: _PaperCurlSnapshotOverlay(
-                key: ValueKey<String>(
-                  'paper_curl_overlay_${widget.chapterId}_$_overlayGeneration',
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final hiddenTargetOffset = Offset(
+          (constraints.maxWidth.isFinite ? constraints.maxWidth : 0) + 64,
+          0,
+        );
+        return Stack(
+          clipBehavior: Clip.hardEdge,
+          fit: StackFit.expand,
+          children: [
+            if (pendingPageIndex != null && snapshots == null)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Transform.translate(
+                    offset: hiddenTargetOffset,
+                    child: RepaintBoundary(
+                      key: _targetPageKey,
+                      child: widget.pageBuilder(context, pendingPageIndex),
+                    ),
+                  ),
                 ),
-                controller: _controller!,
-                snapshots: snapshots,
-                startPageIndex: (_queuedDirection ?? 1) >= 0 ? 0 : 1,
-                onPageChanged: _handleOverlayPageChanged,
               ),
+            RepaintBoundary(
+              key: _currentPageKey,
+              child: widget.pageBuilder(context, safePageIndex),
             ),
-          ),
-      ],
+            if (_overlayVisible && _controller != null && snapshots != null)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: _PaperCurlSnapshotOverlay(
+                    key: ValueKey<String>(
+                      'paper_curl_overlay_${widget.chapterId}_$_overlayGeneration',
+                    ),
+                    controller: _controller!,
+                    snapshots: snapshots,
+                    startPageIndex: (_queuedDirection ?? 1) >= 0 ? 0 : 1,
+                    onPageChanged: _handleOverlayPageChanged,
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }

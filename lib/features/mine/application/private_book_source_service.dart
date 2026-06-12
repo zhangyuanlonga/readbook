@@ -83,13 +83,9 @@ class PrivateBookSourceService {
   }
 
   Future<void> deleteGroup(String id) {
-    return _client.request<void>(
-      method: ApiMethod.delete,
-      path: '/v1/me/book-source-groups/$id',
-      attachAccessToken: true,
-      enableRetry: false,
-      stage: ErrorStage.source,
-      decoder: (_) {},
+    return _deleteWithActionFallback(
+      primaryPath: '/v1/me/book-source-groups/$id',
+      fallbackPath: '/v1/me/book-source-groups/$id/delete',
     );
   }
 
@@ -132,13 +128,9 @@ class PrivateBookSourceService {
   }
 
   Future<void> delete(String id) {
-    return _client.request<void>(
-      method: ApiMethod.delete,
-      path: '/v1/me/book-sources/$id',
-      attachAccessToken: true,
-      enableRetry: false,
-      stage: ErrorStage.source,
-      decoder: (_) {},
+    return _deleteWithActionFallback(
+      primaryPath: '/v1/me/book-sources/$id',
+      fallbackPath: '/v1/me/book-sources/$id/delete',
     );
   }
 
@@ -189,6 +181,38 @@ class PrivateBookSourceService {
       stage: ErrorStage.source,
       decoder: (_) {},
     );
+  }
+
+  Future<void> _deleteWithActionFallback({
+    required String primaryPath,
+    required String fallbackPath,
+  }) async {
+    try {
+      await _requestVoid(method: ApiMethod.delete, path: primaryPath);
+    } on ApiException catch (error) {
+      if (!_shouldUseDeleteActionFallback(error)) {
+        rethrow;
+      }
+      await _requestVoid(method: ApiMethod.post, path: fallbackPath);
+    }
+  }
+
+  Future<void> _requestVoid({required ApiMethod method, required String path}) {
+    return _client.request<void>(
+      method: method,
+      path: path,
+      attachAccessToken: true,
+      enableRetry: false,
+      stage: ErrorStage.source,
+      decoder: (_) {},
+    );
+  }
+
+  bool _shouldUseDeleteActionFallback(ApiException error) {
+    return error.statusCode == 404 ||
+        error.statusCode == 405 ||
+        error.apiCode == 'NOT_FOUND' ||
+        error.apiCode == 'METHOD_NOT_ALLOWED';
   }
 
   Map<String, dynamic> _asMap(Object? data) {

@@ -380,7 +380,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
         _normalizeRouteParam(widget.title) ??
         _normalizeRouteParam(initialBook?.title);
     final hydratedFromCache = _hydrateCachedDetailIfAvailable();
-    if (!hydratedFromCache) {
+    if (!hydratedFromCache && !_isLocalContent) {
       _updatePresentationState(
         _presentationState.copyWith(isLoading: true, clearErrorText: true),
       );
@@ -398,9 +398,10 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       );
     } else {
       if (_isLocalContent) {
-        unawaited(_hydrateLocalBookSnapshotIfAvailable());
+        unawaited(_loadInitialLocalDetail());
+      } else {
+        unawaited(_load(includeCatalog: false));
       }
-      unawaited(_load(includeCatalog: false));
     }
   }
 
@@ -613,7 +614,18 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     return true;
   }
 
-  Future<void> _hydrateLocalBookSnapshotIfAvailable() async {
+  Future<void> _loadInitialLocalDetail() async {
+    final hydrated = await _hydrateLocalBookSnapshotIfAvailable();
+    if (!mounted || hydrated) {
+      return;
+    }
+    _updatePresentationState(
+      _presentationState.copyWith(isLoading: true, clearErrorText: true),
+    );
+    unawaited(_load(includeCatalog: false));
+  }
+
+  Future<bool> _hydrateLocalBookSnapshotIfAvailable() async {
     final sourceId = _activeSourceId?.trim();
     final detailUrl = _activeDetailUrl?.trim();
     if (sourceId == null ||
@@ -621,21 +633,26 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
         detailUrl == null ||
         detailUrl.isEmpty ||
         !LocalReaderIdentity.isLocalSourceId(sourceId)) {
-      return;
+      return false;
     }
 
     final provider = _contentProviderRegistry.findForSourceId(sourceId);
     if (provider is! LocalContentProvider) {
-      return;
+      return false;
     }
 
-    final result = await provider.loadBookSnapshotDetail(
-      sourceId: sourceId,
-      bookId: _activeBookId,
-      detailUrl: detailUrl,
-    );
+    final BookDetailLoadResult? result;
+    try {
+      result = await provider.loadBookSnapshotDetail(
+        sourceId: sourceId,
+        bookId: _activeBookId,
+        detailUrl: detailUrl,
+      );
+    } catch (_) {
+      return false;
+    }
     if (!mounted || result == null || _result != null) {
-      return;
+      return false;
     }
 
     _activeBookId = result.detail.id.trim();
@@ -651,6 +668,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     );
     _recordDetailBodyVisible(result: result, source: 'local_book_snapshot');
     unawaited(_loadSupplementaryState(result: result));
+    return true;
   }
 
   bool _shouldSkipCachedHydration(BookDetailLoadResult cached) {

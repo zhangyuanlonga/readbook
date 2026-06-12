@@ -33,6 +33,8 @@ class _LaunchImageGalleryPageState
 
   List<LaunchImageGalleryIndexItem> _galleries =
       const <LaunchImageGalleryIndexItem>[];
+  Map<String, List<String>> _previewPathsByGalleryId =
+      const <String, List<String>>{};
   String _searchQuery = '';
   bool _startupEnabled = true;
   bool _isLoading = true;
@@ -46,13 +48,38 @@ class _LaunchImageGalleryPageState
   }
 
   Future<void> _load() async {
-    final galleries = await _service.loadGalleryIndex();
+    final sourceGalleries = await _service.loadGalleries();
+    final galleries = sourceGalleries
+        .map((gallery) {
+          final previewPaths = _service.resolveGalleryPreviewPaths(
+            gallery,
+            limit: 3,
+          );
+          return LaunchImageGalleryIndexItem(
+            id: gallery.id,
+            name: gallery.name,
+            updatedAt: gallery.updatedAt,
+            imageCount: gallery.imagePaths.length,
+            isBuiltIn: gallery.isBuiltIn,
+            isEditable: gallery.isEditable,
+            isDeletable: gallery.isDeletable,
+            previewPath: previewPaths.isEmpty ? null : previewPaths.first,
+          );
+        })
+        .toList(growable: false);
+    final previewPathsByGalleryId = <String, List<String>>{
+      for (final gallery in sourceGalleries)
+        gallery.id: _service.resolveGalleryPreviewPaths(gallery, limit: 3),
+    };
     final startupEnabled = await _service.loadStartupEnabled();
     if (!mounted) {
       return;
     }
     setState(() {
       _galleries = galleries;
+      _previewPathsByGalleryId = Map<String, List<String>>.unmodifiable(
+        previewPathsByGalleryId,
+      );
       _startupEnabled = startupEnabled;
       _isLoading = false;
     });
@@ -511,6 +538,10 @@ class _LaunchImageGalleryPageState
     LaunchImageGalleryIndexItem gallery,
   ) {
     final colorScheme = Theme.of(context).colorScheme;
+    final activeAdvancedTheme =
+        ref.watch(activeAdvancedThemeProvider).valueOrNull;
+    final usedByActiveTheme =
+        activeAdvancedTheme?.launchImageGalleryId?.trim() == gallery.id.trim();
     const previewCount = 3;
     return InkWell(
       borderRadius: BorderRadius.circular(18),
@@ -537,6 +568,10 @@ class _LaunchImageGalleryPageState
                     ),
                   ),
                 ),
+                if (usedByActiveTheme) ...[
+                  const ImageResourceUsageBadge(label: '主题默认'),
+                  const SizedBox(width: 6),
+                ],
                 PopupMenuButton<_LaunchGalleryAction>(
                   onSelected: (action) {
                     switch (action) {
@@ -626,7 +661,10 @@ class _LaunchImageGalleryPageState
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: List.generate(previewCount, (index) {
-                  final previewPath = index == 0 ? gallery.previewPath : null;
+                  final previewPaths =
+                      _previewPathsByGalleryId[gallery.id] ?? const <String>[];
+                  final previewPath =
+                      index < previewPaths.length ? previewPaths[index] : null;
                   return Expanded(
                     child: Padding(
                       padding: EdgeInsets.only(

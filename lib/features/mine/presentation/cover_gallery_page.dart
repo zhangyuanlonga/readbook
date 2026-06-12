@@ -9,6 +9,7 @@ import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/adaptive_grid_sliver.dart';
 import '../../../app/widgets/adaptive_overflow_toolbar.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../domain/entities/app_advanced_theme.dart';
 import '../application/advanced_theme_provider.dart';
 import '../application/cover_gallery_provider.dart';
 import '../application/cover_gallery_service.dart';
@@ -30,6 +31,8 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
   final TextEditingController _searchController = TextEditingController();
 
   List<CoverGalleryIndexItem> _galleries = const <CoverGalleryIndexItem>[];
+  Map<String, List<String>> _previewPathsByGalleryId =
+      const <String, List<String>>{};
   String _searchQuery = '';
   bool _isLoading = true;
   bool _isSaving = false;
@@ -42,12 +45,34 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
   }
 
   Future<void> _load() async {
-    final galleries = await _service.loadGalleryIndex();
+    final sourceGalleries = await _service.loadGalleries();
+    final galleries = sourceGalleries
+        .map((gallery) {
+          final previewPaths = _service.resolveGalleryPreviewPaths(
+            gallery,
+            limit: 4,
+          );
+          return CoverGalleryIndexItem(
+            id: gallery.id,
+            name: gallery.name,
+            updatedAt: gallery.updatedAt,
+            imageCount: gallery.imagePaths.length,
+            previewPath: previewPaths.isEmpty ? null : previewPaths.first,
+          );
+        })
+        .toList(growable: false);
+    final previewPathsByGalleryId = <String, List<String>>{
+      for (final gallery in sourceGalleries)
+        gallery.id: _service.resolveGalleryPreviewPaths(gallery, limit: 4),
+    };
     if (!mounted) {
       return;
     }
     setState(() {
       _galleries = galleries;
+      _previewPathsByGalleryId = Map<String, List<String>>.unmodifiable(
+        previewPathsByGalleryId,
+      );
       _isLoading = false;
     });
   }
@@ -401,6 +426,12 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
     CoverGalleryIndexItem gallery,
   ) {
     final colorScheme = Theme.of(context).colorScheme;
+    final activeAdvancedTheme =
+        ref.watch(activeAdvancedThemeProvider).valueOrNull;
+    final usageLabels = _coverGalleryUsageLabels(
+      gallery.id,
+      activeAdvancedTheme,
+    );
     const previewCount = 4;
     return InkWell(
       borderRadius: BorderRadius.circular(18),
@@ -427,6 +458,10 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
                     ),
                   ),
                 ),
+                for (final label in usageLabels) ...[
+                  ImageResourceUsageBadge(label: label),
+                  const SizedBox(width: 6),
+                ],
                 PopupMenuButton<_CoverGalleryAction>(
                   onSelected: (action) {
                     switch (action) {
@@ -493,7 +528,10 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: List.generate(previewCount, (index) {
-                  final path = index == 0 ? gallery.previewPath : null;
+                  final previewPaths =
+                      _previewPathsByGalleryId[gallery.id] ?? const <String>[];
+                  final path =
+                      index < previewPaths.length ? previewPaths[index] : null;
                   return Expanded(
                     child: Padding(
                       padding: EdgeInsets.only(
@@ -551,5 +589,25 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
       borderRadius: BorderRadius.circular(10),
       placeholderIcon: Icons.broken_image_outlined,
     );
+  }
+
+  List<String> _coverGalleryUsageLabels(
+    String galleryId,
+    AppAdvancedTheme? activeTheme,
+  ) {
+    final normalizedId = galleryId.trim();
+    if (normalizedId.isEmpty || activeTheme == null) {
+      return const <String>[];
+    }
+    final usedByLight =
+        activeTheme.coverGalleryIdFor(AppAdvancedThemeMode.light) ==
+        normalizedId;
+    final usedByDark =
+        activeTheme.coverGalleryIdFor(AppAdvancedThemeMode.dark) ==
+        normalizedId;
+    if (usedByLight && usedByDark) {
+      return const <String>['主题默认'];
+    }
+    return <String>[if (usedByLight) '浅色默认', if (usedByDark) '深色默认'];
   }
 }

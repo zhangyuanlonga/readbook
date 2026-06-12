@@ -13,6 +13,7 @@ import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/adaptive_fullscreen_preview.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../core/media/image_selection_service.dart';
+import '../../../domain/entities/app_advanced_theme.dart';
 import '../application/advanced_theme_provider.dart';
 import '../application/reader_background_service.dart';
 import '../providers.dart';
@@ -335,6 +336,13 @@ class _ReaderBackgroundPageState extends ConsumerState<ReaderBackgroundPage> {
 
   Widget _buildBackgroundCard(BuildContext context, String path) {
     final colorScheme = Theme.of(context).colorScheme;
+    final activeAdvancedTheme =
+        ref.watch(activeAdvancedThemeProvider).valueOrNull;
+    final usageLabels = _backgroundUsageLabels(
+      path,
+      activeAdvancedTheme,
+      reader: true,
+    );
     return GestureDetector(
       onTap: () => _openPreview(path),
       onLongPress: _isSaving ? null : () => _confirmDeleteBackground(path),
@@ -365,9 +373,56 @@ class _ReaderBackgroundPageState extends ConsumerState<ReaderBackgroundPage> {
                 icon: Icons.delete_outline,
               ),
             ),
+            if (usageLabels.isNotEmpty)
+              Positioned(
+                left: 10,
+                top: 10,
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final label in usageLabels)
+                      ImageResourceUsageBadge(label: label),
+                  ],
+                ),
+              ),
           ],
         ),
       ),
     );
+  }
+
+  List<String> _backgroundUsageLabels(
+    String path,
+    AppAdvancedTheme? activeTheme, {
+    required bool reader,
+  }) {
+    if (activeTheme == null) {
+      return const <String>[];
+    }
+    final lightPath =
+        reader
+            ? activeTheme.lightConfig.readerWallpaperPath
+            : activeTheme.lightConfig.wallpaperPath;
+    final darkPath =
+        reader
+            ? activeTheme.darkConfig.readerWallpaperPath
+            : activeTheme.darkConfig.wallpaperPath;
+    final usedByLight = _sameResourcePath(path, lightPath);
+    final usedByDark = _sameResourcePath(path, darkPath);
+    if (usedByLight && usedByDark) {
+      return const <String>['主题默认'];
+    }
+    return <String>[if (usedByLight) '浅色默认', if (usedByDark) '深色默认'];
+  }
+
+  bool _sameResourcePath(String left, String? right) {
+    final normalizedLeft = left.trim();
+    final normalizedRight = right?.trim() ?? '';
+    if (normalizedLeft.isEmpty || normalizedRight.isEmpty) {
+      return false;
+    }
+    return normalizedLeft == normalizedRight ||
+        p.normalize(normalizedLeft) == p.normalize(normalizedRight);
   }
 }

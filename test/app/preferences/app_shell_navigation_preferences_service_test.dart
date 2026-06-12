@@ -6,7 +6,7 @@ import 'package:shuxiang_reading_next/app/preferences/app_shell_navigation_snaps
 void main() {
   group('AppShellNavigationPreferencesService', () {
     test(
-      'loads typed defaults while keeping discover hidden by default',
+      'loads typed defaults with only bookshelf and mine visible by default',
       () async {
         SharedPreferences.setMockInitialValues(<String, Object>{
           appShellNavigationHomePreferenceKey: true,
@@ -20,7 +20,7 @@ void main() {
 
         expect(snapshot.showBookshelf, isTrue);
         expect(snapshot.showDiscover, isFalse);
-        expect(snapshot.showStats, isTrue);
+        expect(snapshot.showStats, isFalse);
         expect(prefs.getBool(appShellNavigationHomePreferenceKey), isNull);
       },
     );

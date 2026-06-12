@@ -140,6 +140,46 @@ void main() {
         expect(indexItems.first.previewPath, managedFile.resolvedPath);
       },
     );
+
+    test(
+      'resolves multiple existing preview paths for gallery cards',
+      () async {
+        final prefs = await SharedPreferences.getInstance();
+        final assetStore = await _createAssetStore();
+        final service = CoverGalleryService(
+          preferences: prefs,
+          assetStore: assetStore,
+        );
+        final tempDir = await Directory.systemTemp.createTemp(
+          'cover_gallery_preview_paths_',
+        );
+        addTearDown(() => tempDir.delete(recursive: true));
+        final first = File('${tempDir.path}/first.png')
+          ..writeAsBytesSync(const <int>[1]);
+        final second = File('${tempDir.path}/second.png')
+          ..writeAsBytesSync(const <int>[2]);
+        final third = File('${tempDir.path}/third.png')
+          ..writeAsBytesSync(const <int>[3]);
+
+        final previews = service.resolveGalleryPreviewPaths(
+          CoverGallery(
+            id: 'cover_gallery_preview_paths',
+            name: '多图预览',
+            createdAt: DateTime.parse('2026-05-21T00:00:00.000Z'),
+            updatedAt: DateTime.parse('2026-05-21T00:00:00.000Z'),
+            imagePaths: <String>[
+              first.path,
+              '${tempDir.path}/missing.png',
+              second.path,
+              third.path,
+            ],
+          ),
+          limit: 3,
+        );
+
+        expect(previews, <String>[first.path, second.path, third.path]);
+      },
+    );
   });
 }
 

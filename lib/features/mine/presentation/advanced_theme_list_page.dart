@@ -216,8 +216,11 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       onAuthEvent: _handleAuthEvent,
     );
     _loadAccess(refreshRemote: false);
-    _load();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      unawaited(_load());
       unawaited(_consumePendingExternalImportPayloads());
     });
   }
@@ -256,21 +259,34 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   Future<void> _load() async {
     final service = ref.read(advancedThemeServiceProvider);
     final loadToken = ++_summaryLoadToken;
-    final themes = await service.loadThemeSummaries();
-    if (!mounted) {
-      return;
-    }
-    final sortedThemes = _sortThemeSummaries(themes);
-    setState(() {
-      _themeSummaries = sortedThemes;
-      if (_selectedCategory != null &&
-          !_availableCategories.contains(_selectedCategory)) {
-        _selectedCategory = null;
+    try {
+      final themes = await service.loadThemeSummaries();
+      if (!mounted || loadToken != _summaryLoadToken) {
+        return;
       }
-      _pruneSelectionForVisibleThemes();
-      _isLoading = false;
-    });
-    unawaited(_hydrateThemePreviewSummaries(loadToken, sortedThemes));
+      final sortedThemes = _sortThemeSummaries(themes);
+      setState(() {
+        _themeSummaries = sortedThemes;
+        if (_selectedCategory != null &&
+            !_availableCategories.contains(_selectedCategory)) {
+          _selectedCategory = null;
+        }
+        _pruneSelectionForVisibleThemes();
+        _isLoading = false;
+      });
+      unawaited(_hydrateThemePreviewSummaries(loadToken, sortedThemes));
+    } catch (_) {
+      if (!mounted || loadToken != _summaryLoadToken) {
+        return;
+      }
+      setState(() {
+        _themeSummaries = const <AdvancedThemeSummary>[];
+        _selectedCategory = null;
+        _pruneSelectionForVisibleThemes();
+        _isLoading = false;
+      });
+      _showMessage('高级主题加载失败，请稍后重试。');
+    }
   }
 
   Future<void> _hydrateThemePreviewSummaries(
@@ -278,9 +294,14 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     List<AdvancedThemeSummary> currentSummaries,
   ) async {
     final service = ref.read(advancedThemeServiceProvider);
-    final hydrated = await service.hydrateThemeSummaryPreviewPaths(
-      currentSummaries,
-    );
+    final List<AdvancedThemeSummary> hydrated;
+    try {
+      hydrated = await service.hydrateThemeSummaryPreviewPaths(
+        currentSummaries,
+      );
+    } catch (_) {
+      return;
+    }
     if (!mounted || loadToken != _summaryLoadToken) {
       return;
     }

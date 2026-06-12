@@ -10,6 +10,8 @@ import 'package:go_router/go_router.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/motion/app_motion_widgets.dart';
+import '../../../app/navigation/bottom_nav_icon_gallery_tab_mapper.dart';
+import '../../../app/navigation/bottom_nav_icon_resolver.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/theme/app_theme_palette.dart';
 import '../../../app/theme/app_theme_seed_provider.dart';
@@ -18,6 +20,7 @@ import '../../../app/widgets/adaptive_fullscreen_preview.dart';
 import '../../../app/widgets/adaptive_overflow_toolbar.dart';
 import '../../../app/widgets/adaptive_route_top_bar.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/bottom_nav_icon_view.dart';
 import '../../../app/widgets/text_cover_placeholder.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
@@ -35,7 +38,6 @@ import '../application/advanced_theme_service.dart';
 import '../application/theme_semantic_spec.dart';
 import '../providers.dart';
 import 'widgets/advanced_theme_basic_section.dart';
-import 'widgets/advanced_theme_bottom_nav_gallery_section.dart';
 import 'widgets/advanced_theme_cover_gallery_section.dart';
 import 'widgets/advanced_theme_font_section.dart';
 import 'widgets/advanced_theme_launch_gallery_section.dart';
@@ -1055,6 +1057,19 @@ class _AdvancedThemeEditorPageState
     return '未设置';
   }
 
+  BottomNavIconGallery? _selectedBottomNavGallery() {
+    final selectedId = _draft?.bottomNavGalleryId?.trim();
+    if (selectedId == null || selectedId.isEmpty) {
+      return null;
+    }
+    for (final gallery in _bottomNavGalleries) {
+      if (gallery.id == selectedId) {
+        return gallery;
+      }
+    }
+    return null;
+  }
+
   String? _selectedWallpaperPreviewPath(AppAdvancedTheme draft) {
     return _wallpaperPreviewPathForMode(draft, _selectedMode);
   }
@@ -1690,6 +1705,101 @@ class _AdvancedThemeEditorPageState
         onTap: onTap,
         onLongPress: onLongPress,
         child: child,
+      ),
+    );
+  }
+
+  Widget _buildBottomNavGalleryPreview(
+    BuildContext context, {
+    required BottomNavIconGallery? gallery,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    if (gallery == null) {
+      return Container(
+        width: 168,
+        height: 62,
+        decoration: BoxDecoration(
+          color: colorScheme.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: colorScheme.outlineVariant.withValues(alpha: 0.4),
+          ),
+        ),
+        alignment: Alignment.center,
+        child: Icon(
+          Icons.add_rounded,
+          size: 24,
+          color: colorScheme.onSurfaceVariant,
+        ),
+      );
+    }
+    return Container(
+      width: 190,
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.4),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildBottomNavGalleryPreviewRow(
+            context,
+            gallery: gallery,
+            brightness: Brightness.light,
+          ),
+          const SizedBox(height: 5),
+          _buildBottomNavGalleryPreviewRow(
+            context,
+            gallery: gallery,
+            brightness: Brightness.dark,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomNavGalleryPreviewRow(
+    BuildContext context, {
+    required BottomNavIconGallery gallery,
+    required Brightness brightness,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
+      decoration: BoxDecoration(
+        color:
+            isDark
+                ? Colors.black.withValues(alpha: 0.78)
+                : colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final tab in bottomNavIconGalleryTabs)
+            for (final selected in const <bool>[false, true])
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2.5),
+                child: BottomNavIconView(
+                  icon: resolveCupertinoBottomNavIcon(
+                    tab: appShellTabForBottomNavIconGalleryTab(tab),
+                    selected: selected,
+                    brightness: brightness,
+                    gallery: gallery,
+                  ),
+                  size: 14,
+                  fallbackColor:
+                      selected
+                          ? colorScheme.primary
+                          : (isDark ? Colors.white70 : colorScheme.outline),
+                ),
+              ),
+        ],
       ),
     );
   }
@@ -2414,6 +2524,7 @@ class _AdvancedThemeEditorPageState
   ) {
     final wallpaperPath = _selectedWallpaperPreviewPath(draft);
     final readerWallpaperPath = _selectedReaderWallpaperPreviewPath(draft);
+    final bottomNavGallery = _selectedBottomNavGallery();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2550,6 +2661,16 @@ class _AdvancedThemeEditorPageState
                   ),
                 ],
               ),
+              const SizedBox(height: 10),
+              AdvancedThemeWallpaperResourceCard(
+                title: '底栏图集',
+                subtitle: _resolvedBottomNavGalleryName(),
+                preview: _buildBottomNavGalleryPreview(
+                  context,
+                  gallery: bottomNavGallery,
+                ),
+                onTap: _isSaving ? () {} : _pickBottomNavGallery,
+              ),
             ],
           ),
         ),
@@ -2573,11 +2694,6 @@ class _AdvancedThemeEditorPageState
           padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
           child: Column(
             children: [
-              AdvancedThemeBottomNavGallerySection(
-                subtitle: _resolvedBottomNavGalleryName(),
-                onTap: _pickBottomNavGallery,
-              ),
-              const Divider(height: 1),
               AdvancedThemeFontSection(
                 interfaceFontName: _resolvedAppInterfaceFontName(),
                 readerFontName: _resolvedReaderFontName(),

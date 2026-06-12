@@ -39,15 +39,16 @@ class CoverGalleryService {
   Future<List<CoverGalleryIndexItem>> loadGalleryIndex() async {
     final galleries = await loadGalleries();
     return galleries
-        .map(
-          (gallery) => CoverGalleryIndexItem(
+        .map((gallery) {
+          final previewPaths = resolveGalleryPreviewPaths(gallery, limit: 1);
+          return CoverGalleryIndexItem(
             id: gallery.id,
             name: gallery.name,
             updatedAt: gallery.updatedAt,
             imageCount: gallery.imagePaths.length,
-            previewPath: resolveGalleryPreviewPath(gallery),
-          ),
-        )
+            previewPath: previewPaths.isEmpty ? null : previewPaths.first,
+          );
+        })
         .toList(growable: false);
   }
 
@@ -276,9 +277,17 @@ class CoverGalleryService {
   }
 
   String? resolveGalleryPreviewPath(CoverGallery? gallery) {
+    return resolveGalleryPreviewPaths(gallery, limit: 1).firstOrNull;
+  }
+
+  List<String> resolveGalleryPreviewPaths(
+    CoverGallery? gallery, {
+    int limit = 4,
+  }) {
     if (gallery == null) {
-      return null;
+      return const <String>[];
     }
+    final previews = <String>[];
     for (final rawPath in gallery.imagePaths) {
       final normalized = rawPath.trim();
       if (normalized.isEmpty) {
@@ -286,10 +295,13 @@ class CoverGalleryService {
       }
       final file = File(normalized);
       if (file.existsSync() || normalized.startsWith('assets/')) {
-        return file.path;
+        previews.add(file.path);
+        if (previews.length >= limit) {
+          break;
+        }
       }
     }
-    return null;
+    return List<String>.unmodifiable(previews);
   }
 
   Future<String?> _loadPersistedGalleriesRaw() async {

@@ -77,8 +77,9 @@ class LaunchImageGalleryService {
   Future<List<LaunchImageGalleryIndexItem>> loadGalleryIndex() async {
     final galleries = await loadGalleries();
     return galleries
-        .map(
-          (gallery) => LaunchImageGalleryIndexItem(
+        .map((gallery) {
+          final previewPaths = resolveGalleryPreviewPaths(gallery, limit: 1);
+          return LaunchImageGalleryIndexItem(
             id: gallery.id,
             name: gallery.name,
             updatedAt: gallery.updatedAt,
@@ -86,9 +87,9 @@ class LaunchImageGalleryService {
             isBuiltIn: gallery.isBuiltIn,
             isEditable: gallery.isEditable,
             isDeletable: gallery.isDeletable,
-            previewPath: resolveGalleryPreviewPath(gallery),
-          ),
-        )
+            previewPath: previewPaths.isEmpty ? null : previewPaths.first,
+          );
+        })
         .toList(growable: false);
   }
 
@@ -557,9 +558,18 @@ class LaunchImageGalleryService {
   }
 
   String? resolveGalleryPreviewPath(LaunchImageGallery? gallery) {
+    final previewPaths = resolveGalleryPreviewPaths(gallery, limit: 1);
+    return previewPaths.isEmpty ? null : previewPaths.first;
+  }
+
+  List<String> resolveGalleryPreviewPaths(
+    LaunchImageGallery? gallery, {
+    int limit = 3,
+  }) {
     if (gallery == null) {
-      return null;
+      return const <String>[];
     }
+    final previews = <String>[];
     for (final rawPath in gallery.imagePaths) {
       final normalized = rawPath.trim();
       if (normalized.isEmpty) {
@@ -567,10 +577,13 @@ class LaunchImageGalleryService {
       }
       final file = File(normalized);
       if (file.existsSync() || normalized.startsWith('assets/')) {
-        return file.path;
+        previews.add(file.path);
+        if (previews.length >= limit) {
+          break;
+        }
       }
     }
-    return null;
+    return List<String>.unmodifiable(previews);
   }
 
   String _normalizeFileExtension(String fileName) {

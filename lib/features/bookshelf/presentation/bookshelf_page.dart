@@ -2255,38 +2255,46 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       builder: (dialogContext) {
         final theme = Theme.of(dialogContext);
         final colorScheme = theme.colorScheme;
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              '删除书籍',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w800,
+        final mediaQuery = MediaQuery.of(dialogContext);
+        final safeBottom = math.max(
+          mediaQuery.viewPadding.bottom,
+          mediaQuery.systemGestureInsets.bottom,
+        );
+        return Padding(
+          padding: EdgeInsets.only(bottom: safeBottom),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                '删除书籍',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            Text('确定从书架删除「$title」吗？', style: theme.textTheme.bodyMedium),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(false),
-                  child: const Text('取消'),
-                ),
-                const SizedBox(width: 8),
-                FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: colorScheme.error,
-                    foregroundColor: colorScheme.onError,
+              const SizedBox(height: 12),
+              Text('确定从书架删除「$title」吗？', style: theme.textTheme.bodyMedium),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(false),
+                    child: const Text('取消'),
                   ),
-                  onPressed: () => Navigator.of(dialogContext).pop(true),
-                  child: const Text('删除'),
-                ),
-              ],
-            ),
-          ],
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: colorScheme.error,
+                      foregroundColor: colorScheme.onError,
+                    ),
+                    onPressed: () => Navigator.of(dialogContext).pop(true),
+                    child: const Text('删除'),
+                  ),
+                ],
+              ),
+            ],
+          ),
         );
       },
     );

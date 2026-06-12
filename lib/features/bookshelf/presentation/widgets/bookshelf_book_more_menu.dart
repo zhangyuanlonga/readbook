@@ -25,7 +25,9 @@ class BookshelfBookMoreMenu extends StatelessWidget {
             height: compact ? 28 : 34,
           ),
           onPressed: controller.isOpen ? controller.close : controller.open,
-          icon: const Icon(Icons.more_horiz_rounded),
+          icon: Icon(
+            compact ? Icons.more_vert_rounded : Icons.more_horiz_rounded,
+          ),
         );
       },
     );

@@ -62,8 +62,8 @@ abstract class AppShellNavigationState with _$AppShellNavigationState {
 
   const factory AppShellNavigationState({
     @Default(true) bool showBookshelf,
-    @Default(true) bool showDiscover,
-    @Default(true) bool showStats,
+    @Default(false) bool showDiscover,
+    @Default(false) bool showStats,
   }) = _AppShellNavigationState;
 
   int get configurableVisibleCount {

@@ -325,6 +325,10 @@ class _BottomNavIconGalleryPageState
     final colorScheme = Theme.of(context).colorScheme;
     final metrics = AppAdaptiveMetrics.of(context);
     final active = gallery.id == _activeGalleryId;
+    final activeAdvancedTheme =
+        ref.watch(activeAdvancedThemeProvider).valueOrNull;
+    final usedByActiveTheme =
+        activeAdvancedTheme?.bottomNavGalleryId?.trim() == gallery.id.trim();
 
     return Material(
       color: Colors.transparent,
@@ -361,6 +365,10 @@ class _BottomNavIconGalleryPageState
                   ),
                   if (gallery.isBuiltIn) _buildPill(context, label: '内置'),
                   if (!gallery.isBuiltIn) _buildPill(context, label: '自定义'),
+                  if (usedByActiveTheme) ...[
+                    const SizedBox(width: 6),
+                    const ImageResourceUsageBadge(label: '主题默认'),
+                  ],
                   const SizedBox(width: 6),
                   if (_isSaving && active)
                     SizedBox(

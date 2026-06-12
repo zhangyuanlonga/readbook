@@ -140,7 +140,7 @@ extension on _AppearancePageState {
 
   String _pageTitle(AppearanceSection section) {
     return switch (section) {
-      AppearanceSection.appearance => '外观',
+      AppearanceSection.appearance => '应用外观',
       AppearanceSection.tabBar => '底栏',
       AppearanceSection.cover => '封面',
       AppearanceSection.background => '应用背景',
@@ -1200,6 +1200,8 @@ extension on _AppearancePageState {
   }
 
   Widget _buildBackgroundGallerySection(BuildContext context) {
+    final activeAdvancedTheme =
+        ref.watch(activeAdvancedThemeProvider).valueOrNull;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1256,6 +1258,11 @@ extension on _AppearancePageState {
                 ),
                 itemBuilder: (context, index) {
                   final path = _visibleBackgroundPaths[index];
+                  final usageLabels = _backgroundUsageLabels(
+                    path,
+                    activeAdvancedTheme,
+                    reader: false,
+                  );
                   return GestureDetector(
                     onTap: () => _previewBackground(path),
                     onLongPress: () => _confirmDeleteBackground(path),
@@ -1277,6 +1284,19 @@ extension on _AppearancePageState {
                             icon: Icons.delete_outline,
                           ),
                         ),
+                        if (usageLabels.isNotEmpty)
+                          Positioned(
+                            left: 6,
+                            top: 6,
+                            child: Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: [
+                                for (final label in usageLabels)
+                                  ImageResourceUsageBadge(label: label),
+                              ],
+                            ),
+                          ),
                       ],
                     ),
                   );
@@ -1286,6 +1306,40 @@ extension on _AppearancePageState {
           ),
       ],
     );
+  }
+
+  List<String> _backgroundUsageLabels(
+    String path,
+    AppAdvancedTheme? activeTheme, {
+    required bool reader,
+  }) {
+    if (activeTheme == null) {
+      return const <String>[];
+    }
+    final lightPath =
+        reader
+            ? activeTheme.lightConfig.readerWallpaperPath
+            : activeTheme.lightConfig.wallpaperPath;
+    final darkPath =
+        reader
+            ? activeTheme.darkConfig.readerWallpaperPath
+            : activeTheme.darkConfig.wallpaperPath;
+    final usedByLight = _sameResourcePath(path, lightPath);
+    final usedByDark = _sameResourcePath(path, darkPath);
+    if (usedByLight && usedByDark) {
+      return const <String>['主题默认'];
+    }
+    return <String>[if (usedByLight) '浅色默认', if (usedByDark) '深色默认'];
+  }
+
+  bool _sameResourcePath(String left, String? right) {
+    final normalizedLeft = left.trim();
+    final normalizedRight = right?.trim() ?? '';
+    if (normalizedLeft.isEmpty || normalizedRight.isEmpty) {
+      return false;
+    }
+    return normalizedLeft == normalizedRight ||
+        p.normalize(normalizedLeft) == p.normalize(normalizedRight);
   }
 
   Widget _buildNavigationStyleSection(

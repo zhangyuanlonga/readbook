@@ -6,11 +6,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   group('AppShellNavigationState', () {
     test('uses generated copyWith and value equality', () {
-      final state = const AppShellNavigationState().copyWith(
-        showDiscover: false,
-      );
+      final state = const AppShellNavigationState().copyWith(showStats: true);
 
-      expect(state, const AppShellNavigationState(showDiscover: false));
+      expect(state, const AppShellNavigationState(showStats: true));
       expect(state.visibleTabCount, 3);
     });
   });
@@ -20,15 +18,15 @@ void main() {
       SharedPreferences.setMockInitialValues({});
     });
 
-    test('defaults to showing all tabs', () {
+    test('defaults to showing bookshelf and mine tabs', () {
       final container = ProviderContainer();
       addTearDown(container.dispose);
 
       final state = container.read(appShellNavigationProvider);
       expect(state.showBookshelf, isTrue);
-      expect(state.showDiscover, isTrue);
-      expect(state.showStats, isTrue);
-      expect(state.visibleTabCount, 4);
+      expect(state.showDiscover, isFalse);
+      expect(state.showStats, isFalse);
+      expect(state.visibleTabCount, 2);
     });
 
     test('persists configurable tab visibility', () async {
@@ -37,14 +35,14 @@ void main() {
 
       await container
           .read(appShellNavigationProvider.notifier)
-          .setTabVisible(AppShellTab.discover, false);
+          .setTabVisible(AppShellTab.discover, true);
 
       final updated = container.read(appShellNavigationProvider);
-      expect(updated.showDiscover, isFalse);
+      expect(updated.showDiscover, isTrue);
       expect(updated.visibleTabCount, 3);
 
       final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getBool('app.shell.navigation.discover'), isFalse);
+      expect(prefs.getBool('app.shell.navigation.discover'), isTrue);
     });
 
     test('persists stats tab visibility', () async {
@@ -53,14 +51,14 @@ void main() {
 
       await container
           .read(appShellNavigationProvider.notifier)
-          .setTabVisible(AppShellTab.stats, false);
+          .setTabVisible(AppShellTab.stats, true);
 
       final updated = container.read(appShellNavigationProvider);
-      expect(updated.showStats, isFalse);
+      expect(updated.showStats, isTrue);
       expect(updated.visibleTabCount, 3);
 
       final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getBool('app.shell.navigation.stats'), isFalse);
+      expect(prefs.getBool('app.shell.navigation.stats'), isTrue);
     });
 
     test('keeps mine tab always visible', () async {
@@ -72,7 +70,7 @@ void main() {
           .setTabVisible(AppShellTab.mine, false);
 
       final state = container.read(appShellNavigationProvider);
-      expect(state.visibleTabCount, 4);
+      expect(state.visibleTabCount, 2);
     });
   });
 }

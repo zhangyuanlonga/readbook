@@ -1,5 +1,0 @@
-flutter_launcher_icons:
-  android: "ic_launcher_dark"
-  ios: "AppIconAlt"
-  image_path: "assets/branding/selune_app_icon_dark.png"
-  remove_alpha_ios: true

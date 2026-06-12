@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/composition/app_providers.dart' as app_providers;
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
@@ -17,8 +18,12 @@ import '../../../app/widgets/app_empty_state_card.dart';
 import '../../../app/widgets/app_task_bottom_sheet.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/platform/app_platform_capabilities.dart';
+import '../../../core/auth/auth_event_bus.dart';
+import '../../../core/auth/auth_session.dart';
 import '../../../core/logging/app_logger.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/source_access/source_access_provider.dart';
+import '../../auth/providers.dart' as auth_providers;
 import '../../source/application/external_import_catalog.dart';
 import '../application/advanced_theme_provider.dart';
 import '../application/book_source_import_payload.dart';
@@ -32,6 +37,26 @@ final _privateBookSourceSearchKeywordProvider =
       return '';
     });
 
+final _privateBookSourcesAuthSessionProvider =
+    FutureProvider.autoDispose<AuthSession?>((ref) async {
+      late final StreamSubscription<AuthEvent> subscription;
+      subscription = ref.watch(app_providers.appAuthEventStreamProvider).listen(
+        (_) {
+          ref.invalidateSelf();
+        },
+      );
+      ref.onDispose(() {
+        unawaited(subscription.cancel());
+      });
+
+      final session =
+          await ref.watch(auth_providers.authSessionStoreProvider).getSession();
+      if (session == null || !session.isValid) {
+        return null;
+      }
+      return session;
+    });
+
 enum _PrivateSourceAction { test, submit, edit, delete }
 
 enum _BookSourceImportMethod { url, file, paste }
@@ -43,11 +68,11 @@ class PrivateBookSourcesPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final selectedGroupId = ref.watch(selectedPrivateBookSourceGroupProvider);
-    final listAsync = ref.watch(privateBookSourcesProvider(selectedGroupId));
-    final groupsAsync = ref.watch(privateBookSourceGroupsProvider);
-    final quotaAsync = ref.watch(sourceQuotaProvider);
-    final searchKeyword = ref.watch(_privateBookSourceSearchKeywordProvider);
+    final authSessionAsync = ref.watch(_privateBookSourcesAuthSessionProvider);
+    final authenticated = authSessionAsync.maybeWhen(
+      data: (session) => session?.isValid ?? false,
+      orElse: () => false,
+    );
     final activeAdvancedTheme =
         ref.watch(activeAdvancedThemeProvider).valueOrNull;
     final backdrop = resolveAdvancedThemeBackdrop(
@@ -56,10 +81,112 @@ class PrivateBookSourcesPage extends ConsumerWidget {
     );
     final metrics = AppAdaptiveMetrics.of(context);
     final horizontal = metrics.pagePadding;
-    final routeTopBar = _buildRouteTopBar(context, ref);
+    final routeTopBar = _buildRouteTopBar(
+      context,
+      ref,
+      authenticated: authenticated,
+    );
     final topInset =
         MediaQuery.paddingOf(context).top + routeTopBar.preferredSize.height;
     final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+    final contentChildren = authSessionAsync.when(
+      data: (session) {
+        if (session == null || !session.isValid) {
+          return <Widget>[
+            _LoginRequiredCard(onLogin: () => context.push('/auth')),
+          ];
+        }
+        final selectedGroupId = ref.watch(
+          selectedPrivateBookSourceGroupProvider,
+        );
+        final listAsync = ref.watch(
+          privateBookSourcesProvider(selectedGroupId),
+        );
+        final groupsAsync = ref.watch(privateBookSourceGroupsProvider);
+        final quotaAsync = ref.watch(sourceQuotaProvider);
+        final searchKeyword = ref.watch(
+          _privateBookSourceSearchKeywordProvider,
+        );
+        return <Widget>[
+          _PrivateSourceToolbar(
+            selectedGroupId: selectedGroupId,
+            groupsAsync: groupsAsync,
+            onGroupSelected: (groupId) {
+              ref.read(selectedPrivateBookSourceGroupProvider.notifier).state =
+                  groupId;
+            },
+            onRetry: () => ref.invalidate(privateBookSourceGroupsProvider),
+          ),
+          SizedBox(height: metrics.contentGap),
+          quotaAsync.when(
+            data: (quota) => _QuotaCard(quota: quota),
+            loading: () => const _LoadingCard(message: '正在读取额度'),
+            error:
+                (error, _) => _ErrorCard(
+                  title: '额度读取失败',
+                  message: _messageOf(error),
+                  onRetry: () => ref.invalidate(sourceQuotaProvider),
+                ),
+          ),
+          SizedBox(height: metrics.contentGap),
+          listAsync.when(
+            data: (result) {
+              if (result.items.isEmpty) {
+                return _EmptySourcesCard(
+                  onCreate: () => unawaited(_openCreateForm(context, ref)),
+                );
+              }
+              final visibleItems = _filterPrivateSources(
+                result.items,
+                searchKeyword,
+              );
+              if (visibleItems.isEmpty) {
+                return _FilterEmptySourcesCard(
+                  keyword: searchKeyword,
+                  onClear:
+                      () =>
+                          ref
+                              .read(
+                                _privateBookSourceSearchKeywordProvider
+                                    .notifier,
+                              )
+                              .state = '',
+                );
+              }
+              return Column(
+                children: <Widget>[
+                  for (final item in visibleItems) ...<Widget>[
+                    _PrivateSourceTile(
+                      item: item,
+                      onEdit:
+                          () => unawaited(_openForm(context, ref, item: item)),
+                      onDelete:
+                          () => unawaited(_deleteSource(context, ref, item)),
+                      onTest: () => unawaited(_testSource(context, ref, item)),
+                      onSubmit:
+                          () => unawaited(_submitSource(context, ref, item)),
+                    ),
+                    SizedBox(height: metrics.contentGap),
+                  ],
+                ],
+              );
+            },
+            loading: () => const _LoadingCard(message: '正在加载书源'),
+            error:
+                (error, _) => _ErrorCard(
+                  title: '书源加载失败',
+                  message: _messageOf(error),
+                  onRetry: () => ref.invalidate(privateBookSourcesProvider),
+                ),
+          ),
+        ];
+      },
+      loading: () => const <Widget>[_LoadingCard(message: '正在检查登录状态')],
+      error:
+          (error, _) => <Widget>[
+            _LoginRequiredCard(onLogin: () => context.push('/auth')),
+          ],
+    );
 
     return PopScope<void>(
       canPop: context.canPop(),
@@ -92,95 +219,7 @@ class PrivateBookSourcesPage extends ConsumerWidget {
                     horizontal,
                     bottomInset + metrics.sectionGap,
                   ),
-                  children: <Widget>[
-                    _PrivateSourceToolbar(
-                      selectedGroupId: selectedGroupId,
-                      groupsAsync: groupsAsync,
-                      onGroupSelected: (groupId) {
-                        ref
-                            .read(
-                              selectedPrivateBookSourceGroupProvider.notifier,
-                            )
-                            .state = groupId;
-                      },
-                      onRetry:
-                          () => ref.invalidate(privateBookSourceGroupsProvider),
-                    ),
-                    SizedBox(height: metrics.contentGap),
-                    quotaAsync.when(
-                      data: (quota) => _QuotaCard(quota: quota),
-                      loading: () => const _LoadingCard(message: '正在读取额度'),
-                      error:
-                          (error, _) => _ErrorCard(
-                            title: '额度读取失败',
-                            message: _messageOf(error),
-                            onRetry: () => ref.invalidate(sourceQuotaProvider),
-                          ),
-                    ),
-                    SizedBox(height: metrics.contentGap),
-                    listAsync.when(
-                      data: (result) {
-                        if (result.items.isEmpty) {
-                          return _EmptySourcesCard(
-                            onCreate:
-                                () => unawaited(_openCreateForm(context, ref)),
-                          );
-                        }
-                        final visibleItems = _filterPrivateSources(
-                          result.items,
-                          searchKeyword,
-                        );
-                        if (visibleItems.isEmpty) {
-                          return _FilterEmptySourcesCard(
-                            keyword: searchKeyword,
-                            onClear:
-                                () =>
-                                    ref
-                                        .read(
-                                          _privateBookSourceSearchKeywordProvider
-                                              .notifier,
-                                        )
-                                        .state = '',
-                          );
-                        }
-                        return Column(
-                          children: <Widget>[
-                            for (final item in visibleItems) ...<Widget>[
-                              _PrivateSourceTile(
-                                item: item,
-                                onEdit:
-                                    () => unawaited(
-                                      _openForm(context, ref, item: item),
-                                    ),
-                                onDelete:
-                                    () => unawaited(
-                                      _deleteSource(context, ref, item),
-                                    ),
-                                onTest:
-                                    () => unawaited(
-                                      _testSource(context, ref, item),
-                                    ),
-                                onSubmit:
-                                    () => unawaited(
-                                      _submitSource(context, ref, item),
-                                    ),
-                              ),
-                              SizedBox(height: metrics.contentGap),
-                            ],
-                          ],
-                        );
-                      },
-                      loading: () => const _LoadingCard(message: '正在加载书源'),
-                      error:
-                          (error, _) => _ErrorCard(
-                            title: '书源加载失败',
-                            message: _messageOf(error),
-                            onRetry:
-                                () =>
-                                    ref.invalidate(privateBookSourcesProvider),
-                          ),
-                    ),
-                  ],
+                  children: contentChildren,
                 ),
               ),
             ),
@@ -192,38 +231,45 @@ class PrivateBookSourcesPage extends ConsumerWidget {
 
   static PreferredSizeWidget _buildRouteTopBar(
     BuildContext context,
-    WidgetRef ref,
-  ) {
+    WidgetRef ref, {
+    required bool authenticated,
+  }) {
     return buildMineRouteTopBar(
       context: context,
       title: '我的书源',
       subtitle: '私人书源与共享审核',
-      actions: <AdaptiveOverflowToolbarItem>[
-        AdaptiveOverflowToolbarItem(
-          icon: Icons.library_books_outlined,
-          label: '分组',
-          priority: 9,
-          onPressed: () => unawaited(_openGroupManager(context, ref)),
-        ),
-        AdaptiveOverflowToolbarItem(
-          icon: Icons.add_rounded,
-          label: '新增书源',
-          priority: 10,
-          onPressed: () => unawaited(_openCreateForm(context, ref)),
-        ),
-      ],
-      mobileActions: <Widget>[
-        IconButton(
-          tooltip: '分组',
-          onPressed: () => unawaited(_openGroupManager(context, ref)),
-          icon: const Icon(Icons.library_books_outlined),
-        ),
-        IconButton(
-          tooltip: '新增书源',
-          onPressed: () => unawaited(_openCreateForm(context, ref)),
-          icon: const Icon(Icons.add_rounded),
-        ),
-      ],
+      actions:
+          authenticated
+              ? <AdaptiveOverflowToolbarItem>[
+                AdaptiveOverflowToolbarItem(
+                  icon: Icons.folder_copy_outlined,
+                  label: '分组',
+                  priority: 9,
+                  onPressed: () => unawaited(_openGroupManager(context, ref)),
+                ),
+                AdaptiveOverflowToolbarItem(
+                  icon: Icons.add_rounded,
+                  label: '新增书源',
+                  priority: 10,
+                  onPressed: () => unawaited(_openCreateForm(context, ref)),
+                ),
+              ]
+              : const <AdaptiveOverflowToolbarItem>[],
+      mobileActions:
+          authenticated
+              ? <Widget>[
+                IconButton(
+                  tooltip: '分组',
+                  onPressed: () => unawaited(_openGroupManager(context, ref)),
+                  icon: const Icon(Icons.folder_copy_outlined),
+                ),
+                IconButton(
+                  tooltip: '新增书源',
+                  onPressed: () => unawaited(_openCreateForm(context, ref)),
+                  icon: const Icon(Icons.add_rounded),
+                ),
+              ]
+              : const <Widget>[],
     );
   }
 
@@ -244,9 +290,13 @@ class PrivateBookSourcesPage extends ConsumerWidget {
   }
 
   static void _refresh(WidgetRef ref) {
+    final selectedGroupId = ref.read(selectedPrivateBookSourceGroupProvider);
     ref.invalidate(privateBookSourcesProvider);
+    ref.invalidate(privateBookSourcesProvider(selectedGroupId));
+    ref.invalidate(privateBookSourcesProvider(null));
     ref.invalidate(privateBookSourceGroupsProvider);
     ref.invalidate(sourceQuotaProvider);
+    ref.invalidate(sourceAccessScopeProvider);
   }
 
   static Future<void> _openCreateForm(
@@ -1361,14 +1411,21 @@ class _PrivateSourceGroupManagerSheetState
                   message: _saving ? '保存中' : '新增分组',
                   child: SizedBox.square(
                     dimension: 48,
-                    child: FilledButton(
+                    child: OutlinedButton(
                       onPressed:
                           _saving ? null : () => unawaited(_createGroup()),
-                      style: FilledButton.styleFrom(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: colorScheme.primary,
+                        backgroundColor: Colors.transparent,
                         fixedSize: const Size.square(48),
                         minimumSize: const Size.square(48),
                         padding: EdgeInsets.zero,
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        side: BorderSide(
+                          color: colorScheme.outlineVariant.withValues(
+                            alpha: 0.62,
+                          ),
+                        ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
                         ),
@@ -1379,7 +1436,7 @@ class _PrivateSourceGroupManagerSheetState
                                 dimension: 18,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  color: colorScheme.onPrimary,
+                                  color: colorScheme.primary,
                                 ),
                               )
                               : const Icon(Icons.add_rounded, size: 26),
@@ -1612,6 +1669,9 @@ class _PrivateSourceGroupManagerSheetState
         ref.read(selectedPrivateBookSourceGroupProvider.notifier).state = null;
       }
       _markChanged();
+      await ref
+          .refresh(privateBookSourceGroupsProvider.future)
+          .then<void>((_) {});
       _showMessage('分组已删除');
     } catch (error) {
       _showMessage(_messageOf(error));
@@ -1718,7 +1778,11 @@ class _PrivateSourceTile extends StatelessWidget {
                       item.visibility,
                       colorScheme,
                     ).withValues(alpha: 0.12),
-                    _reviewStatusColor(item.reviewStatus, item.visibility, colorScheme),
+                    _reviewStatusColor(
+                      item.reviewStatus,
+                      item.visibility,
+                      colorScheme,
+                    ),
                   ),
                   if (testStatus.isNotEmpty || testMessage.isNotEmpty)
                     _buildChip(
@@ -1768,7 +1832,11 @@ class _PrivateSourceTile extends StatelessWidget {
     );
   }
 
-  Color _reviewStatusColor(String status, String visibility, ColorScheme colorScheme) {
+  Color _reviewStatusColor(
+    String status,
+    String visibility,
+    ColorScheme colorScheme,
+  ) {
     // 私有书源使用主题色
     if (visibility == 'private') {
       return colorScheme.primary;
@@ -3590,6 +3658,23 @@ class _EmptySourcesCard extends StatelessWidget {
       description: '可以导入自己的 Legado JSON 书源，并按私人分组维护。',
       actionLabel: '新增书源',
       onAction: onCreate,
+    );
+  }
+}
+
+class _LoginRequiredCard extends StatelessWidget {
+  const _LoginRequiredCard({required this.onLogin});
+
+  final VoidCallback onLogin;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppEmptyStateCard(
+      icon: Icons.lock_outline_rounded,
+      title: '请登录后查看',
+      description: '私人书源、分组和额度会跟随账号同步，登录后即可管理。',
+      actionLabel: '去登录',
+      onAction: onLogin,
     );
   }
 }

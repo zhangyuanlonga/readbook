@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shuxiang_reading_next/app/composition/app_providers.dart';
@@ -10,9 +12,12 @@ import 'package:shuxiang_reading_next/core/auth/auth_session_store.dart';
 import 'package:shuxiang_reading_next/core/membership/membership_access_service.dart';
 import 'package:shuxiang_reading_next/core/membership/membership_entitlement.dart';
 import 'package:shuxiang_reading_next/core/membership/membership_service.dart';
+import 'package:shuxiang_reading_next/core/storage/managed_asset_store.dart';
 import 'package:shuxiang_reading_next/core/user/user_profile.dart';
 import 'package:shuxiang_reading_next/core/user/user_profile_service.dart';
 import 'package:shuxiang_reading_next/features/auth/providers.dart';
+import 'package:shuxiang_reading_next/features/mine/application/advanced_theme_provider.dart';
+import 'package:shuxiang_reading_next/features/mine/application/advanced_theme_service.dart';
 import 'package:shuxiang_reading_next/features/mine/providers.dart';
 import 'package:shuxiang_reading_next/features/reader/application/reader_dependencies_provider.dart';
 import 'package:shuxiang_reading_next/features/search/providers.dart';
@@ -22,6 +27,7 @@ import '../../test_utils/fake_auth_session_secret_store.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  const pathProviderChannel = MethodChannel('plugins.flutter.io/path_provider');
 
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
@@ -174,6 +180,78 @@ void main() {
       expect(access.planType, 'lifetime');
     });
 
+    test(
+      'clears active advanced theme when membership access is revoked',
+      () async {
+        final pathProviderDocsDir = await Directory.systemTemp.createTemp(
+          'app_providers_path_docs_',
+        );
+        final pathProviderSupportDir = await Directory.systemTemp.createTemp(
+          'app_providers_path_support_',
+        );
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(pathProviderChannel, (call) async {
+              if (call.method == 'getApplicationDocumentsDirectory') {
+                return pathProviderDocsDir.path;
+              }
+              if (call.method == 'getApplicationSupportDirectory') {
+                return pathProviderSupportDir.path;
+              }
+              return null;
+            });
+        addTearDown(() async {
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+              .setMockMethodCallHandler(pathProviderChannel, null);
+          if (pathProviderDocsDir.existsSync()) {
+            await pathProviderDocsDir.delete(recursive: true);
+          }
+          if (pathProviderSupportDir.existsSync()) {
+            await pathProviderSupportDir.delete(recursive: true);
+          }
+        });
+        final prefs = await SharedPreferences.getInstance();
+        final sessionStore = AuthSessionStore(
+          preferences: prefs,
+          secretStore: FakeAuthSessionSecretStore(),
+        );
+        await sessionStore.saveSession(
+          const AuthSession(
+            accessToken: 'access_expired',
+            userId: 'expired_member',
+            membershipActive: false,
+            vipLevel: 'normal',
+            vipStatus: 'expired',
+          ),
+        );
+        final membershipAccessService = MembershipAccessService(
+          sessionStore: sessionStore,
+          membershipService: _FailingMembershipService(),
+          userProfileService: _FailingUserProfileService(),
+        );
+        final advancedThemeService = await _createAdvancedThemeService(prefs);
+        await advancedThemeService.saveActiveThemeId('theme_to_clear');
+        final container = ProviderContainer(
+          overrides: <Override>[
+            appMembershipAccessServiceProvider.overrideWithValue(
+              membershipAccessService,
+            ),
+            advancedThemeServiceProvider.overrideWithValue(
+              advancedThemeService,
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        final access = await container.read(
+          appMembershipAccessSnapshotProvider.future,
+        );
+
+        expect(access.hasThemeCustom, isFalse);
+        expect(await advancedThemeService.loadActiveThemeId(), isNull);
+        expect(container.read(activeAdvancedThemeIdProvider), isNull);
+      },
+    );
+
     test('membership snapshot refreshes after account events', () async {
       final prefs = await SharedPreferences.getInstance();
       final sessionStore = AuthSessionStore(
@@ -319,4 +397,30 @@ class _FailingUserProfileService extends UserProfileService {
   }) async {
     throw StateError('profile network disabled in smoke test');
   }
+}
+
+Future<AdvancedThemeService> _createAdvancedThemeService(
+  SharedPreferences prefs,
+) async {
+  final documentsDir = await Directory.systemTemp.createTemp(
+    'app_providers_theme_docs_',
+  );
+  final supportDir = await Directory.systemTemp.createTemp(
+    'app_providers_theme_support_',
+  );
+  addTearDown(() async {
+    if (documentsDir.existsSync()) {
+      await documentsDir.delete(recursive: true);
+    }
+    if (supportDir.existsSync()) {
+      await supportDir.delete(recursive: true);
+    }
+  });
+  return AdvancedThemeService(
+    preferences: prefs,
+    assetStore: ManagedAssetStore(
+      documentsDirectoryProvider: () async => documentsDir,
+      supportDirectoryProvider: () async => supportDir,
+    ),
+  );
 }

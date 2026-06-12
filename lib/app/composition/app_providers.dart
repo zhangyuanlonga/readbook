@@ -22,6 +22,7 @@ import '../../features/auth/providers.dart' as auth_providers;
 import '../../features/source/application/external_source_import_bridge.dart';
 import '../../features/source/application/source_health_service.dart';
 import '../../features/book/application/book_presentation_query_service.dart';
+import '../../features/mine/application/advanced_theme_provider.dart';
 import '../../features/mine/application/private_book_source_session_listener.dart';
 import '../../features/mine/providers.dart' as mine_providers;
 import '../../features/reader/application/reader_session_listener.dart';
@@ -103,7 +104,7 @@ final appMembershipAccessServiceProvider = Provider<MembershipAccessService>((
 });
 
 final appMembershipAccessSnapshotProvider =
-    FutureProvider<MembershipAccessSnapshot>((ref) {
+    FutureProvider<MembershipAccessSnapshot>((ref) async {
       // 账号事件是全平台会话变化的唯一刷新信号。统一快照在这里失效后，
       // 搜索、高级主题、阅读器等后续接入方不会因为各自缓存而读到旧会员状态。
       late final StreamSubscription<AuthEvent> subscription;
@@ -113,8 +114,29 @@ final appMembershipAccessSnapshotProvider =
       ref.onDispose(() {
         unawaited(subscription.cancel());
       });
-      return ref.watch(appMembershipAccessServiceProvider).fetchCurrentAccess();
+      final snapshot =
+          await ref
+              .watch(appMembershipAccessServiceProvider)
+              .fetchCurrentAccess();
+      await _clearActiveAdvancedThemeWhenAccessRevoked(ref, snapshot);
+      return snapshot;
     });
+
+Future<void> _clearActiveAdvancedThemeWhenAccessRevoked(
+  Ref ref,
+  MembershipAccessSnapshot snapshot,
+) async {
+  if (!snapshot.hasExplicitMembershipState || snapshot.hasThemeCustom) {
+    return;
+  }
+  final activeThemeId =
+      await ref.read(advancedThemeServiceProvider).loadActiveThemeId();
+  if (activeThemeId == null || activeThemeId.trim().isEmpty) {
+    return;
+  }
+  await ref.read(activeAdvancedThemeIdProvider.notifier).disable();
+  ref.read(advancedThemeRevisionProvider.notifier).markChanged();
+}
 
 final appAuthAccountLifecycleCoordinatorProvider =
     Provider<AuthAccountLifecycleCoordinator>((ref) {

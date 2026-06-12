@@ -49,7 +49,7 @@ const PreferenceKey<bool> appShellNavigationDiscoverPreference =
 const PreferenceKey<bool> appShellNavigationStatsPreference =
     PreferenceKey<bool>(
       appShellNavigationStatsPreferenceKey,
-      defaultValue: true,
+      defaultValue: false,
     );
 
 final appThemePreferencesServiceProvider = Provider<AppThemePreferencesService>(

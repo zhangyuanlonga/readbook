@@ -59,11 +59,15 @@ docs/
 
 ## 🎨 UI/UX 设计体系（ui_ux/）
 
+**📚 入口文档：** [UI/UX 设计规范](ui_ux/README.md) - 设计体系索引和快速参考
+
+### 核心文档
+
+- [Flutter 多端适配设计规范](ui_ux/multiplatform_adaptive_design.md) ⭐ **Flutter必读**：响应式断点、平台适配、自适应组件
 - [UI/UX 全面审查标准与优化方向](ui_ux/ui_ux_review_standards_and_optimization.md) ⭐ **可执行清单**：5大审查维度、全页面审查模板
 - [UI/UX 设计体系总结（基于实际代码）](ui_ux/ui_ux_design_system_actual.md) - 实际代码审计：圆角、间距、Material 3
-- [UI/UX 改进实施计划](ui_ux/ui_ux_implementation_plan.md) - 4 阶段改进计划、推荐依赖（shimmer、lottie）
 - [交互规范与动效指南](ui_ux/ui_ux_interaction_and_animation_guide.md) - 操作反馈、动画标准
-- [高级主题体验优化方案](ui_ux/advanced_theme_experience_optimization.md) - **核心付费功能**：主题市场、付费转化
+- [UI/UX 改进实施计划](ui_ux/ui_ux_implementation_plan.md) - ⚠️ 暂缓执行：4阶段改进计划
 
 ---
 
@@ -79,6 +83,7 @@ docs/
 
 ### 阅读器（features/reader/）
 
+- [高级主题体验优化方案](features/reader/advanced_theme_experience_optimization.md) - **核心付费功能**：主题市场、付费转化
 - [阅读器自动阅读执行计划](features/reader/reader_auto_read_execution_plan_2026-05-24.md)
 - [阅读器本地内容重构执行计划](features/reader/reader_local_content_refactor_execution_plan_2026-05-21.md)
 - [阅读器多模态架构重构执行计划](features/reader/reader_multimodal_architecture_refactor_execution_plan_2026-05-25.md)
@@ -148,9 +153,10 @@ docs/
 - [用户状态与 API 治理计划](governance/user_session_api_governance_plan.md) - API 治理
 
 ### UI/UX 设计
+- [UI/UX 设计规范](ui_ux/README.md) - 设计体系入口
+- [多端适配规范](ui_ux/multiplatform_adaptive_design.md) ⭐ **Flutter必读** - 响应式断点、平台适配
 - [全面审查标准](ui_ux/ui_ux_review_standards_and_optimization.md) - 审查清单
 - [设计体系总结](ui_ux/ui_ux_design_system_actual.md) - 设计规范
-- [实施计划](ui_ux/ui_ux_implementation_plan.md) - 改进计划
 
 ### 进行中功能
 - [书源导入优化](features/book_source/book_source_import_improvement_plan.md) - 正在开发
@@ -164,13 +170,13 @@ docs/
 
 ## 📊 文档统计
 
-- **总文档数：** 59 个
+- **总文档数：** 61 个（+1个多端适配文档）
 - **核心规范：** 7 个
 - **治理计划：** 9 个
-- **UI/UX 设计：** 5 个
-- **功能文档：** 17 个
+- **UI/UX 设计：** 6 个（+1个多端适配）
+- **功能文档：** 18 个
 - **运维文档：** 3 个
-- **归档文档：** 15 个
+- **归档文档：** 16 个
 - **其他：** 3 个
 
 ---
@@ -178,11 +184,22 @@ docs/
 ## 🔄 文档更新记录
 
 ### 2026-06-11
-- ✅ 删除 6 个无用/误导文档
-- ✅ 整理文档目录结构（分类到子目录）
-- ✅ 归档 15 个已完成里程碑文档
-- ✅ 新增书源导入功能文档
-- ✅ 更新 UI/UX 实施计划（恢复推荐依赖）
+- ✅ 项目文档整理与清理
+  - 删除 10 个遗留配置文件（.workflow/、多余icon配置、lib/src/）
+  - 新增 CLAUDE.md 项目指南
+  - 新增 scripts/README.md 构建脚本文档
+- ✅ UI/UX 文档整理与补充
+  - 移动高级主题文档到 features/reader/
+  - 归档审查报告到 archive/
+  - 新增 ui_ux/README.md 入口文档
+  - 🆕 新增 multiplatform_adaptive_design.md Flutter多端适配规范
+  - 更新实施计划状态（标注"暂缓执行"）
+- ✅ 历史整理记录
+  - 删除 6 个无用/误导文档
+  - 整理文档目录结构（分类到子目录）
+  - 归档 15 个已完成里程碑文档
+  - 新增书源导入功能文档
+  - 更新 UI/UX 实施计划（恢复推荐依赖）
 
 ### 2026-06-10
 - 新增 UI/UX 设计体系文档
