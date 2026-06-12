@@ -4689,82 +4689,91 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         .clamp(0.0, 1.0);
     final canNavigateChapters = _chapters.isNotEmpty;
 
-    return Row(
-      children: [
-        IconButton(
-          visualDensity: VisualDensity.compact,
-          splashRadius: 20,
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 38, minHeight: 34),
-          tooltip: '上一章',
-          onPressed:
-              canNavigateChapters
-                  ? () =>
-                      unawaited(_jumpToAdjacentReadableChapter(forward: false))
-                  : null,
-          icon: Icon(Icons.skip_previous_rounded, color: colors.text, size: 21),
-        ),
-        Expanded(
-          child: SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              trackHeight: 3,
-              overlayShape: SliderComponentShape.noOverlay,
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-              activeTrackColor: colors.text,
-              inactiveTrackColor: colors.divider.withValues(alpha: 0.34),
-              thumbColor: colors.text,
-            ),
-            child: Slider(
-              min: 0,
-              max: 1,
-              divisions: 100,
-              value: progressValue,
-              onChangeStart:
-                  _hasVisibleReaderContent
-                      ? (_) => _suspendOverlayAutoHide()
-                      : null,
-              onChanged:
-                  _hasVisibleReaderContent
-                      ? (value) {
-                        _touchOverlayControls();
-                        setState(() {
-                          _bottomOverlayDraftProgressRatio = value;
-                        });
-                      }
-                      : null,
-              onChangeEnd:
-                  _hasVisibleReaderContent
-                      ? (value) {
-                        setState(() {
-                          _bottomOverlayDraftProgressRatio = null;
-                        });
-                        final request = _navigationEntryResolver
-                            .resolveProgressSelection(scrollRatio: value);
-                        _restoreScrollPosition(
-                          request.initialScrollRatio ?? value,
-                        );
-                        _syncActiveReadingRecordSessionProgress(ratio: value);
-                        _scheduleProgressSave();
-                        _resumeOverlayAutoHide();
-                      }
-                      : null,
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: (_) => _markReaderTapHandledByChild(),
+      child: Row(
+        children: [
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            splashRadius: 20,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 44),
+            tooltip: '上一章',
+            onPressed:
+                canNavigateChapters
+                    ? () => unawaited(
+                      _jumpToAdjacentReadableChapter(forward: false),
+                    )
+                    : null,
+            icon: Icon(
+              Icons.skip_previous_rounded,
+              color: colors.text,
+              size: 21,
             ),
           ),
-        ),
-        IconButton(
-          visualDensity: VisualDensity.compact,
-          splashRadius: 20,
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 38, minHeight: 34),
-          tooltip: '下一章',
-          onPressed:
-              canNavigateChapters
-                  ? () =>
-                      unawaited(_jumpToAdjacentReadableChapter(forward: true))
-                  : null,
-          icon: Icon(Icons.skip_next_rounded, color: colors.text, size: 21),
-        ),
-      ],
+          Expanded(
+            child: SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                trackHeight: 3,
+                overlayShape: SliderComponentShape.noOverlay,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                activeTrackColor: colors.text,
+                inactiveTrackColor: colors.divider.withValues(alpha: 0.34),
+                thumbColor: colors.text,
+              ),
+              child: Slider(
+                min: 0,
+                max: 1,
+                divisions: 100,
+                value: progressValue,
+                onChangeStart:
+                    _hasVisibleReaderContent
+                        ? (_) => _suspendOverlayAutoHide()
+                        : null,
+                onChanged:
+                    _hasVisibleReaderContent
+                        ? (value) {
+                          _touchOverlayControls();
+                          setState(() {
+                            _bottomOverlayDraftProgressRatio = value;
+                          });
+                        }
+                        : null,
+                onChangeEnd:
+                    _hasVisibleReaderContent
+                        ? (value) {
+                          setState(() {
+                            _bottomOverlayDraftProgressRatio = null;
+                          });
+                          final request = _navigationEntryResolver
+                              .resolveProgressSelection(scrollRatio: value);
+                          _restoreScrollPosition(
+                            request.initialScrollRatio ?? value,
+                          );
+                          _syncActiveReadingRecordSessionProgress(ratio: value);
+                          _scheduleProgressSave();
+                          _resumeOverlayAutoHide();
+                        }
+                        : null,
+              ),
+            ),
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            splashRadius: 20,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 44),
+            tooltip: '下一章',
+            onPressed:
+                canNavigateChapters
+                    ? () =>
+                        unawaited(_jumpToAdjacentReadableChapter(forward: true))
+                    : null,
+            icon: Icon(Icons.skip_next_rounded, color: colors.text, size: 21),
+          ),
+        ],
+      ),
     );
   }
 

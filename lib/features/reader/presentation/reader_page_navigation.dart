@@ -17,21 +17,80 @@ extension _ReaderPageNavigationExtension on _ReaderPageState {
     double? initialScrollRatio,
   }) async {
     final sessionState = _currentTextSessionState();
+    final fallbackCurrentIndex =
+        _currentIndex == null ? _resolveCurrentIndex(_chapters) : null;
+    final currentChapterIndex =
+        sessionState?.currentChapterIndex ??
+        _currentIndex ??
+        fallbackCurrentIndex;
+    if (_currentIndex == null && currentChapterIndex != null) {
+      _currentIndex = currentChapterIndex;
+    }
+    _logger.info(
+      'Reader adjacent chapter navigation',
+      context: <String, Object?>{
+        'chain': 'reader_chapter_navigation',
+        'step': 'adjacent_request',
+        'direction': forward ? 'next' : 'previous',
+        'chapterId': _chapterId,
+        'chapterUrl': _chapterUrl,
+        'currentIndex': _currentIndex,
+        'sessionIndex': sessionState?.currentChapterIndex,
+        'fallbackIndex': fallbackCurrentIndex,
+        'resolvedCurrentIndex': currentChapterIndex,
+        'chapterCount': _chapters.length,
+      },
+    );
     final decision = _chapterFlow.resolveAdjacentChapter(
       chapters: _chapters,
-      currentChapterIndex: sessionState?.currentChapterIndex ?? _currentIndex,
+      currentChapterIndex: currentChapterIndex,
       forward: forward,
       initialScrollRatio: initialScrollRatio,
     );
     if (decision.type == ReaderAdjacentChapterDecisionType.noCurrent) {
+      if (showBoundaryHint) {
+        _showMessage('当前章节定位失败，请从目录重新进入。');
+      }
+      _logger.warn(
+        'Reader adjacent chapter navigation rejected',
+        context: <String, Object?>{
+          'chain': 'reader_chapter_navigation',
+          'step': 'no_current',
+          'direction': forward ? 'next' : 'previous',
+          'chapterId': _chapterId,
+          'chapterCount': _chapters.length,
+        },
+      );
       return false;
     }
     if (decision.type == ReaderAdjacentChapterDecisionType.boundary) {
       if (showBoundaryHint) {
         _showChapterBoundaryHint(isFirst: decision.isFirstBoundary);
       }
+      _logger.info(
+        'Reader adjacent chapter navigation boundary',
+        context: <String, Object?>{
+          'chain': 'reader_chapter_navigation',
+          'step': 'boundary',
+          'direction': forward ? 'next' : 'previous',
+          'currentIndex': currentChapterIndex,
+          'chapterCount': _chapters.length,
+          'isFirstBoundary': decision.isFirstBoundary,
+        },
+      );
       return false;
     }
+    _logger.info(
+      'Reader adjacent chapter navigation jump',
+      context: <String, Object?>{
+        'chain': 'reader_chapter_navigation',
+        'step': 'jump',
+        'direction': forward ? 'next' : 'previous',
+        'fromIndex': currentChapterIndex,
+        'targetIndex': decision.targetChapterIndex,
+        'initialScrollRatio': decision.initialScrollRatio,
+      },
+    );
     await _jumpTo(
       decision.targetChapterIndex!,
       initialScrollRatio: decision.initialScrollRatio,

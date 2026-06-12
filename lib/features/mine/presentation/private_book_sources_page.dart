@@ -57,7 +57,9 @@ final _privateBookSourcesAuthSessionProvider =
       return session;
     });
 
-enum _PrivateSourceAction { test, submit, edit, delete }
+enum _PrivateSourceAction { detail, test, submit, edit, delete }
+
+enum _PrivateSourceDetailAction { edit, test }
 
 enum _BookSourceImportMethod { url, file, paste }
 
@@ -158,6 +160,9 @@ class PrivateBookSourcesPage extends ConsumerWidget {
                   for (final item in visibleItems) ...<Widget>[
                     _PrivateSourceTile(
                       item: item,
+                      onDetail:
+                          () =>
+                              unawaited(_openDetail(context, ref, item: item)),
                       onEdit:
                           () => unawaited(_openForm(context, ref, item: item)),
                       onDelete:
@@ -284,6 +289,9 @@ class PrivateBookSourcesPage extends ConsumerWidget {
       padding: EdgeInsets.zero,
       builder: (context) => const _PrivateSourceGroupManagerSheet(),
     );
+    if (!context.mounted) {
+      return;
+    }
     if (changed == true) {
       _refresh(ref);
     }
@@ -338,6 +346,33 @@ class PrivateBookSourcesPage extends ConsumerWidget {
       ref.read(_privateBookSourceSearchKeywordProvider.notifier).state = '';
       ref.read(selectedPrivateBookSourceGroupProvider.notifier).state = null;
       _refresh(ref);
+    }
+  }
+
+  static Future<void> _openDetail(
+    BuildContext context,
+    WidgetRef ref, {
+    required PrivateBookSourceItem item,
+  }) async {
+    final action = await showAdaptiveActionSurface<_PrivateSourceDetailAction>(
+      context: context,
+      maxWidth: 560,
+      maxHeightFactor: 0.86,
+      padding: EdgeInsets.zero,
+      builder: (context) => _PrivateSourceDetailSheet(item: item),
+    );
+    if (!context.mounted) {
+      return;
+    }
+    switch (action) {
+      case _PrivateSourceDetailAction.edit:
+        await _openForm(context, ref, item: item);
+        return;
+      case _PrivateSourceDetailAction.test:
+        await _testSource(context, ref, item);
+        return;
+      case null:
+        return;
     }
   }
 
@@ -564,7 +599,7 @@ class PrivateBookSourcesPage extends ConsumerWidget {
     final config = await showAdaptiveActionSurface<_SourceTestConfig>(
       context: context,
       maxWidth: 560,
-      maxHeightFactor: 0.86,
+      maxHeightFactor: 0.7,
       padding: EdgeInsets.zero,
       builder: (context) => _SourceTestConfigSheet(item: item),
     );
@@ -589,7 +624,7 @@ class PrivateBookSourcesPage extends ConsumerWidget {
         await showAdaptiveActionSurface<void>(
           context: context,
           maxWidth: 680,
-          maxHeightFactor: 0.9,
+          maxHeightFactor: 0.7,
           padding: EdgeInsets.zero,
           builder: (context) => _SourceCheckReportSheet(report: report),
         );
@@ -1631,6 +1666,9 @@ class _PrivateSourceGroupManagerSheetState
       builder: (context) => _RenameGroupSurface(controller: controller),
     );
     controller.dispose();
+    if (!mounted) {
+      return;
+    }
     if (name == null || name.isEmpty || name == group.displayName) {
       return;
     }
@@ -1638,9 +1676,18 @@ class _PrivateSourceGroupManagerSheetState
       final updated = await ref
           .read(privateBookSourceServiceProvider)
           .updateGroup(group.id, name);
+      if (!mounted) {
+        return;
+      }
       ref.read(selectedPrivateBookSourceGroupProvider.notifier).state =
           updated.id;
       _markChanged();
+      await ref
+          .refresh(privateBookSourceGroupsProvider.future)
+          .then<void>((_) {});
+      if (!mounted) {
+        return;
+      }
       _showMessage('分组已重命名');
     } catch (error) {
       _showMessage(_messageOf(error));
@@ -1696,6 +1743,7 @@ class _PrivateSourceGroupManagerSheetState
 class _PrivateSourceTile extends StatelessWidget {
   const _PrivateSourceTile({
     required this.item,
+    required this.onDetail,
     required this.onEdit,
     required this.onDelete,
     required this.onTest,
@@ -1703,6 +1751,7 @@ class _PrivateSourceTile extends StatelessWidget {
   });
 
   final PrivateBookSourceItem item;
+  final VoidCallback onDetail;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final VoidCallback onTest;
@@ -1714,13 +1763,15 @@ class _PrivateSourceTile extends StatelessWidget {
     final colorScheme = theme.colorScheme;
     final testStatus = item.lastTestStatus;
     final testMessage = item.lastTestMessage;
+    final normalizationStatus = item.normalizationStatus.trim();
+    final normalizationMessage = item.normalizationError.trim();
 
     return Material(
       color: colorScheme.surfaceContainerLow.withValues(alpha: 0.5),
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: item.visibility == 'shared' ? null : onEdit,
+        onTap: onDetail,
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -1746,6 +1797,7 @@ class _PrivateSourceTile extends StatelessWidget {
                   ),
                   _PrivateSourceMoreButton(
                     item: item,
+                    onDetail: onDetail,
                     onTest: onTest,
                     onSubmit: onSubmit,
                     onEdit: onEdit,
@@ -1784,6 +1836,19 @@ class _PrivateSourceTile extends StatelessWidget {
                       colorScheme,
                     ),
                   ),
+                  if (_showNormalizationChip(normalizationStatus))
+                    _buildChip(
+                      context,
+                      '配置 ${_normalizationLabel(normalizationStatus)}${normalizationMessage.isEmpty ? '' : ' $normalizationMessage'}',
+                      _normalizationStatusColor(
+                        normalizationStatus,
+                        colorScheme,
+                      ).withValues(alpha: 0.12),
+                      _normalizationStatusColor(
+                        normalizationStatus,
+                        colorScheme,
+                      ),
+                    ),
                   if (testStatus.isNotEmpty || testMessage.isNotEmpty)
                     _buildChip(
                       context,
@@ -1858,21 +1923,364 @@ class _PrivateSourceTile extends StatelessWidget {
   Color _testStatusColor(String status, ColorScheme colorScheme) {
     if (status.isEmpty) return colorScheme.onSurfaceVariant;
     switch (status) {
+      case 'passed':
       case 'pass':
       case 'success':
         return Colors.green;
+      case 'failed':
       case 'fail':
       case 'error':
         return Colors.red;
+      case 'unknown':
+      case 'pending':
+        return colorScheme.onSurfaceVariant;
       default:
         return Colors.orange;
     }
+  }
+
+  bool _showNormalizationChip(String status) {
+    return status.isNotEmpty && status != 'done';
+  }
+
+  String _normalizationLabel(String status) {
+    return switch (status) {
+      'pending' => '待规整',
+      'failed' => '配置异常',
+      _ => status,
+    };
+  }
+
+  Color _normalizationStatusColor(String status, ColorScheme colorScheme) {
+    return switch (status) {
+      'failed' => Colors.red,
+      'pending' => Colors.orange,
+      _ => colorScheme.onSurfaceVariant,
+    };
+  }
+}
+
+class _PrivateSourceDetailSheet extends StatelessWidget {
+  const _PrivateSourceDetailSheet({required this.item});
+
+  final PrivateBookSourceItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final metrics = AppAdaptiveMetrics.of(context);
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final normalizationStatus = item.normalizationStatus.trim();
+    final normalizationMessage = item.normalizationError.trim();
+    final testStatus = item.lastTestStatus.trim();
+    final testMessage = item.lastTestMessage.trim();
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        metrics.pagePadding,
+        metrics.contentGap,
+        metrics.pagePadding,
+        bottomInset + metrics.sectionGap,
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.7,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: colorScheme.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(
+                      Icons.menu_book_outlined,
+                      color: colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          item.name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          item.id,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: <Widget>[
+                  _PrivateSourceDetailChip(
+                    label: _typeLabel(item.supportedTypes),
+                    color: colorScheme.primary,
+                  ),
+                  _PrivateSourceDetailChip(
+                    label: _groupLabel(item.groupName),
+                    color: colorScheme.secondary,
+                  ),
+                  _PrivateSourceDetailChip(
+                    label: _reviewLabel(item.reviewStatus, item.visibility),
+                    color:
+                        item.visibility == 'private'
+                            ? colorScheme.primary
+                            : colorScheme.tertiary,
+                  ),
+                  _PrivateSourceDetailChip(
+                    label: item.enabled ? '已启用' : '已停用',
+                    color: item.enabled ? Colors.green : Colors.orange,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              _PrivateSourceDetailSection(
+                title: '基础信息',
+                children: <Widget>[
+                  _PrivateSourceDetailRow(
+                    label: '类型',
+                    value: _typeLabel(item.supportedTypes),
+                  ),
+                  _PrivateSourceDetailRow(
+                    label: '分组',
+                    value: _groupLabel(item.groupName),
+                  ),
+                  _PrivateSourceDetailRow(
+                    label: '状态',
+                    value:
+                        '${item.enabled ? '已启用' : '已停用'} / ${_reviewLabel(item.reviewStatus, item.visibility)}',
+                  ),
+                  _PrivateSourceDetailRow(
+                    label: '创建时间',
+                    value: _formatPrivateSourceDate(item.createdAt),
+                  ),
+                  _PrivateSourceDetailRow(
+                    label: '更新时间',
+                    value: _formatPrivateSourceDate(item.updatedAt),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              _PrivateSourceDetailSection(
+                title: '检测与配置',
+                children: <Widget>[
+                  _PrivateSourceDetailRow(
+                    label: '检测状态',
+                    value:
+                        testMessage.isEmpty
+                            ? _testLabel(testStatus)
+                            : '${_testLabel(testStatus)}：$testMessage',
+                  ),
+                  _PrivateSourceDetailRow(
+                    label: '配置状态',
+                    value:
+                        normalizationMessage.isEmpty
+                            ? _normalizationLabel(normalizationStatus)
+                            : '${_normalizationLabel(normalizationStatus)}：$normalizationMessage',
+                  ),
+                  if (item.reviewNote.trim().isNotEmpty)
+                    _PrivateSourceDetailRow(
+                      label: '审核备注',
+                      value: item.reviewNote.trim(),
+                    ),
+                ],
+              ),
+              if (item.description.trim().isNotEmpty) ...<Widget>[
+                const SizedBox(height: 14),
+                _PrivateSourceDetailSection(
+                  title: '描述',
+                  children: <Widget>[
+                    SelectableText(
+                      item.description.trim(),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        height: 1.45,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: <Widget>[
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('关闭'),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    onPressed:
+                        () => Navigator.of(
+                          context,
+                        ).pop(_PrivateSourceDetailAction.test),
+                    icon: const Icon(Icons.science_outlined),
+                    label: const Text('检测'),
+                  ),
+                  if (item.visibility != 'shared') ...<Widget>[
+                    const SizedBox(width: 8),
+                    FilledButton.icon(
+                      onPressed:
+                          () => Navigator.of(
+                            context,
+                          ).pop(_PrivateSourceDetailAction.edit),
+                      icon: const Icon(Icons.edit_outlined),
+                      label: const Text('编辑'),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _normalizationLabel(String status) {
+    return switch (status) {
+      'done' => '正常',
+      'pending' => '待规整',
+      'failed' => '配置异常',
+      _ => status.isEmpty ? '未知' : status,
+    };
+  }
+}
+
+class _PrivateSourceDetailSection extends StatelessWidget {
+  const _PrivateSourceDetailSection({
+    required this.title,
+    required this.children,
+  });
+
+  final String title;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.25),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            title,
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 10),
+          ...children,
+        ],
+      ),
+    );
+  }
+}
+
+class _PrivateSourceDetailRow extends StatelessWidget {
+  const _PrivateSourceDetailRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          SizedBox(
+            width: 76,
+            child: Text(
+              label,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: SelectableText(
+              value.trim().isEmpty ? '-' : value.trim(),
+              style: theme.textTheme.bodyMedium?.copyWith(height: 1.35),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PrivateSourceDetailChip extends StatelessWidget {
+  const _PrivateSourceDetailChip({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
   }
 }
 
 class _PrivateSourceMoreButton extends StatelessWidget {
   const _PrivateSourceMoreButton({
     required this.item,
+    required this.onDetail,
     required this.onTest,
     required this.onSubmit,
     required this.onEdit,
@@ -1880,6 +2288,7 @@ class _PrivateSourceMoreButton extends StatelessWidget {
   });
 
   final PrivateBookSourceItem item;
+  final VoidCallback onDetail;
   final VoidCallback onTest;
   final VoidCallback onSubmit;
   final VoidCallback onEdit;
@@ -1897,6 +2306,8 @@ class _PrivateSourceMoreButton extends StatelessWidget {
         icon: const Icon(Icons.more_horiz_rounded),
         onSelected: (action) {
           switch (action) {
+            case _PrivateSourceAction.detail:
+              onDetail();
             case _PrivateSourceAction.test:
               onTest();
             case _PrivateSourceAction.submit:
@@ -1909,6 +2320,13 @@ class _PrivateSourceMoreButton extends StatelessWidget {
         },
         itemBuilder:
             (context) => <PopupMenuEntry<_PrivateSourceAction>>[
+              const PopupMenuItem(
+                value: _PrivateSourceAction.detail,
+                child: _PrivateSourceMenuItem(
+                  icon: Icons.info_outline_rounded,
+                  label: '详情',
+                ),
+              ),
               const PopupMenuItem(
                 value: _PrivateSourceAction.test,
                 child: _PrivateSourceMenuItem(
@@ -2193,7 +2611,7 @@ class _SourceCheckReportSheet extends StatelessWidget {
       ),
       child: ConstrainedBox(
         constraints: BoxConstraints(
-          maxHeight: MediaQuery.sizeOf(context).height * 0.86,
+          maxHeight: MediaQuery.sizeOf(context).height * 0.7,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -2238,14 +2656,24 @@ class _SourceCheckReportSheet extends StatelessWidget {
                     color: colorScheme.outlineVariant.withValues(alpha: 0.45),
                   ),
                 ),
-                child: ListView.separated(
-                  padding: const EdgeInsets.all(12),
-                  itemCount: report.logs.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) {
-                    return _SourceCheckLogRow(entry: report.logs[index]);
-                  },
-                ),
+                child:
+                    report.logs.isEmpty
+                        ? _SourceCheckEmptyLogSummary(
+                          message:
+                              summaryMessage.isNotEmpty
+                                  ? summaryMessage
+                                  : '检测报告日志为空，请复制原始结果继续定位。',
+                        )
+                        : ListView.separated(
+                          padding: const EdgeInsets.all(12),
+                          itemCount: report.logs.length,
+                          separatorBuilder: (_, _) => const SizedBox(height: 8),
+                          itemBuilder: (context, index) {
+                            return _SourceCheckLogRow(
+                              entry: report.logs[index],
+                            );
+                          },
+                        ),
               ),
             ),
             const SizedBox(height: 12),
@@ -2323,6 +2751,47 @@ class _SourceCheckLogRow extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _SourceCheckEmptyLogSummary extends StatelessWidget {
+  const _SourceCheckEmptyLogSummary({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final color = colorScheme.error;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(Icons.warning_amber_rounded, color: color, size: 34),
+            const SizedBox(height: 10),
+            Text(
+              '检测报告日志为空',
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: color,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -3804,9 +4273,19 @@ String _testLabel(String value) {
   return switch (value) {
     'passed' => '通过',
     'failed' => '失败',
+    'unknown' => '未检测',
     'pending' => '待检测',
     _ => value.isEmpty ? '未检测' : value,
   };
+}
+
+String _formatPrivateSourceDate(DateTime? value) {
+  if (value == null) {
+    return '-';
+  }
+  final local = value.toLocal();
+  String two(int input) => input.toString().padLeft(2, '0');
+  return '${local.year}-${two(local.month)}-${two(local.day)} ${two(local.hour)}:${two(local.minute)}';
 }
 
 String _checkItemLabel(String value) {
@@ -3862,16 +4341,28 @@ List<PrivateBookSourceItem> _filterPrivateSources(
               item.description,
               item.groupName,
               item.reviewStatus,
+              item.normalizationStatus,
+              item.normalizationError,
               item.lastTestStatus,
               item.lastTestMessage,
               _typeLabel(item.supportedTypes),
               _groupLabel(item.groupName),
               _reviewLabel(item.reviewStatus, item.visibility),
+              _normalizationSearchLabel(item.normalizationStatus),
               _testLabel(item.lastTestStatus),
             ].join(' ').toLowerCase();
         return text.contains(normalized);
       })
       .toList(growable: false);
+}
+
+String _normalizationSearchLabel(String status) {
+  return switch (status) {
+    'pending' => '待规整',
+    'failed' => '配置异常',
+    'done' => '配置正常',
+    _ => status,
+  };
 }
 
 String _messageOf(Object error) {

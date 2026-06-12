@@ -56,6 +56,35 @@ class AppApiConfig {
     return '$normalized/';
   }
 
+  static String normalizeBaseUrl(String value) {
+    return _withTrailingSlash(value);
+  }
+
+  static String readerGatewayApiPath(String baseUrl, String path) {
+    final normalized = path.trim();
+    if (normalized.startsWith('http://') || normalized.startsWith('https://')) {
+      return normalized;
+    }
+    final relative = normalized.replaceFirst(RegExp(r'^/+'), '');
+    final baseHasApi = _baseUrlEndsWithApi(baseUrl);
+    if (relative.startsWith('api/')) {
+      return baseHasApi ? relative.substring(4) : relative;
+    }
+    return baseHasApi ? relative : 'api/$relative';
+  }
+
+  static bool _baseUrlEndsWithApi(String value) {
+    final uri = Uri.tryParse(value.trim());
+    final segments =
+        uri?.path
+            .split('/')
+            .map((segment) => segment.trim().toLowerCase())
+            .where((segment) => segment.isNotEmpty)
+            .toList(growable: false) ??
+        const <String>[];
+    return segments.isNotEmpty && segments.last == 'api';
+  }
+
   static const String appName = String.fromEnvironment(
     'APPREAD_APP_NAME',
     defaultValue: 'selune',

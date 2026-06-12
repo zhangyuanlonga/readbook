@@ -23,15 +23,17 @@ class ServerOnlineSearchService {
     Dio? dio,
     AppLogger? logger,
     String? baseUrl,
-  }) : _baseUrl =
-           (baseUrl ?? AppApiConfig.effectiveReaderGatewayBaseUrl).trim(),
+  }) : _baseUrl = AppApiConfig.normalizeBaseUrl(
+         baseUrl ?? AppApiConfig.effectiveReaderGatewayBaseUrl,
+       ),
        _dio = dio ?? Dio(),
        _logger = logger ?? AppLogger.instance,
        _client =
            client ??
            ApiClient(
-             baseUrl:
-                 (baseUrl ?? AppApiConfig.effectiveReaderGatewayBaseUrl).trim(),
+             baseUrl: AppApiConfig.normalizeBaseUrl(
+               baseUrl ?? AppApiConfig.effectiveReaderGatewayBaseUrl,
+             ),
              defaultTimeout: const Duration(seconds: 30),
            ) {
     ApiClient.installAuthInterceptor(_dio);
@@ -119,7 +121,7 @@ class ServerOnlineSearchService {
 
     final response = await _client.request<_ServerSearchResponse>(
       method: ApiMethod.post,
-      path: 'v1/books/search',
+      path: _gatewayPath('v1/books/search'),
       body: payload,
       attachAccessToken: true,
       enableRetry: false,
@@ -324,7 +326,7 @@ class ServerOnlineSearchService {
   }) async {
     final response = await _client.request<ServerSearchSourcePage>(
       method: ApiMethod.get,
-      path: 'v1/sources',
+      path: _gatewayPath('v1/sources'),
       queryParameters: <String, dynamic>{
         'contentType': _contentTypeParam(contentMode),
         'enabled': true,
@@ -357,7 +359,7 @@ class ServerOnlineSearchService {
     String path, {
     Map<String, String> queryParameters = const <String, String>{},
   }) {
-    final normalized = path.trim();
+    final normalized = _gatewayPath(path);
     final baseUri = Uri.parse(_baseUrl);
     final resolved =
         normalized.startsWith('http://') || normalized.startsWith('https://')
@@ -367,6 +369,10 @@ class ServerOnlineSearchService {
       return resolved.toString();
     }
     return resolved.replace(queryParameters: queryParameters).toString();
+  }
+
+  String _gatewayPath(String path) {
+    return AppApiConfig.readerGatewayApiPath(_baseUrl, path);
   }
 }
 
@@ -420,6 +426,8 @@ class ServerSearchSourceSummary {
     required this.enabled,
     this.group,
     this.healthStatus,
+    this.sourceType,
+    this.visibility,
   });
 
   final String id;
@@ -428,6 +436,8 @@ class ServerSearchSourceSummary {
   final bool enabled;
   final String? group;
   final String? healthStatus;
+  final String? sourceType;
+  final String? visibility;
 
   factory ServerSearchSourceSummary.fromJson(Object? value) {
     if (value is! Map) {
@@ -440,7 +450,11 @@ class ServerSearchSourceSummary {
       contentType: _stringOrEmpty(map['contentType']),
       enabled: map['enabled'] != false,
       group: _optionalString(map['group']),
-      healthStatus: _optionalString(map['healthStatus']),
+      healthStatus: _optionalString(
+        map['healthStatus'] ?? map['health_status'],
+      ),
+      sourceType: _optionalString(map['sourceType'] ?? map['source_type']),
+      visibility: _optionalString(map['visibility']),
     );
   }
 }

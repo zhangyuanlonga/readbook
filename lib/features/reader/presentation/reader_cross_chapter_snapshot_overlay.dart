@@ -120,6 +120,7 @@ class _PaperCurlCrossChapterSnapshotFlipState
   late PageFlipController _controller;
   bool _listenerAttached = false;
   bool _turnStarted = false;
+  bool _completed = false;
 
   @override
   void initState() {
@@ -138,6 +139,7 @@ class _PaperCurlCrossChapterSnapshotFlipState
       _controller = PageFlipController();
       _listenerAttached = false;
       _turnStarted = false;
+      _completed = false;
       _startAfterBuild();
     }
   }
@@ -164,7 +166,7 @@ class _PaperCurlCrossChapterSnapshotFlipState
                 ? _controller.nextPage(FlipCorner.bottom)
                 : _controller.previousPage(FlipCorner.bottom);
         if (!turned) {
-          widget.onCompleted();
+          _completeAfterStableFrame();
         }
       });
     });
@@ -176,12 +178,28 @@ class _PaperCurlCrossChapterSnapshotFlipState
     }
     try {
       _controller.addEventListener('animationComplete', (_) {
-        widget.onCompleted();
+        _completeAfterStableFrame();
       });
       _listenerAttached = true;
     } catch (_) {
       _startAfterBuild();
     }
+  }
+
+  Future<void> _completeAfterStableFrame() async {
+    if (_completed) {
+      return;
+    }
+    _completed = true;
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) {
+      return;
+    }
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) {
+      return;
+    }
+    widget.onCompleted();
   }
 
   void _removeListener() {

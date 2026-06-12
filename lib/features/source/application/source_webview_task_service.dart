@@ -13,14 +13,19 @@ final sourceWebViewTaskServiceProvider = Provider<SourceWebViewTaskService>((
 
 class SourceWebViewTaskService {
   SourceWebViewTaskService({ApiClient? client, String? baseUrl})
-    : _client =
+    : _baseUrl = AppApiConfig.normalizeBaseUrl(
+        baseUrl ?? AppApiConfig.effectiveReaderGatewayBaseUrl,
+      ),
+      _client =
           client ??
           ApiClient(
-            baseUrl:
-                (baseUrl ?? AppApiConfig.effectiveReaderGatewayBaseUrl).trim(),
+            baseUrl: AppApiConfig.normalizeBaseUrl(
+              baseUrl ?? AppApiConfig.effectiveReaderGatewayBaseUrl,
+            ),
             defaultTimeout: const Duration(seconds: 70),
           );
 
+  final String _baseUrl;
   final ApiClient _client;
 
   Future<SourceWebViewTask> createTask({
@@ -39,7 +44,9 @@ class SourceWebViewTaskService {
     final gatewaySourceId = fromServerGatewaySourceId(sourceId);
     return _client.request<SourceWebViewTask>(
       method: ApiMethod.post,
-      path: 'v1/sources/${Uri.encodeComponent(gatewaySourceId)}/webview-task',
+      path: _gatewayPath(
+        'v1/sources/${Uri.encodeComponent(gatewaySourceId)}/webview-task',
+      ),
       body: <String, Object?>{
         'stage': stage.trim(),
         if (_text(mode) != null) 'mode': _text(mode),
@@ -70,7 +77,7 @@ class SourceWebViewTaskService {
   }) {
     return _client.request<SourceWebViewResolveResult>(
       method: ApiMethod.post,
-      path: 'v1/webview/resolve',
+      path: _gatewayPath('v1/webview/resolve'),
       body: <String, Object?>{
         'sourceId': task.sourceId,
         'stage': task.stage,
@@ -85,6 +92,10 @@ class SourceWebViewTaskService {
       stage: _errorStage(task.stage),
       decoder: SourceWebViewResolveResult.fromJson,
     );
+  }
+
+  String _gatewayPath(String path) {
+    return AppApiConfig.readerGatewayApiPath(_baseUrl, path);
   }
 }
 

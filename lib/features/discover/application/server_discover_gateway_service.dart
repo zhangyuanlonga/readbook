@@ -14,11 +14,15 @@ class ServerDiscoverGatewayService {
     SourceHealthService? sourceHealthService,
     String? baseUrl,
     String? catalogBaseUrl,
-  }) : _client =
+  }) : _gatewayBaseUrl = AppApiConfig.normalizeBaseUrl(
+         baseUrl ?? AppApiConfig.effectiveReaderGatewayBaseUrl,
+       ),
+       _client =
            client ??
            ApiClient(
-             baseUrl:
-                 (baseUrl ?? AppApiConfig.effectiveReaderGatewayBaseUrl).trim(),
+             baseUrl: AppApiConfig.normalizeBaseUrl(
+               baseUrl ?? AppApiConfig.effectiveReaderGatewayBaseUrl,
+             ),
              defaultTimeout: const Duration(seconds: 30),
            ),
        _catalogClient =
@@ -27,6 +31,7 @@ class ServerDiscoverGatewayService {
        _sourceHealthService =
            sourceHealthService ?? SourceHealthService.instance;
 
+  final String _gatewayBaseUrl;
   final ApiClient _client;
   final ApiClient _catalogClient;
   final SourceHealthService _sourceHealthService;
@@ -80,6 +85,8 @@ class ServerDiscoverGatewayService {
       sourceUrl: source.sourceUrl ?? sourceId,
       name: source.name,
       enabled: true,
+      sourceType: source.sourceType,
+      groupName: source.groupName,
     );
     return _loadSourceSummary(sourceItem);
   }
@@ -200,6 +207,8 @@ class ServerDiscoverGatewayService {
         catalogSourceId: source.catalogSourceId,
         origin: source.origin,
         accessReason: source.accessReason,
+        sourceType: source.sourceType,
+        groupName: source.groupName,
         sourceReport: response.sourceReport,
       );
     } on AppException catch (error) {
@@ -219,6 +228,8 @@ class ServerDiscoverGatewayService {
         catalogSourceId: source.catalogSourceId,
         origin: source.origin,
         accessReason: source.accessReason,
+        sourceType: source.sourceType,
+        groupName: source.groupName,
         failure: error.gatewayFailure,
       );
     } catch (error) {
@@ -238,6 +249,8 @@ class ServerDiscoverGatewayService {
         catalogSourceId: source.catalogSourceId,
         origin: source.origin,
         accessReason: source.accessReason,
+        sourceType: source.sourceType,
+        groupName: source.groupName,
       );
     }
   }
@@ -254,6 +267,8 @@ class ServerDiscoverGatewayService {
       catalogSourceId: source.catalogSourceId,
       origin: source.origin,
       accessReason: source.accessReason,
+      sourceType: source.sourceType,
+      groupName: source.groupName,
     );
   }
 
@@ -285,7 +300,7 @@ class ServerDiscoverGatewayService {
   }) {
     return _client.request<T>(
       method: method,
-      path: path,
+      path: AppApiConfig.readerGatewayApiPath(_gatewayBaseUrl, path),
       queryParameters: queryParameters,
       body: body,
       attachAccessToken: true,
@@ -377,6 +392,8 @@ class _GatewaySourceItem {
     this.healthStatus,
     this.catalogSourceId,
     this.accessReason,
+    this.sourceType,
+    this.groupName,
   });
 
   final String id;
@@ -386,6 +403,8 @@ class _GatewaySourceItem {
   final String? healthStatus;
   final String? catalogSourceId;
   final String? accessReason;
+  final String? sourceType;
+  final String? groupName;
 
   String get origin => 'cloud_catalog';
 
@@ -411,6 +430,10 @@ class _GatewaySourceItem {
       healthStatus: _optionalString(map['healthStatus']),
       catalogSourceId: catalogSourceId,
       accessReason: accessReasons[catalogSourceId],
+      sourceType: _optionalString(
+        map['sourceType'] ?? map['source_type'] ?? map['visibility'],
+      ),
+      groupName: _optionalString(map['group_name'] ?? map['groupName']),
     );
   }
 }

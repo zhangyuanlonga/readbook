@@ -16,6 +16,8 @@ class DiscoverSourceSummary {
     this.catalogSourceId,
     this.origin = 'cloud_catalog',
     this.accessReason,
+    this.sourceType,
+    this.groupName,
     this.sourceReport = const <String, Object?>{},
     this.failure,
   });
@@ -31,6 +33,8 @@ class DiscoverSourceSummary {
   final String? catalogSourceId;
   final String origin;
   final String? accessReason;
+  final String? sourceType;
+  final String? groupName;
   final Map<String, Object?> sourceReport;
   final GatewayFailure? failure;
 }

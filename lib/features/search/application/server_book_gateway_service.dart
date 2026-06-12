@@ -16,13 +16,16 @@ import 'server_gateway_identity.dart';
 
 class ServerBookGatewayService {
   ServerBookGatewayService({ApiClient? client, Dio? dio, String? baseUrl})
-    : _baseUrl = (baseUrl ?? AppApiConfig.effectiveReaderGatewayBaseUrl).trim(),
+    : _baseUrl = AppApiConfig.normalizeBaseUrl(
+        baseUrl ?? AppApiConfig.effectiveReaderGatewayBaseUrl,
+      ),
       _dio = dio ?? Dio(),
       _client =
           client ??
           ApiClient(
-            baseUrl:
-                (baseUrl ?? AppApiConfig.effectiveReaderGatewayBaseUrl).trim(),
+            baseUrl: AppApiConfig.normalizeBaseUrl(
+              baseUrl ?? AppApiConfig.effectiveReaderGatewayBaseUrl,
+            ),
             defaultTimeout: const Duration(seconds: 70),
           ) {
     ApiClient.installAuthInterceptor(_dio);
@@ -338,7 +341,7 @@ class ServerBookGatewayService {
   }) {
     return _client.request<T>(
       method: ApiMethod.post,
-      path: path,
+      path: _gatewayPath(path),
       body: body,
       attachAccessToken: true,
       enableRetry: false,
@@ -352,7 +355,7 @@ class ServerBookGatewayService {
     String path, {
     Map<String, String> queryParameters = const <String, String>{},
   }) {
-    final normalized = path.trim();
+    final normalized = _gatewayPath(path);
     final resolved =
         normalized.startsWith('http://') || normalized.startsWith('https://')
             ? normalized
@@ -361,6 +364,10 @@ class ServerBookGatewayService {
             : Uri.parse(_baseUrl).resolve(normalized).toString();
     final uri = Uri.parse(resolved);
     return uri.replace(queryParameters: queryParameters).toString();
+  }
+
+  String _gatewayPath(String path) {
+    return AppApiConfig.readerGatewayApiPath(_baseUrl, path);
   }
 }
 

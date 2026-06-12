@@ -5,17 +5,31 @@ import '../../../core/network/api_client.dart';
 import '../../../core/network/api_config.dart';
 
 class PrivateBookSourceService {
-  PrivateBookSourceService({ApiClient? client, String? baseUrl})
-    : _client =
-          client ??
-          ApiClient(baseUrl: (baseUrl ?? AppApiConfig.baseUrl).trim());
+  PrivateBookSourceService({
+    ApiClient? client,
+    ApiClient? quotaClient,
+    String? baseUrl,
+  }) : _baseUrl = AppApiConfig.normalizeBaseUrl(
+         baseUrl ?? AppApiConfig.effectiveReaderGatewayBaseUrl,
+       ),
+       _client =
+           client ??
+           ApiClient(
+             baseUrl: AppApiConfig.normalizeBaseUrl(
+               baseUrl ?? AppApiConfig.effectiveReaderGatewayBaseUrl,
+             ),
+           ),
+       _quotaClient =
+           quotaClient ?? ApiClient(baseUrl: AppApiConfig.baseUrl.trim());
 
+  final String _baseUrl;
   final ApiClient _client;
+  final ApiClient _quotaClient;
 
   Future<PrivateBookSourceListResult> list({String? groupId}) {
     return _client.request<PrivateBookSourceListResult>(
       method: ApiMethod.get,
-      path: '/v1/me/book-sources',
+      path: _gatewayPath('v1/me/book-sources'),
       queryParameters: <String, dynamic>{
         if (groupId != null) 'group_id': groupId,
       },
@@ -29,7 +43,7 @@ class PrivateBookSourceService {
   Future<PrivateBookSourceItem> get(String id) {
     return _client.request<PrivateBookSourceItem>(
       method: ApiMethod.get,
-      path: '/v1/me/book-sources/$id',
+      path: _gatewayPath('v1/me/book-sources/$id'),
       attachAccessToken: true,
       enableRetry: false,
       stage: ErrorStage.source,
@@ -40,7 +54,7 @@ class PrivateBookSourceService {
   Future<List<PrivateBookSourceGroup>> groups() {
     return _client.request<List<PrivateBookSourceGroup>>(
       method: ApiMethod.get,
-      path: '/v1/me/book-source-groups',
+      path: _gatewayPath('v1/me/book-source-groups'),
       attachAccessToken: true,
       enableRetry: false,
       stage: ErrorStage.source,
@@ -61,7 +75,7 @@ class PrivateBookSourceService {
   Future<PrivateBookSourceGroup> createGroup(String name) {
     return _client.request<PrivateBookSourceGroup>(
       method: ApiMethod.post,
-      path: '/v1/me/book-source-groups',
+      path: _gatewayPath('v1/me/book-source-groups'),
       body: <String, dynamic>{'name': name.trim()},
       attachAccessToken: true,
       enableRetry: false,
@@ -73,7 +87,7 @@ class PrivateBookSourceService {
   Future<PrivateBookSourceGroup> updateGroup(String id, String name) {
     return _client.request<PrivateBookSourceGroup>(
       method: ApiMethod.patch,
-      path: '/v1/me/book-source-groups/$id',
+      path: _gatewayPath('v1/me/book-source-groups/$id'),
       body: <String, dynamic>{'name': name.trim()},
       attachAccessToken: true,
       enableRetry: false,
@@ -83,14 +97,14 @@ class PrivateBookSourceService {
   }
 
   Future<void> deleteGroup(String id) {
-    return _deleteWithActionFallback(
-      primaryPath: '/v1/me/book-source-groups/$id',
-      fallbackPath: '/v1/me/book-source-groups/$id/delete',
+    return _requestVoid(
+      method: ApiMethod.delete,
+      path: _gatewayPath('v1/me/book-source-groups/$id'),
     );
   }
 
   Future<SourceQuotaSnapshot> quota() {
-    return _client.request<SourceQuotaSnapshot>(
+    return _quotaClient.request<SourceQuotaSnapshot>(
       method: ApiMethod.get,
       path: '/v1/me/source-quota',
       attachAccessToken: true,
@@ -103,7 +117,7 @@ class PrivateBookSourceService {
   Future<PrivateBookSourceItem> create(PrivateBookSourceInput input) {
     return _client.request<PrivateBookSourceItem>(
       method: ApiMethod.post,
-      path: '/v1/me/book-sources',
+      path: _gatewayPath('v1/me/book-sources'),
       body: input.toJson(),
       attachAccessToken: true,
       enableRetry: false,
@@ -118,7 +132,7 @@ class PrivateBookSourceService {
   ) {
     return _client.request<PrivateBookSourceItem>(
       method: ApiMethod.patch,
-      path: '/v1/me/book-sources/$id',
+      path: _gatewayPath('v1/me/book-sources/$id'),
       body: input.toJson(),
       attachAccessToken: true,
       enableRetry: false,
@@ -128,16 +142,16 @@ class PrivateBookSourceService {
   }
 
   Future<void> delete(String id) {
-    return _deleteWithActionFallback(
-      primaryPath: '/v1/me/book-sources/$id',
-      fallbackPath: '/v1/me/book-sources/$id/delete',
+    return _requestVoid(
+      method: ApiMethod.delete,
+      path: _gatewayPath('v1/me/book-sources/$id'),
     );
   }
 
   Future<PrivateBookSourceItem> setEnabled(String id, bool enabled) {
     return _client.request<PrivateBookSourceItem>(
       method: ApiMethod.patch,
-      path: '/v1/me/book-sources/$id/enabled',
+      path: _gatewayPath('v1/me/book-sources/$id/enabled'),
       body: <String, dynamic>{'enabled': enabled},
       attachAccessToken: true,
       enableRetry: false,
@@ -157,7 +171,7 @@ class PrivateBookSourceService {
     );
     return _client.request<PrivateBookSourceTestResult>(
       method: ApiMethod.post,
-      path: '/v1/me/book-sources/$id/test',
+      path: _gatewayPath('v1/me/book-sources/$id/test'),
       body: <String, dynamic>{
         if (keyword.trim().isNotEmpty) 'keyword': keyword.trim(),
         if (timeoutMs != null) 'timeoutMs': timeoutMs,
@@ -174,27 +188,13 @@ class PrivateBookSourceService {
   Future<void> submit(String id, String note) {
     return _client.request<void>(
       method: ApiMethod.post,
-      path: '/v1/me/book-sources/$id/submit',
+      path: _gatewayPath('v1/me/book-sources/$id/submit'),
       body: <String, dynamic>{'note': note},
       attachAccessToken: true,
       enableRetry: false,
       stage: ErrorStage.source,
       decoder: (_) {},
     );
-  }
-
-  Future<void> _deleteWithActionFallback({
-    required String primaryPath,
-    required String fallbackPath,
-  }) async {
-    try {
-      await _requestVoid(method: ApiMethod.delete, path: primaryPath);
-    } on ApiException catch (error) {
-      if (!_shouldUseDeleteActionFallback(error)) {
-        rethrow;
-      }
-      await _requestVoid(method: ApiMethod.post, path: fallbackPath);
-    }
   }
 
   Future<void> _requestVoid({required ApiMethod method, required String path}) {
@@ -208,11 +208,8 @@ class PrivateBookSourceService {
     );
   }
 
-  bool _shouldUseDeleteActionFallback(ApiException error) {
-    return error.statusCode == 404 ||
-        error.statusCode == 405 ||
-        error.apiCode == 'NOT_FOUND' ||
-        error.apiCode == 'METHOD_NOT_ALLOWED';
+  String _gatewayPath(String path) {
+    return AppApiConfig.readerGatewayApiPath(_baseUrl, path);
   }
 
   Map<String, dynamic> _asMap(Object? data) {
@@ -434,6 +431,9 @@ class PrivateBookSourceItem {
     required this.groupName,
     required this.visibility,
     required this.enabled,
+    required this.compatibilityReport,
+    required this.normalizationStatus,
+    required this.normalizationError,
     required this.reviewStatus,
     required this.reviewNote,
     required this.lastTestStatus,
@@ -451,6 +451,9 @@ class PrivateBookSourceItem {
   final String groupName;
   final String visibility;
   final bool enabled;
+  final String compatibilityReport;
+  final String normalizationStatus;
+  final String normalizationError;
   final String reviewStatus;
   final String reviewNote;
   final String lastTestStatus;
@@ -471,6 +474,9 @@ class PrivateBookSourceItem {
       groupName: json['group_name']?.toString() ?? '',
       visibility: json['visibility']?.toString() ?? 'private',
       enabled: json['enabled'] as bool? ?? true,
+      compatibilityReport: json['compatibility_report']?.toString() ?? '',
+      normalizationStatus: json['normalization_status']?.toString() ?? '',
+      normalizationError: json['normalization_error']?.toString() ?? '',
       reviewStatus: json['review_status']?.toString() ?? 'pending',
       reviewNote: json['review_note']?.toString() ?? '',
       lastTestStatus: json['last_test_status']?.toString() ?? '',

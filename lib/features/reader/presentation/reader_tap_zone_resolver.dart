@@ -81,6 +81,46 @@ class ReaderTapZoneResolver {
       action: actions[index],
     );
   }
+
+  ReaderTapZoneHit? resolvePrimaryHit({
+    required Offset localPosition,
+    required Rect rect,
+  }) {
+    if (rect.isEmpty || !rect.contains(localPosition)) {
+      return null;
+    }
+
+    final usableWidth = max(1.0, rect.width);
+    final normalizedDx = ((localPosition.dx - rect.left) / usableWidth).clamp(
+      0.0,
+      0.999999,
+    );
+    if (normalizedDx < ReaderTapZoneConstants.sideActionWidthRatio) {
+      return ReaderTapZoneHit(
+        rect: rect,
+        row: 1,
+        column: 0,
+        index: 3,
+        action: ReaderTapZoneAction.previousPage,
+      );
+    }
+    if (normalizedDx > 1 - ReaderTapZoneConstants.sideActionWidthRatio) {
+      return ReaderTapZoneHit(
+        rect: rect,
+        row: 1,
+        column: 2,
+        index: 5,
+        action: ReaderTapZoneAction.nextPage,
+      );
+    }
+    return ReaderTapZoneHit(
+      rect: rect,
+      row: 1,
+      column: 1,
+      index: 4,
+      action: ReaderTapZoneAction.toggleToolbar,
+    );
+  }
 }
 
 class ReaderTapZoneConstants {
@@ -88,4 +128,5 @@ class ReaderTapZoneConstants {
 
   static const double minimumHorizontalGuard = 22;
   static const double horizontalGuardRatio = 0.02;
+  static const double sideActionWidthRatio = 0.3;
 }

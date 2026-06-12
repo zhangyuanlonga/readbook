@@ -66,10 +66,9 @@ extension _ReaderTouchNavigationLayer on _ReaderPageState {
       contentRect: surfaceMetrics.contentRect,
       gestureInsets: gestureInsets,
     );
-    return _tapZoneResolver.resolveHit(
+    return _tapZoneResolver.resolvePrimaryHit(
       localPosition: localPosition,
       rect: tapZoneRect,
-      actions: _settings.tapZoneActions,
     );
   }
 

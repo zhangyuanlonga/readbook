@@ -1795,10 +1795,22 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     final previous = _crossChapterSnapshotTransition;
     _crossChapterSnapshotTransition =
         const _CrossChapterSnapshotTransitionState();
-    previous.fromImage?.dispose();
-    previous.toImage?.dispose();
     if (mounted && setStateIfNeeded) {
       setState(() {});
+      _disposeCrossChapterSnapshotImagesAfterFrame(previous);
+    } else {
+      previous.fromImage?.dispose();
+      previous.toImage?.dispose();
+    }
+  }
+
+  Future<void> _disposeCrossChapterSnapshotImagesAfterFrame(
+    _CrossChapterSnapshotTransitionState previous,
+  ) async {
+    await WidgetsBinding.instance.endOfFrame;
+    previous.fromImage?.dispose();
+    if (previous.fromImage != previous.toImage) {
+      previous.toImage?.dispose();
     }
   }
 

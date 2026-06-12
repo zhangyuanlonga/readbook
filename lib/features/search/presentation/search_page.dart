@@ -24,8 +24,6 @@ import '../../../app/widgets/app_empty_state_card.dart';
 
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_stage.dart';
-import '../../../core/source_access/source_access_scope.dart';
-import '../../../core/source_access/source_access_service.dart';
 import '../../../domain/entities/book.dart';
 import '../../../domain/entities/book_metadata_override.dart';
 import '../../book/application/book_display_state.dart';
@@ -180,7 +178,6 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   final TextEditingController _keywordController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   late final ServerOnlineSearchService _serverOnlineSearchService;
-  late final SourceAccessService _sourceAccessService;
   late final BookPresentationQueryService _bookPresentationQueryService;
   late final SearchHistoryService _historyService;
   late final SearchSystemSettingsService _searchSystemSettingsService;
@@ -380,7 +377,6 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   void initState() {
     super.initState();
     _serverOnlineSearchService = ref.read(serverOnlineSearchServiceProvider);
-    _sourceAccessService = SourceAccessService();
     _bookPresentationQueryService = ref.read(
       searchBookPresentationQueryServiceProvider,
     );
@@ -1167,7 +1163,6 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       builder:
           (context) => _ServerSourceFilterSheet(
             service: _serverOnlineSearchService,
-            sourceAccessService: _sourceAccessService,
             contentMode: requestedMode,
             initialSelectedIds: _selectedServerSourceIds,
           ),
@@ -1907,13 +1902,11 @@ class _SearchPageState extends ConsumerState<SearchPage> {
 class _ServerSourceFilterSheet extends StatefulWidget {
   const _ServerSourceFilterSheet({
     required this.service,
-    required this.sourceAccessService,
     required this.contentMode,
     required this.initialSelectedIds,
   });
 
   final ServerOnlineSearchService service;
-  final SourceAccessService sourceAccessService;
   final SearchContentMode contentMode;
   final Set<String> initialSelectedIds;
 
@@ -1923,72 +1916,133 @@ class _ServerSourceFilterSheet extends StatefulWidget {
 }
 
 class _ServerSourceFilterSheetState extends State<_ServerSourceFilterSheet> {
+  static const int _pageSize = 60;
+
   final TextEditingController _filterController = TextEditingController();
-  final Map<String, ServerSearchSourceSummary> _sourcesById =
-      <String, ServerSearchSourceSummary>{};
-  List<_ServerSourceGroupBucket> _groups = const <_ServerSourceGroupBucket>[];
+  final ScrollController _scrollController = ScrollController();
+  List<ServerSearchSourceSummary> _sources =
+      const <ServerSearchSourceSummary>[];
   late Set<String> _draftSelectedIds;
   bool _allSourcesSelected = true;
-  bool _isLoading = false;
+  bool _isLoadingInitial = false;
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
+  int _page = 0;
   int _total = 0;
   String _filterKeyword = '';
   String? _errorText;
   Timer? _filterDebounceTimer;
+  int _loadGeneration = 0;
 
   @override
   void initState() {
     super.initState();
     _draftSelectedIds = Set<String>.of(widget.initialSelectedIds);
     _allSourcesSelected = widget.initialSelectedIds.isEmpty;
-    unawaited(_loadSources());
+    _scrollController.addListener(_maybeLoadMore);
+    unawaited(_reloadSources());
   }
 
   @override
   void dispose() {
     _filterDebounceTimer?.cancel();
+    _scrollController.dispose();
     _filterController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadSources() async {
-    if (_isLoading) return;
+  Future<void> _reloadSources() async {
+    final generation = ++_loadGeneration;
     setState(() {
-      _isLoading = true;
+      _isLoadingInitial = true;
+      _isLoadingMore = false;
+      _hasMore = true;
+      _page = 0;
+      _total = 0;
+      _sources = const <ServerSearchSourceSummary>[];
       _errorText = null;
     });
 
-    try {
-      final scopeFuture = widget.sourceAccessService.fetchMyScope();
-      final sourceFuture = widget.service.loadSourcePage(
-        contentMode: widget.contentMode,
-        page: 1,
-        pageSize: 500,
-      );
-      final scope = await scopeFuture;
-      final page = await sourceFuture;
-      if (!mounted) return;
-      final sourceMap = <String, ServerSearchSourceSummary>{
-        for (final item in page.items) item.id: item,
-      };
-      final groups = _buildServerSourceGroups(scope, sourceMap);
+    await _loadSourcePage(page: 1, generation: generation, reset: true);
+  }
+
+  Future<void> _loadMoreSources() async {
+    if (_isLoadingInitial || _isLoadingMore || !_hasMore) {
+      return;
+    }
+    await _loadSourcePage(
+      page: _page + 1,
+      generation: _loadGeneration,
+      reset: false,
+    );
+  }
+
+  Future<void> _loadSourcePage({
+    required int page,
+    required int generation,
+    required bool reset,
+  }) async {
+    if (!reset) {
       setState(() {
-        _sourcesById
-          ..clear()
-          ..addAll(sourceMap);
-        _groups = groups;
-        _total = sourceMap.length;
+        _isLoadingMore = true;
+        _errorText = null;
+      });
+    }
+    try {
+      final sourcePage = await widget.service.loadSourcePage(
+        contentMode: widget.contentMode,
+        page: page,
+        pageSize: _pageSize,
+        keyword: _filterKeyword,
+      );
+      if (!mounted || generation != _loadGeneration) return;
+      final nextSources =
+          reset
+              ? sourcePage.items
+              : _mergeSourceSummaries(_sources, sourcePage.items);
+      setState(() {
+        _sources = nextSources;
+        _page = sourcePage.page;
+        _total = sourcePage.total;
+        _hasMore = sourcePage.hasMore;
       });
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || generation != _loadGeneration) return;
       setState(() {
         _errorText = '可用书源加载失败：$error';
       });
     } finally {
-      if (mounted) {
+      if (mounted && generation == _loadGeneration) {
         setState(() {
-          _isLoading = false;
+          _isLoadingInitial = false;
+          _isLoadingMore = false;
         });
       }
+    }
+  }
+
+  List<ServerSearchSourceSummary> _mergeSourceSummaries(
+    List<ServerSearchSourceSummary> current,
+    List<ServerSearchSourceSummary> next,
+  ) {
+    if (next.isEmpty) return current;
+    final seen = current.map((source) => source.id).toSet();
+    final merged = <ServerSearchSourceSummary>[...current];
+    for (final source in next) {
+      if (seen.add(source.id)) {
+        merged.add(source);
+      }
+    }
+    return merged;
+  }
+
+  void _maybeLoadMore() {
+    if (!_scrollController.hasClients) {
+      return;
+    }
+    final position = _scrollController.position;
+    if (position.extentAfter < 420) {
+      unawaited(_loadMoreSources());
     }
   }
 
@@ -1996,9 +2050,12 @@ class _ServerSourceFilterSheetState extends State<_ServerSourceFilterSheet> {
     _filterDebounceTimer?.cancel();
     _filterDebounceTimer = Timer(const Duration(milliseconds: 320), () {
       if (!mounted) return;
-      setState(() {
-        _filterKeyword = value.trim();
-      });
+      final nextKeyword = value.trim();
+      if (nextKeyword == _filterKeyword) {
+        return;
+      }
+      _filterKeyword = nextKeyword;
+      unawaited(_reloadSources());
     });
   }
 
@@ -2026,110 +2083,85 @@ class _ServerSourceFilterSheetState extends State<_ServerSourceFilterSheet> {
     });
   }
 
-  void _toggleGroup(_ServerSourceGroupBucket group, bool selected) {
-    setState(() {
-      _allSourcesSelected = false;
-      for (final source in group.sources) {
-        if (selected) {
-          _draftSelectedIds.add(source.id);
-        } else {
-          _draftSelectedIds.remove(source.id);
-        }
-      }
-      if (_draftSelectedIds.isEmpty) {
-        _allSourcesSelected = true;
-      }
-    });
-  }
-
-  bool? _groupSelectedValue(_ServerSourceGroupBucket group) {
-    if (_allSourcesSelected) {
-      return false;
-    }
-    final selectedCount =
-        group.sources
-            .where((source) => _draftSelectedIds.contains(source.id))
-            .length;
-    if (selectedCount == 0) {
-      return false;
-    }
-    if (selectedCount == group.sources.length) {
-      return true;
-    }
-    return null;
-  }
-
-  List<_ServerSourceGroupBucket> get _visibleGroups {
-    final keyword = _filterKeyword.trim().toLowerCase();
-    if (keyword.isEmpty) {
-      return _groups;
-    }
-    final out = <_ServerSourceGroupBucket>[];
-    for (final group in _groups) {
-      final groupMatched =
-          group.name.toLowerCase().contains(keyword) ||
-          group.sourceLabel.toLowerCase().contains(keyword);
-      final sources =
-          groupMatched
-              ? group.sources
-              : group.sources
-                  .where(
-                    (source) => source.name.toLowerCase().contains(keyword),
-                  )
-                  .toList(growable: false);
-      if (sources.isNotEmpty) {
-        out.add(group.copyWithSources(sources));
-      }
-    }
-    return out;
-  }
-
   String get _selectionLabel {
     if (_allSourcesSelected) {
       return _total > 0 ? '搜索全部可用书源' : '暂无可用书源';
     }
-    final selectedGroupCount =
-        _groups
-            .where(
-              (group) =>
-                  group.sources.isNotEmpty &&
-                  group.sources.every(
-                    (source) => _draftSelectedIds.contains(source.id),
-                  ),
-            )
-            .length;
-    if (selectedGroupCount == 1 &&
-        _draftSelectedIds.length ==
-            _groups
-                .firstWhere(
-                  (group) =>
-                      group.sources.isNotEmpty &&
-                      group.sources.every(
-                        (source) => _draftSelectedIds.contains(source.id),
-                      ),
-                )
-                .sources
-                .length) {
-      final group = _groups.firstWhere(
-        (group) =>
-            group.sources.isNotEmpty &&
-            group.sources.every(
-              (source) => _draftSelectedIds.contains(source.id),
-            ),
-      );
-      return '搜索：${group.name}';
-    }
-    if (selectedGroupCount > 1) {
-      return '搜索 $selectedGroupCount 个分组';
-    }
     return '搜索已选 ${_draftSelectedIds.length} 个书源';
+  }
+
+  Widget _buildSourceListItem(BuildContext context, int index) {
+    final theme = Theme.of(context);
+    if (index == 0) {
+      return _ServerSourceAllTile(
+        total: _total,
+        selected: _allSourcesSelected,
+        onChanged: (value) {
+          setState(() {
+            _allSourcesSelected = value != false;
+            if (_allSourcesSelected) {
+              _draftSelectedIds.clear();
+            }
+          });
+        },
+      );
+    }
+
+    final groupIndex = index - 1;
+    if (groupIndex >= _sources.length) {
+      if (_isLoadingInitial || _isLoadingMore) {
+        return const Padding(
+          padding: EdgeInsets.symmetric(vertical: 18),
+          child: Center(
+            child: SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        );
+      }
+      if (_sources.isEmpty) {
+        return Padding(
+          padding: const EdgeInsets.all(24),
+          child: Center(
+            child: Text(
+              _filterKeyword.isEmpty ? '暂无可用书源' : '没有匹配的书源或分组',
+              style: theme.textTheme.bodyMedium,
+            ),
+          ),
+        );
+      }
+      if (!_hasMore) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Center(
+            child: Text(
+              '已加载全部书源',
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        );
+      }
+      return const SizedBox(height: 8);
+    }
+
+    final source = _sources[groupIndex];
+    return _ServerSourceTile(
+      source: source,
+      allSourcesSelected: _allSourcesSelected,
+      selected: !_allSourcesSelected && _draftSelectedIds.contains(source.id),
+      onChanged: (value) => _toggleItem(source.id, value == true),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final metrics = AppAdaptiveMetrics.of(context);
-    final visibleGroups = _visibleGroups;
     final maxHeight = MediaQuery.sizeOf(context).height * 0.78;
     return SafeArea(
       child: Padding(
@@ -2155,12 +2187,12 @@ class _ServerSourceFilterSheetState extends State<_ServerSourceFilterSheet> {
                   ),
                   _ServerSourceCountPill(
                     label:
-                        _isLoading && _total == 0
+                        _isLoadingInitial && _total == 0
                             ? '加载中'
                             : _total > 0
-                            ? '共 $_total 个'
+                            ? '已加载 ${_sources.length}/$_total'
                             : '暂无可用',
-                    loading: _isLoading && _total == 0,
+                    loading: _isLoadingInitial && _total == 0,
                   ),
                 ],
               ),
@@ -2169,7 +2201,7 @@ class _ServerSourceFilterSheetState extends State<_ServerSourceFilterSheet> {
                 controller: _filterController,
                 onChanged: _onFilterChanged,
                 decoration: InputDecoration(
-                  hintText: '筛选分组或书源',
+                  hintText: '搜索书源或分组',
                   prefixIcon: const Icon(Icons.search_rounded, size: 18),
                   suffixIcon:
                       _filterController.text.isEmpty
@@ -2206,7 +2238,7 @@ class _ServerSourceFilterSheetState extends State<_ServerSourceFilterSheet> {
               SizedBox(height: metrics.contentGap),
               Expanded(
                 child:
-                    _errorText != null && _sourcesById.isEmpty
+                    _errorText != null && _sources.isEmpty
                         ? Center(
                           child: Padding(
                             padding: const EdgeInsets.all(16),
@@ -2227,68 +2259,14 @@ class _ServerSourceFilterSheetState extends State<_ServerSourceFilterSheet> {
                                   .withValues(alpha: 0.36),
                             ),
                           ),
-                          child: ListView.builder(
-                            padding: const EdgeInsets.symmetric(vertical: 4),
-                            itemCount: visibleGroups.length + 2,
-                            itemBuilder: (context, index) {
-                              if (index == 0) {
-                                return _ServerSourceAllTile(
-                                  total: _total,
-                                  selected: _allSourcesSelected,
-                                  onChanged: (value) {
-                                    setState(() {
-                                      _allSourcesSelected = value != false;
-                                      if (_allSourcesSelected) {
-                                        _draftSelectedIds.clear();
-                                      }
-                                    });
-                                  },
-                                );
-                              }
-                              final groupIndex = index - 1;
-                              if (groupIndex >= visibleGroups.length) {
-                                if (_isLoading) {
-                                  return const Padding(
-                                    padding: EdgeInsets.symmetric(vertical: 18),
-                                    child: Center(
-                                      child: SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                }
-                                if (visibleGroups.isEmpty) {
-                                  return Padding(
-                                    padding: const EdgeInsets.all(24),
-                                    child: Center(
-                                      child: Text(
-                                        _filterKeyword.trim().isEmpty
-                                            ? '暂无可用书源'
-                                            : '没有匹配的分组或书源',
-                                        style: theme.textTheme.bodyMedium,
-                                      ),
-                                    ),
-                                  );
-                                }
-                                return const SizedBox(height: 8);
-                              }
-                              final group = visibleGroups[groupIndex];
-                              final value = _groupSelectedValue(group);
-                              return _ServerSourceGroupTile(
-                                group: group,
-                                selectedValue: value,
-                                allSourcesSelected: _allSourcesSelected,
-                                selectedIds: _draftSelectedIds,
-                                onGroupChanged:
-                                    (next) =>
-                                        _toggleGroup(group, next != false),
-                                onItemChanged: _toggleItem,
-                              );
-                            },
+                          child: Material(
+                            color: Colors.transparent,
+                            child: ListView.builder(
+                              controller: _scrollController,
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              itemCount: _sources.length + 2,
+                              itemBuilder: _buildSourceListItem,
+                            ),
                           ),
                         ),
               ),
@@ -2413,67 +2391,169 @@ class _ServerSourceAllTile extends StatelessWidget {
   }
 }
 
-class _ServerSourceGroupTile extends StatelessWidget {
-  const _ServerSourceGroupTile({
-    required this.group,
-    required this.selectedValue,
+class _ServerSourceTile extends StatelessWidget {
+  const _ServerSourceTile({
+    required this.source,
     required this.allSourcesSelected,
-    required this.selectedIds,
-    required this.onGroupChanged,
-    required this.onItemChanged,
+    required this.selected,
+    required this.onChanged,
   });
 
-  final _ServerSourceGroupBucket group;
-  final bool? selectedValue;
+  final ServerSearchSourceSummary source;
   final bool allSourcesSelected;
-  final Set<String> selectedIds;
-  final ValueChanged<bool?> onGroupChanged;
-  final void Function(String id, bool selected) onItemChanged;
+  final bool selected;
+  final ValueChanged<bool?> onChanged;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return ExpansionTile(
-      key: PageStorageKey<String>('source-group-${group.id}'),
-      leading: Checkbox(
-        tristate: true,
-        value: selectedValue,
-        onChanged: group.sources.isEmpty ? null : onGroupChanged,
-      ),
-      title: Text(
-        group.name,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: theme.textTheme.bodyMedium?.copyWith(
-          fontWeight: FontWeight.w800,
+    final colorScheme = theme.colorScheme;
+    final subtitle = _serverSourceSubtitle(source);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => onChanged(!selected),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color:
+                  selected
+                      ? colorScheme.primaryContainer.withValues(alpha: 0.34)
+                      : colorScheme.surfaceContainerLowest.withValues(
+                        alpha: 0.38,
+                      ),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color:
+                    selected
+                        ? colorScheme.primary.withValues(alpha: 0.34)
+                        : colorScheme.outlineVariant.withValues(alpha: 0.28),
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+              child: Row(
+                children: <Widget>[
+                  Checkbox(
+                    value: !allSourcesSelected && selected,
+                    onChanged: onChanged,
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Row(
+                          children: <Widget>[
+                            Expanded(
+                              child: Text(
+                                source.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            _SourceScopeChip(source: source),
+                          ],
+                        ),
+                        if (subtitle.isNotEmpty) ...<Widget>[
+                          const SizedBox(height: 4),
+                          Text(
+                            subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
-      subtitle: Text('来源：${group.sourceLabel} · ${group.sources.length} 个书源'),
-      children: group.sources
-          .map(
-            (item) => CheckboxListTile(
-              value: !allSourcesSelected && selectedIds.contains(item.id),
-              title: Text(
-                item.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              subtitle:
-                  (item.group ?? '').trim().isEmpty
-                      ? null
-                      : Text(
-                        item.group!.trim(),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-              controlAffinity: ListTileControlAffinity.leading,
-              dense: true,
-              onChanged: (value) => onItemChanged(item.id, value == true),
-            ),
-          )
-          .toList(growable: false),
     );
   }
+}
+
+String _serverSourceSubtitle(ServerSearchSourceSummary source) {
+  final parts = <String>[
+    if ((source.group ?? '').trim().isNotEmpty) '分组：${source.group!.trim()}',
+    if (_sourceHealthLabel(source.healthStatus).isNotEmpty)
+      '【${_sourceHealthLabel(source.healthStatus)}】',
+  ];
+  return parts.join(' ');
+}
+
+class _SourceScopeChip extends StatelessWidget {
+  const _SourceScopeChip({required this.source});
+
+  final ServerSearchSourceSummary source;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final scope = _sourceScopeLabel(source);
+    final isPrivate = scope == '私人';
+    final background =
+        isPrivate
+            ? colorScheme.tertiaryContainer
+            : colorScheme.secondaryContainer;
+    final foreground =
+        isPrivate
+            ? colorScheme.onTertiaryContainer
+            : colorScheme.onSecondaryContainer;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: background.withValues(alpha: 0.82),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: foreground.withValues(alpha: 0.12)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        child: Text(
+          '【$scope】',
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: foreground,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String _sourceScopeLabel(ServerSearchSourceSummary source) {
+  final raw =
+      (source.sourceType ?? source.visibility ?? '').trim().toLowerCase();
+  return switch (raw) {
+    'private' || 'mine' => '私人',
+    'submitted' => '投稿',
+    _ => '共享',
+  };
+}
+
+String _sourceHealthLabel(String? status) {
+  final normalized = (status ?? '').trim().replaceAll('_', '').toLowerCase();
+  return switch (normalized) {
+    'passed' => '检测通过',
+    'failed' => '检测失败',
+    'unknown' || 'pending' => '未检测',
+    'normalizationfailed' || 'normalizefailed' => '配置异常',
+    'coolingdown' => '冷却中',
+    'ignored' => '已忽略',
+    _ => '',
+  };
 }
 
 class _ServerSourcePickerActions extends StatelessWidget {
@@ -2520,89 +2600,6 @@ class _ServerSourcePickerActions extends StatelessWidget {
       ],
     );
   }
-}
-
-class _ServerSourceGroupBucket {
-  const _ServerSourceGroupBucket({
-    required this.id,
-    required this.name,
-    required this.sourceLabel,
-    required this.sources,
-  });
-
-  final String id;
-  final String name;
-  final String sourceLabel;
-  final List<ServerSearchSourceSummary> sources;
-
-  _ServerSourceGroupBucket copyWithSources(
-    List<ServerSearchSourceSummary> sources,
-  ) {
-    return _ServerSourceGroupBucket(
-      id: id,
-      name: name,
-      sourceLabel: sourceLabel,
-      sources: sources,
-    );
-  }
-}
-
-List<_ServerSourceGroupBucket> _buildServerSourceGroups(
-  SourceAccessScope scope,
-  Map<String, ServerSearchSourceSummary> sourcesById,
-) {
-  final groups = <_ServerSourceGroupBucket>[];
-  final assigned = <String>{};
-  for (final group in scope.groups) {
-    final ids = scope.groupSourceIds[group.id] ?? const <String>[];
-    final sources = ids
-        .map((id) => sourcesById[id])
-        .whereType<ServerSearchSourceSummary>()
-        .toList(growable: false);
-    if (sources.isEmpty) {
-      continue;
-    }
-    assigned.addAll(sources.map((source) => source.id));
-    groups.add(
-      _ServerSourceGroupBucket(
-        id: group.id,
-        name: group.displayName,
-        sourceLabel: group.isPrivate ? '我的私人书源' : '平台书源',
-        sources: sources,
-      ),
-    );
-  }
-  final fallback = sourcesById.values
-      .where((source) => !assigned.contains(source.id))
-      .toList(growable: false);
-  if (fallback.isNotEmpty) {
-    groups.add(
-      _ServerSourceGroupBucket(
-        id: 'other-accessible',
-        name: '其他可用书源',
-        sourceLabel: '可用书源',
-        sources: fallback,
-      ),
-    );
-  }
-  groups.sort((a, b) {
-    final sectionOrder = _sourceSectionOrder(
-      a.sourceLabel,
-    ).compareTo(_sourceSectionOrder(b.sourceLabel));
-    if (sectionOrder != 0) {
-      return sectionOrder;
-    }
-    return a.name.compareTo(b.name);
-  });
-  return groups;
-}
-
-int _sourceSectionOrder(String section) {
-  return switch (section) {
-    '平台书源' => 0,
-    '我的私人书源' => 1,
-    _ => 2,
-  };
 }
 
 Color _readableForegroundFor(Color backgroundColor) {

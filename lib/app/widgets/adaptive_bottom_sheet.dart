@@ -29,7 +29,7 @@ class AdaptiveSheetDragHandle extends StatelessWidget {
 Future<T?> showAdaptiveActionSurface<T>({
   required BuildContext context,
   required WidgetBuilder builder,
-  bool useRootNavigator = false,
+  bool useRootNavigator = true,
   bool barrierDismissible = true,
   bool showDragHandle = true,
   double? maxWidth,
@@ -56,7 +56,7 @@ Future<T?> showAdaptiveActionSurface<T>({
       builder:
           (surfaceContext) => Padding(
             padding: EdgeInsets.only(
-              bottom: MediaQuery.of(surfaceContext).viewInsets.bottom,
+              bottom: _keyboardInsetBottom(surfaceContext),
             ),
             child: AdaptiveActionSurface(
               mode: AdaptiveActionSurfaceMode.mobileSheet,
@@ -91,10 +91,17 @@ Future<T?> showAdaptiveActionSurface<T>({
   };
 }
 
+double _keyboardInsetBottom(BuildContext context) {
+  final mediaQueryInset = MediaQuery.viewInsetsOf(context).bottom;
+  final view = View.of(context);
+  final rawViewInset = view.viewInsets.bottom / view.devicePixelRatio;
+  return mediaQueryInset > rawViewInset ? mediaQueryInset : rawViewInset;
+}
+
 Future<T?> showAdaptiveRawSurface<T>({
   required BuildContext context,
   required WidgetBuilder builder,
-  bool useRootNavigator = false,
+  bool useRootNavigator = true,
   bool barrierDismissible = true,
   bool showDragHandle = true,
   Color? mobileBackgroundColor,

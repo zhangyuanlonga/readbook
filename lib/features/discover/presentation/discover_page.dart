@@ -705,16 +705,37 @@ class _SourceRow extends ConsumerWidget {
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: Text(
-                        loadedSource.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: palette.cardTextColor,
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            loadedSource.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: palette.cardTextColor,
+                            ),
+                          ),
+                          if ((loadedSource.groupName ?? '').trim().isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Text(
+                                '分组：${loadedSource.groupName!.trim()}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: palette.textSecondaryColor,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
+                    const SizedBox(width: 8),
+                    _DiscoverSourceScopeChip(source: loadedSource),
                     if (showLoadedMeta) ...[
                       const SizedBox(width: 10),
                       _SourceRowLoadedMeta(source: loadedSource),
@@ -805,10 +826,7 @@ class _SourceRowLoadedMeta extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final latency = _SourceRow._latencyText(source.latencyMs);
-    final parts = <String>[
-      source.origin == 'cloud_catalog' ? '云端授权目录' : '本地书源',
-      '${source.categoryCount}类',
-    ];
+    final parts = <String>['${source.categoryCount}类'];
     if (latency != '-') {
       parts.add(latency);
     }
@@ -822,6 +840,53 @@ class _SourceRowLoadedMeta extends StatelessWidget {
       ),
     );
   }
+}
+
+class _DiscoverSourceScopeChip extends StatelessWidget {
+  const _DiscoverSourceScopeChip({required this.source});
+
+  final DiscoverSourceSummary source;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final scope = _discoverSourceScopeLabel(source);
+    final isPrivate = scope == '私人';
+    final background =
+        isPrivate
+            ? colorScheme.tertiaryContainer
+            : colorScheme.secondaryContainer;
+    final foreground =
+        isPrivate
+            ? colorScheme.onTertiaryContainer
+            : colorScheme.onSecondaryContainer;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: background.withValues(alpha: 0.84),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: foreground.withValues(alpha: 0.12)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        child: Text(
+          '【$scope】',
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: foreground,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String _discoverSourceScopeLabel(DiscoverSourceSummary source) {
+  final raw = (source.sourceType ?? source.origin).trim().toLowerCase();
+  return switch (raw) {
+    'private' || 'mine' || 'local' => '私人',
+    'submitted' => '投稿',
+    _ => '共享',
+  };
 }
 
 class _CategoryPanel extends ConsumerWidget {

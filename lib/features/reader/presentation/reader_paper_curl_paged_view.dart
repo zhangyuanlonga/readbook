@@ -37,8 +37,10 @@ class ReaderPaperCurlPagedViewState extends State<ReaderPaperCurlPagedView> {
   bool _controllerReady = false;
   bool _overlayVisible = false;
   bool _isAnimating = false;
+  bool _waitingForCommittedPagePaint = false;
   int _overlayGeneration = 0;
   int _captureGeneration = 0;
+  int _overlayDirection = 1;
   int? _queuedDirection;
   int? _pendingPageIndex;
   List<ui.Image>? _snapshotPages;
@@ -78,6 +80,7 @@ class ReaderPaperCurlPagedViewState extends State<ReaderPaperCurlPagedView> {
     _pendingPageIndex = targetIndex;
     _queuedDirection = safeDirection;
     _isAnimating = true;
+    _waitingForCommittedPagePaint = false;
     _disposeSnapshots();
     setState(() {});
     _capturePagesAndStartTurn(_captureGeneration);
@@ -106,6 +109,7 @@ class ReaderPaperCurlPagedViewState extends State<ReaderPaperCurlPagedView> {
     }
 
     final direction = _queuedDirection ?? 1;
+    _overlayDirection = direction;
     final snapshots =
         direction >= 0
             ? <ui.Image>[currentImage, targetImage]
@@ -197,35 +201,76 @@ class ReaderPaperCurlPagedViewState extends State<ReaderPaperCurlPagedView> {
   }
 
   void _commitPendingPage() {
-    final pendingIndex = _pendingPageIndex;
-    _resetOverlay();
-    if (!mounted || pendingIndex == null || widget.pageCount <= 0) {
+    if (_waitingForCommittedPagePaint) {
       return;
     }
+    final pendingIndex = _pendingPageIndex;
+    if (!mounted || pendingIndex == null || widget.pageCount <= 0) {
+      _resetOverlay();
+      return;
+    }
+    final generation = _captureGeneration;
+    _waitingForCommittedPagePaint = true;
     widget.onPageCommitted(pendingIndex.clamp(0, widget.pageCount - 1));
+    _resetOverlayAfterCommittedPagePaint(generation);
+  }
+
+  Future<void> _resetOverlayAfterCommittedPagePaint(int generation) async {
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted || generation != _captureGeneration) {
+      return;
+    }
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted || generation != _captureGeneration) {
+      return;
+    }
+    _resetOverlay();
   }
 
   void _resetOverlay({bool setStateIfNeeded = true}) {
     _removeAnimationCompleteListener();
     _controller = null;
     _controllerReady = false;
+    _overlayDirection = 1;
     _queuedDirection = null;
     _pendingPageIndex = null;
     _isAnimating = false;
+    _waitingForCommittedPagePaint = false;
     _captureGeneration++;
-    _disposeSnapshots();
-    if (mounted && setStateIfNeeded && _overlayVisible) {
+    final snapshots = _detachSnapshots();
+    final wasOverlayVisible = _overlayVisible;
+    if (mounted && setStateIfNeeded && wasOverlayVisible) {
       setState(() {
         _overlayVisible = false;
       });
+      _disposeSnapshotsAfterOverlayFrame(snapshots);
     } else {
       _overlayVisible = false;
+      _disposeSnapshotList(snapshots);
     }
   }
 
   void _disposeSnapshots() {
+    _disposeSnapshotList(_detachSnapshots());
+  }
+
+  List<ui.Image>? _detachSnapshots() {
     final snapshots = _snapshotPages;
     _snapshotPages = null;
+    return snapshots;
+  }
+
+  Future<void> _disposeSnapshotsAfterOverlayFrame(
+    List<ui.Image>? snapshots,
+  ) async {
+    if (snapshots == null) {
+      return;
+    }
+    await WidgetsBinding.instance.endOfFrame;
+    _disposeSnapshotList(snapshots);
+  }
+
+  void _disposeSnapshotList(List<ui.Image>? snapshots) {
     if (snapshots == null) {
       return;
     }
@@ -291,7 +336,7 @@ class ReaderPaperCurlPagedViewState extends State<ReaderPaperCurlPagedView> {
                     ),
                     controller: _controller!,
                     snapshots: snapshots,
-                    startPageIndex: (_queuedDirection ?? 1) >= 0 ? 0 : 1,
+                    startPageIndex: _overlayDirection >= 0 ? 0 : 1,
                     onPageChanged: _handleOverlayPageChanged,
                   ),
                 ),
@@ -351,7 +396,7 @@ class _PaperCurlSnapshotOverlay extends StatelessWidget {
           ),
           onPageChanged: onPageChanged,
           builder: (context, pageIndex, _) {
-            final safeIndex = pageIndex.clamp(0, snapshots.length - 1);
+            final safeIndex = pageIndex.clamp(0, snapshots.length - 1).toInt();
             return RawImage(
               image: snapshots[safeIndex],
               fit: BoxFit.fill,

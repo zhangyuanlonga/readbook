@@ -230,14 +230,14 @@ class ReaderSettings {
   static const double maxChapterHeaderSpacing = 80;
   static const List<ReaderTapZoneAction> defaultTapZoneActions =
       <ReaderTapZoneAction>[
-        ReaderTapZoneAction.catalog,
-        ReaderTapZoneAction.none,
-        ReaderTapZoneAction.bookmark,
         ReaderTapZoneAction.previousPage,
         ReaderTapZoneAction.toggleToolbar,
         ReaderTapZoneAction.nextPage,
         ReaderTapZoneAction.previousPage,
-        ReaderTapZoneAction.autoRead,
+        ReaderTapZoneAction.toggleToolbar,
+        ReaderTapZoneAction.nextPage,
+        ReaderTapZoneAction.previousPage,
+        ReaderTapZoneAction.toggleToolbar,
         ReaderTapZoneAction.nextPage,
       ];
 

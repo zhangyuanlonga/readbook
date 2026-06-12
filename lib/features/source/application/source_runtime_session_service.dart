@@ -12,20 +12,25 @@ final sourceRuntimeSessionServiceProvider =
 
 class SourceRuntimeSessionService {
   SourceRuntimeSessionService({ApiClient? client, String? baseUrl})
-    : _client =
+    : _baseUrl = AppApiConfig.normalizeBaseUrl(
+        baseUrl ?? AppApiConfig.effectiveReaderGatewayBaseUrl,
+      ),
+      _client =
           client ??
           ApiClient(
-            baseUrl:
-                (baseUrl ?? AppApiConfig.effectiveReaderGatewayBaseUrl).trim(),
+            baseUrl: AppApiConfig.normalizeBaseUrl(
+              baseUrl ?? AppApiConfig.effectiveReaderGatewayBaseUrl,
+            ),
             defaultTimeout: const Duration(seconds: 20),
           );
 
+  final String _baseUrl;
   final ApiClient _client;
 
   Future<SourceRuntimeSessionSnapshot> loadSession({required String sourceId}) {
     return _client.request<SourceRuntimeSessionSnapshot>(
       method: ApiMethod.get,
-      path: 'v1/sources/${_pathId(sourceId)}/session',
+      path: _gatewayPath('v1/sources/${_pathId(sourceId)}/session'),
       stage: ErrorStage.source,
       decoder: SourceRuntimeSessionSnapshot.fromJson,
     );
@@ -34,7 +39,7 @@ class SourceRuntimeSessionService {
   Future<SourceLoginTask> createLoginTask({required String sourceId}) {
     return _client.request<SourceLoginTask>(
       method: ApiMethod.get,
-      path: 'v1/sources/${_pathId(sourceId)}/login-task',
+      path: _gatewayPath('v1/sources/${_pathId(sourceId)}/login-task'),
       attachAccessToken: true,
       enableRetry: false,
       stage: ErrorStage.source,
@@ -53,7 +58,7 @@ class SourceRuntimeSessionService {
   }) {
     return _client.request<SourceRuntimeSessionSnapshot>(
       method: ApiMethod.put,
-      path: 'v1/sources/${_pathId(sourceId)}/session',
+      path: _gatewayPath('v1/sources/${_pathId(sourceId)}/session'),
       body: <String, Object?>{
         if (_normalize(cookie) != null) 'cookie': _normalize(cookie),
         if (headers.isNotEmpty) 'headers': _normalizeHeaders(headers),
@@ -82,7 +87,7 @@ class SourceRuntimeSessionService {
   }) {
     return _client.request<SourceRuntimeSessionSnapshot>(
       method: ApiMethod.post,
-      path: 'v1/sources/${_pathId(sourceId)}/login-result',
+      path: _gatewayPath('v1/sources/${_pathId(sourceId)}/login-result'),
       body: <String, Object?>{
         'sourceId': fromServerGatewaySourceId(sourceId),
         if (_normalize(cookies) != null) 'cookies': _normalize(cookies),
@@ -105,7 +110,7 @@ class SourceRuntimeSessionService {
   }) {
     return _client.request<SourceRuntimeSessionSnapshot>(
       method: ApiMethod.delete,
-      path: 'v1/sources/${_pathId(sourceId)}/session',
+      path: _gatewayPath('v1/sources/${_pathId(sourceId)}/session'),
       stage: ErrorStage.source,
       decoder: SourceRuntimeSessionSnapshot.fromJson,
     );
@@ -113,6 +118,10 @@ class SourceRuntimeSessionService {
 
   String _pathId(String sourceId) {
     return Uri.encodeComponent(fromServerGatewaySourceId(sourceId));
+  }
+
+  String _gatewayPath(String path) {
+    return AppApiConfig.readerGatewayApiPath(_baseUrl, path);
   }
 }
 
