@@ -21,6 +21,7 @@ import '../../../app/widgets/app_task_bottom_sheet.dart';
 import '../../../app/widgets/app_task_status.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
 import '../../../app/widgets/app_status_state_card.dart';
+import '../../../app/widgets/foundation/foundation.dart';
 import '../../../app/widgets/import_export_task_sheet.dart';
 import '../../../app/widgets/import_export_task_overlay.dart';
 import '../../../core/storage/local_file_stat.dart';
@@ -836,7 +837,7 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
                 ],
               ),
             ),
-            PopupMenuButton<String>(
+            AppMenuButton<String>(
               onSelected: (value) {
                 if (value == 'set_reader_default') {
                   unawaited(_setReaderDefaultSystemFont());
@@ -845,17 +846,10 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
                   unawaited(_setInterfaceDefaultSystemFont());
                 }
               },
-              itemBuilder:
-                  (context) => const [
-                    PopupMenuItem<String>(
-                      value: 'set_reader_default',
-                      child: Text('设为阅读默认'),
-                    ),
-                    PopupMenuItem<String>(
-                      value: 'set_interface_default',
-                      child: Text('设为界面默认'),
-                    ),
-                  ],
+              actions: const [
+                AppMenuAction(value: 'set_reader_default', label: '设为阅读默认'),
+                AppMenuAction(value: 'set_interface_default', label: '设为界面默认'),
+              ],
             ),
           ],
         ),
@@ -926,7 +920,7 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
                           ),
                           child: const Text('设为阅读默认'),
                         ),
-                      PopupMenuButton<String>(
+                      AppMenuButton<String>(
                         onSelected: (value) {
                           if (value == 'set_interface_default') {
                             unawaited(_setInterfaceDefaultCustomFont(font));
@@ -936,21 +930,19 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
                             unawaited(_removeFont(font));
                           }
                         },
-                        itemBuilder:
-                            (context) => [
-                              const PopupMenuItem<String>(
-                                value: 'set_interface_default',
-                                child: Text('设为界面默认'),
-                              ),
-                              const PopupMenuItem<String>(
-                                value: 'rename',
-                                child: Text('重命名'),
-                              ),
-                              const PopupMenuItem<String>(
-                                value: 'delete',
-                                child: Text('删除字体'),
-                              ),
-                            ],
+                        actions: const [
+                          AppMenuAction(
+                            value: 'set_interface_default',
+                            label: '设为界面默认',
+                          ),
+                          AppMenuAction(value: 'rename', label: '重命名'),
+                          AppMenuAction(
+                            value: 'delete',
+                            label: '删除字体',
+                            icon: Icons.delete_outline,
+                            destructive: true,
+                          ),
+                        ],
                       ),
                     ],
                   ),

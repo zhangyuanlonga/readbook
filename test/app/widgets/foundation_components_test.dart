@@ -379,6 +379,86 @@ void main() {
     expect(archived, isTrue);
   });
 
+  testWidgets('AppMenuButton opens native menu actions', (tester) async {
+    var selected = '';
+
+    await tester.pumpWidget(
+      AdaptiveTestHarness(
+        width: 390,
+        height: 844,
+        wrapWithMaterialApp: true,
+        child: Scaffold(
+          body: Center(
+            child: AppMenuButton<String>(
+              tooltip: '更多',
+              actions: const [
+                AppMenuAction(
+                  value: 'edit',
+                  label: '编辑',
+                  icon: Icons.edit_outlined,
+                ),
+              ],
+              onSelected: (value) {
+                selected = value;
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('更多'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('编辑'), findsOneWidget);
+
+    await tester.tap(find.text('编辑'));
+    await tester.pumpAndSettle();
+
+    expect(selected, 'edit');
+  });
+
+  testWidgets('AppDropdownField delegates to native dropdown menu', (
+    tester,
+  ) async {
+    String? selected = 'a';
+
+    await tester.pumpWidget(
+      AdaptiveTestHarness(
+        width: 390,
+        height: 844,
+        wrapWithMaterialApp: true,
+        child: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 240,
+              child: AppDropdownField<String>(
+                value: selected,
+                labelText: '类型',
+                options: const [
+                  AppDropdownOption(value: 'a', label: '全部'),
+                  AppDropdownOption(value: 'b', label: '未处理'),
+                ],
+                onSelected: (value) {
+                  selected = value;
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(DropdownMenu<String>), findsOneWidget);
+
+    await tester.tap(find.byType(DropdownMenu<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('未处理').last);
+    await tester.pumpAndSettle();
+
+    expect(selected, 'b');
+  });
+
   testWidgets('AppShortcuts delegates key events to native actions', (
     tester,
   ) async {

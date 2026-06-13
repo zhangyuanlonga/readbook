@@ -19,6 +19,7 @@ import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/adaptive_overflow_toolbar.dart';
 import '../../../app/widgets/adaptive_route_top_bar.dart';
 import '../../../app/widgets/adaptive_search_bar.dart';
+import '../../../app/widgets/foundation/foundation.dart';
 
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_stage.dart';
@@ -908,11 +909,12 @@ class _SearchPageState extends ConsumerState<SearchPage> {
             SizedBox(
               width: 38,
               height: metrics.controlHeight,
-              child: PopupMenuButton<_SearchMoreAction>(
+              child: AppMenuButton<_SearchMoreAction>(
                 tooltip: '更多选项',
                 enabled: !_isSearching,
                 padding: EdgeInsets.zero,
-                icon: const Icon(Icons.more_vert_rounded, size: 20),
+                icon: Icons.more_vert_rounded,
+                iconSize: 20,
                 onSelected: (action) {
                   switch (action) {
                     case _SearchMoreAction.serverSources:
@@ -923,38 +925,36 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                       _clearActiveSourceFilter();
                   }
                 },
-                itemBuilder:
-                    (menuContext) => [
-                      PopupMenuItem<_SearchMoreAction>(
-                        value: _SearchMoreAction.serverSources,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: _SearchMoreMenuItemContent(
-                          icon: Icons.manage_search_rounded,
-                          title: '搜索范围',
-                          subtitle: _serverSourceMenuLabel,
-                        ),
+                actions: [
+                  AppMenuAction(
+                    value: _SearchMoreAction.serverSources,
+                    label: '搜索范围',
+                    child: _SearchMoreMenuItemContent(
+                      icon: Icons.manage_search_rounded,
+                      title: '搜索范围',
+                      subtitle: _serverSourceMenuLabel,
+                    ),
+                  ),
+                  AppMenuAction(
+                    value: _SearchMoreAction.togglePrecise,
+                    label: '精准匹配',
+                    child: _SearchMoreMenuItemContent(
+                      icon: Icons.check_circle_outline_rounded,
+                      checked: _isPreciseBookMatch,
+                      title: '精准匹配',
+                    ),
+                  ),
+                  if (_selectedServerSourceIds.isNotEmpty)
+                    const AppMenuAction(
+                      value: _SearchMoreAction.clearSourceFilter,
+                      label: '清空搜索范围',
+                      dividerBefore: true,
+                      child: _SearchMoreMenuItemContent(
+                        icon: Icons.filter_alt_off_outlined,
+                        title: '清空搜索范围',
                       ),
-                      PopupMenuItem<_SearchMoreAction>(
-                        value: _SearchMoreAction.togglePrecise,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: _SearchMoreMenuItemContent(
-                          icon: Icons.check_circle_outline_rounded,
-                          checked: _isPreciseBookMatch,
-                          title: '精准匹配',
-                        ),
-                      ),
-                      if (_selectedServerSourceIds.isNotEmpty)
-                        const PopupMenuDivider(),
-                      if (_selectedServerSourceIds.isNotEmpty)
-                        const PopupMenuItem<_SearchMoreAction>(
-                          value: _SearchMoreAction.clearSourceFilter,
-                          padding: EdgeInsets.symmetric(horizontal: 16),
-                          child: _SearchMoreMenuItemContent(
-                            icon: Icons.filter_alt_off_outlined,
-                            title: '清空搜索范围',
-                          ),
-                        ),
-                    ],
+                    ),
+                ],
               ),
             ),
           ],

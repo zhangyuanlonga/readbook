@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../../app/widgets/foundation/foundation.dart';
 import 'image_resource_collection_widgets.dart';
 
 class AdvancedThemeListToolbar extends StatelessWidget {
@@ -51,23 +52,23 @@ class AdvancedThemeListToolbar extends StatelessWidget {
         const SizedBox(width: 8),
         Flexible(
           flex: categoryControlFlex,
-          child: PopupMenuButton<String?>(
+          child: AppMenuButton<String?>(
             tooltip: '分类筛选',
-            initialValue: selectedCategory,
             onSelected: onCategorySelected,
-            itemBuilder:
-                (context) => <PopupMenuEntry<String?>>[
-                  const PopupMenuItem<String?>(
-                    value: null,
-                    child: Center(child: Text('全部分类')),
-                  ),
-                  ...availableCategories.map(
-                    (category) => PopupMenuItem<String?>(
-                      value: category,
-                      child: Center(child: Text(category)),
-                    ),
-                  ),
-                ],
+            actions: [
+              const AppMenuAction<String?>(
+                value: null,
+                label: '全部分类',
+                child: Center(child: Text('全部分类')),
+              ),
+              ...availableCategories.map(
+                (category) => AppMenuAction<String?>(
+                  value: category,
+                  label: category,
+                  child: Center(child: Text(category)),
+                ),
+              ),
+            ],
             child: Container(
               height: 40,
               width: double.infinity,

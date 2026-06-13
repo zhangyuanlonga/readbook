@@ -9,6 +9,7 @@ import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/adaptive_grid_sliver.dart';
 import '../../../app/widgets/adaptive_overflow_toolbar.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/foundation/foundation.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
 import '../application/advanced_theme_provider.dart';
 import '../application/cover_gallery_provider.dart';
@@ -462,7 +463,7 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
                   ImageResourceUsageBadge(label: label),
                   const SizedBox(width: 6),
                 ],
-                PopupMenuButton<_CoverGalleryAction>(
+                AppMenuButton<_CoverGalleryAction>(
                   onSelected: (action) {
                     switch (action) {
                       case _CoverGalleryAction.edit:
@@ -479,29 +480,31 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
                         break;
                     }
                   },
-                  itemBuilder:
-                      (context) => [
-                        const PopupMenuItem<_CoverGalleryAction>(
-                          value: _CoverGalleryAction.edit,
-                          child: Text('编辑图集'),
-                        ),
-                        const PopupMenuItem<_CoverGalleryAction>(
-                          value: _CoverGalleryAction.rename,
-                          child: Text('重命名'),
-                        ),
-                        const PopupMenuItem<_CoverGalleryAction>(
-                          value: _CoverGalleryAction.duplicate,
-                          child: Text('复制图集'),
-                        ),
-                        const PopupMenuItem<_CoverGalleryAction>(
-                          value: _CoverGalleryAction.delete,
-                          child: Text('删除图集'),
-                        ),
-                      ],
-                  icon: Icon(
-                    Icons.more_horiz_rounded,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
+                  icon: Icons.more_horiz_rounded,
+                  iconColor: colorScheme.onSurfaceVariant,
+                  actions: const [
+                    AppMenuAction(
+                      value: _CoverGalleryAction.edit,
+                      label: '编辑图集',
+                      icon: Icons.edit_outlined,
+                    ),
+                    AppMenuAction(
+                      value: _CoverGalleryAction.rename,
+                      label: '重命名',
+                      icon: Icons.drive_file_rename_outline_rounded,
+                    ),
+                    AppMenuAction(
+                      value: _CoverGalleryAction.duplicate,
+                      label: '复制图集',
+                      icon: Icons.copy_rounded,
+                    ),
+                    AppMenuAction(
+                      value: _CoverGalleryAction.delete,
+                      label: '删除图集',
+                      icon: Icons.delete_outline,
+                      destructive: true,
+                    ),
+                  ],
                 ),
               ],
             ),

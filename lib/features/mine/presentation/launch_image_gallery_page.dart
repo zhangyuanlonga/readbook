@@ -9,6 +9,7 @@ import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/adaptive_grid_sliver.dart';
 import '../../../app/widgets/adaptive_overflow_toolbar.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/foundation/foundation.dart';
 import '../application/advanced_theme_provider.dart';
 import '../application/gallery_index_models.dart';
 import '../application/launch_image_gallery_provider.dart';
@@ -572,7 +573,7 @@ class _LaunchImageGalleryPageState
                   const ImageResourceUsageBadge(label: '主题默认'),
                   const SizedBox(width: 6),
                 ],
-                PopupMenuButton<_LaunchGalleryAction>(
+                AppMenuButton<_LaunchGalleryAction>(
                   onSelected: (action) {
                     switch (action) {
                       case _LaunchGalleryAction.setDefault:
@@ -592,45 +593,39 @@ class _LaunchImageGalleryPageState
                         break;
                     }
                   },
-                  itemBuilder: (context) {
-                    final items = <PopupMenuEntry<_LaunchGalleryAction>>[
-                      const PopupMenuItem<_LaunchGalleryAction>(
-                        value: _LaunchGalleryAction.setDefault,
-                        child: Text('设为默认'),
+                  icon: Icons.more_horiz_rounded,
+                  iconColor: colorScheme.onSurfaceVariant,
+                  actions: [
+                    const AppMenuAction(
+                      value: _LaunchGalleryAction.setDefault,
+                      label: '设为默认',
+                      icon: Icons.check_circle_outline_rounded,
+                    ),
+                    const AppMenuAction(
+                      value: _LaunchGalleryAction.edit,
+                      label: '编辑图集',
+                      icon: Icons.edit_outlined,
+                    ),
+                    if (gallery.isEditable) ...[
+                      const AppMenuAction(
+                        value: _LaunchGalleryAction.rename,
+                        label: '重命名',
+                        icon: Icons.drive_file_rename_outline_rounded,
                       ),
-                      const PopupMenuItem<_LaunchGalleryAction>(
-                        value: _LaunchGalleryAction.edit,
-                        child: Text('编辑图集'),
+                      const AppMenuAction(
+                        value: _LaunchGalleryAction.duplicate,
+                        label: '复制图集',
+                        icon: Icons.copy_rounded,
                       ),
-                    ];
-                    if (gallery.isEditable) {
-                      items.add(
-                        const PopupMenuItem<_LaunchGalleryAction>(
-                          value: _LaunchGalleryAction.rename,
-                          child: Text('重命名'),
+                      if (gallery.isDeletable)
+                        const AppMenuAction(
+                          value: _LaunchGalleryAction.delete,
+                          label: '删除图集',
+                          icon: Icons.delete_outline,
+                          destructive: true,
                         ),
-                      );
-                      items.add(
-                        const PopupMenuItem<_LaunchGalleryAction>(
-                          value: _LaunchGalleryAction.duplicate,
-                          child: Text('复制图集'),
-                        ),
-                      );
-                      if (gallery.isDeletable) {
-                        items.add(
-                          const PopupMenuItem<_LaunchGalleryAction>(
-                            value: _LaunchGalleryAction.delete,
-                            child: Text('删除图集'),
-                          ),
-                        );
-                      }
-                    }
-                    return items;
-                  },
-                  icon: Icon(
-                    Icons.more_horiz_rounded,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
+                    ],
+                  ],
                 ),
               ],
             ),

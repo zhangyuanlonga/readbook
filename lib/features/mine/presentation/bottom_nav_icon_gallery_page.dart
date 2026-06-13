@@ -15,6 +15,7 @@ import '../../../app/widgets/adaptive_grid_sliver.dart';
 import '../../../app/widgets/adaptive_overflow_toolbar.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/bottom_nav_icon_view.dart';
+import '../../../app/widgets/foundation/foundation.dart';
 import '../../../domain/entities/bottom_nav_icon_gallery.dart';
 import '../application/advanced_theme_provider.dart';
 import '../application/gallery_index_models.dart';
@@ -380,7 +381,7 @@ class _BottomNavIconGalleryPageState
                       ),
                     )
                   else
-                    PopupMenuButton<_GalleryAction>(
+                    AppMenuButton<_GalleryAction>(
                       onSelected: (action) {
                         switch (action) {
                           case _GalleryAction.activate:
@@ -400,50 +401,43 @@ class _BottomNavIconGalleryPageState
                             break;
                         }
                       },
-                      itemBuilder: (context) {
-                        final items = <PopupMenuEntry<_GalleryAction>>[
-                          if (!active)
-                            const PopupMenuItem<_GalleryAction>(
-                              value: _GalleryAction.activate,
-                              child: Text('设为默认'),
-                            ),
-                          const PopupMenuItem<_GalleryAction>(
-                            value: _GalleryAction.edit,
-                            child: Text('编辑图标'),
+                      icon:
+                          active
+                              ? Icons.check_circle_rounded
+                              : Icons.more_horiz_rounded,
+                      iconColor:
+                          active ? colorScheme.primary : colorScheme.outline,
+                      actions: [
+                        if (!active)
+                          const AppMenuAction(
+                            value: _GalleryAction.activate,
+                            label: '设为默认',
+                            icon: Icons.check_circle_outline_rounded,
                           ),
-                        ];
-
-                        if (gallery.isEditable) {
-                          items.add(
-                            const PopupMenuItem<_GalleryAction>(
-                              value: _GalleryAction.rename,
-                              child: Text('重命名'),
-                            ),
-                          );
-                        }
-                        items.add(
-                          const PopupMenuItem<_GalleryAction>(
-                            value: _GalleryAction.duplicate,
-                            child: Text('复制图集'),
+                        const AppMenuAction(
+                          value: _GalleryAction.edit,
+                          label: '编辑图标',
+                          icon: Icons.edit_outlined,
+                        ),
+                        if (gallery.isEditable)
+                          const AppMenuAction(
+                            value: _GalleryAction.rename,
+                            label: '重命名',
+                            icon: Icons.drive_file_rename_outline_rounded,
                           ),
-                        );
-                        if (gallery.isDeletable) {
-                          items.add(
-                            const PopupMenuItem<_GalleryAction>(
-                              value: _GalleryAction.delete,
-                              child: Text('删除图集'),
-                            ),
-                          );
-                        }
-                        return items;
-                      },
-                      icon: Icon(
-                        active
-                            ? Icons.check_circle_rounded
-                            : Icons.more_horiz_rounded,
-                        color:
-                            active ? colorScheme.primary : colorScheme.outline,
-                      ),
+                        const AppMenuAction(
+                          value: _GalleryAction.duplicate,
+                          label: '复制图集',
+                          icon: Icons.copy_rounded,
+                        ),
+                        if (gallery.isDeletable)
+                          const AppMenuAction(
+                            value: _GalleryAction.delete,
+                            label: '删除图集',
+                            icon: Icons.delete_outline,
+                            destructive: true,
+                          ),
+                      ],
                     ),
                 ],
               ),

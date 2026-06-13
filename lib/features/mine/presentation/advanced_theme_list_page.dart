@@ -23,6 +23,7 @@ import '../../../app/widgets/adaptive_overflow_toolbar.dart';
 import '../../../app/widgets/adaptive_route_top_bar.dart';
 import '../../../app/widgets/app_task_bottom_sheet.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
+import '../../../app/widgets/foundation/foundation.dart';
 import '../../../app/widgets/import_export_task_sheet.dart';
 import '../../../app/widgets/import_export_copy.dart';
 import '../../../app/widgets/import_export_task_overlay.dart';
@@ -1587,40 +1588,35 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
         onPressed: _isLoading || _isSaving ? null : () => _openEditor(),
         icon: const Icon(Icons.add_rounded),
       ),
-      PopupMenuButton<_AdvancedThemeListMoreAction>(
+      AppMenuButton<_AdvancedThemeListMoreAction>(
         enabled: !_isLoading && !_isSaving,
         tooltip: '更多',
         onSelected: _handleMoreAction,
-        itemBuilder:
-            (context) => <PopupMenuEntry<_AdvancedThemeListMoreAction>>[
-              const PopupMenuItem(
-                value: _AdvancedThemeListMoreAction.importBatch,
-                child: Text('批量导入'),
-              ),
-              const PopupMenuItem(
-                value: _AdvancedThemeListMoreAction.sortThemes,
-                child: Text('排序主题'),
-              ),
-              PopupMenuItem(
-                value: _AdvancedThemeListMoreAction.floatingEdit,
-                child: Row(
-                  children: [
-                    Icon(
-                      _floatingEditEnabled
-                          ? Icons.check_box_rounded
-                          : Icons.check_box_outline_blank_rounded,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 10),
-                    const Text('悬浮编辑按钮'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: _AdvancedThemeListMoreAction.selectThemes,
-                child: Text('选择主题'),
-              ),
-            ],
+        actions: [
+          const AppMenuAction(
+            value: _AdvancedThemeListMoreAction.importBatch,
+            label: '批量导入',
+            icon: Icons.upload_file_outlined,
+          ),
+          const AppMenuAction(
+            value: _AdvancedThemeListMoreAction.sortThemes,
+            label: '排序主题',
+            icon: Icons.sort_rounded,
+          ),
+          AppMenuAction(
+            value: _AdvancedThemeListMoreAction.floatingEdit,
+            label: '悬浮编辑按钮',
+            icon:
+                _floatingEditEnabled
+                    ? Icons.check_box_rounded
+                    : Icons.check_box_outline_blank_rounded,
+          ),
+          const AppMenuAction(
+            value: _AdvancedThemeListMoreAction.selectThemes,
+            label: '选择主题',
+            icon: Icons.checklist_rounded,
+          ),
+        ],
       ),
     ];
   }

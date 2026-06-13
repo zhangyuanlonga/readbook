@@ -21,6 +21,7 @@ import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/app_task_bottom_sheet.dart';
+import '../../../app/widgets/foundation/foundation.dart';
 import '../../../app/widgets/import_export_task_overlay.dart';
 import '../../../app/widgets/import_export_task_sheet.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
@@ -664,56 +665,34 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                                 icon: const Icon(Icons.search_rounded),
                               ),
                         ),
-                      PopupMenuButton<_BookshelfMoreAction>(
+                      AppMenuButton<_BookshelfMoreAction>(
                         tooltip: '更多功能',
                         onSelected: _handleMoreAction,
-                        itemBuilder:
-                            (context) => [
-                              PopupMenuItem<_BookshelfMoreAction>(
-                                value: _BookshelfMoreAction.selectBooks,
-                                enabled:
-                                    !_isLoading && _filteredBooks.isNotEmpty,
-                                child: const Row(
-                                  children: [
-                                    Icon(Icons.checklist_rounded, size: 18),
-                                    SizedBox(width: 10),
-                                    Text('选择书籍'),
-                                  ],
-                                ),
-                              ),
-                              PopupMenuItem<_BookshelfMoreAction>(
-                                value: _BookshelfMoreAction.sortBooks,
-                                enabled: !_isLoading && _books.isNotEmpty,
-                                child: const Row(
-                                  children: [
-                                    Icon(Icons.sort_rounded, size: 18),
-                                    SizedBox(width: 10),
-                                    Text('书籍排序'),
-                                  ],
-                                ),
-                              ),
-                              const PopupMenuItem<_BookshelfMoreAction>(
-                                value: _BookshelfMoreAction.settings,
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.tune_rounded, size: 18),
-                                    SizedBox(width: 10),
-                                    Text('书架设置'),
-                                  ],
-                                ),
-                              ),
-                              const PopupMenuItem<_BookshelfMoreAction>(
-                                value: _BookshelfMoreAction.importLocal,
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.library_add_rounded, size: 18),
-                                    SizedBox(width: 10),
-                                    Text('导入图书'),
-                                  ],
-                                ),
-                              ),
-                            ],
-                        icon: const Icon(Icons.more_vert_rounded),
+                        actions: [
+                          AppMenuAction(
+                            value: _BookshelfMoreAction.selectBooks,
+                            label: '选择书籍',
+                            icon: Icons.checklist_rounded,
+                            enabled: !_isLoading && _filteredBooks.isNotEmpty,
+                          ),
+                          AppMenuAction(
+                            value: _BookshelfMoreAction.sortBooks,
+                            label: '书籍排序',
+                            icon: Icons.sort_rounded,
+                            enabled: !_isLoading && _books.isNotEmpty,
+                          ),
+                          const AppMenuAction(
+                            value: _BookshelfMoreAction.settings,
+                            label: '书架设置',
+                            icon: Icons.tune_rounded,
+                          ),
+                          const AppMenuAction(
+                            value: _BookshelfMoreAction.importLocal,
+                            label: '导入图书',
+                            icon: Icons.library_add_rounded,
+                          ),
+                        ],
+                        icon: Icons.more_vert_rounded,
                       ),
                     ],
                   ],

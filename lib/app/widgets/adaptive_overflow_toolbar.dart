@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../layout/app_adaptive.dart';
+import 'foundation/foundation.dart';
 
 class AdaptiveOverflowToolbarItem {
   const AdaptiveOverflowToolbarItem({
@@ -120,30 +121,24 @@ class _ToolbarMoreButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PopupMenuButton<AdaptiveOverflowToolbarItem>(
+    return AppMenuButton<AdaptiveOverflowToolbarItem>(
       tooltip: tooltip,
-      icon: const Icon(Icons.more_horiz_rounded),
+      icon: Icons.more_horiz_rounded,
       onSelected: (item) {
         if (item.enabled) {
           item.onPressed?.call();
         }
       },
-      itemBuilder:
-          (context) => items
-              .map(
-                (item) => PopupMenuItem<AdaptiveOverflowToolbarItem>(
-                  value: item,
-                  enabled: item.enabled,
-                  child: Row(
-                    children: [
-                      Icon(item.icon, size: 20),
-                      const SizedBox(width: 12),
-                      Expanded(child: Text(item.label)),
-                    ],
-                  ),
-                ),
-              )
-              .toList(growable: false),
+      actions: items
+          .map(
+            (item) => AppMenuAction<AdaptiveOverflowToolbarItem>(
+              value: item,
+              label: item.label,
+              icon: item.icon,
+              enabled: item.enabled,
+            ),
+          )
+          .toList(growable: false),
     );
   }
 }

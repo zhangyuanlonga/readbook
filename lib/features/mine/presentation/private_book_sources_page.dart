@@ -17,6 +17,7 @@ import '../../../app/widgets/adaptive_overflow_toolbar.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
 import '../../../app/widgets/app_task_bottom_sheet.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/foundation/foundation.dart';
 import '../../../app/platform/app_platform_capabilities.dart';
 import '../../../core/auth/auth_event_bus.dart';
 import '../../../core/auth/auth_session.dart';
@@ -2199,14 +2200,13 @@ class _PrivateSourceMoreButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     return SizedBox(
       width: 36,
       height: 36,
-      child: PopupMenuButton<_PrivateSourceAction>(
+      child: AppMenuButton<_PrivateSourceAction>(
         tooltip: '更多',
         padding: EdgeInsets.zero,
-        icon: const Icon(Icons.more_vert_rounded),
+        icon: Icons.more_vert_rounded,
         onSelected: (action) {
           switch (action) {
             case _PrivateSourceAction.detail:
@@ -2221,72 +2221,37 @@ class _PrivateSourceMoreButton extends StatelessWidget {
               onDelete();
           }
         },
-        itemBuilder:
-            (context) => <PopupMenuEntry<_PrivateSourceAction>>[
-              const PopupMenuItem(
-                value: _PrivateSourceAction.detail,
-                child: _PrivateSourceMenuItem(
-                  icon: Icons.info_outline_rounded,
-                  label: '详情',
-                ),
-              ),
-              const PopupMenuItem(
-                value: _PrivateSourceAction.test,
-                child: _PrivateSourceMenuItem(
-                  icon: Icons.science_outlined,
-                  label: '检测',
-                ),
-              ),
-              PopupMenuItem(
-                value: _PrivateSourceAction.submit,
-                enabled: item.visibility == 'private',
-                child: const _PrivateSourceMenuItem(
-                  icon: Icons.ios_share_outlined,
-                  label: '提交共享',
-                ),
-              ),
-              PopupMenuItem(
-                value: _PrivateSourceAction.edit,
-                enabled: item.visibility != 'shared',
-                child: const _PrivateSourceMenuItem(
-                  icon: Icons.edit_outlined,
-                  label: '编辑',
-                ),
-              ),
-              PopupMenuItem(
-                value: _PrivateSourceAction.delete,
-                child: _PrivateSourceMenuItem(
-                  icon: Icons.delete_outline,
-                  label: '删除',
-                  color: colorScheme.error,
-                ),
-              ),
-            ],
+        actions: [
+          const AppMenuAction(
+            value: _PrivateSourceAction.detail,
+            label: '详情',
+            icon: Icons.info_outline_rounded,
+          ),
+          const AppMenuAction(
+            value: _PrivateSourceAction.test,
+            label: '检测',
+            icon: Icons.science_outlined,
+          ),
+          AppMenuAction(
+            value: _PrivateSourceAction.submit,
+            label: '提交共享',
+            icon: Icons.ios_share_outlined,
+            enabled: item.visibility == 'private',
+          ),
+          AppMenuAction(
+            value: _PrivateSourceAction.edit,
+            label: '编辑',
+            icon: Icons.edit_outlined,
+            enabled: item.visibility != 'shared',
+          ),
+          const AppMenuAction(
+            value: _PrivateSourceAction.delete,
+            label: '删除',
+            icon: Icons.delete_outline,
+            destructive: true,
+          ),
+        ],
       ),
-    );
-  }
-}
-
-class _PrivateSourceMenuItem extends StatelessWidget {
-  const _PrivateSourceMenuItem({
-    required this.icon,
-    required this.label,
-    this.color,
-  });
-
-  final IconData icon;
-  final String label;
-  final Color? color;
-
-  @override
-  Widget build(BuildContext context) {
-    final foreground = color ?? Theme.of(context).colorScheme.onSurface;
-    return Row(
-      children: <Widget>[
-        Icon(icon, size: 18, color: foreground),
-        const SizedBox(width: 10),
-        Text(label, style: TextStyle(color: foreground)),
-      ],
     );
   }
 }
@@ -2406,19 +2371,17 @@ class _SourceTestConfigSheetState extends State<_SourceTestConfigSheet> {
                 ),
               ),
               const SizedBox(height: 14),
-              DropdownButtonFormField<int>(
-                initialValue: _timeoutMs,
-                decoration: const InputDecoration(
-                  labelText: '超时',
-                  prefixIcon: Icon(Icons.timer_outlined),
-                ),
-                items: const <DropdownMenuItem<int>>[
-                  DropdownMenuItem(value: 12000, child: Text('12 秒')),
-                  DropdownMenuItem(value: 30000, child: Text('30 秒')),
-                  DropdownMenuItem(value: 60000, child: Text('60 秒')),
-                  DropdownMenuItem(value: 90000, child: Text('90 秒')),
+              AppDropdownField<int>(
+                value: _timeoutMs,
+                labelText: '超时',
+                leadingIcon: const Icon(Icons.timer_outlined),
+                options: const [
+                  AppDropdownOption(value: 12000, label: '12 秒'),
+                  AppDropdownOption(value: 30000, label: '30 秒'),
+                  AppDropdownOption(value: 60000, label: '60 秒'),
+                  AppDropdownOption(value: 90000, label: '90 秒'),
                 ],
-                onChanged: (value) {
+                onSelected: (value) {
                   if (value != null) {
                     setState(() => _timeoutMs = value);
                   }
@@ -3026,16 +2989,19 @@ class _PrivateSourceFormState extends ConsumerState<_PrivateSourceForm> {
                   builder: (context, constraints) {
                     final typeField = _PrivateSourceField(
                       label: '类型',
-                      child: DropdownButtonFormField<String>(
-                        initialValue: _type,
-                        decoration: _privateSourceInputDecoration(),
-                        items: const <DropdownMenuItem<String>>[
-                          DropdownMenuItem(value: 'novel', child: Text('小说')),
-                          DropdownMenuItem(value: 'comic', child: Text('漫画')),
-                          DropdownMenuItem(value: 'audio', child: Text('音频')),
-                          DropdownMenuItem(value: 'video', child: Text('视频')),
+                      child: AppDropdownField<String>(
+                        value: _type,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 13,
+                        ),
+                        options: const [
+                          AppDropdownOption(value: 'novel', label: '小说'),
+                          AppDropdownOption(value: 'comic', label: '漫画'),
+                          AppDropdownOption(value: 'audio', label: '音频'),
+                          AppDropdownOption(value: 'video', label: '视频'),
                         ],
-                        onChanged: (value) {
+                        onSelected: (value) {
                           if (value != null) {
                             setState(() {
                               _type = value;

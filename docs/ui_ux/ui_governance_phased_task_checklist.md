@@ -134,6 +134,7 @@
 - [x] 统一 Card/ListTile 扩展: 普通、可点击、选中、危险操作、禁用。
 - [x] 统一 Selection/BatchAction 模式: `AdaptiveListTile.selected` + `AppBatchActionBar` 覆盖选择态、批量操作栏、危险批量操作确认。
 - [x] 统一 Search/Filter 模式: `AdaptiveSearchBar`、`AdaptiveFilterBar`、`AdaptiveOverflowToolbar` 覆盖搜索输入、筛选 chip、排序入口、清空入口。
+- [x] 统一 Menu/Dropdown 模式: `AppMenuButton` 基于 `MenuAnchor` 覆盖更多菜单、筛选菜单和危险项；`AppDropdownField` 基于 `DropdownMenu` 覆盖表单下拉和设置选择器。
 - [x] 统一 Image/Cover 模式: `DiskCachedCoverImage` 覆盖占位、失败、淡入、圆角、缓存和解码尺寸。
 - [x] 统一 Toast/Snack/Inline feedback 模式: `AppFeedback`、成功、失败、警告、后台任务反馈。
 - [x] 统一 Refresh 模式: 下拉刷新、上拉加载、刷新指示器和错误重试。
@@ -172,6 +173,7 @@
 - [x] 组件测试覆盖 `390x844`、`600x960`、`1280x800` 中至少两个断点。
 - [x] 列表 item 组件有稳定 key / selected / disabled / hover 或 focus smoke test。
 - [x] Selection/BatchAction 组件有 selected count、select all、clear、danger confirm smoke test。
+- [x] Menu/Dropdown 组件有打开、选择、禁用或原生 `DropdownMenu` 委托 smoke test。
 - [x] 图片组件有 loading、error、cache manager、decode size 和圆角 smoke test。
 
 ### 4.5 验收
@@ -222,6 +224,7 @@
 | 触觉反馈 | `HapticFeedback` | 原生 | Flutter 原生能力，封装成功、危险、选择三类反馈规则 |
 | 键盘快捷键 | `Shortcuts` / `Actions` | 原生 | Flutter 原生能力，优先用于桌面端和效率型页面 |
 | 菜单锚点 | `MenuAnchor` | 原生 | Flutter 原生能力，适合作为桌面菜单和 overflow menu 基线 |
+| 选择下拉 | `DropdownMenu` | 原生 | Flutter 原生 MD3 选择器，封装 `AppDropdownField` 后替代旧 `DropdownButton*` |
 
 ### 5.1.3 暂不引入 / 特定需求再评估
 
@@ -251,6 +254,7 @@
 - [x] 拖拽排序: 基于 `ReorderableListView` 封装统一拖拽句柄、排序反馈和空态。
 - [x] 键盘快捷键: 基于 `Shortcuts` / `Actions` 封装 `AppShortcuts`，用于桌面端常用操作。
 - [x] 右键或溢出菜单: 优先基于 `MenuAnchor`，不足时再评估 `context_menus`。
+- [x] 下拉选择器: 基于 `DropdownMenu` 封装 `AppDropdownField`，替代旧 `DropdownButton` / `DropdownButtonFormField`。
 - [x] 原生组件不足时才进入第三方库评估，评估结论必须写入 PR 或任务记录。
 
 ### 5.3 加载与骨架屏
@@ -428,15 +432,15 @@
 |---|---|---|---|
 | [ ] | App Shell / 全局导航 | `ShellScaffold`、桌面工具栏、底部导航、全局任务面板 | 统一快捷键、批量入口、全局反馈和 RepaintBoundary 边界 |
 | [ ] | Home | 首页入口、推荐区、跨模块卡片 | 状态卡片、卡片 Token、断点矩阵 |
-| [ ] | Bookshelf | 书架卡片、筛选、排序、布局切换、更多操作、导入反馈 | 选择态、批量操作、长列表 key、图片尺寸约束 |
-| [ ] | Search | 搜索输入、结果卡片、分组空态、失败报告、书源筛选 | 另一方正在做 P3 Search 关键链路，本轮只接收基础组件，不抢页面迁移 |
-| [ ] | Book detail | 元数据、主操作、目录、来源切换、封面编辑 | 另一方正在做 P3 Book 关键链路，本轮只补治理清单和基础组件 |
+| [ ] | Bookshelf | 书架卡片、筛选、排序、布局切换、更多操作、导入反馈 | 更多操作和设置下拉已接入 `AppMenuButton` / `AppDropdownField`；后续看选择态、批量操作、长列表 key、图片尺寸约束 |
+| [ ] | Search | 搜索输入、结果卡片、分组空态、失败报告、书源筛选 | 搜索更多菜单已接入 `AppMenuButton`；另一方正在做 P3 Search 关键链路，本轮不抢页面迁移 |
+| [ ] | Book detail | 元数据、主操作、目录、来源切换、封面编辑 | 编码下拉已接入 `AppDropdownField`；另一方正在做 P3 Book 关键链路，本轮只补基础组件接入 |
 | [ ] | Reader core | 翻页、章节定位、阅读进度、阅读设置持久化 | 暂缓强推 UI 治理，只记录例外和不破坏核心链路 |
-| [ ] | Reader surrounding | 设置 sheet、目录 sheet、阅读记录、缓存反馈、来源切换、注释工具栏 | 优先迁移非核心弹层、状态、反馈和快捷键 |
+| [ ] | Reader surrounding | 设置 sheet、目录 sheet、阅读记录、缓存反馈、来源切换、注释工具栏 | 阅读记录热力图菜单已接入 `AppMenuButton`；继续迁移非核心弹层、状态、反馈和快捷键 |
 | [x] | Mine / StorageManagement | 存储管理页低风险试点 | 已完成弹层、状态、骨架、反馈、smoke 和复盘 |
-| [ ] | Mine / Appearance | 外观设置、阅读背景、底部导航图标、封面图库、启动图图库 | 图片尺寸、资源占位、图库网格和状态切换 |
-| [ ] | Mine / AdvancedTheme | 高级主题列表、编辑器、导入导出、主题预览 | 选择态、批量操作、动效、图库资源状态 |
-| [ ] | Mine / Source & Assets | 私有书源、字体管理、书签、反馈、会员、系统设置 | 表单、危险确认、后台任务反馈、权限/禁用态 |
+| [ ] | Mine / Appearance | 外观设置、阅读背景、底部导航图标、封面图库、启动图图库 | 图库更多菜单已接入 `AppMenuButton`；后续看图片尺寸、资源占位、图库网格和状态切换 |
+| [ ] | Mine / AdvancedTheme | 高级主题列表、编辑器、导入导出、主题预览 | 主题列表菜单、分类筛选和卡片操作已接入基础菜单；后续看选择态、批量操作、动效、图库资源状态 |
+| [ ] | Mine / Source & Assets | 私有书源、字体管理、书签、反馈、会员、系统设置 | 私有书源、字体、反馈的菜单/下拉已接入基础组件；后续看表单、危险确认、后台任务反馈、权限/禁用态 |
 | [ ] | Auth / Profile | 登录注册、账号资料、密码和头像编辑 | 表单状态、确认弹层、上传/保存反馈 |
 | [ ] | Announcement | 公告列表、公告详情 | 低频页面，按改动机会补状态、卡片和宽屏布局 |
 | [ ] | Discover | 发现页、服务端发现结果、错误/空态 | 状态组件、结果卡片、刷新和失败反馈 |
@@ -494,6 +498,7 @@
 - [x] 高频列表组件有稳定 key 和长列表性能说明。
 - [x] 新增第三方 UI/动效库直接调用数量为 0，合法例外除外。
 - [x] 新增图片组件必须有尺寸约束、占位和失败态。
+- [x] 旧 MD2 风险入口 `PopupMenu*`、`DropdownButton*`、`DropdownMenuItem` 在 `lib` / `test` 扫描结果为 0。
 
 ---
 
@@ -556,6 +561,7 @@
 - [x] 启动 Phase 3 `AppRefreshIndicator`，基于 Flutter 原生 `RefreshIndicator` 统一下拉刷新体验。
 - [x] 启动 Phase 3 `AppFeedback` / `AppToast`，收敛 SnackBar、Toast、Inline feedback 和后台任务反馈。
 - [x] 启动 Phase 3 `AppBatchActionBar`，统一选择态、批量操作和危险批量确认。
+- [x] 启动 Phase 3 `AppMenuButton` / `AppDropdownField`，基于 Flutter 原生 `MenuAnchor` / `DropdownMenu` 收口更多菜单、筛选菜单和表单下拉。
 
 ### 13.2 Week 2-3: 推荐完成
 
@@ -571,6 +577,7 @@
 - [x] 建立裸弹层、硬编码样式、业务页面直连第三方库、长列表性能问题的 baseline。
 - [ ] 每周推广 1-2 个页面，优先处理高频路径和重复 UI 模式明显的页面。
 - [x] 每轮至少沉淀 1 个可复用组件或删除 1 类重复 UI 写法。
+- [x] 完成 MD3 菜单/下拉收尾: `PopupMenu*`、`DropdownButton*`、`DropdownMenuItem` 直接使用清零。
 - [x] 根据试点和自动化误报持续调整 checklist，而不是一次性追求全量完美。
 
 ---

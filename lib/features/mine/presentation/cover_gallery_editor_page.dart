@@ -10,6 +10,7 @@ import '../../../app/platform/app_input_focus_behavior.dart';
 import '../../../app/tasks/app_task_manager.dart';
 import '../../../app/widgets/adaptive_fullscreen_preview.dart';
 import '../../../app/widgets/app_task_status.dart';
+import '../../../app/widgets/foundation/foundation.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../domain/entities/cover_gallery.dart';
 import '../application/cover_gallery_provider.dart';
@@ -413,16 +414,20 @@ class _CoverGalleryEditorPageState
                 onPressed: _isLoading || _isSaving ? null : _pickImages,
                 icon: const Icon(Icons.add_rounded),
               ),
-              PopupMenuButton<String>(
+              AppMenuButton<String>(
                 onSelected: (value) {
                   if (value == 'delete') {
                     _deleteGallery();
                   }
                 },
-                itemBuilder:
-                    (context) => const [
-                      PopupMenuItem(value: 'delete', child: Text('删除图集')),
-                    ],
+                actions: const [
+                  AppMenuAction(
+                    value: 'delete',
+                    label: '删除图集',
+                    icon: Icons.delete_outline,
+                    destructive: true,
+                  ),
+                ],
               ),
             ],
           ],

@@ -571,33 +571,30 @@ extension on _BookshelfPageState {
                         width: controlWidth,
                         child: Align(
                           alignment: Alignment.centerRight,
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<T>(
-                              value: value,
-                              isDense: true,
-                              isExpanded: true,
-                              borderRadius: BorderRadius.circular(14),
-                              alignment: AlignmentDirectional.center,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: colorScheme.onSurface,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 14,
-                              ),
-                              onChanged: onChanged,
-                              items: [
-                                for (final option in values)
-                                  DropdownMenuItem<T>(
-                                    value: option,
-                                    alignment: AlignmentDirectional.center,
-                                    child: Text(
-                                      labelBuilder(option),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ),
-                              ],
+                          child: AppDropdownField<T>(
+                            value: value,
+                            expanded: false,
+                            width: controlWidth,
+                            textAlign: TextAlign.center,
+                            textStyle: theme.textTheme.bodyMedium?.copyWith(
+                              color: colorScheme.onSurface,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
                             ),
+                            options: [
+                              for (final option in values)
+                                AppDropdownOption<T>(
+                                  value: option,
+                                  label: labelBuilder(option),
+                                  labelWidget: Text(
+                                    labelBuilder(option),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                            ],
+                            onSelected: onChanged,
                           ),
                         ),
                       ),

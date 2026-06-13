@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/widgets/foundation/foundation.dart';
 import '../../application/advanced_theme_service.dart';
 import '../advanced_theme_list_actions.dart';
 
@@ -82,28 +83,32 @@ class AdvancedThemeSummaryCard extends StatelessWidget {
                   ),
                 ),
                 if (!isSelectionMode)
-                  PopupMenuButton<AdvancedThemeAction>(
+                  AppMenuButton<AdvancedThemeAction>(
                     enabled: !isSaving,
                     onSelected: onActionSelected,
-                    itemBuilder:
-                        (context) => const [
-                          PopupMenuItem(
-                            value: AdvancedThemeAction.edit,
-                            child: Text('编辑'),
-                          ),
-                          PopupMenuItem(
-                            value: AdvancedThemeAction.duplicate,
-                            child: Text('复制'),
-                          ),
-                          PopupMenuItem(
-                            value: AdvancedThemeAction.exportZip,
-                            child: Text('导出 ZIP'),
-                          ),
-                          PopupMenuItem(
-                            value: AdvancedThemeAction.delete,
-                            child: Text('删除'),
-                          ),
-                        ],
+                    actions: const [
+                      AppMenuAction(
+                        value: AdvancedThemeAction.edit,
+                        label: '编辑',
+                        icon: Icons.edit_outlined,
+                      ),
+                      AppMenuAction(
+                        value: AdvancedThemeAction.duplicate,
+                        label: '复制',
+                        icon: Icons.copy_rounded,
+                      ),
+                      AppMenuAction(
+                        value: AdvancedThemeAction.exportZip,
+                        label: '导出 ZIP',
+                        icon: Icons.archive_outlined,
+                      ),
+                      AppMenuAction(
+                        value: AdvancedThemeAction.delete,
+                        label: '删除',
+                        icon: Icons.delete_outline,
+                        destructive: true,
+                      ),
+                    ],
                   ),
               ],
             ),

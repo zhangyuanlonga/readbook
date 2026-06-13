@@ -4,6 +4,7 @@ import '../../app/layout/app_spacing.dart';
 import '../../domain/entities/source_health.dart';
 import '../../features/reader/application/switch_source_shared.dart';
 import 'adaptive_bottom_sheet.dart';
+import 'foundation/foundation.dart';
 import 'source_health_badge.dart';
 
 Future<SwitchSourceCandidate?> showSwitchSourceCandidateSheet({
@@ -256,35 +257,28 @@ Future<SwitchSourceCandidate?> showSwitchSourceCandidateSheet({
                                       ),
                                     ),
                                     const SizedBox(width: 8),
-                                    PopupMenuButton<SwitchSourceScoreAction>(
+                                    AppMenuButton<SwitchSourceScoreAction>(
                                       tooltip: '评分',
-                                      icon: const Icon(
-                                        Icons.thumb_up_alt_outlined,
-                                        size: 18,
-                                      ),
+                                      icon: Icons.thumb_up_alt_outlined,
+                                      iconSize: 18,
                                       onSelected:
                                           (action) =>
                                               onScoreAction(candidate, action),
-                                      itemBuilder:
-                                          (context) => const [
-                                            PopupMenuItem(
-                                              value:
-                                                  SwitchSourceScoreAction
-                                                      .upvote,
-                                              child: Text('推荐 +1'),
-                                            ),
-                                            PopupMenuItem(
-                                              value:
-                                                  SwitchSourceScoreAction
-                                                      .downvote,
-                                              child: Text('降权 -1'),
-                                            ),
-                                            PopupMenuItem(
-                                              value:
-                                                  SwitchSourceScoreAction.reset,
-                                              child: Text('重置本书评分'),
-                                            ),
-                                          ],
+                                      actions: const [
+                                        AppMenuAction(
+                                          value: SwitchSourceScoreAction.upvote,
+                                          label: '推荐 +1',
+                                        ),
+                                        AppMenuAction(
+                                          value:
+                                              SwitchSourceScoreAction.downvote,
+                                          label: '降权 -1',
+                                        ),
+                                        AppMenuAction(
+                                          value: SwitchSourceScoreAction.reset,
+                                          label: '重置本书评分',
+                                        ),
+                                      ],
                                     ),
                                     const SizedBox(width: 2),
                                     Icon(

@@ -24,6 +24,7 @@ import '../../../app/widgets/adaptive_fullscreen_preview.dart';
 import '../../../app/widgets/adaptive_overflow_toolbar.dart';
 import '../../../app/widgets/adaptive_route_top_bar.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/foundation/foundation.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../app/widgets/runtime_feedback_card.dart';
 import '../../../app/widgets/switch_source_candidate_sheet.dart';
@@ -1661,21 +1662,18 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
           ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 12),
-        DropdownButtonFormField<String?>(
-          initialValue: _editingCharset,
-          decoration: InputDecoration(
-            labelText: '编码',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-          ),
-          items: _kLocalCharsetOptions
+        AppDropdownField<String?>(
+          value: _editingCharset,
+          labelText: '编码',
+          options: _kLocalCharsetOptions
               .map(
-                (option) => DropdownMenuItem<String?>(
+                (option) => AppDropdownOption<String?>(
                   value: option.charset,
-                  child: Text(option.label),
+                  label: option.label,
                 ),
               )
               .toList(growable: false),
-          onChanged:
+          onSelected:
               _isSavingMetadata
                   ? null
                   : (value) {
@@ -2071,24 +2069,18 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
         Row(
           children: [
             Expanded(
-              child: DropdownButtonFormField<String?>(
-                initialValue: _editingCharset,
-                decoration: InputDecoration(
-                  labelText: '编码',
-                  isDense: true,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                items: _kLocalCharsetOptions
+              child: AppDropdownField<String?>(
+                value: _editingCharset,
+                labelText: '编码',
+                options: _kLocalCharsetOptions
                     .map(
-                      (option) => DropdownMenuItem<String?>(
+                      (option) => AppDropdownOption<String?>(
                         value: option.charset,
-                        child: Text(option.label),
+                        label: option.label,
                       ),
                     )
                     .toList(growable: false),
-                onChanged:
+                onSelected:
                     _isSavingMetadata
                         ? null
                         : (value) {

@@ -14,6 +14,7 @@ import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
+import '../../../app/widgets/foundation/foundation.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../domain/entities/book_metadata_override.dart';
 import '../../../domain/entities/local_book.dart';
@@ -655,20 +656,17 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
             _buildHeatmapMenu<_HeatmapRangeMode>(
               icon: Icons.date_range_rounded,
               label: _heatmapRangeLabel,
-              items: const [
-                PopupMenuItem(
+              actions: const [
+                AppMenuAction(
                   value: _HeatmapRangeMode.threeMonths,
-                  child: Text('近 3 个月'),
+                  label: '近 3 个月',
                 ),
-                PopupMenuItem(
+                AppMenuAction(
                   value: _HeatmapRangeMode.sixMonths,
-                  child: Text('近 6 个月'),
+                  label: '近 6 个月',
                 ),
-                PopupMenuItem(
-                  value: _HeatmapRangeMode.oneYear,
-                  child: Text('近 1 年'),
-                ),
-                PopupMenuItem(value: _HeatmapRangeMode.all, child: Text('全部')),
+                AppMenuAction(value: _HeatmapRangeMode.oneYear, label: '近 1 年'),
+                AppMenuAction(value: _HeatmapRangeMode.all, label: '全部'),
               ],
               onSelected: (value) {
                 setState(() {
@@ -1981,12 +1979,12 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
   Widget _buildHeatmapMenu<T>({
     required IconData icon,
     required String label,
-    required List<PopupMenuEntry<T>> items,
+    required List<AppMenuAction<T>> actions,
     required ValueChanged<T> onSelected,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
-    return PopupMenuButton<T>(
-      itemBuilder: (context) => items,
+    return AppMenuButton<T>(
+      actions: actions,
       onSelected: onSelected,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),

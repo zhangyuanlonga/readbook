@@ -13,6 +13,7 @@ import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
 import '../../../app/widgets/app_status_state_card.dart';
+import '../../../app/widgets/foundation/foundation.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/feedback/feedback_models.dart';
 import '../../../core/feedback/feedback_service.dart';
@@ -301,29 +302,16 @@ class _FeedbackPageState extends ConsumerState<FeedbackPage>
       ),
       onSubmitted: (_) => _loadEntries(),
     );
-    final statusDropdown = DropdownButtonFormField<_FeedbackStatusFilter>(
-      initialValue: _statusFilter,
-      isExpanded: true,
-      decoration: const InputDecoration(
-        isDense: true,
-        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      ),
-      items: const [
-        DropdownMenuItem(value: _FeedbackStatusFilter.all, child: Text('全部')),
-        DropdownMenuItem(
-          value: _FeedbackStatusFilter.pending,
-          child: Text('未处理'),
-        ),
-        DropdownMenuItem(
-          value: _FeedbackStatusFilter.resolved,
-          child: Text('已解决'),
-        ),
-        DropdownMenuItem(
-          value: _FeedbackStatusFilter.rejected,
-          child: Text('不予处理'),
-        ),
+    final statusDropdown = AppDropdownField<_FeedbackStatusFilter>(
+      value: _statusFilter,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      options: const [
+        AppDropdownOption(value: _FeedbackStatusFilter.all, label: '全部'),
+        AppDropdownOption(value: _FeedbackStatusFilter.pending, label: '未处理'),
+        AppDropdownOption(value: _FeedbackStatusFilter.resolved, label: '已解决'),
+        AppDropdownOption(value: _FeedbackStatusFilter.rejected, label: '不予处理'),
       ],
-      onChanged: (value) {
+      onSelected: (value) {
         if (value == null || value == _statusFilter) {
           return;
         }
