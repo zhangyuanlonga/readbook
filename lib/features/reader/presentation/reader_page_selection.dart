@@ -506,8 +506,11 @@ extension _ReaderPageSelectionExtension on _ReaderPageState {
     required SelectableRegionState? clearSelectionState,
     VoidCallback? hideToolbar,
   }) {
-    final selectionState = _currentInspirationSelectionState();
-    if (!selectionState.hasSelection) {
+    final presenterState = _annotationPresenter.resolveState(
+      selectionState: _selectionState,
+      existingBookmark: _currentSelectionBookmark(),
+    );
+    if (presenterState.actions.isEmpty) {
       return const <ReaderInspirationActionItem>[];
     }
 
@@ -516,96 +519,59 @@ extension _ReaderPageSelectionExtension on _ReaderPageState {
       _hideBookmarkToolbar();
     }
 
-    return <ReaderInspirationActionItem>[
-      ReaderInspirationActionItem(
-        icon: Icons.copy_all_rounded,
-        label: '复制',
-        onPressed: () {
-          closeMenus();
-          unawaited(
-            _copySelectedSnippet(clearSelectionState: clearSelectionState),
-          );
-        },
-      ),
-      ReaderInspirationActionItem(
-        icon:
-            selectionState.hasExistingBookmark
-                ? Icons.delete_outline_rounded
-                : Icons.lightbulb_outline_rounded,
-        label: selectionState.hasExistingBookmark ? '删除灵感' : '保存灵感',
-        onPressed: () {
-          closeMenus();
-          if (selectionState.existingBookmark case final bookmark?) {
-            unawaited(
-              _onRemoveBookmarkPressed(
-                bookmark,
-                clearSelectionState: clearSelectionState,
-              ),
-            );
-            return;
-          }
-          unawaited(
-            _onSaveBookmarkPressed(clearSelectionState: clearSelectionState),
-          );
-        },
-      ),
-      ReaderInspirationActionItem(
-        icon: Icons.edit_note_rounded,
-        label:
-            selectionState.existingBookmark?.hasNote == true ? '编辑笔记' : '记笔记',
-        onPressed: () {
-          _isEditingBookmarkNote = true;
-          hideToolbar?.call();
-          _hideBookmarkToolbar();
-          unawaited(
-            _onEditBookmarkNotePressed(
-              clearSelectionState: clearSelectionState,
-            ),
-          );
-        },
-      ),
-      ReaderInspirationActionItem(
-        icon: Icons.highlight_alt_rounded,
-        label: selectionState.isHighlight ? '取消高亮' : '高亮',
-        isActive: selectionState.isHighlight,
-        onPressed: () {
-          unawaited(_toggleSelectionHighlight());
-        },
-      ),
-      ReaderInspirationActionItem(
-        icon: Icons.format_bold_rounded,
-        label: selectionState.isBold ? '取消加粗重点' : '加粗重点',
-        isActive: selectionState.isBold,
-        onPressed: () {
-          unawaited(_toggleSelectionBold());
-        },
-      ),
-      ReaderInspirationActionItem(
-        icon: Icons.format_underlined_rounded,
-        label: selectionState.isUnderline ? '取消划线' : '划线',
-        isActive: selectionState.isUnderline,
-        onPressed: () {
-          unawaited(_toggleSelectionUnderline());
-        },
-      ),
-      ReaderInspirationActionItem(
-        icon: Icons.multiline_chart_rounded,
-        label: selectionState.isWavy ? '取消波浪线' : '波浪线',
-        isActive: selectionState.isWavy,
-        onPressed: () {
-          unawaited(_toggleSelectionWavy());
-        },
-      ),
-      ReaderInspirationActionItem(
-        icon: Icons.close_rounded,
-        label: '取消选择',
-        onPressed: () {
-          closeMenus();
-          clearSelectionState?.clearSelection();
-          _clearSelectionState();
-        },
-      ),
-    ];
+    return _selectionToolbarPresenter.buildItems(
+      actions: presenterState.actions,
+      onAction:
+          (action) => switch (action.kind) {
+            ReaderAnnotationToolbarActionKind.copy => () {
+              closeMenus();
+              unawaited(
+                _copySelectedSnippet(clearSelectionState: clearSelectionState),
+              );
+            },
+            ReaderAnnotationToolbarActionKind.saveOrRemoveBookmark => () {
+              closeMenus();
+              if (presenterState.toolbarState.existingBookmark
+                  case final bookmark?) {
+                unawaited(
+                  _onRemoveBookmarkPressed(
+                    bookmark,
+                    clearSelectionState: clearSelectionState,
+                  ),
+                );
+                return;
+              }
+              unawaited(
+                _onSaveBookmarkPressed(
+                  clearSelectionState: clearSelectionState,
+                ),
+              );
+            },
+            ReaderAnnotationToolbarActionKind.editNote => () {
+              _isEditingBookmarkNote = true;
+              hideToolbar?.call();
+              _hideBookmarkToolbar();
+              unawaited(
+                _onEditBookmarkNotePressed(
+                  clearSelectionState: clearSelectionState,
+                ),
+              );
+            },
+            ReaderAnnotationToolbarActionKind.toggleHighlight =>
+              () => unawaited(_toggleSelectionHighlight()),
+            ReaderAnnotationToolbarActionKind.toggleBold =>
+              () => unawaited(_toggleSelectionBold()),
+            ReaderAnnotationToolbarActionKind.toggleUnderline =>
+              () => unawaited(_toggleSelectionUnderline()),
+            ReaderAnnotationToolbarActionKind.toggleWavy =>
+              () => unawaited(_toggleSelectionWavy()),
+            ReaderAnnotationToolbarActionKind.clearSelection => () {
+              closeMenus();
+              clearSelectionState?.clearSelection();
+              _clearSelectionState();
+            },
+          },
+    );
   }
 
   Widget _buildInspirationActionPanel({
@@ -736,18 +702,6 @@ extension _ReaderPageSelectionExtension on _ReaderPageState {
           ),
         ),
       ],
-    );
-  }
-
-  ReaderInspirationSelectionState _currentInspirationSelectionState() {
-    final existingBookmark = _currentSelectionBookmark();
-    return ReaderInspirationSelectionState(
-      hasSelection: _isTextSelectionActive && _selectedSnippet.isNotEmpty,
-      existingBookmark: existingBookmark,
-      isHighlight: _selectionHighlight,
-      isBold: _selectionBold,
-      isUnderline: _selectionUnderline,
-      isWavy: _selectionWavy,
     );
   }
 

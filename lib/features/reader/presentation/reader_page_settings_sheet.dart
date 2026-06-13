@@ -26,48 +26,17 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
     }
     var availableCustomFonts = List<ReaderCustomFontEntry>.from(_customFonts);
     var startAutoReadAfterApply = startAutoReadAfterApplyInitially;
-    var isPersistingDraft = false;
     final showInterfaceSettings = initialTab == _ReaderSettingsTab.interface;
     final isAudioChapter = _currentContentMode == ReaderContentMode.audio;
     String? activeSettingsGroupKey = initialSettingsGroupKey;
-    Timer? persistDraftTimer;
-    Timer? sliderInteractionTimer;
-    var isSliderInteracting = false;
     const settingsGroupingService = ReaderSettingsGroupingService();
-
-    String fingerprint(ReaderSettings settings) {
-      return jsonEncode(settings.copyWith(autoReadEnabled: false).toJson());
-    }
-
-    var persistedFingerprint = fingerprint(_settings);
-
-    Future<void> persistDraftNow(ReaderSettings settings) async {
-      final normalized = settings.copyWith(autoReadEnabled: false);
-      final nextFingerprint = fingerprint(normalized);
-      if (nextFingerprint == persistedFingerprint || isPersistingDraft) {
-        return;
-      }
-
-      isPersistingDraft = true;
-      try {
-        await _persistResolvedReaderSettingsLayers(normalized);
-        persistedFingerprint = nextFingerprint;
-      } catch (_) {
-        // Keep in-memory preview even when persistence fails.
-      } finally {
-        isPersistingDraft = false;
-      }
-    }
-
-    void schedulePersistDraft() {
-      persistDraftTimer?.cancel();
-      persistDraftTimer = Timer(const Duration(milliseconds: 220), () {
-        if (!mounted) {
-          return;
-        }
-        unawaited(persistDraftNow(draft));
-      });
-    }
+    const backgroundTilesPresenter = ReaderSettingsBackgroundTilesPresenter();
+    final settingsSession = ReaderSettingsSheetSession(
+      initialSettings: _settings,
+      currentDraft: () => draft,
+      isMounted: () => mounted,
+      persistSettings: _persistResolvedReaderSettingsLayers,
+    );
 
     await _ensureBackgroundPresetsReady();
     if (!mounted) {
@@ -117,19 +86,20 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                         .surface
                         .withValues(
                           alpha:
-                              isSliderInteracting ? interactionSheetAlpha : 1.0,
+                              settingsSession.isSliderInteracting
+                                  ? interactionSheetAlpha
+                                  : 1.0,
                         );
 
-                    final activeBackgroundBase64 =
-                        draft.backgroundImageBase64?.trim();
-                    final hasBackgroundImage =
-                        activeBackgroundBase64 != null &&
-                        activeBackgroundBase64.isNotEmpty;
-                    final isPresetBackground =
-                        hasBackgroundImage &&
-                        _backgroundPresetBase64.values.contains(
-                          activeBackgroundBase64,
+                    final backgroundSelection = backgroundTilesPresenter
+                        .resolveSelection(
+                          activeBackgroundValue: draft.backgroundImageBase64,
+                          presetValues: _backgroundPresetBase64.values,
                         );
+                    final activeBackgroundBase64 =
+                        backgroundSelection.activeBackgroundValue;
+                    final hasBackgroundImage =
+                        backgroundSelection.hasBackgroundImage;
                     final customBackgrounds = _customBackgroundImages;
                     Future<void> openMineFontManagement() async {
                       if (!context.mounted) {
@@ -200,20 +170,27 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                         return;
                       }
 
-                      if (isSliderInteracting) {
-                        schedulePersistDraft();
+                      if (settingsSession.isSliderInteracting) {
+                        settingsSession.schedulePersistDraft();
                       } else {
-                        unawaited(persistDraftNow(draft));
+                        unawaited(settingsSession.persistNow(draft));
                       }
-                      final currentFingerprint = fingerprint(_settings);
-                      final draftFingerprint = fingerprint(draft);
+                      final currentFingerprint =
+                          ReaderSettingsSheetSession.fingerprintFor(_settings);
+                      final draftFingerprint =
+                          ReaderSettingsSheetSession.fingerprintFor(draft);
                       if (currentFingerprint == draftFingerprint) {
                         return;
                       }
 
                       WidgetsBinding.instance.addPostFrameCallback((_) {
                         if (!mounted ||
-                            fingerprint(_settings) == fingerprint(draft)) {
+                            ReaderSettingsSheetSession.fingerprintFor(
+                                  _settings,
+                                ) ==
+                                ReaderSettingsSheetSession.fingerprintFor(
+                                  draft,
+                                )) {
                           return;
                         }
                         _applyReaderSettingsWithModeRestore(
@@ -233,29 +210,12 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                       bool active, {
                       bool delayedRestore = false,
                     }) {
-                      sliderInteractionTimer?.cancel();
-                      if (delayedRestore && !active) {
-                        sliderInteractionTimer = Timer(
-                          const Duration(milliseconds: 180),
-                          () {
-                            if (!mounted ||
-                                !context.mounted ||
-                                !isSliderInteracting) {
-                              return;
-                            }
-                            setModalState(() {
-                              isSliderInteracting = false;
-                            });
-                          },
-                        );
-                        return;
-                      }
-                      if (isSliderInteracting == active) {
-                        return;
-                      }
-                      setModalState(() {
-                        isSliderInteracting = active;
-                      });
+                      settingsSession.setSliderInteractionPreview(
+                        active,
+                        delayedRestore: delayedRestore,
+                        canUpdate: () => mounted && context.mounted,
+                        notifyChanged: () => setModalState(() {}),
+                      );
                     }
 
                     Slider buildPreviewAwareSlider({
@@ -485,77 +445,38 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                             .clamp(0.94, 1.18)
                             .toDouble();
                     final backgroundColorOptions =
-                        _readerBackgroundColorOptions()
-                            .map(
-                              (option) => ReaderThemeBackgroundColorOption(
-                                label: option.label,
-                                previewColor: option.previewColor,
-                                mode: option.mode,
-                                backgroundStyle: option.backgroundStyle,
-                                backgroundTone: option.backgroundTone,
-                              ),
-                            )
-                            .toList(growable: false);
-                    final presetBackgroundTiles =
-                        <ReaderBackgroundImageTileData>[];
-                    for (final preset in _backgroundPresets) {
-                      final previewBytes =
-                          _backgroundPresetBytes[preset.assetPath];
-                      final presetBase64 =
-                          _backgroundPresetBase64[preset.assetPath];
-                      if (previewBytes == null) {
-                        continue;
-                      }
-                      presetBackgroundTiles.add(
-                        ReaderBackgroundImageTileData(
-                          label: preset.label,
-                          selected:
-                              activeBackgroundBase64 == preset.assetPath ||
-                              (presetBase64 != null &&
-                                  activeBackgroundBase64 == presetBase64),
-                          previewBytes: previewBytes,
-                          showLabel: false,
-                          onTap: () {
-                            updateDraft(
-                              draft.copyWith(
-                                backgroundImageBase64: preset.assetPath,
-                              ),
+                        const ReaderSettingsBackgroundColorOptionsPresenter()
+                            .build(
+                              resolvePreviewColor:
+                                  (mode, settings) =>
+                                      _resolveThemeColors(
+                                        mode,
+                                        settings,
+                                      ).background,
                             );
-                          },
-                        ),
-                      );
-                    }
-                    final customBackgroundTiles =
-                        <ReaderBackgroundImageTileData>[];
-                    for (
-                      var index = 0;
-                      index < customBackgrounds.length;
-                      index += 1
-                    ) {
-                      final source = customBackgrounds[index];
-                      final previewBytes =
-                          _customBackgroundPreviewBytes[source];
-                      final isSelected =
-                          hasBackgroundImage &&
-                          !isPresetBackground &&
-                          activeBackgroundBase64 == source;
-                      customBackgroundTiles.add(
-                        ReaderBackgroundImageTileData(
-                          label: '自定义${index + 1}',
-                          selected: isSelected,
-                          previewBytes: previewBytes,
-                          showLabel: true,
-                          icon:
-                              previewBytes == null
-                                  ? Icons.broken_image_outlined
-                                  : null,
-                          onTap:
-                              () => unawaited(
+                    final presetBackgroundTiles = backgroundTilesPresenter
+                        .buildPresetTiles(
+                          presets: _backgroundPresets,
+                          presetBytes: _backgroundPresetBytes,
+                          presetBase64: _backgroundPresetBase64,
+                          activeBackgroundValue: activeBackgroundBase64,
+                          onSelectPreset:
+                              (assetPath) => updateDraft(
+                                draft.copyWith(
+                                  backgroundImageBase64: assetPath,
+                                ),
+                              ),
+                        );
+                    final customBackgroundTiles = backgroundTilesPresenter
+                        .buildCustomTiles(
+                          customBackgrounds: customBackgrounds,
+                          customPreviewBytes: _customBackgroundPreviewBytes,
+                          selection: backgroundSelection,
+                          onSelectCustom:
+                              (source) => unawaited(
                                 applyStoredCustomBackground(source),
                               ),
-                        ),
-                      );
-                    }
+                        );
                     final keyboardInset =
                         MediaQuery.viewInsetsOf(context).bottom;
                     final safeBottom = _bottomSafeInset(context);
@@ -574,8 +495,6 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                         (compactSheetVisualWidth / compactSheetBaseWidth)
                             .clamp(0.88, 1.08)
                             .toDouble();
-                    double compactScaleValue(double value) =>
-                        value * compactSheetScale;
 
                     Widget buildSettingsGroupEntryCard({
                       required IconData icon,
@@ -588,56 +507,18 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                       subtitle: subtitle,
                       onTap: onTap,
                       compactScale: compactSheetScale,
-                      interactionPreviewActive: isSliderInteracting,
+                      interactionPreviewActive:
+                          settingsSession.isSliderInteracting,
                     );
 
                     Widget buildTextReaderSettingsSheet() {
                       Widget buildOwnershipHintCard(String groupKey) {
                         final descriptor = _readerSettingsPresenter
                             .ownershipDescriptor(groupKey);
-                        final colorScheme = Theme.of(context).colorScheme;
-                        return Container(
-                          width: double.infinity,
-                          margin: EdgeInsets.only(bottom: compactScaleValue(8)),
-                          padding: EdgeInsets.fromLTRB(
-                            compactScaleValue(12),
-                            compactScaleValue(10),
-                            compactScaleValue(12),
-                            compactScaleValue(10),
-                          ),
-                          decoration: BoxDecoration(
-                            color: colorScheme.primaryContainer.withValues(
-                              alpha: 0.22,
-                            ),
-                            borderRadius: BorderRadius.circular(
-                              compactScaleValue(16),
-                            ),
-                            border: Border.all(
-                              color: colorScheme.primary.withValues(
-                                alpha: 0.18,
-                              ),
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                descriptor.title,
-                                style: Theme.of(context).textTheme.labelLarge
-                                    ?.copyWith(fontWeight: FontWeight.w800),
-                              ),
-                              SizedBox(height: compactScaleValue(4)),
-                              Text(
-                                descriptor.description,
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.bodySmall?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                  height: 1.35,
-                                ),
-                              ),
-                            ],
-                          ),
+                        return ReaderSettingsOwnershipHintCard(
+                          title: descriptor.title,
+                          description: descriptor.description,
+                          compactScale: compactSheetScale,
                         );
                       }
 
@@ -689,6 +570,38 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                           ],
                           _ => children,
                         };
+                      }
+
+                      Widget buildLayoutInfoSettingsPanel() {
+                        return ReaderLayoutInfoSettingsPanel(
+                          settings: draft,
+                          groups: semanticGroups(),
+                          compactScale: compactSheetScale,
+                          marginControlStep:
+                              _ReaderPageState._kMarginControlStep,
+                          sliderBuilder: buildPreviewAwareSlider,
+                          formatLayoutMarginValue: _formatLayoutMarginValue,
+                          letterSpacingSliderValue: _letterSpacingSliderValue,
+                          letterSpacingValueLabel: _letterSpacingValueLabel,
+                          letterSpacingFromSliderValue:
+                              _letterSpacingFromSliderValue,
+                          lineHeightSliderValue: _lineHeightSliderValue,
+                          lineHeightValueLabel: _lineHeightValueLabel,
+                          lineHeightFromSliderValue:
+                              ({required sliderValue, required settings}) =>
+                                  _lineHeightFromSliderValue(
+                                    sliderValue: sliderValue,
+                                    settings: settings,
+                                  ),
+                          paragraphSpacingValueLabel:
+                              _paragraphSpacingValueLabel,
+                          paragraphIndentValueLabel: _paragraphIndentValueLabel,
+                          readerBatteryReadFailed: _readerBatteryReadFailed,
+                          onChanged:
+                              (next) => setModalState(() {
+                                draft = next;
+                              }),
+                        );
                       }
 
                       final rawSelectedCards = switch (activeSettingsGroupKey) {
@@ -766,69 +679,11 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                               ],
                         'quick_margins' => <Widget>[
                           buildOwnershipHintCard('quick_margins'),
-                          ReaderLayoutInfoSettingsPanel(
-                            settings: draft,
-                            groups: semanticGroups(),
-                            compactScale: compactSheetScale,
-                            marginControlStep:
-                                _ReaderPageState._kMarginControlStep,
-                            sliderBuilder: buildPreviewAwareSlider,
-                            formatLayoutMarginValue: _formatLayoutMarginValue,
-                            letterSpacingSliderValue: _letterSpacingSliderValue,
-                            letterSpacingValueLabel: _letterSpacingValueLabel,
-                            letterSpacingFromSliderValue:
-                                _letterSpacingFromSliderValue,
-                            lineHeightSliderValue: _lineHeightSliderValue,
-                            lineHeightValueLabel: _lineHeightValueLabel,
-                            lineHeightFromSliderValue:
-                                ({required sliderValue, required settings}) =>
-                                    _lineHeightFromSliderValue(
-                                      sliderValue: sliderValue,
-                                      settings: settings,
-                                    ),
-                            paragraphSpacingValueLabel:
-                                _paragraphSpacingValueLabel,
-                            paragraphIndentValueLabel:
-                                _paragraphIndentValueLabel,
-                            readerBatteryReadFailed: _readerBatteryReadFailed,
-                            onChanged:
-                                (next) => setModalState(() {
-                                  draft = next;
-                                }),
-                          ),
+                          buildLayoutInfoSettingsPanel(),
                         ],
                         'info_layout' => <Widget>[
                           buildOwnershipHintCard('info_layout'),
-                          ReaderLayoutInfoSettingsPanel(
-                            settings: draft,
-                            groups: semanticGroups(),
-                            compactScale: compactSheetScale,
-                            marginControlStep:
-                                _ReaderPageState._kMarginControlStep,
-                            sliderBuilder: buildPreviewAwareSlider,
-                            formatLayoutMarginValue: _formatLayoutMarginValue,
-                            letterSpacingSliderValue: _letterSpacingSliderValue,
-                            letterSpacingValueLabel: _letterSpacingValueLabel,
-                            letterSpacingFromSliderValue:
-                                _letterSpacingFromSliderValue,
-                            lineHeightSliderValue: _lineHeightSliderValue,
-                            lineHeightValueLabel: _lineHeightValueLabel,
-                            lineHeightFromSliderValue:
-                                ({required sliderValue, required settings}) =>
-                                    _lineHeightFromSliderValue(
-                                      sliderValue: sliderValue,
-                                      settings: settings,
-                                    ),
-                            paragraphSpacingValueLabel:
-                                _paragraphSpacingValueLabel,
-                            paragraphIndentValueLabel:
-                                _paragraphIndentValueLabel,
-                            readerBatteryReadFailed: _readerBatteryReadFailed,
-                            onChanged:
-                                (next) => setModalState(() {
-                                  draft = next;
-                                }),
-                          ),
+                          buildLayoutInfoSettingsPanel(),
                         ],
                         'typography' => <Widget>[
                           buildOwnershipHintCard('typography'),
@@ -890,38 +745,7 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                                 }),
                           ),
                         ],
-                        'info' => <Widget>[
-                          ReaderLayoutInfoSettingsPanel(
-                            settings: draft,
-                            groups: semanticGroups(),
-                            compactScale: compactSheetScale,
-                            marginControlStep:
-                                _ReaderPageState._kMarginControlStep,
-                            sliderBuilder: buildPreviewAwareSlider,
-                            formatLayoutMarginValue: _formatLayoutMarginValue,
-                            letterSpacingSliderValue: _letterSpacingSliderValue,
-                            letterSpacingValueLabel: _letterSpacingValueLabel,
-                            letterSpacingFromSliderValue:
-                                _letterSpacingFromSliderValue,
-                            lineHeightSliderValue: _lineHeightSliderValue,
-                            lineHeightValueLabel: _lineHeightValueLabel,
-                            lineHeightFromSliderValue:
-                                ({required sliderValue, required settings}) =>
-                                    _lineHeightFromSliderValue(
-                                      sliderValue: sliderValue,
-                                      settings: settings,
-                                    ),
-                            paragraphSpacingValueLabel:
-                                _paragraphSpacingValueLabel,
-                            paragraphIndentValueLabel:
-                                _paragraphIndentValueLabel,
-                            readerBatteryReadFailed: _readerBatteryReadFailed,
-                            onChanged:
-                                (next) => setModalState(() {
-                                  draft = next;
-                                }),
-                          ),
-                        ],
+                        'info' => <Widget>[buildLayoutInfoSettingsPanel()],
                         'behavior' => <Widget>[
                           ReaderReadingBehaviorSettingsPanel(
                             settings: draft,
@@ -1040,80 +864,16 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                                   : textSheetMaxWidth,
                           heightFactor: settingsSheetHeightFactor,
                           backgroundColor: sheetSurfaceColor,
-                          child: Material(
-                            color: Colors.transparent,
-                            child: Padding(
-                              padding: EdgeInsets.fromLTRB(
-                                metrics.pagePadding,
-                                metrics.isCompactDensity ? 6 : 8,
-                                metrics.pagePadding,
-                                max(6.0, safeBottom * 0.35),
-                              ),
-                              child: Column(
-                                children: [
-                                  Container(
-                                    width: 42,
-                                    height: 4,
-                                    margin: EdgeInsets.only(
-                                      bottom: metrics.isCompactDensity ? 8 : 10,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .outlineVariant
-                                          .withValues(alpha: 0.7),
-                                      borderRadius: BorderRadius.circular(999),
-                                    ),
-                                  ),
-                                  SizedBox(
-                                    height: metrics.controlHeight,
-                                    child: Stack(
-                                      alignment: Alignment.center,
-                                      children: [
-                                        if (activeSettingsGroupKey != null)
-                                          Align(
-                                            alignment: Alignment.centerLeft,
-                                            child: IconButton(
-                                              visualDensity:
-                                                  VisualDensity.compact,
-                                              onPressed: () {
-                                                setModalState(() {
-                                                  activeSettingsGroupKey = null;
-                                                });
-                                              },
-                                              icon: const Icon(
-                                                Icons.arrow_back_rounded,
-                                              ),
-                                            ),
-                                          ),
-                                        Center(
-                                          child: Text(
-                                            sheetTitle,
-                                            textAlign: TextAlign.center,
-                                            style: Theme.of(
-                                              context,
-                                            ).textTheme.titleMedium?.copyWith(
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  SizedBox(
-                                    height: metrics.isCompactDensity ? 4 : 6,
-                                  ),
-                                  Expanded(
-                                    child: ListView(
-                                      padding: EdgeInsets.only(
-                                        bottom: max(4.0, safeBottom * 0.18),
-                                      ),
-                                      children: selectedCards,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
+                          child: ReaderSettingsSheetFrame(
+                            title: sheetTitle,
+                            safeBottom: safeBottom,
+                            onBack:
+                                activeSettingsGroupKey == null
+                                    ? null
+                                    : () => setModalState(() {
+                                      activeSettingsGroupKey = null;
+                                    }),
+                            children: selectedCards,
                           ),
                         ),
                       );
@@ -1129,10 +889,8 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
         );
       },
     );
-    sliderInteractionTimer?.cancel();
-
-    persistDraftTimer?.cancel();
-    await persistDraftNow(draft);
+    settingsSession.cancelTimers();
+    await settingsSession.persistNow(draft);
 
     if (!mounted) {
       return;
@@ -1193,109 +951,6 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
   Future<void> _ensureBackgroundPresetsReady() =>
       _ensureBackgroundPresetsReadyImpl();
 
-  List<ReaderBackgroundColorOption> _readerBackgroundColorOptions() {
-    return <ReaderBackgroundColorOption>[
-      _createReaderBackgroundColorOption(
-        label: '明亮',
-        mode: ReaderThemeMode.light,
-        backgroundStyle: ReaderBackgroundStyle.plain,
-        backgroundTone: ReaderBackgroundTone.surface,
-      ),
-      _createReaderBackgroundColorOption(
-        label: '护眼',
-        mode: ReaderThemeMode.sepia,
-        backgroundStyle: ReaderBackgroundStyle.warm,
-        backgroundTone: ReaderBackgroundTone.container,
-      ),
-      _createReaderBackgroundColorOption(
-        label: '浅灰',
-        mode: ReaderThemeMode.light,
-        backgroundStyle: ReaderBackgroundStyle.paper,
-        backgroundTone: ReaderBackgroundTone.containerHigh,
-      ),
-      _createReaderThemePaletteBackgroundColorOption(
-        themeOption: appThemeFlameOrangeOption,
-        backgroundTone: ReaderBackgroundTone.flameOrangeTint,
-      ),
-      _createReaderThemePaletteBackgroundColorOption(
-        themeOption: appThemePineGreenOption,
-        backgroundTone: ReaderBackgroundTone.pineGreenTint,
-      ),
-      _createReaderThemePaletteBackgroundColorOption(
-        themeOption: appThemeSeaBlueOption,
-        backgroundTone: ReaderBackgroundTone.seaBlueTint,
-      ),
-      _createReaderThemePaletteBackgroundColorOption(
-        themeOption: appThemeNightPurpleOption,
-        backgroundTone: ReaderBackgroundTone.nightPurpleTint,
-      ),
-      _createReaderThemePaletteBackgroundColorOption(
-        themeOption: appThemeMistTealOption,
-        backgroundTone: ReaderBackgroundTone.mistTealTint,
-      ),
-      _createReaderThemePaletteBackgroundColorOption(
-        themeOption: appThemeBerryRoseOption,
-        backgroundTone: ReaderBackgroundTone.berryRoseTint,
-      ),
-      _createReaderThemePaletteBackgroundColorOption(
-        themeOption: appThemeAmberGoldOption,
-        backgroundTone: ReaderBackgroundTone.amberGoldTint,
-      ),
-      _createReaderBackgroundColorOption(
-        label: '夜间',
-        mode: ReaderThemeMode.dark,
-        backgroundStyle: ReaderBackgroundStyle.plain,
-        backgroundTone: ReaderBackgroundTone.pureBlack,
-      ),
-    ];
-  }
-
-  ReaderBackgroundColorOption _createReaderBackgroundColorOption({
-    required String label,
-    required ReaderThemeMode mode,
-    required ReaderBackgroundStyle backgroundStyle,
-    required ReaderBackgroundTone backgroundTone,
-  }) {
-    final previewSettings = ReaderSettings(
-      themeMode: mode,
-      backgroundStyle: backgroundStyle,
-      backgroundTone: backgroundTone,
-    );
-    final previewColors = _resolveThemeColors(mode, previewSettings);
-    return ReaderBackgroundColorOption(
-      label: label,
-      previewColor: previewColors.background,
-      mode: mode,
-      backgroundStyle: backgroundStyle,
-      backgroundTone: backgroundTone,
-    );
-  }
-
-  ReaderBackgroundColorOption _createReaderThemePaletteBackgroundColorOption({
-    required AppThemeSeedOption themeOption,
-    required ReaderBackgroundTone backgroundTone,
-  }) {
-    return _createReaderBackgroundColorOption(
-      label: themeOption.label,
-      mode: ReaderThemeMode.light,
-      backgroundStyle: ReaderBackgroundStyle.paper,
-      backgroundTone: backgroundTone,
-    );
-  }
-
-  Color? _readerPaletteSeedColorForTone(ReaderBackgroundTone tone) {
-    return switch (tone) {
-      ReaderBackgroundTone.flameOrangeTint => appThemeFlameOrangeOption.color,
-      ReaderBackgroundTone.pineGreenTint => appThemePineGreenOption.color,
-      ReaderBackgroundTone.seaBlueTint => appThemeSeaBlueOption.color,
-      ReaderBackgroundTone.nightPurpleTint => appThemeNightPurpleOption.color,
-      ReaderBackgroundTone.mistTealTint => appThemeMistTealOption.color,
-      ReaderBackgroundTone.berryRoseTint => appThemeBerryRoseOption.color,
-      ReaderBackgroundTone.amberGoldTint => appThemeAmberGoldOption.color,
-      _ => null,
-    };
-  }
-
   Future<String?> _pickBackgroundImagePath() async {
     try {
       final picked = await _imageSelectionService.pickImage(
@@ -1322,14 +977,5 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
       _showMessage('选择背景失败：$error');
       return null;
     }
-  }
-
-  String _formatTypographyValue({
-    required double value,
-    required int fractionDigits,
-    String unit = '',
-  }) {
-    final normalized = value == 0 ? 0.0 : value;
-    return '${normalized.toStringAsFixed(fractionDigits)}$unit';
   }
 }

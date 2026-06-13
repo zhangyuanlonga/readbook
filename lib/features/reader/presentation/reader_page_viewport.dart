@@ -4,70 +4,51 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
   Widget _buildReaderPageScaffold(BuildContext context) {
     final colors = _resolveThemeColors(_effectiveReaderThemeMode(), _settings);
     final canPopRoute = context.canPop();
-
-    return PopScope<void>(
-      canPop: canPopRoute,
-      onPopInvokedWithResult: (didPop, _) {
-        if (didPop || !mounted) {
-          return;
-        }
-        context.go('/bookshelf');
-      },
-      child: Builder(
-        builder: (context) {
-          final shellModel = _presentationResolver.buildShellModel(
-            contentSession: _resolvedContentSession(),
-            settings: _settings,
-            surfaceMetrics: _resolveReaderSurfaceMetrics(context),
-            viewportKind: _presentationViewportKind,
-            palette: _presentationPalette(context),
-            parts: ReaderShellParts(
-              background: _buildBackgroundLayer(colors),
-              chrome: ReaderShellChromeSlots(
-                backgroundOverlay:
-                    _readerBrightnessOverlayAlpha() > 0.001
-                        ? IgnorePointer(
-                          child: ColoredBox(
-                            color: Colors.black.withValues(
-                              alpha: _readerBrightnessOverlayAlpha(),
-                            ),
-                          ),
-                        )
-                        : null,
-                foregroundOverlay: Stack(
-                  clipBehavior: Clip.hardEdge,
-                  children: [
-                    _buildChapterLoadingIndicator(colors),
-                    _buildAutoReadStatusOverlay(colors),
-                    _buildOverlayScrim(),
-                    _buildTopOverlay(colors),
-                    _buildBottomOverlay(colors),
-                  ],
-                ),
-              ),
-            ),
-          );
-
-          return Focus(
-            focusNode: _readerFocusNode,
-            autofocus: true,
-            onKeyEvent: _handleReaderKeyEvent,
-            child: Scaffold(
-              backgroundColor: colors.background,
-              body: SafeArea(
-                top: false,
-                bottom: false,
-                child: ClipRect(
-                  child: ReaderShell(
-                    model: shellModel,
-                    child: _buildReaderContent(colors),
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
+    final shellModel = _presentationResolver.buildShellModel(
+      contentSession: _resolvedContentSession(),
+      settings: _settings,
+      surfaceMetrics: _resolveReaderSurfaceMetrics(context),
+      viewportKind: _presentationViewportKind,
+      palette: _presentationPalette(context),
+      parts: ReaderShellParts(
+        background: _buildBackgroundLayer(colors),
+        chrome: ReaderShellChromeSlots(
+          backgroundOverlay:
+              _readerBrightnessOverlayAlpha() > 0.001
+                  ? IgnorePointer(
+                    child: ColoredBox(
+                      color: Colors.black.withValues(
+                        alpha: _readerBrightnessOverlayAlpha(),
+                      ),
+                    ),
+                  )
+                  : null,
+          foregroundOverlay: Stack(
+            clipBehavior: Clip.hardEdge,
+            children: [
+              _buildChapterLoadingIndicator(colors),
+              _buildAutoReadStatusOverlay(colors),
+              _buildOverlayScrim(),
+              _buildTopOverlay(colors),
+              _buildBottomOverlay(colors),
+            ],
+          ),
+        ),
       ),
+    );
+
+    return ReaderPageScaffoldShell(
+      colors: colors,
+      canPopRoute: canPopRoute,
+      onFallbackPop: () {
+        if (mounted) {
+          context.go('/bookshelf');
+        }
+      },
+      focusNode: _readerFocusNode,
+      onKeyEvent: _handleReaderKeyEvent,
+      shellModel: shellModel,
+      child: _buildReaderContent(colors),
     );
   }
 

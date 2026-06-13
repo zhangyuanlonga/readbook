@@ -41,53 +41,53 @@
 
 ### A0：基线和保护线
 
-- [ ] 记录当前 `reader_page_settings_sheet.dart` 行数、主要闭包、重复 panel 调用点。
-- [ ] 不改 `ReaderSettings.toJson/fromJson`。
-- [ ] 不改 `_persistResolvedReaderSettingsLayers` 的入参语义。
-- [ ] 不改实时预览策略：slider 拖动时延迟持久化、非拖动时即时预览。
-- [ ] 不改字体导入、背景选择、背景删除的用户可见行为。
+- [x] 记录当前 `reader_page_settings_sheet.dart` 行数、主要闭包、重复 panel 调用点。
+- [x] 不改 `ReaderSettings.toJson/fromJson`。
+- [x] 不改 `_persistResolvedReaderSettingsLayers` 的入参语义。
+- [x] 不改实时预览策略：slider 拖动时延迟持久化、非拖动时即时预览。
+- [x] 不改字体导入、背景选择、背景删除的用户可见行为。
 
 ### A1：抽出设置页会话控制器
 
-- [ ] 新建 `reader_settings_sheet_session.dart` 或同级 helper。
-- [ ] 抽出 fingerprint、`persistDraftNow`、`schedulePersistDraft`、slider interaction 状态控制。
-- [ ] 保留真正的持久化调用由外层注入，helper 不直接读写 repository/service。
-- [ ] 补测试覆盖：相同 fingerprint 不重复持久化、slider 拖动节流、dispose/cancel timer。
+- [x] 新建 `reader_settings_sheet_session.dart` 或同级 helper。
+- [x] 抽出 fingerprint、`persistDraftNow`、`schedulePersistDraft`、slider interaction 状态控制。
+- [x] 保留真正的持久化调用由外层注入，helper 不直接读写 repository/service。
+- [x] 补测试覆盖：相同 fingerprint 不重复持久化、slider 拖动节流、dispose/cancel timer。
 
 预期收益：`settings_sheet` -120 到 -180 行。
 
 ### A2：抽出背景资源面板输入构建
 
-- [ ] 新建 `reader_settings_background_tiles_presenter.dart`。
-- [ ] 抽出 preset/custom background tile data 构建。
-- [ ] 抽出 `hasBackgroundImage`、`isPresetBackground`、active/custom 判断。
-- [ ] 保留选图、存储、删除文件副作用在外层，只让 presenter 产出 tile data。
-- [ ] 补测试覆盖：preset 选中、自定义选中、preview 缺失 fallback。
+- [x] 新建 `reader_settings_background_tiles_presenter.dart`。
+- [x] 抽出 preset/custom background tile data 构建。
+- [x] 抽出 `hasBackgroundImage`、`isPresetBackground`、active/custom 判断。
+- [x] 保留选图、存储、删除文件副作用在外层，只让 presenter 产出 tile data。
+- [x] 补测试覆盖：preset 选中、自定义选中、preview 缺失 fallback。
 
 预期收益：`settings_sheet` -120 到 -180 行。
 
 ### A3：消除布局/信息栏 panel 重复调用
 
-- [ ] 把 `quick_margins`、`info_layout`、`info` 三处重复 `ReaderLayoutInfoSettingsPanel` 参数收口成一个 builder/helper。
-- [ ] 抽出 `ReaderLayoutInfoPanelCallbacks` 或局部私有 helper，避免复制 slider/value formatter 参数。
-- [ ] 保持 `ReaderLayoutInfoSettingsPanel` 本身不改行为。
+- [x] 把 `quick_margins`、`info_layout`、`info` 三处重复 `ReaderLayoutInfoSettingsPanel` 参数收口成一个 builder/helper。
+- [x] 抽出 `ReaderLayoutInfoPanelCallbacks` 或局部私有 helper，避免复制 slider/value formatter 参数。
+- [x] 保持 `ReaderLayoutInfoSettingsPanel` 本身不改行为。
 
 预期收益：`settings_sheet` -80 到 -130 行。
 
 ### A4：抽出 sheet 壳层
 
-- [ ] 新建 `reader_settings_sheet_frame.dart` 或复用现有 floating helper。
-- [ ] 抽出 drag handle、标题栏、返回按钮、ListView padding、heightFactor 组合。
-- [ ] 外层只传 `title`、`canBack`、`onBack`、`children`、`heightFactor`。
-- [ ] 补 widget smoke test，确认返回按钮和标题渲染。
+- [x] 新建 `reader_settings_sheet_frame.dart` 或复用现有 floating helper。
+- [x] 抽出 drag handle、标题栏、返回按钮、ListView padding，`heightFactor` 继续由 floating sheet 外层控制。
+- [x] 外层只向 frame 传 `title`、`onBack`、`children`、`safeBottom`，是否可返回由 `onBack` 是否为空表达。
+- [x] 补 widget smoke test，确认返回按钮和标题渲染。
 
 预期收益：`settings_sheet` -120 到 -180 行。
 
 ### A5：验收
 
-- [ ] `reader_page_settings_sheet.dart < 1000` 行。
-- [ ] `flutter analyze`。
-- [ ] 设置页相关 widget/session/presenter tests。
+- [x] `reader_page_settings_sheet.dart < 1000` 行。
+- [x] `flutter analyze`。
+- [x] 设置页相关 widget/session/presenter tests。
 - [ ] Android 真机 smoke：打开设置、切换分组、拖动 slider、字体弹窗、背景选择/删除、应用/关闭。
 
 ---
@@ -106,75 +106,79 @@
 
 ### B1：提取触摸导航决策边界
 
-- [ ] 新建 `reader_touch_navigation_controller.dart`。
-- [ ] 把 `_onReaderTap` 前半段判断改成 controller 返回 `ReaderTouchNavigationIntent`。
-- [ ] 保留实际副作用在 `_ReaderPageState`：翻页、打开目录、打开自动阅读、切主题。
-- [ ] 覆盖测试：选区中忽略、冷却中忽略、自动阅读中打开控制、overlay 可见时隐藏、tap zone 命中。
+- [x] 新建 `reader_touch_navigation_controller.dart`。
+- [x] 把 `_onReaderTap` 前半段判断改成 controller 返回 `ReaderTouchNavigationIntent`。
+- [x] 保留实际副作用在 `_ReaderPageState`：翻页、打开目录、打开自动阅读、切主题。
+- [x] 覆盖测试：选区中忽略、冷却中忽略、自动阅读中打开控制、overlay 可见时隐藏、tap zone 命中。
 
 预期收益：`reader_page.dart`/part -80 到 -130 行，逻辑边界更清楚。
 
 ### B2：提取桌面输入派发边界
 
-- [ ] 复用现有 `ReaderDesktopInputResolver`，新增 dispatcher/presenter 只负责 action 到 intent 的转换。
-- [ ] 将 `reader_desktop_input_layer.dart` 从 part 移出或删除，保留 reader_page 中极薄副作用执行入口。
-- [ ] 覆盖测试：键盘翻页、overlay 切换、自动阅读暂停、滚轮节流。
+- [x] 复用现有 `ReaderDesktopInputResolver`，新增 dispatcher/presenter 只负责 action 到 intent 的转换。
+- [x] 将 `reader_desktop_input_layer.dart` 从 part 移出或删除，保留 reader_page 中极薄副作用执行入口。
+- [x] 覆盖测试：键盘翻页、overlay 切换、自动阅读暂停、滚轮节流。
 
 预期收益：part -1，`reader_page` 净减少较小，但耦合下降。
 
 ### B3：提取标注工具栏 presenter
 
-- [ ] 新建 `reader_selection_toolbar_presenter.dart`。
-- [ ] 抽出灵感/笔记/高亮/加粗/下划线/波浪线 actions 的构建规则。
-- [ ] 保留 repository 写入、overlay entry、note editor 在原流程。
-- [ ] 覆盖测试：已有 bookmark 时显示删除、无 bookmark 时显示保存、样式 active 状态正确。
+- [x] 新建 `reader_selection_toolbar_presenter.dart`。
+- [x] 抽出灵感/笔记/高亮/加粗/下划线/波浪线 actions 的构建规则。
+- [x] 保留 repository 写入、overlay entry、note editor 在原流程。
+- [x] 覆盖测试：已有 bookmark 时显示删除、无 bookmark 时显示保存、样式 active 状态正确。
 
 预期收益：selection part -150 到 -220 行，reader_page 间接瘦身。
 
 ### B4：提取 reader 顶部/底部 action 数据 presenter
 
-- [ ] 只抽按钮展示数据和 enabled/label/icon 决策，不抽 overlay 动画和系统 UI。
-- [ ] 暂不移动 `reader_chrome_surface.dart`，除非 presenter 抽完后它变成纯展示。
-- [ ] 覆盖测试：书签按钮、缓存按钮、自动阅读按钮、章节进度文案。
+- [x] 只抽按钮展示数据和 enabled/label/icon 决策，不抽 overlay 动画和系统 UI。
+- [x] 暂不移动 `reader_chrome_surface.dart`，除非 presenter 抽完后它变成纯展示。
+- [x] 覆盖测试：书签按钮、缓存按钮、自动阅读按钮、章节进度文案。
 
 预期收益：`reader_page.dart` -150 到 -250 行。
 
 ### B5：验收
 
-- [ ] `reader_page.dart <= 5200` 行，或说明未达成原因。
-- [ ] `flutter analyze`。
-- [ ] 新增 presenter/controller tests。
+- [x] `reader_page.dart <= 5200` 行，或说明未达成原因。
+- [x] `flutter analyze`。
+- [x] 新增 presenter/controller tests。
 - [ ] 阅读器 smoke：点击分区、左右翻页、上下章、目录、自动阅读、长按、标注、错误重试。
+
+验收结果：B 阶段完成时 `reader_page.dart` 为 5158 行，直属 part 为 14 个；P3-C 移除 touch part 后最新行数见 C3。
 
 ---
 
 ## 4. Phase P3-C：part 文件继续解耦
 
-**当前**: reader_page 直属 part 15 个。  
+**当前**: reader_page 直属 part 13 个。
 **目标**: 优先到 13 个，理想到 12 个。  
 **原则**: 不为了数量强拆 runtime/content_loading/source_switch 这种高状态 part。
 
 ### C1：安全候选
 
-- [ ] `reader_desktop_input_layer.dart`：72 行，优先移出 part 或合并为独立 dispatcher。
-- [ ] `reader_touch_navigation_layer.dart`：152 行，在 B1 controller 完成后再移出 part。
-- [ ] `reader_page_viewport.dart`：490 行，只有在 viewport 输入模型收口后才考虑独立 widget/helper。
+- [x] `reader_desktop_input_layer.dart`：72 行，优先移出 part 或合并为独立 dispatcher。
+- [x] `reader_touch_navigation_layer.dart`：152 行，在 B1 controller 完成后再移出 part。
+- [x] `reader_page_viewport.dart`：490 行，先抽出 `ReaderPageScaffoldShell` 收口 scaffold/focus/shell 输入模型；分页/漫画/PDF 状态核心暂不移出 part。
 
-### C2：暂缓候选
+### C2：暂缓候选审计
 
-- [ ] `reader_page_runtime.dart`：1910 行，状态核心，暂缓。
-- [ ] `reader_page_content_loading.dart`：1327 行，章节加载核心，暂缓。
-- [ ] `reader_page_source_switch.dart`：1024 行，换源流程复杂，暂缓。
-- [ ] `reader_page_selection.dart`：1064 行，先抽 toolbar presenter，不直接移出 part。
-- [ ] `reader_page_background.dart`：516 行，涉及缓存、压缩、偏好存储，暂缓。
-- [ ] `reader_chrome_surface.dart`：185 行，仍是 overlay/runtime 协调，暂缓。
+- [x] `reader_page_runtime.dart`：1910 行，状态核心，已审计，继续暂缓。
+- [x] `reader_page_content_loading.dart`：1327 行，章节加载核心，已审计，继续暂缓。
+- [x] `reader_page_source_switch.dart`：1024 行，换源流程复杂，已审计，继续暂缓。
+- [x] `reader_page_selection.dart`：1064 行，toolbar presenter 已抽，剩余 selection state/overlay/note editor 强耦合，继续暂缓直接移出 part。
+- [x] `reader_page_background.dart`：516 行，涉及缓存、压缩、偏好存储，已审计，继续暂缓。
+- [x] `reader_chrome_surface.dart`：185 行，仍是 overlay/runtime 协调，已审计，继续暂缓。
 
 ### C3：验收
 
-- [ ] part 数量到 13 个。
-- [ ] 若要到 12 个，必须先证明第三个候选不碰核心状态。
-- [ ] `flutter analyze`。
-- [ ] 相关 controller/widget tests。
+- [x] part 数量到 13 个。
+- [x] 已评估第三候选：`reader_page_viewport.dart` 后半段仍碰核心状态，暂不冲 12 个。
+- [x] `flutter analyze`。
+- [x] 相关 controller/widget tests。
 - [ ] 真机验证顶部/底部 chrome、触摸/桌面输入、内容模式切换。
+
+验收结果：`reader_page.dart` 当前 5323 行，直属 part 当前 13 个。暂不冲 12 个，因为第三候选 `reader_page_viewport.dart` 后半段仍直接牵涉分页、漫画、PDF、阅读进度提交。
 
 ---
 

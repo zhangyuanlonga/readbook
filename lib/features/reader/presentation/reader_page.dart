@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:math';
-import 'dart:ui' show ImageFilter, lerpDouble;
+import 'dart:ui' show lerpDouble;
 import 'dart:ui' as ui;
 
 import 'package:battery_plus/battery_plus.dart';
@@ -27,7 +27,6 @@ import '../../../app/images/local_file_image.dart';
 import '../../../app/motion/app_motion.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_theme.dart';
-import '../../../app/theme/app_theme_palette.dart';
 import '../../../app/theme/app_theme_provider.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/adaptive_fullscreen_preview.dart';
@@ -154,11 +153,15 @@ import 'chapter_cache_sheets.dart';
 import 'reader_catalog_sheet.dart';
 import 'reader_annotated_text.dart';
 import 'reader_audio_view.dart';
+import 'reader_annotation_controller.dart';
 import 'reader_annotation_interaction.dart';
+import 'reader_annotation_presenter.dart';
 import 'reader_body_region.dart';
 import 'reader_bookmark_range_presenter.dart';
+import 'reader_chrome_action_presenter.dart';
 import 'reader_content_loading_controller.dart';
 import 'reader_content_loading_presenter.dart';
+import 'reader_desktop_input_dispatcher.dart';
 import 'reader_error_presenter.dart';
 import 'reader_feedback_widgets.dart';
 import 'reader_layout_context.dart';
@@ -179,10 +182,14 @@ import 'reader_paged_viewport_support.dart';
 import 'reader_cross_chapter_snapshot_overlay.dart';
 import 'reader_presentation_resolver.dart';
 import 'reader_runtime_controller.dart';
+import 'reader_selection_toolbar_presenter.dart';
 import 'reader_tap_zone_resolver.dart';
 import 'reader_text_paged_view.dart';
+import 'reader_touch_navigation_controller.dart';
 import 'reader_viewport_builder.dart';
 import 'widgets/chrome/reader_chrome_widgets.dart';
+import 'widgets/chrome/reader_overlay_bars.dart';
+import 'widgets/viewport/reader_page_scaffold_shell.dart';
 import 'sheets/reader_settings/reader_audio_settings_section.dart';
 import 'sheets/reader_settings/reader_auto_read_settings_section.dart';
 import 'sheets/reader_settings/reader_floating_settings_sheet.dart';
@@ -191,8 +198,11 @@ import 'sheets/reader_settings/reader_font_weight_sheet.dart';
 import 'sheets/reader_settings/reader_layout_settings_section.dart';
 import 'sheets/reader_settings/reader_manga_settings_section.dart';
 import 'sheets/reader_settings/reader_page_turn_settings_section.dart';
+import 'sheets/reader_settings/reader_settings_background_tiles_presenter.dart';
 import 'sheets/reader_settings/reader_settings_components.dart';
 import 'sheets/reader_settings/reader_settings_sections.dart';
+import 'sheets/reader_settings/reader_settings_sheet_frame.dart';
+import 'sheets/reader_settings/reader_settings_sheet_session.dart';
 import 'sheets/reader_settings/reader_tap_zone_editor_sheet.dart';
 import 'sheets/reader_settings/reader_theme_background_settings_section.dart';
 import 'sheets/reader_settings/reader_typography_settings_section.dart';
@@ -205,8 +215,6 @@ part 'reader_page_content_rendering.dart';
 part 'reader_page_lifecycle.dart';
 part 'reader_page_navigation.dart';
 part 'reader_page_runtime.dart';
-part 'reader_desktop_input_layer.dart';
-part 'reader_touch_navigation_layer.dart';
 part 'reader_chrome_surface.dart';
 part 'reader_page_shell.dart';
 part 'reader_page_settings_sheet.dart';
@@ -256,8 +264,6 @@ enum _OverlayEdge { top, bottom }
 
 enum _ReaderInteractionState { idle, dragging, animating, settling }
 
-enum _ReaderTopMoreAction { cacheChapter, switchSource, toggleBookshelf }
-
 enum _ReaderAutoReadControlAction { catalog, toggle, settings, exit }
 
 enum ReaderAutoReadSessionState {
@@ -266,6 +272,242 @@ enum ReaderAutoReadSessionState {
   paused,
   chapterPaused,
   finished,
+}
+
+extension _ReaderDesktopInputLayer on _ReaderPageState {
+  KeyEventResult _handleReaderKeyEvent(FocusNode node, KeyEvent event) {
+    final intent = _desktopInputDispatcher.resolveKeyIntent(
+      event: event,
+      snapshot: _desktopInputSnapshot(),
+    );
+    return _dispatchReaderDesktopInputAction(intent.action);
+  }
+
+  void _handleReaderPointerSignal(PointerSignalEvent event) {
+    final now = DateTime.now();
+    final intent = _desktopInputDispatcher.resolvePointerSignalIntent(
+      event: event,
+      snapshot: _desktopInputSnapshot(),
+      now: now,
+    );
+    if (intent.action == ReaderDesktopInputAction.none) {
+      return;
+    }
+    if (intent.updateLastPageTurnAt) {
+      _lastPointerScrollPageTurnAt = now;
+    }
+    _dispatchReaderDesktopInputAction(intent.action);
+  }
+
+  ReaderDesktopInputSnapshot _desktopInputSnapshot() {
+    return ReaderDesktopInputSnapshot(
+      textSelectionActive: _isTextSelectionActive,
+      editingText: _isEditingBookmarkNote,
+      readerBusy: _isBootstrapping || _isLoadingContent || _errorText != null,
+      overlayVisible: _showOverlayControls,
+      autoReadSessionEnabled: _isAutoReadSessionEnabled,
+      isPagedViewport:
+          _currentViewportKind == ReaderModeViewportKind.textPaged ||
+          _currentViewportKind == ReaderModeViewportKind.imagePaged,
+      lastPageTurnAt: _lastPointerScrollPageTurnAt,
+    );
+  }
+
+  KeyEventResult _dispatchReaderDesktopInputAction(
+    ReaderDesktopInputAction action,
+  ) {
+    switch (action) {
+      case ReaderDesktopInputAction.none:
+        return KeyEventResult.ignored;
+      case ReaderDesktopInputAction.toggleOverlay:
+        if (_showOverlayControls) {
+          _hideOverlayControls(resumeAutoRead: true);
+        } else {
+          _setOverlayControlsVisibility(true);
+        }
+        return KeyEventResult.handled;
+      case ReaderDesktopInputAction.pauseAutoRead:
+        _pauseAutoReadSession();
+        return KeyEventResult.handled;
+      case ReaderDesktopInputAction.previousPage:
+        unawaited(_turnReaderByDirection(forward: false));
+        return KeyEventResult.handled;
+      case ReaderDesktopInputAction.nextPage:
+        unawaited(_turnReaderByDirection(forward: true));
+        return KeyEventResult.handled;
+      case ReaderDesktopInputAction.chapterStart:
+        _restoreScrollPosition(0);
+        return KeyEventResult.handled;
+      case ReaderDesktopInputAction.chapterEnd:
+        _restoreScrollPosition(1);
+        return KeyEventResult.handled;
+    }
+  }
+}
+
+extension _ReaderTouchNavigationLayer on _ReaderPageState {
+  void _onReaderTap(Offset localPosition, Size size, EdgeInsets gestureInsets) {
+    final startIntent = _touchNavigationController.resolveTapStart(
+      textSelectionActive: _isTextSelectionActive,
+      initialInteractionCoolingDown: _isInitialReaderInteractionCoolingDown,
+      backNavigationCoolingDown: _isBackNavigationInteractionCoolingDown,
+      autoReadStatus: _touchAutoReadStatus,
+      autoReadSessionEnabled: _isAutoReadSessionEnabled,
+      autoReadTapGuardUntil: _autoReadTapGuardUntil,
+      now: DateTime.now(),
+      overlayVisible: _showOverlayControls,
+      tapEnabled: _settings.pageTurnMode.tapEnabled,
+      usesScrollLayout: _settings.pageTurnMode.usesScrollLayout,
+    );
+    if (startIntent.type != ReaderTouchNavigationIntentType.resolveTapZone) {
+      _dispatchReaderTouchNavigationIntent(startIntent);
+      return;
+    }
+
+    final hit = _resolveTapZoneHit(
+      localPosition: localPosition,
+      size: size,
+      gestureInsets: gestureInsets,
+    );
+    _dispatchReaderTouchNavigationIntent(
+      _touchNavigationController.resolveTapZoneAction(hit?.action),
+    );
+  }
+
+  ReaderTouchAutoReadStatus get _touchAutoReadStatus {
+    return switch (_autoReadSessionState) {
+      ReaderAutoReadSessionState.off => ReaderTouchAutoReadStatus.off,
+      ReaderAutoReadSessionState.running => ReaderTouchAutoReadStatus.running,
+      ReaderAutoReadSessionState.paused => ReaderTouchAutoReadStatus.paused,
+      ReaderAutoReadSessionState.chapterPaused =>
+        ReaderTouchAutoReadStatus.chapterPaused,
+      ReaderAutoReadSessionState.finished => ReaderTouchAutoReadStatus.finished,
+    };
+  }
+
+  void _dispatchReaderTouchNavigationIntent(
+    ReaderTouchNavigationIntent intent,
+  ) {
+    switch (intent.type) {
+      case ReaderTouchNavigationIntentType.ignore:
+      case ReaderTouchNavigationIntentType.resolveTapZone:
+        return;
+      case ReaderTouchNavigationIntentType.showAutoReadControl:
+        unawaited(_showAutoReadControlSheet());
+        return;
+      case ReaderTouchNavigationIntentType.openAutoReadOverlay:
+        unawaited(_openAutoReadFromOverlay());
+        return;
+      case ReaderTouchNavigationIntentType.hideOverlay:
+        _hideOverlayControls(resumeAutoRead: true);
+        return;
+      case ReaderTouchNavigationIntentType.performTapZoneAction:
+        final action = intent.tapZoneAction;
+        if (action != null) {
+          _performTapZoneAction(action);
+        }
+        return;
+    }
+  }
+
+  ReaderTapZoneHit? _resolveTapZoneHit({
+    required Offset localPosition,
+    required Size size,
+    required EdgeInsets gestureInsets,
+  }) {
+    final surfaceMetrics = _resolveReaderSurfaceMetrics(
+      context,
+      viewportSize: size,
+      viewportKind: _currentViewportKind,
+    );
+    final tapZoneRect = _tapZoneResolver.resolveRect(
+      viewportSize: size,
+      contentRect: surfaceMetrics.contentRect,
+      gestureInsets: gestureInsets,
+    );
+    return _tapZoneResolver.resolvePrimaryHit(
+      localPosition: localPosition,
+      rect: tapZoneRect,
+    );
+  }
+
+  bool get _supportsFloatingToolbarOnLongPress {
+    if (_isTextPagedViewport || _isTextScrollViewport) {
+      return false;
+    }
+    if (_currentContentMode == ReaderContentMode.audio) {
+      return false;
+    }
+    if (_isMangaViewport) {
+      return false;
+    }
+    return _resolvedContentSession().hybridSubMode != ReaderHybridSubMode.pdf;
+  }
+
+  bool get _shouldHandleReaderLongPress =>
+      _isMangaViewport || _supportsFloatingToolbarOnLongPress;
+
+  Future<void> _handleReaderLongPress() async {
+    if (_isAutoReadSessionEnabled) {
+      if (_autoReadSessionState == ReaderAutoReadSessionState.running) {
+        _pauseAutoReadSession();
+      } else if (_autoReadSessionState == ReaderAutoReadSessionState.paused) {
+        await _showSettingsSheet(
+          initialTab: _ReaderSettingsTab.reading,
+          initialSettingsGroupKey: 'auto_read',
+        );
+        return;
+      }
+    }
+    if (_isMangaViewport) {
+      await _openMangaPositionSheet();
+      return;
+    }
+    if (_supportsFloatingToolbarOnLongPress) {
+      _setOverlayControlsVisibility(true);
+      _touchOverlayControls();
+      return;
+    }
+    _hideOverlayControls(resumeAutoRead: false);
+  }
+
+  void _performTapZoneAction(ReaderTapZoneAction action) {
+    switch (action) {
+      case ReaderTapZoneAction.previousPage:
+        unawaited(_turnReaderByDirection(forward: false));
+        return;
+      case ReaderTapZoneAction.nextPage:
+        unawaited(_turnReaderByDirection(forward: true));
+        return;
+      case ReaderTapZoneAction.toggleToolbar:
+        final nextShow = !_showOverlayControls;
+        _setOverlayControlsVisibility(nextShow);
+        if (!nextShow) {
+          _scheduleAutoReadResume();
+        } else {
+          _touchOverlayControls();
+        }
+        return;
+      case ReaderTapZoneAction.catalog:
+        unawaited(_openCatalogSheetFromOverlay());
+        return;
+      case ReaderTapZoneAction.autoRead:
+        if (_supportsAutoRead) {
+          unawaited(_openAutoReadFromOverlay());
+        } else {
+          _showMessage('当前内容暂不支持自动阅读');
+        }
+        return;
+      case ReaderTapZoneAction.bookmark:
+        unawaited(_showCatalogSheet());
+        return;
+      case ReaderTapZoneAction.nightMode:
+        unawaited(_toggleDayNightMode());
+        return;
+      case ReaderTapZoneAction.none:
+        return;
+    }
+  }
 }
 
 // 阅读器拆分索引：
@@ -314,6 +556,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const ReaderErrorPresenter();
   final ReaderBookmarkRangePresenter _bookmarkRangePresenter =
       const ReaderBookmarkRangePresenter();
+  final ReaderChromeActionPresenter _chromeActionPresenter =
+      const ReaderChromeActionPresenter();
   final ReaderChapterFlow _chapterFlow = const ReaderChapterFlow();
   final ReaderChapterNavigation _chapterNavigation =
       const ReaderChapterNavigation();
@@ -378,10 +622,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const ReaderSettingsEntryController();
   final ReaderSelectionController _selectionController =
       const ReaderSelectionController();
+  final ReaderAnnotationPresenter _annotationPresenter =
+      const ReaderAnnotationPresenter();
+  final ReaderSelectionToolbarPresenter _selectionToolbarPresenter =
+      const ReaderSelectionToolbarPresenter();
   final ReaderSessionStateResolver _sessionStateResolver =
       const ReaderSessionStateResolver();
-  final ReaderDesktopInputResolver _desktopInputResolver =
-      const ReaderDesktopInputResolver();
+  final ReaderDesktopInputDispatcher _desktopInputDispatcher =
+      const ReaderDesktopInputDispatcher();
+  final ReaderTouchNavigationController _touchNavigationController =
+      const ReaderTouchNavigationController();
   late final ReaderSystemSettingsService _systemSettingsService;
   late final ReaderBackgroundService _readerBackgroundService;
   late final LocalBookStorageService _localBookStorageService;
@@ -4008,183 +4258,39 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         layoutContext.overlayActionPlacement ==
         ReaderOverlayActionPlacement.topToolbar;
     final isDarkMode = _effectiveReaderThemeMode() == ReaderThemeMode.dark;
-    final dayNightIcon =
-        isDarkMode ? Icons.light_mode_rounded : Icons.dark_mode_rounded;
-    final dayNightTooltip = isDarkMode ? '切换日间模式' : '切换夜间模式';
-    final autoReadIcon =
-        _autoReadSessionState == ReaderAutoReadSessionState.running
-            ? Icons.pause_circle_filled_rounded
-            : Icons.play_circle_outline_rounded;
-    final autoReadTooltip = switch (_autoReadSessionState) {
-      ReaderAutoReadSessionState.running => '暂停自动阅读',
-      ReaderAutoReadSessionState.paused ||
-      ReaderAutoReadSessionState.chapterPaused => '继续自动阅读',
-      ReaderAutoReadSessionState.finished ||
-      ReaderAutoReadSessionState.off => '自动阅读',
-    };
+    final dayNightAction = _chromeActionPresenter.dayNightAction(
+      isDarkMode: isDarkMode,
+    );
+    final autoReadAction = _chromeActionPresenter.autoReadAction(
+      _chromeAutoReadStatus,
+    );
 
-    return Positioned(
-      top: 0,
-      left: 0,
-      right: 0,
-      child: IgnorePointer(
-        ignoring: !_showOverlayControls,
-        child: AnimatedBuilder(
-          animation: _overlayControlsController,
-          builder: (context, _) {
-            final fade = _overlayControlsFadeProgress;
-            return _buildShellOverlayTransition(
-              edge: _OverlayEdge.top,
-              child: ClipRect(
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          colors.overlay.withValues(alpha: 0.94),
-                          colors.overlay.withValues(alpha: 0.84),
-                        ],
-                      ),
-                      border: Border(
-                        bottom: BorderSide(
-                          color: colors.divider.withValues(alpha: 0.22),
-                        ),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.05 * fade),
-                          blurRadius: 12,
-                          offset: const Offset(0, 5),
-                        ),
-                      ],
-                    ),
-                    child: SafeArea(
-                      bottom: false,
-                      child: SizedBox(
-                        height: 78,
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(6, 6, 10, 8),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              _buildTopActionButton(
-                                icon: Icons.arrow_back_ios_new,
-                                tooltip: '返回',
-                                onPressed: _handleBackNavigation,
-                                colors: colors,
-                                emphasizeHitArea: true,
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      chapterTitle,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: colors.text,
-                                        fontSize: 18,
-                                        height: 1.05,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      chapterLine,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: colors.meta,
-                                        fontSize: 12,
-                                        height: 1.05,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              if (useDesktopChrome) ...[
-                                _buildTopActionButton(
-                                  icon: Icons.list_alt_outlined,
-                                  tooltip: '目录',
-                                  onPressed:
-                                      () => unawaited(
-                                        _openCatalogSheetFromOverlay(),
-                                      ),
-                                  colors: colors,
-                                  emphasizeHitArea: true,
-                                ),
-                                const SizedBox(width: 2),
-                                _buildTopActionButton(
-                                  icon: autoReadIcon,
-                                  tooltip: autoReadTooltip,
-                                  onPressed:
-                                      () =>
-                                          unawaited(_openAutoReadFromOverlay()),
-                                  colors: colors,
-                                  emphasizeHitArea: true,
-                                ),
-                                const SizedBox(width: 2),
-                                _buildTopActionButton(
-                                  icon: dayNightIcon,
-                                  tooltip: dayNightTooltip,
-                                  onPressed:
-                                      () => unawaited(_toggleDayNightMode()),
-                                  colors: colors,
-                                  emphasizeHitArea: true,
-                                ),
-                                const SizedBox(width: 2),
-                                _buildTopActionButton(
-                                  icon: Icons.palette_outlined,
-                                  tooltip: '界面设置',
-                                  onPressed:
-                                      () => unawaited(
-                                        _showSettingsSheet(
-                                          initialTab:
-                                              _ReaderSettingsTab.interface,
-                                        ),
-                                      ),
-                                  colors: colors,
-                                  emphasizeHitArea: true,
-                                ),
-                                const SizedBox(width: 8),
-                              ],
-                              _buildTopActionButton(
-                                icon: Icons.auto_stories_rounded,
-                                tooltip: '书籍详情',
-                                onPressed: _openDetailPage,
-                                colors: colors,
-                                emphasizeHitArea: true,
-                              ),
-                              const SizedBox(width: 2),
-                              _buildTopActionButton(
-                                icon: Icons.more_vert_rounded,
-                                tooltip: '更多',
-                                onPressed:
-                                    () =>
-                                        unawaited(_showTopMoreActions(colors)),
-                                colors: colors,
-                                emphasizeHitArea: true,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-      ),
+    return ReaderTopOverlayBar(
+      colors: colors,
+      overlayVisible: _showOverlayControls,
+      animation: _overlayControlsController,
+      fadeProgress: _overlayControlsFadeProgress,
+      transitionBuilder:
+          (child) => _buildShellOverlayTransition(
+            edge: _OverlayEdge.top,
+            child: child,
+          ),
+      chapterTitle: chapterTitle,
+      chapterLine: chapterLine,
+      useDesktopChrome: useDesktopChrome,
+      autoReadAction: autoReadAction,
+      dayNightAction: dayNightAction,
+      onBack: _handleBackNavigation,
+      onCatalog: () => unawaited(_openCatalogSheetFromOverlay()),
+      onAutoRead: () => unawaited(_openAutoReadFromOverlay()),
+      onToggleDayNight: () => unawaited(_toggleDayNightMode()),
+      onInterfaceSettings:
+          () => unawaited(
+            _showSettingsSheet(initialTab: _ReaderSettingsTab.interface),
+          ),
+      onOpenDetail: _openDetailPage,
+      onMore: () => unawaited(_showTopMoreActions(colors)),
+      onActionPointerDown: _markReaderTapHandledByChild,
     );
   }
 
@@ -4193,98 +4299,32 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Future<void> _showTopMoreActions(ReaderThemeColors colors) async {
-    final action = await showAdaptiveActionSurface<_ReaderTopMoreAction>(
-      context: context,
-      maxWidth: 420,
-      padding: EdgeInsets.zero,
-      builder: (actionContext) {
-        final colorScheme = Theme.of(actionContext).colorScheme;
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (_canCacheChapter)
-                ListTile(
-                  leading: Icon(
-                    _isCurrentChapterCached
-                        ? Icons.cloud_done_rounded
-                        : Icons.cloud_download_outlined,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                  title: Text(_isCurrentChapterCached ? '已缓存章节' : '缓存章节'),
-                  onTap:
-                      _isCurrentChapterCached
-                          ? null
-                          : () => Navigator.of(
-                            actionContext,
-                          ).pop(_ReaderTopMoreAction.cacheChapter),
-                ),
-              if (_canSwitchSource)
-                ListTile(
-                  leading:
-                      _isSwitchSourceLoading
-                          ? SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          )
-                          : Icon(
-                            Icons.swap_horiz_rounded,
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                  title: Text(_isSwitchSourceLoading ? '换源中...' : '切换书源'),
-                  onTap:
-                      _isSwitchSourceLoading
-                          ? null
-                          : () => Navigator.of(
-                            actionContext,
-                          ).pop(_ReaderTopMoreAction.switchSource),
-                ),
-              ListTile(
-                leading:
-                    _isShelfActionLoading
-                        ? SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        )
-                        : Icon(
-                          _isInBookshelf
-                              ? Icons.bookmark_added
-                              : Icons.bookmark_add_outlined,
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                title: Text(_isInBookshelf ? '从书架移除' : '加入书架'),
-                onTap:
-                    _isShelfActionLoading
-                        ? null
-                        : () => Navigator.of(
-                          actionContext,
-                        ).pop(_ReaderTopMoreAction.toggleBookshelf),
-              ),
-            ],
-          ),
-        );
-      },
+    final actions = _chromeActionPresenter.buildTopMoreActions(
+      canCacheChapter: _canCacheChapter,
+      isCurrentChapterCached: _isCurrentChapterCached,
+      canSwitchSource: _canSwitchSource,
+      isSwitchSourceLoading: _isSwitchSourceLoading,
+      isShelfActionLoading: _isShelfActionLoading,
+      isInBookshelf: _isInBookshelf,
     );
+    final action =
+        await showAdaptiveActionSurface<ReaderChromeTopMoreActionKind>(
+          context: context,
+          maxWidth: 420,
+          padding: EdgeInsets.zero,
+          builder: (_) => ReaderTopMoreActionSheet(actions: actions),
+        );
     if (!mounted || action == null) {
       return;
     }
     switch (action) {
-      case _ReaderTopMoreAction.cacheChapter:
+      case ReaderChromeTopMoreActionKind.cacheChapter:
         await _openChapterCache();
         return;
-      case _ReaderTopMoreAction.switchSource:
+      case ReaderChromeTopMoreActionKind.switchSource:
         await _showSwitchSourceSheet();
         return;
-      case _ReaderTopMoreAction.toggleBookshelf:
+      case ReaderChromeTopMoreActionKind.toggleBookshelf:
         await _toggleBookshelf();
         return;
     }
@@ -4299,150 +4339,56 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return _buildDesktopBottomProgressOverlay(colors, layoutContext);
     }
 
-    const middleLabel = '界面';
-    const middleIcon = Icons.palette_outlined;
     final isDarkMode = _effectiveReaderThemeMode() == ReaderThemeMode.dark;
-    final dayNightLabel = isDarkMode ? '日间' : '夜间';
-    final dayNightIcon =
-        isDarkMode ? Icons.light_mode_rounded : Icons.dark_mode_rounded;
-    final autoReadIcon =
-        _autoReadSessionState == ReaderAutoReadSessionState.running
-            ? Icons.pause_circle_filled_rounded
-            : Icons.play_circle_outline_rounded;
-    final autoReadLabel = switch (_autoReadSessionState) {
-      ReaderAutoReadSessionState.running => '暂停',
-      ReaderAutoReadSessionState.paused => '继续',
-      ReaderAutoReadSessionState.chapterPaused => '继续',
-      ReaderAutoReadSessionState.finished => '自动',
-      ReaderAutoReadSessionState.off => '自动',
-    };
+    final dayNightAction = _chromeActionPresenter.dayNightAction(
+      isDarkMode: isDarkMode,
+    );
+    final autoReadAction = _chromeActionPresenter.autoReadAction(
+      _chromeAutoReadStatus,
+    );
+    const interfaceAction = ReaderChromeActionData(
+      icon: Icons.palette_outlined,
+      label: '界面',
+      tooltip: '界面设置',
+    );
 
-    return Positioned(
-      left: 0,
-      right: 0,
-      bottom: 0,
-      child: IgnorePointer(
-        ignoring: !_showOverlayControls,
-        child: AnimatedBuilder(
-          animation: _overlayControlsController,
-          builder: (context, _) {
-            final fade = _overlayControlsFadeProgress;
-            return _buildShellOverlayTransition(
-              edge: _OverlayEdge.bottom,
-              child: ClipRect(
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          colors.overlay.withValues(alpha: 0.84),
-                          colors.overlay.withValues(alpha: 0.94),
-                        ],
-                      ),
-                      border: Border(
-                        top: BorderSide(
-                          color: colors.divider.withValues(alpha: 0.22),
-                        ),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.06 * fade),
-                          blurRadius: 14,
-                          offset: const Offset(0, -5),
-                        ),
-                      ],
-                    ),
-                    child: SafeArea(
-                      top: false,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _buildBottomProgressStrip(colors),
-                            const SizedBox(height: 3),
-                            Container(
-                              height: 1,
-                              color: colors.divider.withValues(alpha: 0.18),
-                            ),
-                            const SizedBox(height: 3),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: _buildToolbarAction(
-                                    icon: Icons.list_alt_outlined,
-                                    label: '目录',
-                                    onTap: (_) async {
-                                      _touchOverlayControls();
-                                      await _openCatalogSheetFromOverlay();
-                                    },
-                                    colors: colors,
-                                  ),
-                                ),
-                                Expanded(
-                                  child: _buildToolbarAction(
-                                    icon: autoReadIcon,
-                                    label: autoReadLabel,
-                                    onTap: (_) async {
-                                      _touchOverlayControls();
-                                      await _openAutoReadFromOverlay();
-                                    },
-                                    onLongPress:
-                                        () => _showSettingsSheet(
-                                          initialTab:
-                                              _ReaderSettingsTab.reading,
-                                          initialSettingsGroupKey: 'auto_read',
-                                        ),
-                                    colors: colors,
-                                    active:
-                                        _autoReadSessionState !=
-                                        ReaderAutoReadSessionState.off,
-                                  ),
-                                ),
-                                Expanded(
-                                  child: _buildToolbarAction(
-                                    icon: dayNightIcon,
-                                    label: dayNightLabel,
-                                    onTap: (buttonContext) async {
-                                      _touchOverlayControls();
-                                      await _toggleDayNightModeWithReveal(
-                                        buttonContext,
-                                      );
-                                    },
-                                    colors: colors,
-                                    active: isDarkMode,
-                                  ),
-                                ),
-                                Expanded(
-                                  child: _buildToolbarAction(
-                                    icon: middleIcon,
-                                    label: middleLabel,
-                                    onTap: (_) async {
-                                      _touchOverlayControls();
-                                      await _showSettingsSheet(
-                                        initialTab:
-                                            _ReaderSettingsTab.interface,
-                                      );
-                                    },
-                                    colors: colors,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-      ),
+    return ReaderMobileBottomOverlayBar(
+      colors: colors,
+      overlayVisible: _showOverlayControls,
+      animation: _overlayControlsController,
+      fadeProgress: _overlayControlsFadeProgress,
+      transitionBuilder:
+          (child) => _buildShellOverlayTransition(
+            edge: _OverlayEdge.bottom,
+            child: child,
+          ),
+      progressStrip: _buildBottomProgressStrip(colors),
+      autoReadAction: autoReadAction,
+      dayNightAction: dayNightAction,
+      interfaceAction: interfaceAction,
+      onCatalog: (_) async {
+        _touchOverlayControls();
+        await _openCatalogSheetFromOverlay();
+      },
+      onAutoRead: (_) async {
+        _touchOverlayControls();
+        await _openAutoReadFromOverlay();
+      },
+      onAutoReadLongPress:
+          () => _showSettingsSheet(
+            initialTab: _ReaderSettingsTab.reading,
+            initialSettingsGroupKey: 'auto_read',
+          ),
+      onToggleDayNight: (buttonContext) async {
+        _touchOverlayControls();
+        await _toggleDayNightModeWithReveal(buttonContext);
+      },
+      onInterfaceSettings: (_) async {
+        _touchOverlayControls();
+        await _showSettingsSheet(initialTab: _ReaderSettingsTab.interface);
+      },
+      onActionPointerDown: _markReaderTapHandledByChild,
+      onActionError: () => _showMessage('操作失败，请稍后重试。'),
     );
   }
 
@@ -4450,195 +4396,42 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     ReaderThemeColors colors,
     ReaderLayoutContext layoutContext,
   ) {
-    return Positioned(
-      left: 0,
-      right: 0,
-      bottom: 0,
-      child: IgnorePointer(
-        ignoring: !_showOverlayControls,
-        child: AnimatedBuilder(
-          animation: _overlayControlsController,
-          builder: (context, _) {
-            final fade = _overlayControlsFadeProgress;
-            return _buildShellOverlayTransition(
-              edge: _OverlayEdge.bottom,
-              child: SafeArea(
-                top: false,
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    24,
-                    0,
-                    24,
-                    max(10.0, layoutContext.metrics.pagePadding * 0.5),
-                  ),
-                  child: Align(
-                    alignment: Alignment.bottomCenter,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxWidth: layoutContext.desktopProgressMaxWidth,
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(999),
-                        child: BackdropFilter(
-                          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: colors.overlay.withValues(alpha: 0.9),
-                              borderRadius: BorderRadius.circular(999),
-                              border: Border.all(
-                                color: colors.divider.withValues(alpha: 0.22),
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(
-                                    alpha: 0.08 * fade,
-                                  ),
-                                  blurRadius: 18,
-                                  offset: const Offset(0, 8),
-                                ),
-                              ],
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 2,
-                              ),
-                              child: _buildBottomProgressStrip(colors),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-      ),
+    return ReaderDesktopBottomProgressOverlay(
+      colors: colors,
+      overlayVisible: _showOverlayControls,
+      animation: _overlayControlsController,
+      fadeProgress: _overlayControlsFadeProgress,
+      transitionBuilder:
+          (child) => _buildShellOverlayTransition(
+            edge: _OverlayEdge.bottom,
+            child: child,
+          ),
+      progressStrip: _buildBottomProgressStrip(colors),
+      maxWidth: layoutContext.desktopProgressMaxWidth,
+      bottomPadding: max(10.0, layoutContext.metrics.pagePadding * 0.5),
     );
   }
 
   Widget _buildAutoReadStatusOverlay(ReaderThemeColors colors) {
-    if (_autoReadSessionState == ReaderAutoReadSessionState.off) {
-      return const SizedBox.shrink();
-    }
-
-    final topPadding = MediaQuery.viewPaddingOf(context).top;
-    final colorScheme = Theme.of(context).colorScheme;
-    final progress = _safeCurrentScrollRatio();
     final isPaused =
         _autoReadSessionState == ReaderAutoReadSessionState.paused ||
         _autoReadSessionState == ReaderAutoReadSessionState.chapterPaused;
-    final indicatorOpacity = isPaused ? 0.42 : 0.86;
-
-    return IgnorePointer(
-      ignoring:
-          _autoReadSessionState != ReaderAutoReadSessionState.chapterPaused,
-      child: Stack(
-        children: [
-          Positioned(
-            top: topPadding + 8,
-            left: 24,
-            right: 24,
-            child: AnimatedOpacity(
-              duration: AppMotion.fast,
-              opacity: indicatorOpacity,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(999),
-                child: LinearProgressIndicator(
-                  minHeight: 3,
-                  value: progress,
-                  backgroundColor: colors.divider.withValues(alpha: 0.28),
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    colorScheme.primary,
-                  ),
-                ),
-              ),
-            ),
+    final isChapterPaused =
+        _autoReadSessionState == ReaderAutoReadSessionState.chapterPaused;
+    return ReaderAutoReadStatusOverlay(
+      colors: colors,
+      visible: _autoReadSessionState != ReaderAutoReadSessionState.off,
+      isPaused: isPaused,
+      isChapterPaused: isChapterPaused,
+      progress: _safeCurrentScrollRatio(),
+      topPadding: MediaQuery.viewPaddingOf(context).top,
+      onResume: _resumeAutoReadSession,
+      onOpenSettings:
+          () => _showSettingsSheet(
+            initialTab: _ReaderSettingsTab.reading,
+            initialSettingsGroupKey: 'auto_read',
           ),
-          if (_autoReadSessionState == ReaderAutoReadSessionState.paused)
-            Center(
-              child: GestureDetector(
-                onTap: () => _resumeAutoReadSession(),
-                onLongPress:
-                    () => _showSettingsSheet(
-                      initialTab: _ReaderSettingsTab.reading,
-                      initialSettingsGroupKey: 'auto_read',
-                    ),
-                child: _buildAutoReadFloatingHint(
-                  colors: colors,
-                  icon: Icons.play_arrow_rounded,
-                  title: '自动阅读已暂停',
-                  actionLabel: '点击继续 · 长按设置',
-                ),
-              ),
-            ),
-          if (_autoReadSessionState == ReaderAutoReadSessionState.chapterPaused)
-            Center(
-              child: GestureDetector(
-                onTap: () => unawaited(_continueAutoReadAfterChapterPause()),
-                child: _buildAutoReadFloatingHint(
-                  colors: colors,
-                  icon: Icons.play_arrow_rounded,
-                  title: '本章结束',
-                  actionLabel: '点击继续',
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAutoReadFloatingHint({
-    required ReaderThemeColors colors,
-    required IconData icon,
-    required String title,
-    required String actionLabel,
-  }) {
-    final textTheme = Theme.of(context).textTheme;
-    final colorScheme = Theme.of(context).colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.overlay.withValues(alpha: 0.88),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: colors.divider.withValues(alpha: 0.24)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: colorScheme.primary, size: 24),
-            const SizedBox(width: 10),
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: textTheme.bodyMedium?.copyWith(
-                    color: colors.text,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                Text(
-                  actionLabel,
-                  style: textTheme.bodySmall?.copyWith(color: colors.meta),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
+      onContinueChapter: () => unawaited(_continueAutoReadAfterChapterPause()),
     );
   }
 
@@ -4648,91 +4441,35 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         .clamp(0.0, 1.0);
     final canNavigateChapters = _chapters.isNotEmpty;
 
-    return Listener(
-      behavior: HitTestBehavior.translucent,
-      onPointerDown: (_) => _markReaderTapHandledByChild(),
-      child: Row(
-        children: [
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            splashRadius: 20,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 48, minHeight: 44),
-            tooltip: '上一章',
-            onPressed:
-                canNavigateChapters
-                    ? () => unawaited(
-                      _jumpToAdjacentReadableChapter(forward: false),
-                    )
-                    : null,
-            icon: Icon(
-              Icons.skip_previous_rounded,
-              color: colors.text,
-              size: 21,
-            ),
-          ),
-          Expanded(
-            child: SliderTheme(
-              data: SliderTheme.of(context).copyWith(
-                trackHeight: 3,
-                overlayShape: SliderComponentShape.noOverlay,
-                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                activeTrackColor: colors.text,
-                inactiveTrackColor: colors.divider.withValues(alpha: 0.34),
-                thumbColor: colors.text,
-              ),
-              child: Slider(
-                min: 0,
-                max: 1,
-                divisions: 100,
-                value: progressValue,
-                onChangeStart:
-                    _hasVisibleReaderContent
-                        ? (_) => _suspendOverlayAutoHide()
-                        : null,
-                onChanged:
-                    _hasVisibleReaderContent
-                        ? (value) {
-                          _touchOverlayControls();
-                          setState(() {
-                            _bottomOverlayDraftProgressRatio = value;
-                          });
-                        }
-                        : null,
-                onChangeEnd:
-                    _hasVisibleReaderContent
-                        ? (value) {
-                          setState(() {
-                            _bottomOverlayDraftProgressRatio = null;
-                          });
-                          final request = _navigationEntryResolver
-                              .resolveProgressSelection(scrollRatio: value);
-                          _restoreScrollPosition(
-                            request.initialScrollRatio ?? value,
-                          );
-                          _syncActiveReadingRecordSessionProgress(ratio: value);
-                          _scheduleProgressSave();
-                          _resumeOverlayAutoHide();
-                        }
-                        : null,
-              ),
-            ),
-          ),
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            splashRadius: 20,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 48, minHeight: 44),
-            tooltip: '下一章',
-            onPressed:
-                canNavigateChapters
-                    ? () =>
-                        unawaited(_jumpToAdjacentReadableChapter(forward: true))
-                    : null,
-            icon: Icon(Icons.skip_next_rounded, color: colors.text, size: 21),
-          ),
-        ],
-      ),
+    return ReaderBottomProgressStrip(
+      colors: colors,
+      progressValue: progressValue,
+      canNavigateChapters: canNavigateChapters,
+      hasVisibleReaderContent: _hasVisibleReaderContent,
+      onPreviousChapter:
+          () => unawaited(_jumpToAdjacentReadableChapter(forward: false)),
+      onNextChapter:
+          () => unawaited(_jumpToAdjacentReadableChapter(forward: true)),
+      onPointerDown: _markReaderTapHandledByChild,
+      onChangeStart: (_) => _suspendOverlayAutoHide(),
+      onChanged: (value) {
+        _touchOverlayControls();
+        setState(() {
+          _bottomOverlayDraftProgressRatio = value;
+        });
+      },
+      onChangeEnd: (value) {
+        setState(() {
+          _bottomOverlayDraftProgressRatio = null;
+        });
+        final request = _navigationEntryResolver.resolveProgressSelection(
+          scrollRatio: value,
+        );
+        _restoreScrollPosition(request.initialScrollRatio ?? value);
+        _syncActiveReadingRecordSessionProgress(ratio: value);
+        _scheduleProgressSave();
+        _resumeOverlayAutoHide();
+      },
     );
   }
 
@@ -4768,126 +4505,24 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
-  Widget _buildTopActionButton({
-    required String tooltip,
-    required VoidCallback? onPressed,
-    required IconData icon,
-    required ReaderThemeColors colors,
-    bool loading = false,
-    bool emphasizeHitArea = false,
-  }) {
-    return Listener(
-      behavior: HitTestBehavior.translucent,
-      onPointerDown: (_) => _markReaderTapHandledByChild(),
-      child: IconButton(
-        tooltip: tooltip,
-        onPressed: onPressed,
-        style: IconButton.styleFrom(
-          foregroundColor: colors.text,
-          backgroundColor: Colors.transparent,
-          minimumSize:
-              emphasizeHitArea ? const Size(44, 44) : const Size(34, 34),
-          visualDensity: VisualDensity.compact,
-          padding: emphasizeHitArea ? const EdgeInsets.all(4) : EdgeInsets.zero,
-          tapTargetSize:
-              emphasizeHitArea
-                  ? MaterialTapTargetSize.padded
-                  : MaterialTapTargetSize.shrinkWrap,
-        ),
-        icon:
-            loading
-                ? SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: colors.text,
-                  ),
-                )
-                : Icon(icon, size: emphasizeHitArea ? 22 : 18),
-      ),
-    );
-  }
-
-  Widget _buildToolbarAction({
-    required IconData icon,
-    required String label,
-    required Future<void> Function(BuildContext context) onTap,
-    required ReaderThemeColors colors,
-    Future<void> Function()? onLongPress,
-    bool active = false,
-  }) {
-    return Builder(
-      builder: (buttonContext) {
-        return Material(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(22),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(22),
-            onTapDown: (_) => _markReaderTapHandledByChild(),
-            onTap: () async {
-              try {
-                await onTap(buttonContext);
-              } catch (_) {
-                _showMessage('操作失败，请稍后重试。');
-              }
-            },
-            onLongPress:
-                onLongPress == null
-                    ? null
-                    : () async {
-                      try {
-                        await onLongPress();
-                      } catch (_) {
-                        _showMessage('操作失败，请稍后重试。');
-                      }
-                    },
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 140),
-              curve: Curves.easeOut,
-              decoration: BoxDecoration(
-                color:
-                    active
-                        ? colors.background.withValues(alpha: 0.52)
-                        : Colors.transparent,
-                borderRadius: BorderRadius.circular(22),
-              ),
-              padding: const EdgeInsets.symmetric(vertical: 5),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(icon, size: 19, color: colors.text),
-                  const SizedBox(height: 2),
-                  Text(
-                    label,
-                    style: TextStyle(
-                      color: colors.text,
-                      fontSize: 11.5,
-                      height: 1.05,
-                      fontWeight: active ? FontWeight.w700 : FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   String _chapterProgressLabel() {
-    if (_currentIndex == null || _chapters.isEmpty) {
-      return _bookTitle.isEmpty ? '加载章节信息中' : _bookTitle;
-    }
+    return _chromeActionPresenter.chapterProgressLabel(
+      bookTitle: _bookTitle,
+      currentIndex: _currentIndex,
+      chapterCount: _chapters.length,
+    );
+  }
 
-    final chapter = _currentIndex! + 1;
-    final total = _chapters.length;
-    if (_bookTitle.isEmpty) {
-      return '第 $chapter / $total 章';
-    }
-
-    return '$_bookTitle · 第 $chapter / $total 章';
+  ReaderChromeAutoReadStatus get _chromeAutoReadStatus {
+    return switch (_autoReadSessionState) {
+      ReaderAutoReadSessionState.off => ReaderChromeAutoReadStatus.off,
+      ReaderAutoReadSessionState.running => ReaderChromeAutoReadStatus.running,
+      ReaderAutoReadSessionState.paused => ReaderChromeAutoReadStatus.paused,
+      ReaderAutoReadSessionState.chapterPaused =>
+        ReaderChromeAutoReadStatus.chapterPaused,
+      ReaderAutoReadSessionState.finished =>
+        ReaderChromeAutoReadStatus.finished,
+    };
   }
 
   ReaderFailurePresentation? _readerFailurePresentationFor(AppException error) {
@@ -5425,12 +5060,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     )).toDouble();
   }
 
-  String _letterSpacingValueLabel(ReaderSettings settings) {
-    return _formatTypographyValue(
-      value: settings.letterSpacing,
-      fractionDigits: 2,
-    );
-  }
+  String _letterSpacingValueLabel(ReaderSettings settings) =>
+      _readerSettingsPresenter.letterSpacingValueLabel(settings);
 
   double _lineHeightSliderValue(ReaderSettings settings) {
     return _typographyMetricsResolver.resolveLineSpacingExtra(settings);
@@ -5581,7 +5212,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Color _backgroundForTone(ColorScheme scheme, ReaderBackgroundTone tone) {
-    final paletteSeedColor = _readerPaletteSeedColorForTone(tone);
+    final paletteSeedColor = readerPaletteSeedColorForTone(tone);
     if (paletteSeedColor != null) {
       return _blendReaderToneColor(
         base: scheme.surface,
@@ -5611,7 +5242,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Color _overlayForTone(ColorScheme scheme, ReaderBackgroundTone tone) {
-    final paletteSeedColor = _readerPaletteSeedColorForTone(tone);
+    final paletteSeedColor = readerPaletteSeedColorForTone(tone);
     if (paletteSeedColor != null) {
       return _blendReaderToneColor(
         base: scheme.surfaceContainerLow,

@@ -232,6 +232,60 @@ class ReaderSettingsGroupEntryCard extends StatelessWidget {
   }
 }
 
+class ReaderSettingsOwnershipHintCard extends StatelessWidget {
+  const ReaderSettingsOwnershipHintCard({
+    super.key,
+    required this.title,
+    required this.description,
+    this.compactScale = 1,
+  });
+
+  final String title;
+  final String description;
+  final double compactScale;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      margin: EdgeInsets.only(bottom: _scale(8)),
+      padding: EdgeInsets.fromLTRB(
+        _scale(12),
+        _scale(10),
+        _scale(12),
+        _scale(10),
+      ),
+      decoration: BoxDecoration(
+        color: colorScheme.primaryContainer.withValues(alpha: 0.22),
+        borderRadius: BorderRadius.circular(_scale(16)),
+        border: Border.all(color: colorScheme.primary.withValues(alpha: 0.18)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          SizedBox(height: _scale(4)),
+          Text(
+            description,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              height: 1.35,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  double _scale(double value) => value * compactScale;
+}
+
 class ReaderSettingsToggleRow extends StatelessWidget {
   const ReaderSettingsToggleRow({
     super.key,
