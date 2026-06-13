@@ -97,12 +97,16 @@ final bookDetailBookshelfServiceProvider = Provider<BookshelfService>((ref) {
 final bookDetailSwitchSourceSearchServiceProvider = Provider<SearchService>((
   ref,
 ) {
-  return SearchService();
+  return SearchService(
+    searchHitCacheService: ref.watch(
+      app_providers.appSearchHitCacheServiceProvider,
+    ),
+  );
 });
 
 final bookDetailSearchHitCacheServiceProvider = Provider<SearchHitCacheService>(
   (ref) {
-    return SearchHitCacheService();
+    return ref.watch(app_providers.appSearchHitCacheServiceProvider);
   },
 );
 

@@ -1,8 +1,17 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:collection';
 
 import 'package:dio/dio.dart';
 
+import '../cache/app_cache_coordinator.dart';
+import '../cache/cache_entry.dart';
+import '../cache/cache_key.dart';
+import '../cache/cache_policy.dart';
+import '../cache/cache_result.dart';
+import '../cache/cache_scope.dart';
+import '../cache/cache_store.dart';
+import '../cache/cache_trace.dart';
 import '../errors/app_exception.dart';
 import '../errors/error_codes.dart';
 import '../errors/error_stage.dart';
@@ -149,6 +158,7 @@ final class ApiJsonDecoders {
 class ApiClient {
   static AuthTokenRefresher? defaultAuthTokenRefresher;
   static ApiCacheUserIdResolver? defaultCacheUserIdResolver;
+  static final ApiCacheStore defaultCacheStore = ApiCacheStore();
 
   /// Installs the shared auth interceptor on a Dio instance once.
   ///
@@ -180,6 +190,7 @@ class ApiClient {
     Duration defaultCacheTtl = const Duration(minutes: 5),
     Duration defaultLongCacheTtl = const Duration(hours: 6),
     ApiCacheStore? cacheStore,
+    AppCacheCoordinator? cacheCoordinator,
     Map<String, String> defaultHeaders = const {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
@@ -193,7 +204,8 @@ class ApiClient {
        _defaultMaxRetries = defaultMaxRetries,
        _defaultCacheTtl = defaultCacheTtl,
        _defaultLongCacheTtl = defaultLongCacheTtl,
-       _cacheStore = cacheStore ?? ApiCacheStore(),
+       _cacheStore = cacheStore ?? ApiClient.defaultCacheStore,
+       _cacheCoordinator = cacheCoordinator ?? AppCacheCoordinator(),
        _defaultHeaders = Map.unmodifiable({...defaultHeaders}),
        _authTokenRefresher =
            authTokenRefresher ?? ApiClient.defaultAuthTokenRefresher,
@@ -207,6 +219,7 @@ class ApiClient {
     if (_dio.interceptors.whereType<NetworkLogInterceptor>().isEmpty) {
       _dio.interceptors.add(NetworkLogInterceptor(_logger));
     }
+    _cacheCoordinator.registerStore(_cacheStore);
   }
 
   final Dio _dio;
@@ -217,6 +230,7 @@ class ApiClient {
   final Duration _defaultCacheTtl;
   final Duration _defaultLongCacheTtl;
   final ApiCacheStore _cacheStore;
+  final AppCacheCoordinator _cacheCoordinator;
   final Map<String, String> _defaultHeaders;
   final AuthTokenRefresher? _authTokenRefresher;
   final ApiCacheUserIdResolver? _cacheUserIdResolver;
@@ -246,12 +260,11 @@ class ApiClient {
         _isIdempotent(method) && enableRetry
             ? (maxRetries ?? _defaultMaxRetries) + 1
             : 1;
-    final resolvedCachePolicy =
-        enableCache && cachePolicy == ApiCachePolicy.realtime
-            ? ApiCachePolicy.shortCache
-            : cachePolicy;
+    final resolvedCachePolicy = cachePolicy;
     final shouldUseCache =
-        resolvedCachePolicy != ApiCachePolicy.realtime && _isIdempotent(method);
+        enableCache &&
+        resolvedCachePolicy != ApiCachePolicy.realtime &&
+        _isIdempotent(method);
     final cacheUserId = await _resolveCacheUserId(attachAccessToken);
     final cacheKey = _cacheKey(
       method: method,
@@ -422,7 +435,7 @@ class ApiClient {
   }
 
   void clearCache() {
-    _cacheStore.clear();
+    unawaited(_cacheCoordinator.clearScope(scope: AppCacheScope.apiResponse));
   }
 
   String _resolveUrl(String path) {
@@ -464,21 +477,23 @@ class ApiClient {
     return method == ApiMethod.get || method == ApiMethod.head;
   }
 
-  String _cacheKey({
+  AppCacheKey _cacheKey({
     required ApiMethod method,
     required String url,
     required Map<String, dynamic> queryParameters,
     required String? userId,
   }) {
-    final scope = (userId ?? '').trim().isEmpty ? 'public' : 'user:$userId';
-    if (queryParameters.isEmpty) {
-      return '$scope ${_methodText(method)} $url';
-    }
+    final owner = (userId ?? '').trim().isEmpty ? 'public' : userId!.trim();
     final sorted = SplayTreeMap<String, dynamic>.from(queryParameters);
-    final query = sorted.entries
-        .map((entry) => '${entry.key}=${entry.value}')
-        .join('&');
-    return '$scope ${_methodText(method)} $url?$query';
+    return AppCacheKey(
+      scope: AppCacheScope.apiResponse,
+      owner: owner,
+      parts: <String, Object?>{
+        'method': _methodText(method),
+        'url': url,
+        for (final entry in sorted.entries) 'query.${entry.key}': entry.value,
+      },
+    );
   }
 
   Duration _defaultTtlForPolicy(ApiCachePolicy policy) {
@@ -647,43 +662,245 @@ class ApiClient {
   }
 }
 
-class ApiCacheStore {
-  final Map<String, _ApiCacheEntry> _entries = <String, _ApiCacheEntry>{};
+class ApiCacheStore implements AppCacheStore {
+  ApiCacheStore({AppCacheTracer? tracer})
+    : _tracer = tracer ?? AppCacheTracer();
 
-  T? get<T>(String key) {
-    final entry = _entries[key];
+  final Map<String, _ApiCacheEntry> _entries = <String, _ApiCacheEntry>{};
+  final AppCacheTracer _tracer;
+
+  @override
+  AppCacheScope get scope => AppCacheScope.apiResponse;
+
+  @override
+  String get backendName => 'memory.api_response';
+
+  T? get<T>(Object key) {
+    final cacheKey = _normalizeKey(key);
+    final storageKey = _storageKey(key);
+    final entry = _entries[storageKey];
     if (entry == null) {
+      if (cacheKey != null) {
+        _tracer.traceRead(
+          AppCacheReadResult.miss(key: cacheKey, backend: backendName),
+        );
+      }
       return null;
     }
-    if (DateTime.now().isAfter(entry.expiresAt)) {
-      _entries.remove(key);
+    final now = DateTime.now();
+    if (!entry.expiresAt.isAfter(now)) {
+      _entries.remove(storageKey);
+      if (entry.key != null) {
+        _tracer.traceRead(
+          AppCacheReadResult.stale(
+            key: entry.key!,
+            backend: backendName,
+            entry: entry.toAppEntry(),
+            invalidReason: AppCacheInvalidReason.ttlExpired,
+          ),
+        );
+      }
       return null;
+    }
+    if (entry.key != null) {
+      _tracer.traceRead(
+        AppCacheReadResult.hit(
+          key: entry.key!,
+          backend: backendName,
+          entry: entry.toAppEntry(),
+        ),
+      );
     }
     return entry.value as T?;
   }
 
-  void set<T>(String key, T value, Duration ttl) {
+  void set<T>(Object key, T value, Duration ttl) {
     if (ttl <= Duration.zero) {
       return;
     }
-    _entries[key] = _ApiCacheEntry(
+    final cacheKey = _normalizeKey(key);
+    final storageKey = _storageKey(key);
+    _entries[storageKey] = _ApiCacheEntry(
+      key: cacheKey,
       value: value,
+      createdAt: DateTime.now(),
       expiresAt: DateTime.now().add(ttl),
     );
+    if (cacheKey != null) {
+      _tracer.traceWrite(
+        AppCacheWriteResult.written(key: cacheKey, backend: backendName),
+      );
+    }
   }
 
-  void invalidate(String key) {
-    _entries.remove(key);
+  void invalidate(Object key) {
+    _entries.remove(_storageKey(key));
   }
 
   void clear() {
     _entries.clear();
   }
+
+  @override
+  Future<AppCacheReadResult> read(
+    AppCacheKey key, {
+    AppCachePolicy? policy,
+  }) async {
+    final entry = _entries[key.toStorageKey()];
+    if (entry == null) {
+      return AppCacheReadResult.miss(key: key, backend: backendName);
+    }
+    if (!entry.expiresAt.isAfter(DateTime.now())) {
+      _entries.remove(key.toStorageKey());
+      return AppCacheReadResult.stale(
+        key: key,
+        backend: backendName,
+        entry: entry.toAppEntry(keyOverride: key),
+        invalidReason: AppCacheInvalidReason.ttlExpired,
+      );
+    }
+    return AppCacheReadResult.hit(
+      key: key,
+      backend: backendName,
+      entry: entry.toAppEntry(keyOverride: key),
+    );
+  }
+
+  @override
+  Future<AppCacheWriteResult> write(
+    AppCacheEntry entry, {
+    AppCachePolicy? policy,
+  }) async {
+    final expiresAt =
+        entry.expiresAt ??
+        policy?.expiresAtFor(entry.createdAt) ??
+        DateTime.now().add(const Duration(minutes: 5));
+    if (!expiresAt.isAfter(DateTime.now())) {
+      return AppCacheWriteResult.skipped(key: entry.key, backend: backendName);
+    }
+    _entries[entry.key.toStorageKey()] = _ApiCacheEntry(
+      key: entry.key,
+      value: entry.payload,
+      createdAt: entry.createdAt,
+      expiresAt: expiresAt,
+    );
+    return AppCacheWriteResult.written(
+      key: entry.key,
+      backend: backendName,
+      sizeBytes: entry.sizeBytes,
+    );
+  }
+
+  @override
+  Future<AppCacheDeleteResult> delete(AppCacheKey key) async {
+    final removed = _entries.remove(key.toStorageKey());
+    return AppCacheDeleteResult.deleted(
+      scope: scope,
+      backend: backendName,
+      key: key,
+      deletedEntries: removed == null ? 0 : 1,
+    );
+  }
+
+  @override
+  Future<AppCacheDeleteResult> clearScope({String? owner}) async {
+    final normalizedOwner = owner?.trim() ?? '';
+    if (normalizedOwner.isEmpty) {
+      final deleted = _entries.length;
+      _entries.clear();
+      return AppCacheDeleteResult.deleted(
+        scope: scope,
+        backend: backendName,
+        deletedEntries: deleted,
+      );
+    }
+    final keys = _entries.entries
+        .where((entry) => entry.value.key?.owner == normalizedOwner)
+        .map((entry) => entry.key)
+        .toList(growable: false);
+    for (final key in keys) {
+      _entries.remove(key);
+    }
+    return AppCacheDeleteResult.deleted(
+      scope: scope,
+      backend: backendName,
+      deletedEntries: keys.length,
+    );
+  }
+
+  @override
+  Future<AppCacheStats> stats({String? owner}) async {
+    final normalizedOwner = owner?.trim() ?? '';
+    final entries = _entries.values
+        .where(
+          (entry) =>
+              normalizedOwner.isEmpty || entry.key?.owner == normalizedOwner,
+        )
+        .toList(growable: false);
+    return AppCacheStats(
+      scope: scope,
+      backend: backendName,
+      entries: entries.length,
+      bytes: 0,
+    );
+  }
+
+  @override
+  Future<AppCachePruneResult> prune(AppCachePolicy policy) async {
+    final before = _entries.length;
+    final now = DateTime.now();
+    _entries.removeWhere((_, entry) => !entry.expiresAt.isAfter(now));
+    final maxEntries = policy.maxEntries;
+    if (maxEntries != null && maxEntries >= 0 && _entries.length > maxEntries) {
+      final sorted =
+          _entries.entries.toList()
+            ..sort((a, b) => a.value.createdAt.compareTo(b.value.createdAt));
+      final overflow = _entries.length - maxEntries;
+      for (final entry in sorted.take(overflow)) {
+        _entries.remove(entry.key);
+      }
+    }
+    return AppCachePruneResult(
+      scope: scope,
+      backend: backendName,
+      deletedEntries: before - _entries.length,
+    );
+  }
+
+  AppCacheKey? _normalizeKey(Object key) {
+    return key is AppCacheKey ? key : null;
+  }
+
+  String _storageKey(Object key) {
+    return key is AppCacheKey ? key.toStorageKey() : key.toString();
+  }
 }
 
 class _ApiCacheEntry {
-  _ApiCacheEntry({required this.value, required this.expiresAt});
+  _ApiCacheEntry({
+    required this.value,
+    required this.expiresAt,
+    required this.createdAt,
+    this.key,
+  });
 
+  final AppCacheKey? key;
   final Object? value;
   final DateTime expiresAt;
+  final DateTime createdAt;
+
+  AppCacheEntry toAppEntry({AppCacheKey? keyOverride}) {
+    final resolvedKey =
+        keyOverride ??
+        key ??
+        AppCacheKey(scope: AppCacheScope.apiResponse, owner: 'legacy');
+    return AppCacheEntry(
+      key: resolvedKey,
+      payload: value,
+      createdAt: createdAt,
+      updatedAt: createdAt,
+      lastAccessedAt: DateTime.now(),
+      expiresAt: expiresAt,
+    );
+  }
 }

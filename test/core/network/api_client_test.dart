@@ -12,6 +12,7 @@ void main() {
     setUp(() {
       ApiClient.defaultAuthTokenRefresher = null;
       ApiClient.defaultCacheUserIdResolver = null;
+      ApiClient.defaultCacheStore.clear();
     });
 
     test('unwraps data when code is OK', () async {
@@ -180,6 +181,7 @@ void main() {
         method: ApiMethod.get,
         path: path,
         enableCache: true,
+        cachePolicy: ApiCachePolicy.shortCache,
         decoder:
             (data) =>
                 (data as Map).map((key, value) => MapEntry('$key', value)),
@@ -188,6 +190,7 @@ void main() {
         method: ApiMethod.get,
         path: path,
         enableCache: true,
+        cachePolicy: ApiCachePolicy.shortCache,
         decoder:
             (data) =>
                 (data as Map).map((key, value) => MapEntry('$key', value)),
@@ -198,6 +201,50 @@ void main() {
       expect(count, 1);
       await server.close(force: true);
     });
+
+    test(
+      'keeps realtime policy uncached even when enableCache is true',
+      () async {
+        var count = 0;
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        server.listen((request) async {
+          count += 1;
+          request.response.statusCode = 200;
+          request.response.write(
+            jsonEncode({
+              'code': 'OK',
+              'message': 'success',
+              'data': {'count': count},
+            }),
+          );
+          await request.response.close();
+        });
+
+        final client = ApiClient();
+        final path = 'http://${server.address.host}:${server.port}/realtime';
+        final first = await client.request<Map<String, dynamic>>(
+          method: ApiMethod.get,
+          path: path,
+          enableCache: true,
+          decoder:
+              (data) =>
+                  (data as Map).map((key, value) => MapEntry('$key', value)),
+        );
+        final second = await client.request<Map<String, dynamic>>(
+          method: ApiMethod.get,
+          path: path,
+          enableCache: true,
+          decoder:
+              (data) =>
+                  (data as Map).map((key, value) => MapEntry('$key', value)),
+        );
+
+        expect(first['count'], 1);
+        expect(second['count'], 2);
+        expect(count, 2);
+        await server.close(force: true);
+      },
+    );
 
     test('attaches authorization by default when token is available', () async {
       final refresher = _FakeAuthTokenRefresher();
@@ -284,6 +331,7 @@ void main() {
         method: ApiMethod.get,
         path: path,
         attachAccessToken: true,
+        enableCache: true,
         cachePolicy: ApiCachePolicy.shortCache,
         decoder:
             (data) =>
@@ -293,6 +341,7 @@ void main() {
         method: ApiMethod.get,
         path: path,
         attachAccessToken: true,
+        enableCache: true,
         cachePolicy: ApiCachePolicy.shortCache,
         decoder:
             (data) =>
@@ -303,6 +352,7 @@ void main() {
         method: ApiMethod.get,
         path: path,
         attachAccessToken: true,
+        enableCache: true,
         cachePolicy: ApiCachePolicy.shortCache,
         decoder:
             (data) =>
@@ -312,6 +362,97 @@ void main() {
       expect(first['count'], 1);
       expect(second['count'], 1);
       expect(third['count'], 2);
+      expect(count, 2);
+      await server.close(force: true);
+    });
+
+    test('expires cached responses after ttl', () async {
+      var count = 0;
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        count += 1;
+        request.response.statusCode = 200;
+        request.response.write(
+          jsonEncode({
+            'code': 'OK',
+            'message': 'success',
+            'data': {'count': count},
+          }),
+        );
+        await request.response.close();
+      });
+
+      final client = ApiClient();
+      final path = 'http://${server.address.host}:${server.port}/cache-ttl';
+      final first = await client.request<Map<String, dynamic>>(
+        method: ApiMethod.get,
+        path: path,
+        enableCache: true,
+        cachePolicy: ApiCachePolicy.shortCache,
+        cacheTtl: const Duration(milliseconds: 20),
+        decoder:
+            (data) =>
+                (data as Map).map((key, value) => MapEntry('$key', value)),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      final second = await client.request<Map<String, dynamic>>(
+        method: ApiMethod.get,
+        path: path,
+        enableCache: true,
+        cachePolicy: ApiCachePolicy.shortCache,
+        cacheTtl: const Duration(milliseconds: 20),
+        decoder:
+            (data) =>
+                (data as Map).map((key, value) => MapEntry('$key', value)),
+      );
+
+      expect(first['count'], 1);
+      expect(second['count'], 2);
+      expect(count, 2);
+      await server.close(force: true);
+    });
+
+    test('clearCache clears cached responses through coordinator', () async {
+      var count = 0;
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        count += 1;
+        request.response.statusCode = 200;
+        request.response.write(
+          jsonEncode({
+            'code': 'OK',
+            'message': 'success',
+            'data': {'count': count},
+          }),
+        );
+        await request.response.close();
+      });
+
+      final client = ApiClient();
+      final path = 'http://${server.address.host}:${server.port}/cache-clear';
+      final first = await client.request<Map<String, dynamic>>(
+        method: ApiMethod.get,
+        path: path,
+        enableCache: true,
+        cachePolicy: ApiCachePolicy.shortCache,
+        decoder:
+            (data) =>
+                (data as Map).map((key, value) => MapEntry('$key', value)),
+      );
+      client.clearCache();
+      await Future<void>.delayed(Duration.zero);
+      final second = await client.request<Map<String, dynamic>>(
+        method: ApiMethod.get,
+        path: path,
+        enableCache: true,
+        cachePolicy: ApiCachePolicy.shortCache,
+        decoder:
+            (data) =>
+                (data as Map).map((key, value) => MapEntry('$key', value)),
+      );
+
+      expect(first['count'], 1);
+      expect(second['count'], 2);
       expect(count, 2);
       await server.close(force: true);
     });

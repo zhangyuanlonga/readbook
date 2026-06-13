@@ -3,6 +3,7 @@ import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
 import '../../../core/logging/app_logger.dart';
 import 'search_models.dart';
+import 'search_hit_cache_service.dart';
 import 'search_system_settings_service.dart';
 import 'server_online_search_service.dart';
 
@@ -11,16 +12,24 @@ export 'search_models.dart';
 class SearchService {
   SearchService({
     AppLogger? logger,
-    Object? searchHitCacheService,
+    SearchHitCacheService? searchHitCacheService,
     SearchSystemSettingsService? searchSystemSettingsService,
     int? maxConcurrentSources,
     Object? runtimePlatform,
     ServerOnlineSearchService? serverOnlineSearchService,
-  }) : _logger = logger ?? AppLogger.instance,
+  }) : assert(
+         searchHitCacheService != null || serverOnlineSearchService != null,
+         'SearchService needs a SearchHitCacheService unless a fully built '
+         'ServerOnlineSearchService is injected.',
+       ),
+       _logger = logger ?? AppLogger.instance,
        _searchSystemSettingsService =
            searchSystemSettingsService ?? SearchSystemSettingsService(),
        _serverOnlineSearchService =
-           serverOnlineSearchService ?? ServerOnlineSearchService(),
+           serverOnlineSearchService ??
+           ServerOnlineSearchService(
+             searchHitCacheService: searchHitCacheService!,
+           ),
        _maxConcurrentSources =
            maxConcurrentSources ??
            SearchSystemSettingsService.defaultMaxConcurrentSources;

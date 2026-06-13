@@ -1,5 +1,8 @@
 import 'dart:async';
 
+import '../../../core/cache/app_cache_coordinator.dart';
+import '../../../core/cache/cache_entry.dart';
+import '../../../core/cache/cache_result.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
@@ -11,6 +14,7 @@ import '../../search/application/server_gateway_identity.dart';
 import '../../source/application/source_health_service.dart';
 import 'content_text_cleaner.dart';
 import 'reader_gateway_content_cache_codec.dart';
+import 'reader_chapter_content_cache_store.dart';
 import 'removed_script_source_guard.dart';
 
 class ChapterContentResult {
@@ -143,19 +147,32 @@ class ChapterContentService {
     ServerBookGatewayService? serverGatewayService,
     ContentTextCleaner? cleaner,
     AppLogger? logger,
+    AppCacheCoordinator? cacheCoordinator,
+    ReaderChapterContentCacheKeyBuilder? cacheKeyBuilder,
   }) : _database = database ?? AppDatabase.instance,
        _sourceHealthService =
            sourceHealthService ?? SourceHealthService.instance,
        _serverGatewayService =
            serverGatewayService ?? ServerBookGatewayService(),
        _cleaner = cleaner ?? const ContentTextCleaner(),
-       _logger = logger ?? AppLogger.instance;
+       _logger = logger ?? AppLogger.instance,
+       _chapterContentCacheKeyBuilder =
+           cacheKeyBuilder ?? const ReaderChapterContentCacheKeyBuilder() {
+    final cacheStore = ReaderChapterContentCacheStore(
+      database: _database,
+      keyBuilder: _chapterContentCacheKeyBuilder,
+    );
+    _cacheCoordinator = cacheCoordinator ?? AppCacheCoordinator();
+    _cacheCoordinator.registerStore(cacheStore);
+  }
 
   final AppDatabase _database;
   final SourceHealthService _sourceHealthService;
   final ServerBookGatewayService _serverGatewayService;
   final ContentTextCleaner _cleaner;
   final AppLogger _logger;
+  final ReaderChapterContentCacheKeyBuilder _chapterContentCacheKeyBuilder;
+  late final AppCacheCoordinator _cacheCoordinator;
 
   static final Map<String, String> _chapterCache = <String, String>{};
 
@@ -188,8 +205,17 @@ class ChapterContentService {
       );
     }
 
-    final cacheKey = '$normalizedSourceId|$normalizedChapterUrl';
     final normalizedBookId = bookId?.trim() ?? '';
+    final appCacheKey = _chapterContentCacheKeyBuilder.build(
+      bookId: normalizedBookId,
+      sourceId: normalizedSourceId,
+      chapterUrl: normalizedChapterUrl,
+      chapterIndex: chapterIndex,
+    );
+    final cacheKey = _chapterContentCacheKeyBuilder.legacyStorageKey(
+      sourceId: normalizedSourceId,
+      chapterUrl: normalizedChapterUrl,
+    );
     final cached = _chapterCache[cacheKey];
     if (cached != null) {
       final decoded = ReaderGatewayContentCacheCodec.decode(cached);
@@ -219,8 +245,25 @@ class ChapterContentService {
     }
 
     try {
-      final persisted = await _database.getChapterCache(cacheKey);
-      final persistedContent = persisted?.content.trim() ?? '';
+      final persistedResult = await _cacheCoordinator.read(appCacheKey);
+      final persistedContent =
+          persistedResult.status == AppCacheReadStatus.hit
+              ? persistedResult.entry?.payload?.toString().trim() ?? ''
+              : '';
+      if (persistedResult.status != AppCacheReadStatus.hit) {
+        _logger.info(
+          'Chapter content cache bypass',
+          context: <String, Object?>{
+            'chain': 'content',
+            'step': 'content_cache',
+            'sourceId': normalizedSourceId,
+            'bookId': normalizedBookId,
+            'chapterUrl': normalizedChapterUrl,
+            'cacheStatus': persistedResult.status.name,
+            'invalidReason': persistedResult.invalidReason?.name,
+          },
+        );
+      }
       if (persistedContent.isNotEmpty) {
         _chapterCache[cacheKey] = persistedContent;
         final decoded = ReaderGatewayContentCacheCodec.decode(persistedContent);
@@ -402,14 +445,29 @@ class ChapterContentService {
       return;
     }
     try {
-      await _database.upsertChapterCache(
-        cacheKey: cacheKey,
-        bookId: bookId,
-        sourceId: sourceId,
-        chapterIndex: chapterIndex,
-        chapterTitle: chapterTitle,
-        chapterUrl: chapterUrl,
-        content: content,
+      final now = DateTime.now();
+      await _cacheCoordinator.write(
+        AppCacheEntry(
+          key: _chapterContentCacheKeyBuilder.build(
+            bookId: bookId,
+            sourceId: sourceId,
+            chapterUrl: chapterUrl,
+            chapterIndex: chapterIndex,
+          ),
+          payload: content,
+          createdAt: now,
+          updatedAt: now,
+          lastAccessedAt: now,
+          metadata: <String, Object?>{
+            'legacyCacheKey': cacheKey,
+            'bookId': bookId,
+            'sourceId': sourceId,
+            'chapterIndex': chapterIndex,
+            'chapterTitle': chapterTitle,
+            'chapterUrl': chapterUrl,
+          },
+          sizeBytes: content.length,
+        ),
       );
     } catch (error) {
       _logger.warn(

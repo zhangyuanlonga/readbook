@@ -1167,6 +1167,7 @@ class AppDatabase extends _$AppDatabase {
     return into(storedSyncConflicts).insertOnConflictUpdate(companion);
   }
 
+  /// Cache backend read for `ReaderChapterContentCacheStore`.
   Future<ChapterCache?> getChapterCache(String cacheKey) {
     final normalizedKey = cacheKey.trim();
     if (normalizedKey.isEmpty) {
@@ -1178,6 +1179,18 @@ class AppDatabase extends _$AppDatabase {
     )).getSingleOrNull();
   }
 
+  /// Cache backend single-entry delete for `ReaderChapterContentCacheStore`.
+  Future<int> deleteChapterCache(String cacheKey) {
+    final normalizedKey = cacheKey.trim();
+    if (normalizedKey.isEmpty) {
+      return Future.value(0);
+    }
+
+    return (delete(chapterCaches)
+      ..where((table) => table.cacheKey.equals(normalizedKey))).go();
+  }
+
+  /// Cache backend write for `ReaderChapterContentCacheStore`.
   Future<void> upsertChapterCache({
     required String cacheKey,
     required String bookId,
@@ -1221,6 +1234,20 @@ class AppDatabase extends _$AppDatabase {
       ),
       mode: InsertMode.insertOrReplace,
     );
+  }
+
+  /// `chapter_caches` predates the unified cache protocol and only has
+  /// `updated_at`; touch it on reads so pruning can behave like LRU without a
+  /// table migration.
+  Future<int> touchChapterCache(String cacheKey) {
+    final normalizedKey = cacheKey.trim();
+    if (normalizedKey.isEmpty) {
+      return Future.value(0);
+    }
+
+    return (update(chapterCaches)..where(
+      (table) => table.cacheKey.equals(normalizedKey),
+    )).write(ChapterCachesCompanion(updatedAt: Value(DateTime.now())));
   }
 
   Future<int> getCachedChapterCount(String bookId) async {
@@ -1549,7 +1576,50 @@ class AppDatabase extends _$AppDatabase {
     return result;
   }
 
-  Future<void> clearSearchSourceHits() => delete(searchSourceHits).go();
+  Future<List<SearchSourceHit>> listSearchSourceHits({
+    String? titleNorm,
+    String? authorNorm,
+    String? sourceId,
+  }) {
+    final normalizedTitleNorm = titleNorm?.trim() ?? '';
+    final normalizedAuthorNorm = authorNorm?.trim() ?? '';
+    final normalizedSourceId = sourceId?.trim() ?? '';
+    final query = select(searchSourceHits)
+      ..orderBy([(table) => OrderingTerm.desc(table.updatedAt)]);
+    if (normalizedTitleNorm.isNotEmpty) {
+      query.where((table) => table.titleNorm.equals(normalizedTitleNorm));
+    }
+    if (normalizedAuthorNorm.isNotEmpty) {
+      query.where((table) => table.authorNorm.equals(normalizedAuthorNorm));
+    }
+    if (normalizedSourceId.isNotEmpty) {
+      query.where((table) => table.sourceId.equals(normalizedSourceId));
+    }
+    return query.get();
+  }
+
+  Future<int> deleteSearchSourceHits({
+    String? titleNorm,
+    String? authorNorm,
+    String? sourceId,
+  }) {
+    final normalizedTitleNorm = titleNorm?.trim() ?? '';
+    final normalizedAuthorNorm = authorNorm?.trim() ?? '';
+    final normalizedSourceId = sourceId?.trim() ?? '';
+    final statement = delete(searchSourceHits);
+    if (normalizedTitleNorm.isNotEmpty) {
+      statement.where((table) => table.titleNorm.equals(normalizedTitleNorm));
+    }
+    if (normalizedAuthorNorm.isNotEmpty) {
+      statement.where((table) => table.authorNorm.equals(normalizedAuthorNorm));
+    }
+    if (normalizedSourceId.isNotEmpty) {
+      statement.where((table) => table.sourceId.equals(normalizedSourceId));
+    }
+    return statement.go();
+  }
+
+  Future<int> clearSearchSourceHits() => delete(searchSourceHits).go();
 
   Future<int> countSearchSourceHits() async {
     const sql = 'SELECT COUNT(*) AS totalCount FROM search_source_hits';
@@ -1580,6 +1650,78 @@ class AppDatabase extends _$AppDatabase {
     final row =
         await customSelect(sql, readsFrom: {searchSourceHits}).getSingle();
     return _decodeCount(row.data['totalBytes']);
+  }
+
+  Future<int> pruneSearchSourceHitsByBudget({
+    required int maxEntries,
+    required int maxBytes,
+    Duration? stalePeriod,
+  }) async {
+    var deletedCount = 0;
+    if (stalePeriod != null && stalePeriod > Duration.zero) {
+      final cutoff = DateTime.now().subtract(stalePeriod);
+      deletedCount +=
+          await (delete(
+            searchSourceHits,
+          )..where((table) => table.updatedAt.isSmallerThanValue(cutoff))).go();
+    }
+
+    final normalizedMaxEntries = maxEntries < 0 ? 0 : maxEntries;
+    final totalCount = await countSearchSourceHits();
+    final overflowCount = totalCount - normalizedMaxEntries;
+    if (overflowCount > 0) {
+      await customStatement(
+        'DELETE FROM search_source_hits '
+        'WHERE rowid IN ('
+        'SELECT rowid FROM search_source_hits '
+        'ORDER BY updated_at ASC '
+        'LIMIT ?'
+        ')',
+        <Object>[overflowCount],
+      );
+      deletedCount += overflowCount;
+    }
+
+    final normalizedMaxBytes = maxBytes < 0 ? 0 : maxBytes;
+    var totalBytes = await estimateSearchSourceHitsBytes();
+    if (totalBytes <= normalizedMaxBytes) {
+      return deletedCount;
+    }
+
+    final rows =
+        await customSelect(
+          'SELECT rowid AS rowId, '
+          'LENGTH(title_norm) + LENGTH(author_norm) + LENGTH(source_id) + '
+          'LENGTH(source_name) + LENGTH(title) + COALESCE(LENGTH(author), 0) + '
+          'COALESCE(LENGTH(latest_chapter), 0) AS estimatedBytes '
+          'FROM search_source_hits '
+          'ORDER BY updated_at ASC',
+          readsFrom: {searchSourceHits},
+        ).get();
+    final rowIdsToDelete = <int>[];
+    for (final row in rows) {
+      if (totalBytes <= normalizedMaxBytes) {
+        break;
+      }
+      final rowId = _decodeCount(row.data['rowId']);
+      if (rowId <= 0) {
+        continue;
+      }
+      rowIdsToDelete.add(rowId);
+      totalBytes -= _decodeCount(row.data['estimatedBytes']);
+    }
+    if (rowIdsToDelete.isEmpty) {
+      return deletedCount;
+    }
+    final placeholders = List<String>.filled(
+      rowIdsToDelete.length,
+      '?',
+    ).join(',');
+    await customStatement(
+      'DELETE FROM search_source_hits WHERE rowid IN ($placeholders)',
+      rowIdsToDelete.cast<Object>(),
+    );
+    return deletedCount + rowIdsToDelete.length;
   }
 
   int _decodeCount(Object? value) {
@@ -1938,6 +2080,70 @@ class AppDatabase extends _$AppDatabase {
         updatedAt: Value(DateTime.now()),
       ),
     );
+  }
+
+  Future<int> countLocalBookIndexEntries() async {
+    final countExpression = storedLocalChapters.id.count();
+    final query = selectOnly(storedLocalChapters)
+      ..addColumns([countExpression]);
+    final row = await query.getSingle();
+    return row.read(countExpression) ?? 0;
+  }
+
+  Future<int> estimateLocalBookIndexBytes() async {
+    await _ensureLocalChapterBodiesTable();
+    final chapterRow =
+        await customSelect(
+          '''
+          SELECT COALESCE(SUM(
+            LENGTH(id) + LENGTH(book_id) + LENGTH(title) +
+            LENGTH(COALESCE(content, '')) +
+            LENGTH(COALESCE(image_urls_json, '')) +
+            LENGTH(COALESCE(document_json, '')) +
+            LENGTH(COALESCE(source_ref, ''))
+          ), 0) AS estimatedBytes
+          FROM local_chapters
+          ''',
+          readsFrom: {storedLocalChapters},
+        ).getSingle();
+    final bodyRow =
+        await customSelect('''
+          SELECT COALESCE(SUM(
+            LENGTH(chapter_id) + LENGTH(book_id) + LENGTH(content) +
+            LENGTH(image_urls_json) + LENGTH(COALESCE(document_json, ''))
+          ), 0) AS estimatedBytes
+          FROM local_chapter_bodies
+          ''').getSingle();
+    return (chapterRow.data['estimatedBytes'] as int? ?? 0) +
+        (bodyRow.data['estimatedBytes'] as int? ?? 0);
+  }
+
+  Future<int> clearLocalBookIndexCache() async {
+    await _ensureLocalChapterBodiesTable();
+    final deletedChapters = await countLocalBookIndexEntries();
+    if (deletedChapters == 0) {
+      return 0;
+    }
+
+    await transaction(() async {
+      await customStatement('DELETE FROM local_chapter_bodies');
+      await delete(storedLocalChapters).go();
+      await (update(storedLocalBooks)..where(
+        (table) =>
+            table.chapterCount.isBiggerThanValue(0) |
+            table.indexStatus.isIn(<String>[
+              LocalBookIndexStatus.ready.name,
+              LocalBookIndexStatus.indexing.name,
+            ]),
+      )).write(
+        StoredLocalBooksCompanion(
+          indexStatus: Value(LocalBookIndexStatus.stale.name),
+          chapterCount: const Value(0),
+          updatedAt: Value(DateTime.now()),
+        ),
+      );
+    });
+    return deletedChapters;
   }
 
   Future<void> replaceLocalChapters({
@@ -3224,6 +3430,41 @@ class AppDatabase extends _$AppDatabase {
     return result;
   }
 
+  Future<StoredSourceHealthSnapshot?> getStoredSourceHealthSnapshot(
+    String sourceId,
+  ) {
+    final normalizedSourceId = sourceId.trim();
+    if (normalizedSourceId.isEmpty) {
+      return Future<StoredSourceHealthSnapshot?>.value(null);
+    }
+    return (select(storedSourceHealthSnapshots)
+          ..where((table) => table.sourceId.equals(normalizedSourceId))
+          ..limit(1))
+        .getSingleOrNull();
+  }
+
+  Future<int> countSourceHealthSnapshots() async {
+    const sql = 'SELECT COUNT(*) AS totalCount FROM source_health_snapshots';
+    final row =
+        await customSelect(
+          sql,
+          readsFrom: {storedSourceHealthSnapshots},
+        ).getSingle();
+    return _decodeCount(row.data['totalCount']);
+  }
+
+  Future<int> estimateSourceHealthSnapshotsBytes() async {
+    const sql =
+        'SELECT COALESCE(SUM(LENGTH(source_id) + LENGTH(payload_json)), 0) '
+        'AS totalBytes FROM source_health_snapshots';
+    final row =
+        await customSelect(
+          sql,
+          readsFrom: {storedSourceHealthSnapshots},
+        ).getSingle();
+    return _decodeCount(row.data['totalBytes']);
+  }
+
   Future<void> replaceSourceHealthSnapshots(
     Map<String, SourceHealthSnapshot> snapshots,
   ) async {
@@ -3250,6 +3491,101 @@ class AppDatabase extends _$AppDatabase {
         }
       });
     });
+  }
+
+  Future<void> upsertSourceHealthSnapshot(SourceHealthSnapshot snapshot) async {
+    final sourceId = snapshot.sourceId.trim();
+    if (sourceId.isEmpty) {
+      return;
+    }
+    await into(storedSourceHealthSnapshots).insert(
+      StoredSourceHealthSnapshotsCompanion(
+        sourceId: Value(sourceId),
+        payloadJson: Value(jsonEncode(snapshot.toJson())),
+        updatedAt: Value(DateTime.now().toUtc()),
+      ),
+      mode: InsertMode.insertOrReplace,
+    );
+  }
+
+  Future<int> deleteSourceHealthSnapshot(String sourceId) {
+    final normalizedSourceId = sourceId.trim();
+    if (normalizedSourceId.isEmpty) {
+      return Future.value(0);
+    }
+    return (delete(storedSourceHealthSnapshots)
+      ..where((table) => table.sourceId.equals(normalizedSourceId))).go();
+  }
+
+  Future<int> clearSourceHealthSnapshots() {
+    return delete(storedSourceHealthSnapshots).go();
+  }
+
+  Future<int> pruneSourceHealthSnapshotsByBudget({
+    required int maxEntries,
+    required int maxBytes,
+    Duration? stalePeriod,
+  }) async {
+    var deletedCount = 0;
+    if (stalePeriod != null && stalePeriod > Duration.zero) {
+      final cutoff = DateTime.now().subtract(stalePeriod);
+      deletedCount +=
+          await (delete(
+            storedSourceHealthSnapshots,
+          )..where((table) => table.updatedAt.isSmallerThanValue(cutoff))).go();
+    }
+
+    final normalizedMaxEntries = maxEntries < 0 ? 0 : maxEntries;
+    final totalCount = await countSourceHealthSnapshots();
+    final overflowCount = totalCount - normalizedMaxEntries;
+    if (overflowCount > 0) {
+      await customStatement(
+        'DELETE FROM source_health_snapshots '
+        'WHERE source_id IN ('
+        'SELECT source_id FROM source_health_snapshots '
+        'ORDER BY updated_at ASC '
+        'LIMIT ?'
+        ')',
+        <Object>[overflowCount],
+      );
+      deletedCount += overflowCount;
+    }
+
+    final normalizedMaxBytes = maxBytes < 0 ? 0 : maxBytes;
+    var totalBytes = await estimateSourceHealthSnapshotsBytes();
+    if (totalBytes <= normalizedMaxBytes) {
+      return deletedCount;
+    }
+
+    final rows =
+        await customSelect(
+          'SELECT source_id AS sourceId, '
+          'LENGTH(source_id) + LENGTH(payload_json) AS estimatedBytes '
+          'FROM source_health_snapshots ORDER BY updated_at ASC',
+          readsFrom: {storedSourceHealthSnapshots},
+        ).get();
+    final sourceIdsToDelete = <String>[];
+    for (final row in rows) {
+      if (totalBytes <= normalizedMaxBytes) {
+        break;
+      }
+      final sourceId = (row.data['sourceId'] ?? '').toString().trim();
+      if (sourceId.isEmpty) {
+        continue;
+      }
+      sourceIdsToDelete.add(sourceId);
+      totalBytes -= _decodeCount(row.data['estimatedBytes']);
+    }
+    if (sourceIdsToDelete.isEmpty) {
+      return deletedCount;
+    }
+    await batch((batch) {
+      batch.deleteWhere(
+        storedSourceHealthSnapshots,
+        (table) => table.sourceId.isIn(sourceIdsToDelete),
+      );
+    });
+    return deletedCount + sourceIdsToDelete.length;
   }
 
   Future<StoredRemoteAccessSnapshot?> getRemoteAccessSnapshot(String userId) {

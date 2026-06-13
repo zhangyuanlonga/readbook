@@ -18,6 +18,7 @@ import '../application/reader_session_state.dart';
 import '../application/reader_surface_metrics.dart';
 import 'reader_shell.dart';
 import 'reader_text_block_presentation.dart';
+import 'widgets/reader_cached_network_image.dart';
 
 typedef ReaderPagedPageBuilder =
     Widget Function(BuildContext context, int pageIndex);
@@ -646,12 +647,12 @@ class ReaderPagedPageContent extends StatelessWidget {
         }
       }
     }
-    return Image.network(
-      imageUrl,
+    return ReaderCachedNetworkImage(
+      imageUrl: imageUrl,
       fit: BoxFit.contain,
       cacheWidth: model.imageDecodeBudget?.cacheWidth,
       cacheHeight: model.imageDecodeBudget?.cacheHeight,
-      errorBuilder: errorBuilder,
+      errorBuilder: (context, _, error) => errorBuilder(context, error, null),
     );
   }
 

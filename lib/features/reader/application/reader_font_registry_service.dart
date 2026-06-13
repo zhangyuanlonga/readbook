@@ -46,11 +46,24 @@ class ReaderCustomFontEntry {
           importedAt is int
               ? importedAt
               : int.tryParse(importedAt?.toString() ?? '') ?? 0,
-      fileHash: (json['fileHash'] ?? '').toString().trim().isEmpty
-          ? null
-          : (json['fileHash'] ?? '').toString().trim(),
+      fileHash:
+          (json['fileHash'] ?? '').toString().trim().isEmpty
+              ? null
+              : (json['fileHash'] ?? '').toString().trim(),
     );
   }
+}
+
+class ReaderFontRegistryStats {
+  const ReaderFontRegistryStats({
+    required this.entries,
+    required this.bytes,
+    required this.version,
+  });
+
+  final int entries;
+  final int bytes;
+  final int version;
 }
 
 class ReaderFontRegistryException implements Exception {
@@ -66,10 +79,9 @@ class ReaderFontRegistryService {
   ReaderFontRegistryService({
     Future<Directory> Function()? supportDirProvider,
     ManagedAssetStore? assetStore,
-  })
-    : _assetStore =
-          assetStore ??
-          ManagedAssetStore(supportDirectoryProvider: supportDirProvider);
+  }) : _assetStore =
+           assetStore ??
+           ManagedAssetStore(supportDirectoryProvider: supportDirProvider);
 
   static const String _registryFileName = 'registry.json';
   static const XTypeGroup _fontTypeGroup = XTypeGroup(
@@ -84,6 +96,7 @@ class ReaderFontRegistryService {
 
   final ManagedAssetStore _assetStore;
   final Set<String> _loadedFamilyKeys = <String>{};
+  static const int registrySchemaVersion = 1;
 
   Future<void> restoreRegisteredFonts() async {
     final entries = await _loadRegistry();
@@ -117,6 +130,29 @@ class ReaderFontRegistryService {
     final entries = await _loadRegistry();
     entries.sort((a, b) => b.importedAtEpochMs.compareTo(a.importedAtEpochMs));
     return entries;
+  }
+
+  Future<ReaderFontRegistryStats> loadRegistryStats() async {
+    final registryFile = await _resolveRegistryFile();
+    final entries = await _loadRegistry();
+    var bytes = 0;
+    if (await registryFile.exists()) {
+      bytes += await registryFile.length();
+    }
+    for (final entry in entries) {
+      final resolvedPath =
+          await _assetStore.resolvePersistedPath(entry.filePath) ??
+          entry.filePath;
+      final file = File(resolvedPath);
+      if (await file.exists()) {
+        bytes += await file.length();
+      }
+    }
+    return ReaderFontRegistryStats(
+      entries: entries.length,
+      bytes: bytes,
+      version: registrySchemaVersion,
+    );
   }
 
   Future<ReaderCustomFontEntry?> pickAndImportFont({
@@ -197,7 +233,8 @@ class ReaderFontRegistryService {
       bytes: bytes,
       fileName: '$familyKey$extension',
       assetId: familyKey,
-      displayName: displayName ?? path.basenameWithoutExtension(sourceFile.path),
+      displayName:
+          displayName ?? path.basenameWithoutExtension(sourceFile.path),
       targetNamePrefix: familyKey,
     );
     final targetPath = asset.resolvedPath!;
@@ -304,7 +341,8 @@ class ReaderFontRegistryService {
       }
     }
 
-    customPath = await _assetStore.resolvePersistedPath(customPath) ?? customPath;
+    customPath =
+        await _assetStore.resolvePersistedPath(customPath) ?? customPath;
     if (customPath.isEmpty || !await File(customPath).exists()) {
       return _fallbackToSystemFont(settings);
     }
@@ -412,8 +450,7 @@ class ReaderFontRegistryService {
             await _assetStore.relativizePersistedPath(entry.filePath) ??
             entry.filePath;
         final resolved =
-            await _assetStore.resolvePersistedPath(persisted) ??
-            entry.filePath;
+            await _assetStore.resolvePersistedPath(persisted) ?? entry.filePath;
         if (persisted != entry.filePath || resolved != entry.filePath) {
           changed = true;
           normalizedEntries.add(

@@ -33,6 +33,7 @@ class AnnouncementService {
         queryParameters: {'page': page, 'page_size': pageSize},
         attachAccessToken: false,
         enableCache: useCache,
+        cachePolicy: ApiCachePolicy.shortCache,
         cacheTtl: const Duration(minutes: 5),
         stage: ErrorStage.unknown,
         decoder: _decodeMap,
@@ -73,6 +74,7 @@ class AnnouncementService {
           path: '/v1/announcements/latest',
           attachAccessToken: false,
           enableCache: useCache,
+          cachePolicy: ApiCachePolicy.shortCache,
           cacheTtl: _latestCacheTtl,
           stage: ErrorStage.unknown,
         );
@@ -125,6 +127,7 @@ class AnnouncementService {
       path: '/v1/announcements/$normalized',
       attachAccessToken: false,
       enableCache: useCache,
+      cachePolicy: ApiCachePolicy.shortCache,
       cacheTtl: const Duration(minutes: 10),
       stage: ErrorStage.unknown,
       decoder: _decodeMap,

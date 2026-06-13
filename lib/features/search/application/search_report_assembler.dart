@@ -15,11 +15,12 @@ Future<SearchExecutionReport> buildSearchExecutionReportWithExistingAggregator({
   required Map<String, String> sourceNames,
   required Map<String, int> sourceOrderById,
   required bool aggregateByTitleAuthor,
+  required SearchHitCacheService searchHitCacheService,
   int? processedSourceCountOverride,
 }) async {
   final report = await _SearchReportAssembler(
     logger: AppLogger.instance,
-    searchHitCacheService: SearchHitCacheService(),
+    searchHitCacheService: searchHitCacheService,
     progressAggregationInterval: Duration.zero,
   ).buildExecutionReport(
     keyword: keyword,

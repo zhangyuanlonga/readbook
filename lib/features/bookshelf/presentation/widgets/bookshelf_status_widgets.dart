@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../../app/widgets/app_empty_state_card.dart';
 import '../../../../app/widgets/app_status_state_card.dart';
+import '../../../../app/widgets/foundation/foundation.dart';
 
 class BookshelfEmptyCard extends StatelessWidget {
   const BookshelfEmptyCard({
@@ -24,7 +25,9 @@ class BookshelfEmptyCard extends StatelessWidget {
       description: '请先在搜索结果或详情页加入书架。',
       footer:
           showImportAction
-              ? FilledButton.icon(
+              ? AppButton(
+                label: '导入本地图书',
+                icon: const Icon(Icons.library_add_rounded),
                 onPressed: onImportLocal,
                 style: FilledButton.styleFrom(
                   backgroundColor: palette.primaryColor,
@@ -32,8 +35,6 @@ class BookshelfEmptyCard extends StatelessWidget {
                     palette.primaryColor,
                   ),
                 ),
-                icon: const Icon(Icons.library_add_rounded),
-                label: const Text('导入本地图书'),
               )
               : null,
     );
@@ -99,7 +100,11 @@ class BookshelfLoadErrorCard extends StatelessWidget {
       tone: AppStatusStateTone.error,
       footer: Align(
         alignment: Alignment.centerLeft,
-        child: FilledButton.tonal(onPressed: onRetry, child: const Text('重试')),
+        child: AppButton(
+          label: '重试',
+          variant: AppButtonVariant.tonal,
+          onPressed: onRetry,
+        ),
       ),
       compact: true,
     );

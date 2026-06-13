@@ -9,6 +9,15 @@ import '../theme/app_advanced_theme_tokens.dart';
 final Map<String, ImageProvider?> _advancedThemeBackdropFileImageCache =
     <String, ImageProvider?>{};
 
+int get advancedThemeBackdropImageProviderCacheLength =>
+    _advancedThemeBackdropFileImageCache.length;
+
+int clearAdvancedThemeBackdropImageProviderCache() {
+  final count = _advancedThemeBackdropFileImageCache.length;
+  _advancedThemeBackdropFileImageCache.clear();
+  return count;
+}
+
 Decoration buildAdvancedThemeBackdropDecoration(
   ResolvedAdvancedThemeBackdrop backdrop, {
   BorderRadius? borderRadius,

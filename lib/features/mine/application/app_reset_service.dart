@@ -8,6 +8,7 @@ import '../../../core/logging/app_logger.dart';
 import '../../../core/logging/source_log_store.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/datasources/local/app_database_connection.dart';
+import '../../reader/application/reader_pagination_cache_service.dart';
 
 class AppResetSummary {
   const AppResetSummary({
@@ -34,7 +35,10 @@ class AppResetService {
        _authSessionStore =
            authSessionStore ?? AuthSessionStore(preferences: preferences),
        _cacheGovernanceService =
-           cacheGovernanceService ?? AppCacheGovernanceService(),
+           cacheGovernanceService ??
+           AppCacheGovernanceService(
+             paginationCacheStore: ReaderPaginationCacheService(),
+           ),
        _logger = logger ?? AppLogger.instance;
 
   final Future<SharedPreferences> _preferencesFuture;

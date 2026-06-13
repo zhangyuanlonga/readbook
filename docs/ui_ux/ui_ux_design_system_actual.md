@@ -151,35 +151,38 @@ elevation: 根据主题动态调整
 
 ---
 
-## 三、动画规范（需要补充）
+## 三、动画规范（实际代码）
 
-### 3.1 时长标准（建议）
+### 3.1 时长标准
 
 ```dart
-class AppDuration {
-  static const instant = Duration(milliseconds: 100);   // 微交互
-  static const fast = Duration(milliseconds: 200);      // 快速
-  static const normal = Duration(milliseconds: 300);    // 标准
-  static const medium = Duration(milliseconds: 400);    // 中速
+// 来自 app/motion/app_motion.dart
+class AppMotion {
+  static const instant = Duration.zero;
+  static const fast = Duration(milliseconds: 120);
+  static const medium = Duration(milliseconds: 180);
+  static const slow = Duration(milliseconds: 260);
+  static const page = Duration(milliseconds: 300);
 }
 ```
 
-**当前状态：** 动画时长散落各处，需要统一
+**当前状态：** 已有中心化 `AppMotion`。新增动画应优先使用它，并通过 `AppMotion.enabledOf(context)` / `durationOf` 尊重系统减少动画设置。
 
 ---
 
-### 3.2 曲线标准（建议）
+### 3.2 曲线标准
 
 ```dart
-class AppCurves {
-  static const easeIn = Curves.easeIn;
-  static const easeOut = Curves.easeOut;
-  static const easeInOut = Curves.easeInOut;
-  static const emphasized = Cubic(0.4, 0.0, 0.2, 1.0);
+// 来自 app/motion/app_motion.dart
+class AppMotion {
+  static const standard = Curves.easeOutCubic;
+  static const emphasized = Curves.easeInOutCubic;
+  static const decelerate = Curves.easeOutQuart;
+  static const accelerate = Curves.easeInCubic;
 }
 ```
 
-**当前状态：** 未统一，各处自行选择曲线
+**当前状态：** 新增动画默认使用 `AppMotion.standard`；只有明确业务语义时才选择其它曲线。
 
 ---
 
@@ -206,44 +209,43 @@ class AppCurves {
 
 ## 五、需要改进的地方
 
-### 5.1 缺少统一的 Design Token
+### 5.1 Token 入口需要收敛
 
 **问题：**
-- 间距值散落各处（8、12、16、24 等）
-- 动画时长不统一
-- 没有中心化的 token 文件
+- 已有 `AppComponentThemeTokens`、`AppAdaptiveMetrics`、`AppSpacing`、`AppSizeTokens`、`AppMotion`。
+- 问题不是完全缺失 Token，而是开发入口分散，容易不知道该引用哪个标准。
+- 部分旧页面仍有局部硬编码圆角、间距、颜色和阴影。
 
 **建议：**
-- 创建 `lib/app/design_tokens/app_spacing.dart`
-- 创建 `lib/app/design_tokens/app_duration.dart`
-- 创建 `lib/app/design_tokens/app_curves.dart`
+- 不新建并行 Token 总文件。
+- 使用 `ui_governance_baseline_and_standards.md` 作为 Token 来源索引。
+- 新代码优先使用现有 Token，旧代码按页面治理逐步替换。
 
 ---
 
 ### 5.2 动画使用不系统
 
 **问题：**
-- 有 171 处动画，但使用不一致
-- 有的页面有动画，有的没有
-- 时长和曲线随意
+- 已有 `AppMotion`，但部分旧动画仍直接写 `Duration` 和 `Curves`。
+- 有的页面没有通过 `MediaQuery.disableAnimations` 降级。
 
 **建议：**
-- 制定动画使用规范
-- 统一页面过渡动画
-- 添加微交互动画
+- 新增动画默认使用 `AppMotion`。
+- 旧页面按高频路径逐步收敛，不追求一次性替换。
+- 页面转场、列表项动画、微交互要补 smoke 或手测记录。
 
 ---
 
 ### 5.3 空状态/错误状态不统一
 
 **问题：**
-- 不同页面空状态样式不同
-- 错误提示方式不一致
+- 已有 `AppEmptyStateCard` 和 `AppStatusStateCard`。
+- 部分旧页面仍然手写空态、错误态和局部加载态。
 
 **建议：**
-- 创建统一的 `AppEmptyState` 组件
-- 创建统一的 `AppErrorState` 组件
-- 统一 SnackBar 样式
+- 新增页面优先使用 `AppEmptyStateCard`、`AppStatusStateCard`、`FeatureDisabledPage`。
+- 如后续需要更强语义，可基于现有状态卡创建 `AppErrorState` 别名组件。
+- 加载态后续补 `AppLoadingIndicator` 或统一局部加载卡。
 
 ---
 
@@ -251,15 +253,15 @@ class AppCurves {
 
 ### 优先级 P0（立即补充）
 
-1. **创建 Design Token 文件**
-   - `app_spacing.dart`
-   - `app_duration.dart`
-   - `app_curves.dart`
+1. **收敛 Token 入口**
+   - 使用 `ui_governance_baseline_and_standards.md` 作为索引
+   - 明确现有 `app/theme`、`app/layout`、`app/motion` 的职责
+   - 不新建并行 Token 体系
 
-2. **创建统一组件**
-   - `AppEmptyState` - 空状态
-   - `AppErrorState` - 错误状态
-   - `AppLoadingIndicator` - 加载指示器
+2. **补齐最小基础组件**
+   - `AppButton` - 语义按钮薄封装
+   - `AppTextField` - 普通表单输入薄封装
+   - 后续再评估 `AppLoadingIndicator` / OperationSurfaceFrame
 
 3. **统一高频页面**
    - 书架页

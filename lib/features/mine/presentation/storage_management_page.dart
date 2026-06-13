@@ -10,6 +10,8 @@ import '../../../app/layout/app_spacing.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../core/cache/app_cache_governance_service.dart';
+import '../../../core/cache/cache_result.dart';
+import '../../../core/cache/cache_scope.dart';
 import '../application/storage_management_service.dart';
 import '../application/advanced_theme_provider.dart';
 import 'widgets/mine_route_top_bar.dart';
@@ -28,6 +30,9 @@ class _StorageManagementPageState extends State<StorageManagementPage> {
   bool _isLoading = true;
   bool _isClearingCaches = false;
   bool _isCleaningOrphans = false;
+  final Set<AppCacheScope> _clearingScopes = <AppCacheScope>{};
+  final Map<AppCacheScope, String> _cacheClearErrors =
+      <AppCacheScope, String>{};
   String? _errorText;
 
   @override
@@ -69,8 +74,16 @@ class _StorageManagementPageState extends State<StorageManagementPage> {
     if (_isClearingCaches) {
       return;
     }
+    final confirmed = await _confirmCacheClear(
+      title: '清理所有可重建缓存',
+      message: '会清理章节、分页、图片、API、搜索命中和书源健康等可重新生成的缓存，不会删除本地图书和高级主题资源。',
+    );
+    if (!confirmed) {
+      return;
+    }
     setState(() {
       _isClearingCaches = true;
+      _cacheClearErrors.clear();
     });
     try {
       await _service.clearRebuildableCaches();
@@ -88,6 +101,80 @@ class _StorageManagementPageState extends State<StorageManagementPage> {
         });
       }
     }
+  }
+
+  Future<void> _clearCacheScope(AppCacheGovernanceEntry entry) async {
+    if (_clearingScopes.contains(entry.scope) || !entry.deletable) {
+      return;
+    }
+    final confirmed = await _confirmCacheClear(
+      title: '清理${entry.label}',
+      message: '该缓存会在后续使用时重新生成，清理不会删除本地图书、高级主题资源或账号数据。',
+    );
+    if (!confirmed || !mounted) {
+      return;
+    }
+    setState(() {
+      _clearingScopes.add(entry.scope);
+      _cacheClearErrors.remove(entry.scope);
+    });
+    try {
+      final result = await _service.clearCacheScope(entry.scope);
+      if (!mounted) {
+        return;
+      }
+      if (result.status == AppCacheDeleteStatus.backendError) {
+        setState(() {
+          _cacheClearErrors[entry.scope] = '清理失败，请稍后重试。';
+        });
+        return;
+      }
+      await _load();
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('${entry.label}已清理。')));
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _cacheClearErrors[entry.scope] = '清理失败，请稍后重试。';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _clearingScopes.remove(entry.scope);
+        });
+      }
+    }
+  }
+
+  Future<bool> _confirmCacheClear({
+    required String title,
+    required String message,
+  }) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: Text(title),
+            content: Text(message),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('确认清理'),
+              ),
+            ],
+          ),
+    );
+    return confirmed ?? false;
   }
 
   Future<void> _cleanOrphans() async {
@@ -170,12 +257,7 @@ class _StorageManagementPageState extends State<StorageManagementPage> {
                       if (_errorText case final message?)
                         _buildErrorCard(context, message),
                       if (_isLoading)
-                        const Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(32),
-                            child: CircularProgressIndicator(),
-                          ),
-                        )
+                        _buildLoadingSkeleton(context)
                       else if (_snapshot case final snapshot?) ...[
                         _buildFootprintCard(
                           context,
@@ -322,15 +404,85 @@ class _StorageManagementPageState extends State<StorageManagementPage> {
           ),
           const SizedBox(height: 12),
           for (final entry in snapshot.entries) ...[
-            Row(
-              children: [
-                Expanded(child: Text(entry.label)),
-                Text(
-                  '${_formatBytes(entry.currentBytes)} · ${entry.currentEntries} 项',
+            _buildCacheEntryTile(context, entry),
+            if (entry != snapshot.entries.last) const SizedBox(height: 10),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCacheEntryTile(
+    BuildContext context,
+    AppCacheGovernanceEntry entry,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final isClearing = _clearingScopes.contains(entry.scope);
+    final errorText = _cacheClearErrors[entry.scope];
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.34),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color:
+              entry.overBudget
+                  ? colorScheme.error.withValues(alpha: 0.38)
+                  : colorScheme.outlineVariant.withValues(alpha: 0.36),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(_iconForCacheScope(entry.scope), color: colorScheme.primary),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      entry.label,
+                      style: textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '${_formatBytes(entry.currentBytes)} · ${entry.currentEntries} 项${_budgetText(entry)}',
+                      style: textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
+              const SizedBox(width: 8),
+              TextButton.icon(
+                onPressed:
+                    entry.deletable && !isClearing
+                        ? () => _clearCacheScope(entry)
+                        : null,
+                icon:
+                    isClearing
+                        ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                        : const Icon(Icons.delete_sweep_outlined),
+                label: const Text('清理'),
+              ),
+            ],
+          ),
+          if (errorText != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              errorText,
+              style: textTheme.bodySmall?.copyWith(color: colorScheme.error),
             ),
-            if (entry != snapshot.entries.last) const SizedBox(height: 8),
           ],
         ],
       ),
@@ -398,13 +550,85 @@ class _StorageManagementPageState extends State<StorageManagementPage> {
         color: colorScheme.errorContainer.withValues(alpha: 0.58),
         borderRadius: BorderRadius.circular(metrics.cardRadius),
       ),
-      child: Text(
-        message,
-        style: Theme.of(
-          context,
-        ).textTheme.bodyMedium?.copyWith(color: colorScheme.onErrorContainer),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              message,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onErrorContainer,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          TextButton(
+            onPressed: _isLoading ? null : _load,
+            child: const Text('重试'),
+          ),
+        ],
       ),
     );
+  }
+
+  Widget _buildLoadingSkeleton(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
+    return Column(
+      children: List<Widget>.generate(
+        3,
+        (index) => Container(
+          height: 74,
+          margin: EdgeInsets.only(bottom: metrics.sectionGap),
+          decoration: BoxDecoration(
+            color: colorScheme.surface.withValues(alpha: 0.62),
+            borderRadius: BorderRadius.circular(metrics.cardRadius),
+            border: Border.all(
+              color: colorScheme.outlineVariant.withValues(alpha: 0.28),
+            ),
+          ),
+          alignment: Alignment.center,
+          child:
+              index == 1
+                  ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2.4),
+                  )
+                  : null,
+        ),
+      ),
+    );
+  }
+
+  IconData _iconForCacheScope(AppCacheScope scope) {
+    return switch (scope) {
+      AppCacheScope.chapterContent => Icons.menu_book_rounded,
+      AppCacheScope.paginationLayout => Icons.view_carousel_rounded,
+      AppCacheScope.coverImage => Icons.image_rounded,
+      AppCacheScope.readerImage => Icons.photo_size_select_actual_rounded,
+      AppCacheScope.apiResponse => Icons.cloud_queue_rounded,
+      AppCacheScope.searchHit => Icons.manage_search_rounded,
+      AppCacheScope.sourceHealth => Icons.health_and_safety_rounded,
+      AppCacheScope.themePreview => Icons.palette_rounded,
+      AppCacheScope.localBookIndex => Icons.library_books_rounded,
+      AppCacheScope.readerPreference => Icons.tune_rounded,
+    };
+  }
+
+  String _budgetText(AppCacheGovernanceEntry entry) {
+    final parts = <String>[];
+    final maxBytes = entry.maxBytes;
+    final maxEntries = entry.maxEntries;
+    if (maxBytes != null) {
+      parts.add('预算 ${_formatBytes(maxBytes)}');
+    }
+    if (maxEntries != null) {
+      parts.add('上限 $maxEntries 项');
+    }
+    if (parts.isEmpty) {
+      return '';
+    }
+    return ' · ${parts.join(' / ')}';
   }
 
   String _formatBytes(int bytes) {

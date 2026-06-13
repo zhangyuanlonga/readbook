@@ -51,8 +51,13 @@ UI/UX 设计体系文档，定义视觉规范、交互标准和审查流程。
 - **[设计系统（实际代码）](ui_ux_design_system_actual.md)** - 基于实际代码的设计规范
   - 圆角规范（卡片20dp、按钮14dp等）
   - 间距规范（基于AppAdaptiveMetrics）
-  - 颜色系统（AppThemeColors）
+  - 颜色系统（Material 3 ColorScheme + 高级主题 palette）
   - 组件样式规范
+
+- **[UI 治理基线与标准收敛](ui_governance_baseline_and_standards.md)** - Phase 0/1 产物
+  - Token、Theme、Adaptive 组件来源表
+  - 合法例外和试点范围
+  - 新增 UI Review checklist
 
 - **[交互与动效指南](ui_ux_interaction_and_animation_guide.md)** - 交互规范和动画标准
   - 操作反馈规范（点击、悬停、手势）
@@ -67,6 +72,11 @@ UI/UX 设计体系文档，定义视觉规范、交互标准和审查流程。
   - 每个页面的审查清单
 
 ### 实施计划
+
+- **[UI 治理阶段任务清单](ui_governance_phased_task_checklist.md)** - 可打勾的阶段任务
+  - 收敛现有 Token 和 Adaptive 体系
+  - 拆分 Phase 0-5 阶段任务
+  - 提供试点迁移、自动化检查、模块推广 checklist
 
 - **[执行路线图](EXECUTION_ROADMAP.md)** ⭐ **决策必读** - 任务优先级和执行建议
   - 快速决策检查清单
@@ -120,27 +130,31 @@ UI/UX 设计体系文档，定义视觉规范、交互标准和审查流程。
 - 底部弹层：顶部20dp
 
 **间距：**
-- 参考 `lib/app/layout/app_adaptive_metrics.dart`
+- 参考 `lib/app/layout/app_adaptive.dart`
 - 手机端：16dp（标准间距）
 - 平板/桌面：根据屏幕宽度自适应
 
 **动画时长：**
-- 快速：150-200ms
-- 标准：250-300ms
-- 慢速：400-500ms
-- 缓动曲线：Curves.easeOutCubic
+- 快速：120ms
+- 标准：180ms
+- 慢速：260ms
+- 页面：300ms
+- 缓动曲线：`AppMotion.standard` / `Curves.easeOutCubic`
 
 ### 组件库
 
 **已实现：**
-- AppCard - 统一卡片样式
-- AppButton - 按钮组件
-- 参考 `lib/app/widgets/` 和 `lib/shared/widgets/`
+- AdaptiveCard - 统一自适应卡片样式
+- AppButton - 语义按钮薄封装
+- AppTextField - 普通表单输入薄封装
+- AppEmptyStateCard - 空状态卡
+- AppStatusStateCard - 错误/警告/状态卡
+- 参考 `lib/app/widgets/`
 
 **待实现：**
-- AppEmptyState - 空状态组件
-- AppErrorState - 错误状态组件
 - AppLoadingIndicator - 加载指示器
+- OperationSurfaceFrame - 标题/内容/操作区框架
+- AppErrorState - 如需要，可基于 `AppStatusStateCard` 再做语义别名
 - （详见实施计划）
 
 ## 📝 使用指南

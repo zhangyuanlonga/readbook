@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../app/platform/app_input_focus_behavior.dart';
+import '../../../../app/widgets/foundation/foundation.dart';
 
 class AdvancedThemeEditorTitle extends StatelessWidget {
   const AdvancedThemeEditorTitle({
@@ -23,14 +24,10 @@ class AdvancedThemeEditorTitle extends StatelessWidget {
     if (isEditing) {
       return ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 220),
-        child: TextField(
+        child: AppTextField(
           controller: nameController,
           autofocus: appEnableAutoFocusForTextInput,
-          decoration: const InputDecoration(
-            border: OutlineInputBorder(),
-            isDense: true,
-            contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          ),
+          textInputAction: TextInputAction.done,
           onSubmitted: onSubmitted,
         ),
       );

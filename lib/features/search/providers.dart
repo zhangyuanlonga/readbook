@@ -12,7 +12,11 @@ import 'application/search_system_settings_service.dart';
 final serverOnlineSearchServiceProvider = Provider<ServerOnlineSearchService>((
   ref,
 ) {
-  return ServerOnlineSearchService();
+  return ServerOnlineSearchService(
+    searchHitCacheService: ref.watch(
+      app_providers.appSearchHitCacheServiceProvider,
+    ),
+  );
 });
 
 final serverBookGatewayServiceProvider = Provider<ServerBookGatewayService>((

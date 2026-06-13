@@ -78,13 +78,7 @@ class StorageHealthService {
       score -= 20;
     }
     final overBudgetKinds =
-        cacheSnapshot.entries
-            .where(
-              (entry) =>
-                  entry.currentBytes > entry.maxBytes ||
-                  entry.currentEntries > entry.maxEntries,
-            )
-            .length;
+        cacheSnapshot.entries.where((entry) => entry.overBudget).length;
     if (overBudgetKinds > 0) {
       warnings.add('$overBudgetKinds 类缓存超过预算');
       score -= 15;

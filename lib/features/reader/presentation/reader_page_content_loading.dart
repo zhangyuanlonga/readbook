@@ -946,8 +946,10 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
 
     try {
       final payload = await _cachedChapterStore.getCachedPayload(
+        bookId: _activeBookId,
         sourceId: sourceId,
         chapterUrl: chapterUrl,
+        chapterIndex: _currentIndex,
       );
       if (payload == null || payload.isEmpty) {
         return false;
@@ -1189,8 +1191,10 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
     }
     try {
       return await _cachedChapterStore.hasCachedPayload(
+        bookId: _activeBookId,
         sourceId: normalizedSourceId,
         chapterUrl: normalizedChapterUrl,
+        chapterIndex: _currentIndex,
       );
     } catch (_) {
       return false;

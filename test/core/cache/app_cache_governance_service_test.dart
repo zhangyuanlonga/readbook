@@ -2,12 +2,18 @@ import 'dart:io';
 
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shuxiang_reading_next/core/cache/app_cache_governance_service.dart';
 import 'package:shuxiang_reading_next/core/cache/cache_budget_policy.dart';
+import 'package:shuxiang_reading_next/core/cache/cache_result.dart';
+import 'package:shuxiang_reading_next/core/cache/cache_scope.dart';
 import 'package:shuxiang_reading_next/core/cache/cover_image_disk_cache.dart';
 import 'package:shuxiang_reading_next/core/storage/managed_asset_store.dart';
 import 'package:shuxiang_reading_next/data/datasources/local/app_database.dart';
 import 'package:shuxiang_reading_next/domain/entities/managed_asset.dart';
+import 'package:shuxiang_reading_next/domain/entities/local_book.dart';
+import 'package:shuxiang_reading_next/domain/entities/local_chapter.dart';
+import 'package:shuxiang_reading_next/features/reader/application/local/local_book_index_cache_store.dart';
 import 'package:shuxiang_reading_next/features/reader/application/reader_pagination_cache_service.dart';
 import 'package:shuxiang_reading_next/features/reader/application/reader_pagination_models.dart';
 
@@ -20,6 +26,7 @@ void main() {
     late _TestCoverImageDiskCache coverImageDiskCache;
 
     setUp(() async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
       database = AppDatabase(executor: NativeDatabase.memory());
       paginationDir = await Directory.systemTemp.createTemp(
         'app_cache_governance_pagination_',
@@ -43,7 +50,7 @@ void main() {
       }
     });
 
-    test('aggregates chapter, pagination and cover cache budgets', () async {
+    test('aggregates unified cache scopes and cover cache budgets', () async {
       await database.upsertChapterCache(
         cacheKey: 's1|u1',
         bookId: 'book_1',
@@ -79,7 +86,17 @@ void main() {
       );
       final snapshot = await service.loadSnapshot();
 
-      expect(snapshot.entries, hasLength(3));
+      expect(
+        snapshot.entries.map((entry) => entry.scope),
+        containsAll(<AppCacheScope>[
+          AppCacheScope.chapterContent,
+          AppCacheScope.paginationLayout,
+          AppCacheScope.coverImage,
+          AppCacheScope.apiResponse,
+          AppCacheScope.searchHit,
+          AppCacheScope.sourceHealth,
+        ]),
+      );
       expect(snapshot.totalEntries, greaterThanOrEqualTo(3));
       expect(snapshot.totalBytes, greaterThan(0));
       expect(
@@ -169,6 +186,17 @@ void main() {
             collectionId: 'user_1',
             targetNamePrefix: 'user_1',
           );
+          final themeCoverGallery = await ManagedAssetStore(
+            documentsDirectoryProvider: () async => documentsDir,
+            supportDirectoryProvider: () async => supportDir,
+          ).persistBytes(
+            type: ManagedAssetType.coverGalleryImage,
+            scope: ManagedAssetScope.themeBinding,
+            bytes: const <int>[8, 8, 8],
+            fileName: 'theme-cover.png',
+            collectionId: 'theme_1',
+            targetNamePrefix: 'theme_1',
+          );
 
           final service = AppCacheGovernanceService(
             database: database,
@@ -185,6 +213,7 @@ void main() {
           );
           expect(coverImageDiskCache.clearCalls, 1);
           expect(await File(avatar.resolvedPath!).exists(), isTrue);
+          expect(await File(themeCoverGallery.resolvedPath!).exists(), isTrue);
         } finally {
           if (await documentsDir.exists()) {
             await documentsDir.delete(recursive: true);
@@ -227,6 +256,90 @@ void main() {
       expect(failingPaginationStore.pruneCalls, 1);
       expect(coverImageDiskCache.compactCalls, 1);
     });
+
+    test('clears a single cache scope', () async {
+      await database.upsertChapterCache(
+        cacheKey: 'src|chapter',
+        bookId: 'book_1',
+        sourceId: 'src',
+        chapterIndex: 0,
+        chapterUrl: 'chapter',
+        chapterTitle: 'chapter',
+        content: 'payload',
+      );
+      await File(
+        '${coverDir.path}/cover_a',
+      ).writeAsBytes(const <int>[1, 2, 3], flush: true);
+      final service = AppCacheGovernanceService(
+        database: database,
+        paginationCacheStore: paginationCacheService,
+        coverImageDiskCache: coverImageDiskCache,
+      );
+
+      final result = await service.clearScope(AppCacheScope.chapterContent);
+
+      expect(result.status, AppCacheDeleteStatus.deleted);
+      expect(result.deletedEntries, 1);
+      expect(await database.countChapterCaches(), 0);
+      expect(await coverImageDiskCache.countAll(), 1);
+    });
+
+    test(
+      'clears local book index without deleting local book metadata',
+      () async {
+        final now = DateTime.parse('2026-06-13T08:00:00.000Z');
+        await database.upsertLocalBook(
+          LocalBook(
+            id: 'local_book_1',
+            title: '本地书',
+            format: LocalBookFormat.txt,
+            storagePath: '/tmp/local_book_1.txt',
+            fileSize: 128,
+            indexStatus: LocalBookIndexStatus.ready,
+            chapterCount: 1,
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
+        await database.replaceLocalChapters(
+          bookId: 'local_book_1',
+          chapters: <LocalChapter>[
+            LocalChapter(
+              id: 'local_book_1_chapter_1',
+              bookId: 'local_book_1',
+              chapterIndex: 0,
+              title: '第一章',
+              content: '正文',
+              createdAt: now,
+              updatedAt: now,
+            ),
+          ],
+        );
+        final service = AppCacheGovernanceService(
+          database: database,
+          paginationCacheStore: paginationCacheService,
+          coverImageDiskCache: coverImageDiskCache,
+          extraStores: <LocalBookIndexCacheStore>[
+            LocalBookIndexCacheStore(database: database),
+          ],
+        );
+
+        final before = await service.loadSnapshot();
+        final localIndexBefore = before.entries.singleWhere(
+          (entry) => entry.scope == AppCacheScope.localBookIndex,
+        );
+        final result = await service.clearScope(AppCacheScope.localBookIndex);
+        final book = await database.getLocalBookById('local_book_1');
+
+        expect(localIndexBefore.currentEntries, 1);
+        expect(result.status, AppCacheDeleteStatus.deleted);
+        expect(result.deletedEntries, 1);
+        expect(await database.countLocalBookIndexEntries(), 0);
+        expect(book, isNotNull);
+        expect(book!.indexStatus, LocalBookIndexStatus.stale);
+        expect(book.chapterCount, 0);
+      },
+    );
   });
 }
 

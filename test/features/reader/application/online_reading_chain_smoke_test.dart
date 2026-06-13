@@ -13,6 +13,7 @@ import 'package:shuxiang_reading_next/features/book/application/book_detail_read
 import 'package:shuxiang_reading_next/features/book/presentation/book_detail_route.dart';
 import 'package:shuxiang_reading_next/features/reader/application/reader_entry_route_resolver.dart';
 import 'package:shuxiang_reading_next/features/reader/application/reader_preferences_service.dart';
+import 'package:shuxiang_reading_next/features/search/application/search_hit_cache_service.dart';
 import 'package:shuxiang_reading_next/features/search/application/search_service.dart';
 import 'package:shuxiang_reading_next/features/search/application/server_online_search_service.dart';
 
@@ -41,6 +42,7 @@ void main() {
         final searchService = SearchService(
           serverOnlineSearchService: ServerOnlineSearchService(
             baseUrl: 'http://${server.address.host}:${server.port}/',
+            searchHitCacheService: SearchHitCacheService(database: database),
           ),
         );
         final progressReports = <int>[];
@@ -145,7 +147,8 @@ void main() {
 }
 
 Future<void> _handleGatewayRequest(HttpRequest request) async {
-  if (request.uri.path != '/v1/books/search/stream') {
+  if (request.uri.path != '/v1/books/search/stream' &&
+      request.uri.path != '/api/v1/books/search/stream') {
     request.response
       ..statusCode = HttpStatus.notFound
       ..write('not found');

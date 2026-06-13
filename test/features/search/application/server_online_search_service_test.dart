@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shuxiang_reading_next/core/errors/error_codes.dart';
 import 'package:shuxiang_reading_next/core/network/api_client.dart';
 import 'package:shuxiang_reading_next/core/network/auth_token_refresher.dart';
+import 'package:shuxiang_reading_next/features/search/application/search_hit_cache_service.dart';
 import 'package:shuxiang_reading_next/features/search/application/search_models.dart';
 import 'package:shuxiang_reading_next/features/search/application/server_online_search_service.dart';
 
@@ -51,6 +52,7 @@ void main() {
 
       final service = ServerOnlineSearchService(
         baseUrl: 'http://${server.address.host}:${server.port}/',
+        searchHitCacheService: SearchHitCacheService(),
       );
 
       final report = await service.search(
@@ -121,6 +123,7 @@ void main() {
 
       final service = ServerOnlineSearchService(
         baseUrl: 'http://${server.address.host}:${server.port}/',
+        searchHitCacheService: SearchHitCacheService(),
       );
 
       final report = await service.search(

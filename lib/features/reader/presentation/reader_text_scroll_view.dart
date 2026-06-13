@@ -9,6 +9,7 @@ import '../application/reader_session_state.dart';
 import '../application/reader_surface_metrics.dart';
 import 'reader_shell.dart';
 import 'reader_text_block_presentation.dart';
+import 'widgets/reader_cached_network_image.dart';
 
 typedef ReaderScrollImageBuilder =
     Widget Function(BuildContext context, ReaderRenderImageItem item);
@@ -199,8 +200,8 @@ class _DefaultReaderImage extends StatelessWidget {
   Widget build(BuildContext context) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
-      child: Image.network(
-        item.imageUrl,
+      child: ReaderCachedNetworkImage(
+        imageUrl: item.imageUrl,
         fit: BoxFit.cover,
         cacheWidth: decodeBudget?.cacheWidth,
         cacheHeight: decodeBudget?.cacheHeight,

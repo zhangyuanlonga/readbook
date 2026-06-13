@@ -285,6 +285,55 @@ void main() {
     );
 
     test(
+      'rebuilds ready txt index when persisted chapter payload is unreadable',
+      () async {
+        final now = DateTime.parse('2026-02-23T12:00:00.000Z');
+        final file = File('${tempDir.path}/corrupted_index.txt');
+        await file.writeAsString('第1章\n重建后的正文');
+        await repository.upsertBook(
+          LocalBook(
+            id: 'local_index_corrupted_txt',
+            title: 'corrupted txt',
+            format: LocalBookFormat.txt,
+            storagePath: file.path,
+            fileSize: await file.length(),
+            indexStatus: LocalBookIndexStatus.ready,
+            chapterCount: 1,
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
+        await repository.replaceChapters(
+          bookId: 'local_index_corrupted_txt',
+          chapters: <LocalChapter>[
+            LocalChapter(
+              id: 'local_index_corrupted_txt_0',
+              bookId: 'local_index_corrupted_txt',
+              chapterIndex: 0,
+              title: '坏索引',
+              content: '',
+              createdAt: now,
+              updatedAt: now,
+            ),
+          ],
+        );
+
+        final service = buildService(parsers: const [_FakeSuccessParser()]);
+        final chapters = await service.ensureIndexed(
+          bookId: 'local_index_corrupted_txt',
+        );
+
+        final updated = await repository.getBookById(
+          'local_index_corrupted_txt',
+        );
+        expect(chapters, hasLength(2));
+        expect(updated, isNotNull);
+        expect(updated!.indexStatus, LocalBookIndexStatus.ready);
+        expect(updated.chapterCount, 2);
+      },
+    );
+
+    test(
       'keeps ready txt with empty content and valid offsets readable',
       () async {
         final now = DateTime.parse('2026-02-23T12:00:00.000Z');

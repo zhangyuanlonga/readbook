@@ -200,6 +200,7 @@ import 'widgets/background/reader_background_layer.dart';
 import 'widgets/chrome/reader_chrome_widgets.dart';
 import 'widgets/chrome/reader_overlay_bars.dart';
 import 'widgets/overlay/reader_overlay_layer_model.dart';
+import 'widgets/reader_cached_network_image.dart';
 import 'widgets/viewport/reader_page_scaffold_shell.dart';
 import 'sheets/reader_settings/reader_audio_settings_section.dart';
 import 'sheets/reader_settings/reader_auto_read_settings_section.dart';

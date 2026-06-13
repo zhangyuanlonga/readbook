@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../application/reader_image_decode_budget.dart';
+import 'widgets/reader_cached_network_image.dart';
 
 typedef ReaderImageRetryCallback = void Function(ReaderImageRetryAction action);
 
@@ -97,24 +98,21 @@ class ReaderImagePipeline {
       );
     }
 
-    return Image.network(
-      requestUrl,
+    return ReaderCachedNetworkImage(
       key: key,
-      headers: headers.isEmpty ? null : headers,
+      imageUrl: requestUrl,
+      headers: headers,
       fit: fit,
       filterQuality: filterQuality,
       cacheWidth: decodeBudget?.cacheWidth,
       cacheHeight: decodeBudget?.cacheHeight,
-      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-        if (wasSynchronouslyLoaded || frame != null) {
-          return child;
-        }
+      placeholder: (context, _) {
         return buildLoadingPlaceholder(
           color: palette.meta,
           aspectRatio: placeholderAspectRatio,
         );
       },
-      errorBuilder: (context, error, stackTrace) {
+      errorBuilder: (context, _, error) {
         return buildImageErrorWidget(
           request: request,
           palette: palette,

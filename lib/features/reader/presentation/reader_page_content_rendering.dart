@@ -432,19 +432,14 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
       );
     }
 
-    return Image.network(
-      requestUrl,
-      headers: _chapterImageHeaders.isEmpty ? null : _chapterImageHeaders,
+    return ReaderCachedNetworkImage(
+      imageUrl: requestUrl,
+      headers: _chapterImageHeaders,
       fit: BoxFit.fitWidth,
-      gaplessPlayback: true,
       filterQuality: _resolveReaderImageFilterQuality(),
       cacheWidth: decodeBudget.cacheWidth,
       cacheHeight: decodeBudget.cacheHeight,
-      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-        if (wasSynchronouslyLoaded || frame != null) {
-          return child;
-        }
-
+      placeholder: (context, _) {
         return AspectRatio(
           aspectRatio: 3 / 4,
           child: Center(
@@ -455,7 +450,7 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
           ),
         );
       },
-      errorBuilder: (context, error, stackTrace) {
+      errorBuilder: (context, _, error) {
         return _buildMangaImageError(colors, sourceUrl, retryNonce);
       },
     );

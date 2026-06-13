@@ -1,4 +1,7 @@
 import '../../../core/cache/app_cache_governance_service.dart';
+import '../../../core/cache/cache_result.dart';
+import '../../../core/cache/cache_scope.dart';
+import '../../../core/cache/cache_store.dart';
 import '../../../core/storage/directory_metrics.dart';
 import '../../../core/storage/local_file_stat.dart';
 import '../../../core/storage/managed_asset_directory_policy.dart';
@@ -6,7 +9,11 @@ import '../../../core/storage/managed_asset_store.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../data/datasources/local/app_database_connection.dart';
 import '../../../domain/entities/managed_asset.dart';
+import '../../reader/application/local/local_book_index_cache_store.dart';
 import '../../reader/application/local/local_book_storage_service.dart';
+import '../../reader/application/reader_pagination_cache_service.dart';
+import '../../reader/application/reader_preference_cache_store.dart';
+import '../presentation/advanced_theme_preview_image_cache.dart';
 
 class StorageFootprint {
   const StorageFootprint({
@@ -44,7 +51,15 @@ class StorageManagementService {
     LocalBookStorageService? localBookStorageService,
   }) : _database = database ?? AppDatabase.instance,
        _cacheGovernanceService =
-           cacheGovernanceService ?? AppCacheGovernanceService(),
+           cacheGovernanceService ??
+           AppCacheGovernanceService(
+             paginationCacheStore: ReaderPaginationCacheService(),
+             extraStores: <AppCacheStore>[
+               AdvancedThemePreviewCacheStore(),
+               LocalBookIndexCacheStore(database: database),
+               ReaderPreferenceCacheStore(),
+             ],
+           ),
        _managedAssetStore = managedAssetStore ?? ManagedAssetStore(),
        _localBookStorageService =
            localBookStorageService ?? LocalBookStorageService();
@@ -97,6 +112,10 @@ class StorageManagementService {
 
   Future<void> clearRebuildableCaches() {
     return _cacheGovernanceService.clearRebuildableCaches();
+  }
+
+  Future<AppCacheDeleteResult> clearCacheScope(AppCacheScope scope) {
+    return _cacheGovernanceService.clearScope(scope);
   }
 
   Future<AppDatabaseMaintenanceReport> clearOrphanedDatabaseData() {

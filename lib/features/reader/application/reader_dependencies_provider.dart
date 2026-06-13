@@ -111,6 +111,10 @@ final readerFeatureDependenciesFactoryProvider =
     Provider<ReaderFeatureDependenciesFactory>((ref) {
       return () {
         final database = ref.watch(app_providers.appDatabaseProvider);
+        final appCacheCoordinator = ref.watch(
+          app_providers.appCacheCoordinatorProvider,
+        );
+        appCacheCoordinator.registerStore(_sharedReaderPaginationCacheService);
         final localBookRepository = ref.watch(
           app_providers.localBookRepositoryProvider,
         );
@@ -180,8 +184,14 @@ final readerFeatureDependenciesFactoryProvider =
           membershipAccessService: ref.watch(
             app_providers.appMembershipAccessServiceProvider,
           ),
-          switchSourceSearchService: SearchService(),
-          searchHitCacheService: SearchHitCacheService(),
+          searchHitCacheService: ref.watch(
+            app_providers.appSearchHitCacheServiceProvider,
+          ),
+          switchSourceSearchService: SearchService(
+            searchHitCacheService: ref.watch(
+              app_providers.appSearchHitCacheServiceProvider,
+            ),
+          ),
           sourceHealthService: ref.watch(
             app_providers.appSourceHealthServiceProvider,
           ),
@@ -194,7 +204,10 @@ final readerFeatureDependenciesFactoryProvider =
           bookmarkRepository: bookmarkRepository,
           bookMetadataOverrideRepository: bookMetadataOverrideRepository,
           localBookRepository: localBookRepository,
-          cachedChapterStore: ReaderCachedChapterStore(database: database),
+          cachedChapterStore: ReaderCachedChapterStore(
+            database: database,
+            cacheCoordinator: appCacheCoordinator,
+          ),
           readerErrorCenterService: ReaderErrorCenterService.instance,
           resourceBudgetResolver: const ReaderResourceBudgetResolver(),
           logger: AppLogger.instance,

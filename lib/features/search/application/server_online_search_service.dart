@@ -14,6 +14,7 @@ import '../../../core/network/auth_interceptor.dart';
 import '../../../core/network/interceptors.dart';
 import '../../../domain/entities/book.dart';
 import 'server_gateway_identity.dart';
+import 'search_hit_cache_service.dart';
 import 'search_models.dart';
 import 'search_report_assembler.dart';
 
@@ -22,12 +23,14 @@ class ServerOnlineSearchService {
     ApiClient? client,
     Dio? dio,
     AppLogger? logger,
+    required SearchHitCacheService searchHitCacheService,
     String? baseUrl,
   }) : _baseUrl = AppApiConfig.normalizeBaseUrl(
          baseUrl ?? AppApiConfig.effectiveReaderGatewayBaseUrl,
        ),
        _dio = dio ?? Dio(),
        _logger = logger ?? AppLogger.instance,
+       _searchHitCacheService = searchHitCacheService,
        _client =
            client ??
            ApiClient(
@@ -45,6 +48,7 @@ class ServerOnlineSearchService {
   final ApiClient _client;
   final Dio _dio;
   final AppLogger _logger;
+  final SearchHitCacheService _searchHitCacheService;
   final String _baseUrl;
 
   static const int _rawSearchPageSize = 100;
@@ -137,6 +141,7 @@ class ServerOnlineSearchService {
     final report = await response.toSearchExecutionReport(
       keyword,
       aggregateByTitleAuthor: aggregateByTitleAuthor,
+      searchHitCacheService: _searchHitCacheService,
     );
     onProgress?.call(report);
     return report;
@@ -229,6 +234,7 @@ class ServerOnlineSearchService {
         aggregateByTitleAuthor: aggregateByTitleAuthor,
         expectedSourceCount:
             selectedSourceIds.isEmpty ? 0 : selectedSourceIds.length,
+        searchHitCacheService: _searchHitCacheService,
       );
       SearchExecutionReport? finalReport;
 
@@ -496,11 +502,13 @@ class _ServerSearchAccumulator {
     required this.keyword,
     required this.aggregateByTitleAuthor,
     required this.expectedSourceCount,
-  });
+    required SearchHitCacheService searchHitCacheService,
+  }) : _searchHitCacheService = searchHitCacheService;
 
   final String keyword;
   final bool aggregateByTitleAuthor;
   final int expectedSourceCount;
+  final SearchHitCacheService _searchHitCacheService;
   final Map<String, _ServerSearchItem> _itemsById =
       <String, _ServerSearchItem>{};
   final Map<String, String> _sourceNames = <String, String>{};
@@ -560,6 +568,7 @@ class _ServerSearchAccumulator {
       sourceNames: sourceNames,
       sourceOrderById: Map<String, int>.unmodifiable(_sourceOrderById),
       aggregateByTitleAuthor: aggregateByTitleAuthor,
+      searchHitCacheService: _searchHitCacheService,
       processedSourceCountOverride: _processedSourceCount,
     );
   }
@@ -750,6 +759,7 @@ class _ServerSearchResponse {
   Future<SearchExecutionReport> toSearchExecutionReport(
     String keyword, {
     required bool aggregateByTitleAuthor,
+    required SearchHitCacheService searchHitCacheService,
   }) {
     final books = items.map((item) => item.toBook()).toList(growable: false);
     final booksById = <String, Book>{for (final book in books) book.id: book};
@@ -790,6 +800,7 @@ class _ServerSearchResponse {
       sourceNames: Map<String, String>.unmodifiable(sourceNames),
       sourceOrderById: Map<String, int>.unmodifiable(sourceOrderById),
       aggregateByTitleAuthor: aggregateByTitleAuthor,
+      searchHitCacheService: searchHitCacheService,
     );
   }
 }

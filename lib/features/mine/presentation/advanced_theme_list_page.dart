@@ -102,7 +102,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       const AdvancedThemeListQueryController();
   final TextEditingController _searchController = TextEditingController();
   final AdvancedThemePreviewImageCache _previewImageCache =
-      AdvancedThemePreviewImageCache();
+      AdvancedThemePreviewImageCache.shared;
 
   AdvancedThemeListPageState get _pageState =>
       ref.read(advancedThemeListPageStateProvider);

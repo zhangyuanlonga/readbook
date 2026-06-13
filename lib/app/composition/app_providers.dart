@@ -6,11 +6,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/auth/auth_event_bus.dart';
 import '../../core/auth/session_change_listener.dart';
 import '../../core/auth/auth_token_refresher_impl.dart';
+import '../../core/cache/app_cache_coordinator.dart';
 import '../../core/cache/cover_image_disk_cache.dart';
 import '../../core/logging/app_logger.dart';
 import '../../core/logging/source_log_store.dart';
 import '../../core/membership/membership_access_resolver.dart';
 import '../../core/membership/membership_access_service.dart';
+import '../../core/network/api_client.dart';
 import '../../data/datasources/local/app_database.dart';
 import '../../data/repositories/book_metadata_override_repository_impl.dart';
 import '../../data/repositories/bookmark_repository_impl.dart';
@@ -24,11 +26,16 @@ import '../../features/source/application/source_health_service.dart';
 import '../../features/book/application/book_presentation_query_service.dart';
 import '../../features/mine/application/advanced_theme_provider.dart';
 import '../../features/mine/application/private_book_source_session_listener.dart';
+import '../../features/mine/presentation/advanced_theme_preview_image_cache.dart';
 import '../../features/mine/providers.dart' as mine_providers;
+import '../../features/reader/application/local/local_book_index_cache_store.dart';
+import '../../features/reader/application/reader_preference_cache_store.dart';
 import '../../features/reader/application/reader_session_listener.dart';
+import '../../features/search/application/search_hit_cache_service.dart';
 import '../../features/search/application/search_history_session_listener.dart';
 import '../../features/source/application/remote_content_task_scheduler_service.dart';
 import '../../features/source/application/remote_content_task_conflict_service.dart';
+import '../../features/source/application/source_health_persistence_service.dart';
 import '../lifecycle/auth_account_lifecycle_coordinator.dart';
 import '../lifecycle/app_lifecycle_coordinator.dart';
 import '../platform/app_platform_capabilities.dart';
@@ -55,6 +62,30 @@ final appCoverImageDiskCacheProvider = Provider<CoverImageDiskCache>((ref) {
   return CoverImageDiskCache.instance;
 });
 
+final appSearchHitCacheServiceProvider = Provider<SearchHitCacheService>((ref) {
+  return SearchHitCacheService(database: ref.watch(appDatabaseProvider));
+});
+
+final appSourceHealthPersistenceServiceProvider =
+    Provider<SourceHealthPersistenceService>((ref) {
+      return SourceHealthPersistenceService(
+        database: ref.watch(appDatabaseProvider),
+      );
+    });
+
+final appCacheCoordinatorProvider = Provider<AppCacheCoordinator>((ref) {
+  return AppCacheCoordinator(
+    stores: [
+      ApiClient.defaultCacheStore,
+      ref.watch(appSearchHitCacheServiceProvider),
+      ref.watch(appSourceHealthPersistenceServiceProvider),
+      AdvancedThemePreviewCacheStore(),
+      LocalBookIndexCacheStore(database: ref.watch(appDatabaseProvider)),
+      ReaderPreferenceCacheStore(),
+    ],
+  );
+});
+
 final bookmarkRepositoryProvider = Provider<BookmarkRepository>((ref) {
   return BookmarkRepositoryImpl(ref.watch(appDatabaseProvider));
 });
@@ -69,7 +100,9 @@ final localBookRepositoryProvider = Provider<LocalBookRepository>((ref) {
 });
 
 final appSourceHealthServiceProvider = Provider<SourceHealthService>((ref) {
-  final service = SourceHealthService();
+  final service = SourceHealthService(
+    persistenceService: ref.watch(appSourceHealthPersistenceServiceProvider),
+  );
   ref.onDispose(service.dispose);
   return service;
 });
@@ -143,8 +176,12 @@ final appAuthAccountLifecycleCoordinatorProvider =
       final sessionService = ref.watch(
         mine_providers.minePageSessionServiceProvider,
       );
+      final cacheCoordinator = ref.watch(appCacheCoordinatorProvider);
       return AuthAccountLifecycleCoordinator(
-        clearAccountScopedCache: sessionService.clearUserScopedCache,
+        clearAccountScopedCache: (userId) async {
+          await sessionService.clearUserScopedCache(userId);
+          await cacheCoordinator.clearUserScoped(owner: userId);
+        },
         refreshCurrentAccountData: () async {
           await sessionService.loadSession(refreshRemote: true);
         },

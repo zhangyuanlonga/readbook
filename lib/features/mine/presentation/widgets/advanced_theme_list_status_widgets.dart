@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/layout/app_adaptive.dart';
+import '../../../../app/widgets/adaptive_card.dart';
 import '../../../../app/widgets/app_empty_state_card.dart';
+import '../../../../app/widgets/foundation/foundation.dart';
 import '../../../../core/membership/membership_access_presentation.dart';
 
 class AdvancedThemeVipLockedState extends StatelessWidget {
@@ -15,19 +18,18 @@ class AdvancedThemeVipLockedState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
     final colorScheme = Theme.of(context).colorScheme;
     return ListView(
-      padding: EdgeInsets.fromLTRB(16, topInset + 18, 16, 24),
+      padding: EdgeInsets.fromLTRB(
+        metrics.pagePadding,
+        topInset + metrics.sectionGap,
+        metrics.pagePadding,
+        metrics.sectionGap + 8,
+      ),
       children: [
-        Container(
-          padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
-          decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(
-              color: colorScheme.outlineVariant.withValues(alpha: 0.5),
-            ),
-          ),
+        AdaptiveCard(
+          padding: EdgeInsets.all(metrics.cardPadding + 4),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -52,7 +54,7 @@ class AdvancedThemeVipLockedState extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
+              SizedBox(height: metrics.contentGap + 4),
               Text(
                 MembershipAccessPresentation.featureTitle(
                   MembershipFeatureGate.advancedTheme,
@@ -71,12 +73,11 @@ class AdvancedThemeVipLockedState extends StatelessWidget {
                   height: 1.5,
                 ),
               ),
-              const SizedBox(height: 16),
-              FilledButton(
+              SizedBox(height: metrics.sectionGap),
+              AppButton(
+                label: MembershipAccessPresentation.membershipButtonLabel,
+                icon: const Icon(Icons.workspace_premium_rounded),
                 onPressed: onOpenMembership,
-                child: const Text(
-                  MembershipAccessPresentation.membershipButtonLabel,
-                ),
               ),
             ],
           ),

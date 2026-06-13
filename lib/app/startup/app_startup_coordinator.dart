@@ -254,7 +254,7 @@ class AppStartupCoordinator {
   }
 
   Future<void> _enforceCacheBudgets() async {
-    await _cacheGovernanceService.enforceBudgets();
+    await _cacheGovernanceService.enforceBudgets(collectSnapshot: false);
   }
 
   Future<void> _runStorageMaintenanceIfNeeded() async {

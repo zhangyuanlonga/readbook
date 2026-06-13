@@ -1,4 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shuxiang_reading_next/core/cache/cache_entry.dart';
+import 'package:shuxiang_reading_next/core/cache/cache_key.dart';
+import 'package:shuxiang_reading_next/core/cache/cache_policy.dart';
+import 'package:shuxiang_reading_next/core/cache/cache_result.dart';
+import 'package:shuxiang_reading_next/core/cache/cache_scope.dart';
 import 'package:shuxiang_reading_next/core/errors/error_codes.dart';
 import 'package:shuxiang_reading_next/core/errors/error_stage.dart';
 import 'package:shuxiang_reading_next/core/errors/gateway_failure.dart';
@@ -378,6 +383,57 @@ class _NoopSourceHealthService extends SourceHealthService {
 
 class _NoopSourceHealthPersistenceService
     implements SourceHealthPersistenceService {
+  @override
+  AppCacheScope get scope => AppCacheScope.sourceHealth;
+
+  @override
+  String get backendName => 'noop.source_health';
+
+  @override
+  Future<AppCacheReadResult> read(
+    AppCacheKey key, {
+    AppCachePolicy? policy,
+  }) async {
+    return AppCacheReadResult.miss(key: key, backend: backendName);
+  }
+
+  @override
+  Future<AppCacheWriteResult> write(
+    AppCacheEntry entry, {
+    AppCachePolicy? policy,
+  }) async {
+    return AppCacheWriteResult.skipped(key: entry.key, backend: backendName);
+  }
+
+  @override
+  Future<AppCacheDeleteResult> delete(AppCacheKey key) async {
+    return AppCacheDeleteResult.skipped(
+      scope: scope,
+      backend: backendName,
+      key: key,
+    );
+  }
+
+  @override
+  Future<AppCacheDeleteResult> clearScope({String? owner}) async {
+    return AppCacheDeleteResult.deleted(scope: scope, backend: backendName);
+  }
+
+  @override
+  Future<AppCacheStats> stats({String? owner}) async {
+    return AppCacheStats(
+      scope: scope,
+      backend: backendName,
+      entries: 0,
+      bytes: 0,
+    );
+  }
+
+  @override
+  Future<AppCachePruneResult> prune(AppCachePolicy policy) async {
+    return AppCachePruneResult(scope: scope, backend: backendName);
+  }
+
   @override
   Future<Map<String, SourceHealthSnapshot>> loadSnapshots() async {
     return <String, SourceHealthSnapshot>{};

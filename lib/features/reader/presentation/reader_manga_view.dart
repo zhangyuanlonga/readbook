@@ -9,6 +9,7 @@ import '../application/reader_image_decode_budget.dart';
 import '../application/reader_session_state.dart';
 import '../application/reader_surface_metrics.dart';
 import 'reader_shell.dart';
+import 'widgets/reader_cached_network_image.dart';
 
 typedef ReaderMangaImageBuilder =
     Widget Function(BuildContext context, ReaderMangaImageItem item);
@@ -591,16 +592,14 @@ class _DefaultReaderMangaImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Image.network(
-      item.imageUrl,
+    return ReaderCachedNetworkImage(
+      imageUrl: item.imageUrl,
+      scope: ReaderCachedImageScope.readerManga,
       fit: BoxFit.fitWidth,
       filterQuality: _resolveFilterQuality(item.settings.mangaLoadStrategy),
       cacheWidth: item.imageDecodeBudget?.cacheWidth,
       cacheHeight: item.imageDecodeBudget?.cacheHeight,
-      loadingBuilder: (context, child, progress) {
-        if (progress == null) {
-          return child;
-        }
+      placeholder: (context, _) {
         return AspectRatio(
           aspectRatio: 3 / 4,
           child: Center(
