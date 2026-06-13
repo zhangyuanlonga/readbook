@@ -25,13 +25,9 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
                   : null,
           foregroundOverlay: Stack(
             clipBehavior: Clip.hardEdge,
-            children: [
-              _buildChapterLoadingIndicator(colors),
-              _buildAutoReadStatusOverlay(colors),
-              _buildOverlayScrim(),
-              _buildTopOverlay(colors),
-              _buildBottomOverlay(colors),
-            ],
+            children: readerForegroundOverlayOrder
+                .map((slot) => _buildForegroundOverlaySlot(slot, colors))
+                .toList(growable: false),
           ),
         ),
       ),
@@ -61,6 +57,22 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
           _buildReaderInfoBar(colors, isHeader: false),
       ],
     );
+  }
+
+  Widget _buildForegroundOverlaySlot(
+    ReaderForegroundOverlaySlot slot,
+    ReaderThemeColors colors,
+  ) {
+    return switch (slot) {
+      ReaderForegroundOverlaySlot.chapterLoading =>
+        _buildChapterLoadingIndicator(colors),
+      ReaderForegroundOverlaySlot.autoReadStatus => _buildAutoReadStatusOverlay(
+        colors,
+      ),
+      ReaderForegroundOverlaySlot.overlayScrim => _buildOverlayScrim(),
+      ReaderForegroundOverlaySlot.topChrome => _buildTopOverlay(colors),
+      ReaderForegroundOverlaySlot.bottomChrome => _buildBottomOverlay(colors),
+    };
   }
 
   Widget _composeReaderBody(ReaderThemeColors colors) {
@@ -151,11 +163,19 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
         canGoNextChapter: canGoNextChapter,
         onPreviousChapter:
             canGoPreviousChapter
-                ? () => _jumpToAdjacentReadableChapter(forward: false)
+                ? () => _dispatchReaderNavigationCommand(
+                  const ReaderNavigationCommand.previousChapter(
+                    source: ReaderNavigationCommandSource.audio,
+                  ),
+                )
                 : null,
         onNextChapter:
             canGoNextChapter
-                ? () => _jumpToAdjacentReadableChapter(forward: true)
+                ? () => _dispatchReaderNavigationCommand(
+                  const ReaderNavigationCommand.nextChapter(
+                    source: ReaderNavigationCommandSource.audio,
+                  ),
+                )
                 : null,
       ),
     );
@@ -454,6 +474,7 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
           onPaperCurlTurnRejected: (_) {
             _scheduleReaderInteractionSettle();
           },
+          onPaperCurlTurnResult: _handlePaperCurlTurnResult,
           onPaperCurlPageCommitted: _commitPaperCurlPage,
           curlState: curlState,
           curlColors: CurlRendererColors(

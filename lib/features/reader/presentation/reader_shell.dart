@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'reader_overlay_z_order.dart';
+
 import '../../../domain/entities/reader_settings.dart';
 import '../application/reader_content_session.dart';
 import '../application/reader_surface_metrics.dart';
@@ -128,56 +130,16 @@ class ReaderShell extends StatelessWidget {
 
     final stackedContent = Stack(
       clipBehavior: model.clipBehavior,
-      children: <Widget>[
-        Positioned.fill(
-          child: ColoredBox(
-            color: model.palette.backgroundColor,
-            child: model.background ?? const SizedBox.shrink(),
-          ),
-        ),
-        if (model.chrome.backgroundOverlay != null)
-          Positioned.fill(
-            child: IgnorePointer(child: model.chrome.backgroundOverlay),
-          ),
-        Positioned.fill(
-          child: DecoratedBox(
-            decoration: BoxDecoration(color: contentSurfaceColor),
-            child: content,
-          ),
-        ),
-        if (model.chrome.center != null)
-          Positioned.fill(child: IgnorePointer(child: model.chrome.center)),
-        if (model.chrome.top != null)
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: SafeArea(bottom: false, child: model.chrome.top!),
-          ),
-        if (model.chrome.bottom != null)
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: SafeArea(top: false, child: model.chrome.bottom!),
-          ),
-        if (model.chrome.leading != null)
-          Positioned(
-            left: 0,
-            top: 0,
-            bottom: 0,
-            child: SafeArea(right: false, child: model.chrome.leading!),
-          ),
-        if (model.chrome.trailing != null)
-          Positioned(
-            top: 0,
-            right: 0,
-            bottom: 0,
-            child: SafeArea(left: false, child: model.chrome.trailing!),
-          ),
-        if (model.chrome.foregroundOverlay != null)
-          Positioned.fill(child: model.chrome.foregroundOverlay!),
-      ],
+      children: readerShellLayerOrder
+          .map(
+            (slot) => _buildLayer(
+              slot,
+              content: content,
+              contentSurfaceColor: contentSurfaceColor,
+            ),
+          )
+          .whereType<Widget>()
+          .toList(growable: false),
     );
 
     if (!model.callbacks.hasAnyHandler) {
@@ -192,5 +154,76 @@ class ReaderShell extends StatelessWidget {
       onDoubleTap: model.callbacks.onDoubleTap,
       child: stackedContent,
     );
+  }
+
+  Widget? _buildLayer(
+    ReaderShellLayerSlot slot, {
+    required Widget content,
+    required Color contentSurfaceColor,
+  }) {
+    return switch (slot) {
+      ReaderShellLayerSlot.background => Positioned.fill(
+        child: ColoredBox(
+          color: model.palette.backgroundColor,
+          child: model.background ?? const SizedBox.shrink(),
+        ),
+      ),
+      ReaderShellLayerSlot.backgroundOverlay =>
+        model.chrome.backgroundOverlay == null
+            ? null
+            : Positioned.fill(
+              child: IgnorePointer(child: model.chrome.backgroundOverlay),
+            ),
+      ReaderShellLayerSlot.content => Positioned.fill(
+        child: DecoratedBox(
+          decoration: BoxDecoration(color: contentSurfaceColor),
+          child: content,
+        ),
+      ),
+      ReaderShellLayerSlot.center =>
+        model.chrome.center == null
+            ? null
+            : Positioned.fill(child: IgnorePointer(child: model.chrome.center)),
+      ReaderShellLayerSlot.top =>
+        model.chrome.top == null
+            ? null
+            : Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: SafeArea(bottom: false, child: model.chrome.top!),
+            ),
+      ReaderShellLayerSlot.bottom =>
+        model.chrome.bottom == null
+            ? null
+            : Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: SafeArea(top: false, child: model.chrome.bottom!),
+            ),
+      ReaderShellLayerSlot.leading =>
+        model.chrome.leading == null
+            ? null
+            : Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              child: SafeArea(right: false, child: model.chrome.leading!),
+            ),
+      ReaderShellLayerSlot.trailing =>
+        model.chrome.trailing == null
+            ? null
+            : Positioned(
+              top: 0,
+              right: 0,
+              bottom: 0,
+              child: SafeArea(left: false, child: model.chrome.trailing!),
+            ),
+      ReaderShellLayerSlot.foregroundOverlay =>
+        model.chrome.foregroundOverlay == null
+            ? null
+            : Positioned.fill(child: model.chrome.foregroundOverlay!),
+    };
   }
 }

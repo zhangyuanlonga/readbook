@@ -201,7 +201,21 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     if (_readerInteractionState == state) {
       return;
     }
+    final previous = _readerInteractionState;
     _readerInteractionState = state;
+    final context = <String, Object?>{
+      'chain': 'reader_interaction_state',
+      'from': previous.name,
+      'to': state.name,
+      'chapterId': _chapterId,
+      'viewportKind': _currentViewportKind.name,
+      'contentMode': _currentContentMode.name,
+    };
+    developer.Timeline.instantSync(
+      'reader.interaction_state',
+      arguments: context,
+    );
+    _logger.debug('Reader interaction state changed', context: context);
     if (state == _ReaderInteractionState.idle && _deferredNeighborPreload) {
       _deferredNeighborPreload = false;
       _startNeighborPreloadNow();
@@ -1887,6 +1901,31 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     _syncActiveReadingRecordSessionProgress();
     _scheduleProgressSave();
     _scheduleReaderInteractionSettle();
+  }
+
+  void _handlePaperCurlTurnResult(ReaderPaperCurlResult result) {
+    final context = <String, Object?>{
+      'chain': 'reader_paper_curl_adapter',
+      'type': result.type.name,
+      'direction': result.direction,
+      'fromPageIndex': result.fromPageIndex,
+      'targetPageIndex': result.targetPageIndex,
+      'failureReason': result.failureReason?.name,
+      'message': result.message,
+      'chapterId': _chapterId,
+      'currentPageIndex': _currentPageIndex,
+      'pageCount': _currentPagedPageCount,
+      'viewportKind': _currentViewportKind.name,
+    };
+    developer.Timeline.instantSync(
+      'reader.paper_curl_adapter_result',
+      arguments: context,
+    );
+    if (result.isFailure) {
+      _logger.warn('Reader paper curl adapter result', context: context);
+    } else {
+      _logger.info('Reader paper curl adapter result', context: context);
+    }
   }
 
   void _onPagedTransitionStatus(AnimationStatus status) {

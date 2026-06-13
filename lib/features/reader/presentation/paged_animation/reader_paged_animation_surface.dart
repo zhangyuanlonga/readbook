@@ -27,6 +27,7 @@ class ReaderPagedAnimationSurface extends StatelessWidget {
     this.onPaperCurlPageCommitted,
     this.onPaperCurlTurnStarted,
     this.onPaperCurlTurnRejected,
+    this.onPaperCurlTurnResult,
     this.selectionWrapper = _identityWrapper,
     this.disabledSelectionWrapper = _identityWrapper,
     this.animationRendererRegistry = const PagedAnimationRendererRegistry(),
@@ -53,6 +54,7 @@ class ReaderPagedAnimationSurface extends StatelessWidget {
   final ValueChanged<int>? onPaperCurlPageCommitted;
   final ValueChanged<int>? onPaperCurlTurnStarted;
   final ValueChanged<int>? onPaperCurlTurnRejected;
+  final ValueChanged<ReaderPaperCurlResult>? onPaperCurlTurnResult;
   final ReaderPagedViewportWrapper selectionWrapper;
   final ReaderPagedViewportWrapper disabledSelectionWrapper;
   final PagedAnimationRendererRegistry animationRendererRegistry;
@@ -99,6 +101,7 @@ class ReaderPagedAnimationSurface extends StatelessWidget {
       onPageCommitted: onCommitted,
       onTurnStarted: onPaperCurlTurnStarted,
       onTurnRejected: onPaperCurlTurnRejected,
+      onTurnResult: onPaperCurlTurnResult,
     );
   }
 

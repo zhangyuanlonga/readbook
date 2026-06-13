@@ -8,6 +8,7 @@ import 'package:shuxiang_reading_next/features/reader/presentation/reader_annota
 import 'package:shuxiang_reading_next/features/reader/presentation/reader_chrome_action_presenter.dart';
 import 'package:shuxiang_reading_next/features/reader/presentation/reader_desktop_input_dispatcher.dart';
 import 'package:shuxiang_reading_next/features/reader/presentation/reader_page_support_models.dart';
+import 'package:shuxiang_reading_next/features/reader/presentation/reader_pointer_input_controller.dart';
 import 'package:shuxiang_reading_next/features/reader/presentation/reader_selection_toolbar_presenter.dart';
 import 'package:shuxiang_reading_next/features/reader/presentation/reader_touch_navigation_controller.dart';
 import 'package:shuxiang_reading_next/features/reader/presentation/widgets/chrome/reader_overlay_bars.dart';
@@ -96,6 +97,123 @@ void main() {
         ReaderTouchNavigationIntentType.performTapZoneAction,
       );
       expect(tapZoneIntent.tapZoneAction, ReaderTapZoneAction.nextPage);
+    });
+  });
+
+  group('ReaderPointerInputController', () {
+    test('marks child-handled taps so fallback reader tap can be skipped', () {
+      final controller = ReaderPointerInputController(
+        now: () => DateTime.utc(2026, 6, 13, 10),
+      );
+      final traces = <String>[];
+
+      controller.beginPointer(
+        const PointerDownEvent(
+          pointer: 1,
+          position: Offset(10, 10),
+          kind: PointerDeviceKind.touch,
+        ),
+        shouldHandleLongPress: false,
+        selectionActive: false,
+        resolveLongPressGuard:
+            () => const ReaderPointerLongPressGuard(
+              mounted: true,
+              selectionActive: false,
+            ),
+        logTrace: (step, {context = const <String, Object?>{}}) {
+          traces.add(step);
+        },
+        onLongPress: () {},
+      );
+      controller.markChildHandled();
+      final snapshot = controller.buildPointerUpSnapshot(
+        const PointerUpEvent(
+          pointer: 1,
+          position: Offset(10, 10),
+          kind: PointerDeviceKind.touch,
+        ),
+      );
+
+      expect(snapshot?.childHandled, isTrue);
+      expect(traces, contains('pointer_down'));
+    });
+
+    test('movement cancels reader-level long press priority', () {
+      final controller = ReaderPointerInputController(
+        now: () => DateTime.utc(2026, 6, 13, 10),
+      );
+      final traces = <String>[];
+
+      controller.beginPointer(
+        const PointerDownEvent(
+          pointer: 1,
+          position: Offset(0, 0),
+          kind: PointerDeviceKind.touch,
+        ),
+        shouldHandleLongPress: true,
+        selectionActive: false,
+        resolveLongPressGuard:
+            () => const ReaderPointerLongPressGuard(
+              mounted: true,
+              selectionActive: false,
+            ),
+        logTrace: (step, {context = const <String, Object?>{}}) {
+          traces.add(step);
+        },
+        onLongPress: () {},
+      );
+
+      controller.updatePointerMove(
+        const PointerMoveEvent(
+          pointer: 1,
+          position: Offset(80, 0),
+          kind: PointerDeviceKind.touch,
+        ),
+        logTrace: (step, {context = const <String, Object?>{}}) {
+          traces.add(step);
+        },
+      );
+      final snapshot = controller.buildPointerUpSnapshot(
+        const PointerUpEvent(
+          pointer: 1,
+          position: Offset(80, 0),
+          kind: PointerDeviceKind.touch,
+        ),
+      );
+
+      expect(snapshot?.moved, isTrue);
+      expect(traces, contains('pointer_move_cancel_long_press'));
+    });
+
+    test('selection active blocks reader fallback long press', () async {
+      final controller = ReaderPointerInputController();
+      var longPressed = false;
+
+      controller.beginPointer(
+        const PointerDownEvent(
+          pointer: 1,
+          position: Offset(0, 0),
+          kind: PointerDeviceKind.touch,
+        ),
+        shouldHandleLongPress: true,
+        selectionActive: true,
+        resolveLongPressGuard:
+            () => const ReaderPointerLongPressGuard(
+              mounted: true,
+              selectionActive: true,
+            ),
+        logTrace: (step, {context = const <String, Object?>{}}) {},
+        onLongPress: () {
+          longPressed = true;
+        },
+      );
+
+      await Future<void>.delayed(
+        kLongPressTimeout + const Duration(milliseconds: 20),
+      );
+
+      expect(longPressed, isFalse);
+      controller.dispose();
     });
   });
 

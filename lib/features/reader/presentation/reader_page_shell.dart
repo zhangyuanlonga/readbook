@@ -55,11 +55,15 @@ extension _ReaderPageShellExtension on _ReaderPageState {
       _pauseAutoReadSession();
     }
 
-    if (event.direction == ReaderVolumeKeyDirection.up) {
-      await _turnReaderByDirection(forward: false);
-    } else {
-      await _turnReaderByDirection(forward: true);
-    }
+    await _dispatchReaderNavigationCommand(
+      event.direction == ReaderVolumeKeyDirection.up
+          ? const ReaderNavigationCommand.previousPage(
+            source: ReaderNavigationCommandSource.volumeKey,
+          )
+          : const ReaderNavigationCommand.nextPage(
+            source: ReaderNavigationCommandSource.volumeKey,
+          ),
+    );
 
     if (shouldResumeAutoRead &&
         mounted &&
@@ -141,7 +145,15 @@ extension _ReaderPageShellExtension on _ReaderPageState {
       return;
     }
 
-    await _jumpToAdjacentReadableChapter(forward: forward);
+    await _dispatchReaderNavigationCommand(
+      forward
+          ? const ReaderNavigationCommand.nextChapter(
+            source: ReaderNavigationCommandSource.scrollEdge,
+          )
+          : const ReaderNavigationCommand.previousChapter(
+            source: ReaderNavigationCommandSource.scrollEdge,
+          ),
+    );
   }
 
   Future<void> _turnMangaPage({required bool forward}) async {
@@ -152,7 +164,15 @@ extension _ReaderPageShellExtension on _ReaderPageState {
     final target = forward ? _mangaPageIndex + 1 : _mangaPageIndex - 1;
     final isOutOfRange = forward ? target >= total : target < 0;
     if (isOutOfRange) {
-      await _jumpToAdjacentReadableChapter(forward: forward);
+      await _dispatchReaderNavigationCommand(
+        forward
+            ? const ReaderNavigationCommand.nextChapter(
+              source: ReaderNavigationCommandSource.scrollEdge,
+            )
+            : const ReaderNavigationCommand.previousChapter(
+              source: ReaderNavigationCommandSource.scrollEdge,
+            ),
+      );
       return;
     }
     if (_mangaPageController.hasClients) {

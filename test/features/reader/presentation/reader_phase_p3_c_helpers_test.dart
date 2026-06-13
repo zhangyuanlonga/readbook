@@ -4,10 +4,32 @@ import 'package:shuxiang_reading_next/domain/entities/reader_settings.dart';
 import 'package:shuxiang_reading_next/features/reader/application/reader_content_session.dart';
 import 'package:shuxiang_reading_next/features/reader/application/reader_surface_metrics.dart';
 import 'package:shuxiang_reading_next/features/reader/presentation/reader_page_support_models.dart';
+import 'package:shuxiang_reading_next/features/reader/presentation/reader_overlay_z_order.dart';
 import 'package:shuxiang_reading_next/features/reader/presentation/reader_shell.dart';
 import 'package:shuxiang_reading_next/features/reader/presentation/widgets/viewport/reader_page_scaffold_shell.dart';
 
 void main() {
+  test('reader shell and foreground overlay z-order are explicit', () {
+    expect(readerShellLayerOrder, const <ReaderShellLayerSlot>[
+      ReaderShellLayerSlot.background,
+      ReaderShellLayerSlot.backgroundOverlay,
+      ReaderShellLayerSlot.content,
+      ReaderShellLayerSlot.center,
+      ReaderShellLayerSlot.top,
+      ReaderShellLayerSlot.bottom,
+      ReaderShellLayerSlot.leading,
+      ReaderShellLayerSlot.trailing,
+      ReaderShellLayerSlot.foregroundOverlay,
+    ]);
+    expect(readerForegroundOverlayOrder, const <ReaderForegroundOverlaySlot>[
+      ReaderForegroundOverlaySlot.chapterLoading,
+      ReaderForegroundOverlaySlot.autoReadStatus,
+      ReaderForegroundOverlaySlot.overlayScrim,
+      ReaderForegroundOverlaySlot.topChrome,
+      ReaderForegroundOverlaySlot.bottomChrome,
+    ]);
+  });
+
   testWidgets(
     'reader page scaffold shell renders focused reader shell content',
     (tester) async {

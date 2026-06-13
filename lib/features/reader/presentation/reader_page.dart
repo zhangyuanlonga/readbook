@@ -100,7 +100,9 @@ import '../application/removed_script_source_guard.dart';
 import '../application/reader_jump_facade.dart';
 import '../application/reader_jump_planner.dart';
 import '../application/reader_layout_resolver.dart';
+import '../application/reader_navigation_command_dispatcher.dart';
 import '../application/reader_navigation_entry_resolver.dart';
+import '../application/reader_page_turn_gate.dart';
 import '../application/reader_page_bootstrap_controller.dart';
 import '../application/reader_pagination_controller.dart';
 import '../application/reader_pagination_cache_service.dart';
@@ -167,11 +169,13 @@ import 'reader_feedback_widgets.dart';
 import 'reader_layout_context.dart';
 import 'paged_animation/curl_paged_animation_renderer.dart';
 import 'paged_animation/reader_paged_animation_surface.dart';
+import 'reader_interaction_coordinator.dart';
 import 'reader_pdf_view.dart';
 import 'reader_paper_curl_paged_view.dart';
 import 'reader_page_lifecycle_delegate.dart';
 import 'reader_page_support_models.dart';
 import 'reader_pointer_input_controller.dart';
+import 'reader_overlay_z_order.dart';
 import 'reader_selection_state.dart';
 import 'reader_shell.dart';
 import 'reader_source_switch_controller.dart';
@@ -330,10 +334,22 @@ extension _ReaderDesktopInputLayer on _ReaderPageState {
         _pauseAutoReadSession();
         return KeyEventResult.handled;
       case ReaderDesktopInputAction.previousPage:
-        unawaited(_turnReaderByDirection(forward: false));
+        unawaited(
+          _dispatchReaderNavigationCommand(
+            const ReaderNavigationCommand.previousPage(
+              source: ReaderNavigationCommandSource.keyboard,
+            ),
+          ),
+        );
         return KeyEventResult.handled;
       case ReaderDesktopInputAction.nextPage:
-        unawaited(_turnReaderByDirection(forward: true));
+        unawaited(
+          _dispatchReaderNavigationCommand(
+            const ReaderNavigationCommand.nextPage(
+              source: ReaderNavigationCommandSource.keyboard,
+            ),
+          ),
+        );
         return KeyEventResult.handled;
       case ReaderDesktopInputAction.chapterStart:
         _restoreScrollPosition(0);
@@ -388,24 +404,54 @@ extension _ReaderTouchNavigationLayer on _ReaderPageState {
   void _dispatchReaderTouchNavigationIntent(
     ReaderTouchNavigationIntent intent,
   ) {
-    switch (intent.type) {
-      case ReaderTouchNavigationIntentType.ignore:
-      case ReaderTouchNavigationIntentType.resolveTapZone:
+    _dispatchReaderInteractionCommand(
+      _interactionCoordinator.resolveTouchIntent(intent),
+    );
+  }
+
+  void _dispatchReaderInteractionCommand(ReaderInteractionCommand command) {
+    switch (command.type) {
+      case ReaderInteractionCommandType.ignore:
         return;
-      case ReaderTouchNavigationIntentType.showAutoReadControl:
+      case ReaderInteractionCommandType.showAutoReadControl:
         unawaited(_showAutoReadControlSheet());
         return;
-      case ReaderTouchNavigationIntentType.openAutoReadOverlay:
+      case ReaderInteractionCommandType.openAutoReadOverlay:
         unawaited(_openAutoReadFromOverlay());
         return;
-      case ReaderTouchNavigationIntentType.hideOverlay:
+      case ReaderInteractionCommandType.hideOverlay:
         _hideOverlayControls(resumeAutoRead: true);
         return;
-      case ReaderTouchNavigationIntentType.performTapZoneAction:
-        final action = intent.tapZoneAction;
-        if (action != null) {
-          _performTapZoneAction(action);
+      case ReaderInteractionCommandType.navigation:
+        final navigationCommand = command.navigationCommand;
+        if (navigationCommand != null) {
+          unawaited(_dispatchReaderNavigationCommand(navigationCommand));
         }
+        return;
+      case ReaderInteractionCommandType.toggleToolbar:
+        final nextShow = !_showOverlayControls;
+        _setOverlayControlsVisibility(nextShow);
+        if (!nextShow) {
+          _scheduleAutoReadResume();
+        } else {
+          _touchOverlayControls();
+        }
+        return;
+      case ReaderInteractionCommandType.openCatalog:
+        unawaited(_openCatalogSheetFromOverlay());
+        return;
+      case ReaderInteractionCommandType.openAutoRead:
+        if (_supportsAutoRead) {
+          unawaited(_openAutoReadFromOverlay());
+        } else {
+          _showMessage('当前内容暂不支持自动阅读');
+        }
+        return;
+      case ReaderInteractionCommandType.openBookmarkCatalog:
+        unawaited(_showCatalogSheet());
+        return;
+      case ReaderInteractionCommandType.toggleNightMode:
+        unawaited(_toggleDayNightMode());
         return;
     }
   }
@@ -470,44 +516,6 @@ extension _ReaderTouchNavigationLayer on _ReaderPageState {
     }
     _hideOverlayControls(resumeAutoRead: false);
   }
-
-  void _performTapZoneAction(ReaderTapZoneAction action) {
-    switch (action) {
-      case ReaderTapZoneAction.previousPage:
-        unawaited(_turnReaderByDirection(forward: false));
-        return;
-      case ReaderTapZoneAction.nextPage:
-        unawaited(_turnReaderByDirection(forward: true));
-        return;
-      case ReaderTapZoneAction.toggleToolbar:
-        final nextShow = !_showOverlayControls;
-        _setOverlayControlsVisibility(nextShow);
-        if (!nextShow) {
-          _scheduleAutoReadResume();
-        } else {
-          _touchOverlayControls();
-        }
-        return;
-      case ReaderTapZoneAction.catalog:
-        unawaited(_openCatalogSheetFromOverlay());
-        return;
-      case ReaderTapZoneAction.autoRead:
-        if (_supportsAutoRead) {
-          unawaited(_openAutoReadFromOverlay());
-        } else {
-          _showMessage('当前内容暂不支持自动阅读');
-        }
-        return;
-      case ReaderTapZoneAction.bookmark:
-        unawaited(_showCatalogSheet());
-        return;
-      case ReaderTapZoneAction.nightMode:
-        unawaited(_toggleDayNightMode());
-        return;
-      case ReaderTapZoneAction.none:
-        return;
-    }
-  }
 }
 
 // 阅读器拆分索引：
@@ -561,6 +569,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   final ReaderChapterFlow _chapterFlow = const ReaderChapterFlow();
   final ReaderChapterNavigation _chapterNavigation =
       const ReaderChapterNavigation();
+  final ReaderNavigationCommandDispatcher _navigationCommandDispatcher =
+      const ReaderNavigationCommandDispatcher();
   final ReaderChapterWindowController _chapterWindowController =
       const ReaderChapterWindowController();
   final ReaderPageBootstrapController _pageBootstrapController =
@@ -632,6 +642,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const ReaderDesktopInputDispatcher();
   final ReaderTouchNavigationController _touchNavigationController =
       const ReaderTouchNavigationController();
+  final ReaderInteractionCoordinator _interactionCoordinator =
+      const ReaderInteractionCoordinator();
+  final ReaderPageTurnGate _pageTurnGate = const ReaderPageTurnGate();
   late final ReaderSystemSettingsService _systemSettingsService;
   late final ReaderBackgroundService _readerBackgroundService;
   late final LocalBookStorageService _localBookStorageService;
@@ -2724,7 +2737,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     _isScrollEdgeAdvancingChapter = true;
     try {
-      await _jumpToAdjacentReadableChapter(forward: forward);
+      await _dispatchReaderNavigationCommand(
+        forward
+            ? const ReaderNavigationCommand.nextChapter(
+              source: ReaderNavigationCommandSource.scrollEdge,
+            )
+            : const ReaderNavigationCommand.previousChapter(
+              source: ReaderNavigationCommandSource.scrollEdge,
+            ),
+      );
     } finally {
       _isScrollEdgeAdvancingChapter = false;
     }
@@ -3849,12 +3870,24 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         velocity >= _kSwipeTurnVelocityThreshold;
 
     if (isLeftTurn && !isRightTurn) {
-      unawaited(_turnPagedTextPage(direction: 1));
+      unawaited(
+        _dispatchReaderNavigationCommand(
+          const ReaderNavigationCommand.nextPage(
+            source: ReaderNavigationCommandSource.swipe,
+          ),
+        ),
+      );
       return;
     }
 
     if (isRightTurn && !isLeftTurn) {
-      unawaited(_turnPagedTextPage(direction: -1));
+      unawaited(
+        _dispatchReaderNavigationCommand(
+          const ReaderNavigationCommand.previousPage(
+            source: ReaderNavigationCommandSource.swipe,
+          ),
+        ),
+      );
     }
   }
 
@@ -4447,9 +4480,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       canNavigateChapters: canNavigateChapters,
       hasVisibleReaderContent: _hasVisibleReaderContent,
       onPreviousChapter:
-          () => unawaited(_jumpToAdjacentReadableChapter(forward: false)),
+          () => unawaited(
+            _dispatchReaderNavigationCommand(
+              const ReaderNavigationCommand.previousChapter(
+                source: ReaderNavigationCommandSource.chrome,
+              ),
+            ),
+          ),
       onNextChapter:
-          () => unawaited(_jumpToAdjacentReadableChapter(forward: true)),
+          () => unawaited(
+            _dispatchReaderNavigationCommand(
+              const ReaderNavigationCommand.nextChapter(
+                source: ReaderNavigationCommandSource.chrome,
+              ),
+            ),
+          ),
       onPointerDown: _markReaderTapHandledByChild,
       onChangeStart: (_) => _suspendOverlayAutoHide(),
       onChanged: (value) {

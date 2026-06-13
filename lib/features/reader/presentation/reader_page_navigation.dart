@@ -11,6 +11,169 @@ extension _ReaderPageNavigationExtension on _ReaderPageState {
     return _chapters.isNotEmpty;
   }
 
+  Future<bool> _dispatchReaderNavigationCommand(
+    ReaderNavigationCommand command,
+  ) async {
+    final snapshot = _readerNavigationCommandSnapshot(command);
+    final decision = _navigationCommandDispatcher.resolve(
+      command: command,
+      snapshot: snapshot,
+    );
+    _logReaderNavigationCommand(
+      command: command,
+      snapshot: snapshot,
+      decision: decision,
+    );
+
+    if (!decision.shouldExecute) {
+      _handleRejectedReaderNavigationCommand(command, decision);
+      return false;
+    }
+
+    switch (command.type) {
+      case ReaderNavigationCommandType.previousPage:
+        await _turnReaderByDirection(forward: false);
+        return true;
+      case ReaderNavigationCommandType.nextPage:
+        await _turnReaderByDirection(forward: true);
+        return true;
+      case ReaderNavigationCommandType.previousChapter:
+        return _jumpToAdjacentReadableChapter(forward: false);
+      case ReaderNavigationCommandType.nextChapter:
+        return _jumpToAdjacentReadableChapter(forward: true);
+      case ReaderNavigationCommandType.reloadChapter:
+        await _reloadCurrentChapterFromPullToRefresh();
+        return true;
+      case ReaderNavigationCommandType.jumpChapter:
+        final target = command.targetChapterIndex;
+        if (target == null) {
+          return false;
+        }
+        await _jumpTo(target, initialScrollRatio: 0);
+        return true;
+    }
+  }
+
+  ReaderNavigationCommandSnapshot _readerNavigationCommandSnapshot(
+    ReaderNavigationCommand command,
+  ) {
+    final sessionState = _currentTextSessionState();
+    final fallbackCurrentIndex =
+        _currentIndex == null ? _resolveCurrentIndex(_chapters) : null;
+    final turnGateDecision = _readerPageTurnGateDecisionForCommand(command);
+    return ReaderNavigationCommandSnapshot(
+      mounted: mounted,
+      bootstrapping: _isBootstrapping,
+      loadingContent: _isLoadingContent,
+      pageTurnBusy: turnGateDecision.isBlocked,
+      pageTurnBusyReason: turnGateDecision.blockReason,
+      pageTurnBusyMessage: turnGateDecision.message,
+      chapterCount: _chapters.length,
+      currentChapterIndex:
+          sessionState?.currentChapterIndex ??
+          _currentIndex ??
+          fallbackCurrentIndex,
+      overlayVisible: _showOverlayControls,
+      isLocalContent: _isLocalContent,
+      usesContinuousTextFlow: _shouldUseContinuousTextFlow,
+      viewportKind: _currentViewportKind.name,
+      contentMode: _currentContentMode.name,
+      hasError: _errorText != null,
+    );
+  }
+
+  ReaderPageTurnGateDecision _readerPageTurnGateDecisionForCommand(
+    ReaderNavigationCommand command,
+  ) {
+    return _pageTurnGate.resolve(
+      requestKind: _readerPageTurnRequestKindForCommand(command),
+      snapshot: _readerPageTurnGateSnapshot(),
+    );
+  }
+
+  ReaderPageTurnRequestKind _readerPageTurnRequestKindForCommand(
+    ReaderNavigationCommand command,
+  ) {
+    return switch (command.type) {
+      ReaderNavigationCommandType.previousPage ||
+      ReaderNavigationCommandType.nextPage => ReaderPageTurnRequestKind.page,
+      ReaderNavigationCommandType.previousChapter ||
+      ReaderNavigationCommandType
+          .nextChapter => ReaderPageTurnRequestKind.chapter,
+      ReaderNavigationCommandType.jumpChapter => ReaderPageTurnRequestKind.jump,
+      ReaderNavigationCommandType.reloadChapter =>
+        ReaderPageTurnRequestKind.reload,
+    };
+  }
+
+  ReaderPageTurnGateSnapshot _readerPageTurnGateSnapshot() {
+    return ReaderPageTurnGateSnapshot(
+      pagedTransitionAnimating: _isPagedTransitionAnimating,
+      curlAutoTurning: _isCurlAutoTurning,
+      curlPreviewActive: _isCurlPreviewActive,
+      crossChapterSnapshotActive: _crossChapterSnapshotTransition.isActive,
+      paperCurlAnimating: _paperCurlViewKey.currentState?.isAnimating ?? false,
+      readerInteractionAnimating:
+          _readerInteractionState == _ReaderInteractionState.animating,
+    );
+  }
+
+  void _handleRejectedReaderNavigationCommand(
+    ReaderNavigationCommand command,
+    ReaderNavigationCommandDecision decision,
+  ) {
+    if (decision.rejectReason == ReaderNavigationCommandRejectReason.boundary) {
+      if (command.type == ReaderNavigationCommandType.previousChapter) {
+        _showChapterBoundaryHint(isFirst: true);
+      } else if (command.type == ReaderNavigationCommandType.nextChapter) {
+        _showChapterBoundaryHint(isFirst: false);
+      }
+      return;
+    }
+
+    final message = decision.message;
+    if (message != null && message.isNotEmpty) {
+      _showMessage(message);
+    }
+  }
+
+  void _logReaderNavigationCommand({
+    required ReaderNavigationCommand command,
+    required ReaderNavigationCommandSnapshot snapshot,
+    required ReaderNavigationCommandDecision decision,
+  }) {
+    final context = <String, Object?>{
+      'chain': 'reader_navigation_command',
+      'command': command.type.name,
+      'source': command.source.name,
+      'decision': decision.type.name,
+      'rejectReason': decision.rejectReason?.name,
+      'targetChapterIndex': command.targetChapterIndex,
+      'currentIndex': snapshot.currentChapterIndex,
+      'chapterCount': snapshot.chapterCount,
+      'pageTurnBusy': snapshot.pageTurnBusy,
+      'pageTurnBusyReason': snapshot.pageTurnBusyReason?.name,
+      'bootstrapping': snapshot.bootstrapping,
+      'loadingContent': snapshot.loadingContent,
+      'hasError': snapshot.hasError,
+      'overlayVisible': snapshot.overlayVisible,
+      'isLocalContent': snapshot.isLocalContent,
+      'usesContinuousTextFlow': snapshot.usesContinuousTextFlow,
+      'viewportKind': snapshot.viewportKind,
+      'contentMode': snapshot.contentMode,
+      'chapterId': _chapterId,
+    };
+    developer.Timeline.instantSync(
+      'reader.navigation_command',
+      arguments: context,
+    );
+    if (decision.shouldExecute) {
+      _logger.info('Reader navigation command execute', context: context);
+    } else {
+      _logger.warn('Reader navigation command rejected', context: context);
+    }
+  }
+
   Future<bool> _jumpToAdjacentReadableChapter({
     required bool forward,
     bool showBoundaryHint = true,
