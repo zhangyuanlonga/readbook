@@ -34,6 +34,7 @@ void main() {
             height: 120,
             cacheWidth: 160,
             cacheHeight: 240,
+            borderRadius: BorderRadius.all(Radius.circular(8)),
           ),
         ),
       ),
@@ -47,7 +48,37 @@ void main() {
       same(CoverImageDiskCache.instance.cacheManager),
     );
     expect(widget.httpHeaders, CoverImageDiskCache.defaultHttpHeaders);
+    expect(widget.width, 80);
+    expect(widget.height, 120);
     expect(widget.memCacheWidth, 160);
     expect(widget.memCacheHeight, 240);
+    expect(widget.fadeInDuration, Duration.zero);
+    expect(widget.fadeOutDuration, Duration.zero);
+
+    final clip = tester.widget<ClipRRect>(
+      find
+          .ancestor(
+            of: find.byType(CachedNetworkImage),
+            matching: find.byType(ClipRRect),
+          )
+          .first,
+    );
+    expect(clip.borderRadius, const BorderRadius.all(Radius.circular(8)));
+
+    final element = tester.element(find.byType(CachedNetworkImage));
+    final placeholder = widget.placeholder!(
+      element,
+      'https://example.com/cover.jpg',
+    );
+    final error = widget.errorWidget!(
+      element,
+      'https://example.com/cover.jpg',
+      Exception('load failed'),
+    );
+
+    expect(placeholder, isA<Text>());
+    expect((placeholder as Text).data, 'fallback-cover');
+    expect(error, isA<Text>());
+    expect((error as Text).data, 'fallback-cover');
   });
 }

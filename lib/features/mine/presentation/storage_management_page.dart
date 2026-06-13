@@ -7,8 +7,11 @@ import 'package:go_router/go_router.dart';
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/foundation/foundation.dart';
 import '../../../core/cache/app_cache_governance_service.dart';
 import '../../../core/cache/cache_result.dart';
 import '../../../core/cache/cache_scope.dart';
@@ -17,14 +20,16 @@ import '../application/advanced_theme_provider.dart';
 import 'widgets/mine_route_top_bar.dart';
 
 class StorageManagementPage extends StatefulWidget {
-  const StorageManagementPage({super.key});
+  const StorageManagementPage({super.key, this.service});
+
+  final StorageManagementGateway? service;
 
   @override
   State<StorageManagementPage> createState() => _StorageManagementPageState();
 }
 
 class _StorageManagementPageState extends State<StorageManagementPage> {
-  final StorageManagementService _service = StorageManagementService();
+  late final StorageManagementGateway _service;
 
   StorageManagementSnapshot? _snapshot;
   bool _isLoading = true;
@@ -38,6 +43,7 @@ class _StorageManagementPageState extends State<StorageManagementPage> {
   @override
   void initState() {
     super.initState();
+    _service = widget.service ?? StorageManagementService();
     unawaited(_load());
   }
 
@@ -91,9 +97,11 @@ class _StorageManagementPageState extends State<StorageManagementPage> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
+      AppFeedback.showSnackBar(
         context,
-      ).showSnackBar(const SnackBar(content: Text('缓存已清理。')));
+        message: '缓存已清理。',
+        tone: AppFeedbackTone.success,
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -127,15 +135,22 @@ class _StorageManagementPageState extends State<StorageManagementPage> {
         setState(() {
           _cacheClearErrors[entry.scope] = '清理失败，请稍后重试。';
         });
+        AppFeedback.showSnackBar(
+          context,
+          message: '${entry.label}清理失败，请稍后重试。',
+          tone: AppFeedbackTone.error,
+        );
         return;
       }
       await _load();
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
+      AppFeedback.showSnackBar(
         context,
-      ).showSnackBar(SnackBar(content: Text('${entry.label}已清理。')));
+        message: '${entry.label}已清理。',
+        tone: AppFeedbackTone.success,
+      );
     } catch (_) {
       if (!mounted) {
         return;
@@ -143,6 +158,11 @@ class _StorageManagementPageState extends State<StorageManagementPage> {
       setState(() {
         _cacheClearErrors[entry.scope] = '清理失败，请稍后重试。';
       });
+      AppFeedback.showSnackBar(
+        context,
+        message: '${entry.label}清理失败，请稍后重试。',
+        tone: AppFeedbackTone.error,
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -156,22 +176,13 @@ class _StorageManagementPageState extends State<StorageManagementPage> {
     required String title,
     required String message,
   }) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAdaptiveActionSurface<bool>(
       context: context,
+      maxWidth: 420,
       builder:
-          (context) => AlertDialog(
+          (context) => _CacheClearConfirmationSurface(
             title: Text(title),
-            content: Text(message),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('取消'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('确认清理'),
-              ),
-            ],
+            message: Text(message),
           ),
     );
     return confirmed ?? false;
@@ -190,8 +201,10 @@ class _StorageManagementPageState extends State<StorageManagementPage> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已清理 ${report.totalDeleted} 条孤立/过期数据。')),
+      AppFeedback.showSnackBar(
+        context,
+        message: '已清理 ${report.totalDeleted} 条孤立/过期数据。',
+        tone: AppFeedbackTone.success,
       );
     } finally {
       if (mounted) {
@@ -254,39 +267,7 @@ class _StorageManagementPageState extends State<StorageManagementPage> {
                     children: [
                       _buildSummaryCard(context),
                       SizedBox(height: metrics.sectionGap),
-                      if (_errorText case final message?)
-                        _buildErrorCard(context, message),
-                      if (_isLoading)
-                        _buildLoadingSkeleton(context)
-                      else if (_snapshot case final snapshot?) ...[
-                        _buildFootprintCard(
-                          context,
-                          title: snapshot.database.label,
-                          icon: Icons.storage_rounded,
-                          bytes: snapshot.database.bytes,
-                          fileCount: snapshot.database.fileCount,
-                        ),
-                        SizedBox(height: metrics.sectionGap),
-                        _buildFootprintCard(
-                          context,
-                          title: snapshot.localBooks.label,
-                          icon: Icons.library_books_rounded,
-                          bytes: snapshot.localBooks.bytes,
-                          fileCount: snapshot.localBooks.fileCount,
-                        ),
-                        SizedBox(height: metrics.sectionGap),
-                        _buildFootprintCard(
-                          context,
-                          title: snapshot.userAssets.label,
-                          icon: Icons.photo_library_rounded,
-                          bytes: snapshot.userAssets.bytes,
-                          fileCount: snapshot.userAssets.fileCount,
-                        ),
-                        SizedBox(height: metrics.sectionGap),
-                        _buildCacheCard(context, snapshot.cacheSnapshot),
-                        SizedBox(height: metrics.sectionGap),
-                        _buildActionsCard(context),
-                      ],
+                      _buildStateContent(context),
                     ],
                   ),
                 ),
@@ -295,6 +276,71 @@ class _StorageManagementPageState extends State<StorageManagementPage> {
           },
         ),
       ),
+    );
+  }
+
+  Widget _buildStateContent(BuildContext context) {
+    return AppAnimatedSwitcher(
+      child: KeyedSubtree(
+        key: ValueKey<String>(_storageStateKey),
+        child: _buildStateContentBody(context),
+      ),
+    );
+  }
+
+  String get _storageStateKey {
+    if (_isLoading) {
+      return 'loading';
+    }
+    if (_errorText != null) {
+      return 'error';
+    }
+    return _snapshot == null ? 'empty' : 'content';
+  }
+
+  Widget _buildStateContentBody(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    final message = _errorText;
+    if (message != null) {
+      return _buildErrorCard(context, message);
+    }
+    if (_isLoading) {
+      return _buildLoadingSkeleton(context);
+    }
+    final snapshot = _snapshot;
+    if (snapshot == null) {
+      return const SizedBox.shrink();
+    }
+    return Column(
+      children: [
+        _buildFootprintCard(
+          context,
+          title: snapshot.database.label,
+          icon: Icons.storage_rounded,
+          bytes: snapshot.database.bytes,
+          fileCount: snapshot.database.fileCount,
+        ),
+        SizedBox(height: metrics.sectionGap),
+        _buildFootprintCard(
+          context,
+          title: snapshot.localBooks.label,
+          icon: Icons.library_books_rounded,
+          bytes: snapshot.localBooks.bytes,
+          fileCount: snapshot.localBooks.fileCount,
+        ),
+        SizedBox(height: metrics.sectionGap),
+        _buildFootprintCard(
+          context,
+          title: snapshot.userAssets.label,
+          icon: Icons.photo_library_rounded,
+          bytes: snapshot.userAssets.bytes,
+          fileCount: snapshot.userAssets.fileCount,
+        ),
+        SizedBox(height: metrics.sectionGap),
+        _buildCacheCard(context, snapshot.cacheSnapshot),
+        SizedBox(height: metrics.sectionGap),
+        _buildActionsCard(context),
+      ],
     );
   }
 
@@ -479,9 +525,10 @@ class _StorageManagementPageState extends State<StorageManagementPage> {
           ),
           if (errorText != null) ...[
             const SizedBox(height: 8),
-            Text(
-              errorText,
-              style: textTheme.bodySmall?.copyWith(color: colorScheme.error),
+            AppInlineFeedback(
+              message: errorText,
+              tone: AppFeedbackTone.error,
+              compact: true,
             ),
           ],
         ],
@@ -541,62 +588,28 @@ class _StorageManagementPageState extends State<StorageManagementPage> {
   }
 
   Widget _buildErrorCard(BuildContext context, String message) {
-    final colorScheme = Theme.of(context).colorScheme;
     final metrics = AppAdaptiveMetrics.of(context);
-    return Container(
-      margin: EdgeInsets.only(bottom: metrics.sectionGap),
-      padding: EdgeInsets.all(metrics.cardPadding),
-      decoration: BoxDecoration(
-        color: colorScheme.errorContainer.withValues(alpha: 0.58),
-        borderRadius: BorderRadius.circular(metrics.cardRadius),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              message,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: colorScheme.onErrorContainer,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          TextButton(
-            onPressed: _isLoading ? null : _load,
-            child: const Text('重试'),
-          ),
-        ],
+    return Padding(
+      padding: EdgeInsets.only(bottom: metrics.sectionGap),
+      child: AppInlineFeedback(
+        title: '读取失败',
+        message: message,
+        tone: AppFeedbackTone.error,
+        action: TextButton(
+          onPressed: _isLoading ? null : _load,
+          child: const Text('重试'),
+        ),
       ),
     );
   }
 
   Widget _buildLoadingSkeleton(BuildContext context) {
     final metrics = AppAdaptiveMetrics.of(context);
-    final colorScheme = Theme.of(context).colorScheme;
-    return Column(
-      children: List<Widget>.generate(
-        3,
-        (index) => Container(
-          height: 74,
-          margin: EdgeInsets.only(bottom: metrics.sectionGap),
-          decoration: BoxDecoration(
-            color: colorScheme.surface.withValues(alpha: 0.62),
-            borderRadius: BorderRadius.circular(metrics.cardRadius),
-            border: Border.all(
-              color: colorScheme.outlineVariant.withValues(alpha: 0.28),
-            ),
-          ),
-          alignment: Alignment.center,
-          child:
-              index == 1
-                  ? const SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2.4),
-                  )
-                  : null,
-        ),
-      ),
+    return AppSkeletonList(
+      itemCount: 3,
+      itemHeight: 74,
+      spacing: metrics.sectionGap,
+      showTrailing: true,
     );
   }
 
@@ -644,5 +657,54 @@ class _StorageManagementPageState extends State<StorageManagementPage> {
     }
     final fractionDigits = value >= 10 || unitIndex == 0 ? 0 : 1;
     return '${value.toStringAsFixed(fractionDigits)} ${units[unitIndex]}';
+  }
+}
+
+class _CacheClearConfirmationSurface extends StatelessWidget {
+  const _CacheClearConfirmationSurface({
+    required this.title,
+    required this.message,
+  });
+
+  final Widget title;
+  final Widget message;
+
+  @override
+  Widget build(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        DefaultTextStyle.merge(
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          child: title,
+        ),
+        SizedBox(height: metrics.contentGap),
+        DefaultTextStyle.merge(
+          style: Theme.of(context).textTheme.bodyMedium,
+          child: message,
+        ),
+        SizedBox(height: metrics.sectionGap),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            AppButton(
+              label: '取消',
+              variant: AppButtonVariant.text,
+              onPressed: () => Navigator.of(context).pop(false),
+            ),
+            const SizedBox(width: 8),
+            AppButton(
+              label: '确认清理',
+              variant: AppButtonVariant.danger,
+              onPressed: () => Navigator.of(context).pop(true),
+            ),
+          ],
+        ),
+      ],
+    );
   }
 }

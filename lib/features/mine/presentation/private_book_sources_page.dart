@@ -29,8 +29,10 @@ import '../application/advanced_theme_provider.dart';
 import '../application/book_source_import_payload.dart';
 import '../application/private_book_source_provider.dart';
 import '../application/private_book_source_service.dart';
+import 'private_book_source_presentation.dart';
 import 'widgets/image_resource_collection_widgets.dart';
 import 'widgets/mine_route_top_bar.dart';
+import 'widgets/private_book_source_state_cards.dart';
 
 final _privateBookSourceSearchKeywordProvider =
     StateProvider.autoDispose<String>((ref) {
@@ -95,7 +97,9 @@ class PrivateBookSourcesPage extends ConsumerWidget {
       data: (session) {
         if (session == null || !session.isValid) {
           return <Widget>[
-            _LoginRequiredCard(onLogin: () => context.push('/auth')),
+            PrivateBookSourceLoginRequiredCard(
+              onLogin: () => context.push('/auth'),
+            ),
           ];
         }
         final selectedGroupId = ref.watch(
@@ -122,9 +126,10 @@ class PrivateBookSourcesPage extends ConsumerWidget {
           SizedBox(height: metrics.contentGap),
           quotaAsync.when(
             data: (quota) => _QuotaCard(quota: quota),
-            loading: () => const _LoadingCard(message: '正在读取额度'),
+            loading:
+                () => const PrivateBookSourceLoadingCard(message: '正在读取额度'),
             error:
-                (error, _) => _ErrorCard(
+                (error, _) => PrivateBookSourceErrorCard(
                   title: '额度读取失败',
                   message: _messageOf(error),
                   onRetry: () => ref.invalidate(sourceQuotaProvider),
@@ -134,7 +139,7 @@ class PrivateBookSourcesPage extends ConsumerWidget {
           listAsync.when(
             data: (result) {
               if (result.items.isEmpty) {
-                return _EmptySourcesCard(
+                return PrivateBookSourceEmptySourcesCard(
                   onCreate: () => unawaited(_openCreateForm(context, ref)),
                 );
               }
@@ -143,7 +148,7 @@ class PrivateBookSourcesPage extends ConsumerWidget {
                 searchKeyword,
               );
               if (visibleItems.isEmpty) {
-                return _FilterEmptySourcesCard(
+                return PrivateBookSourceFilterEmptyCard(
                   keyword: searchKeyword,
                   onClear:
                       () =>
@@ -176,9 +181,10 @@ class PrivateBookSourcesPage extends ConsumerWidget {
                 ],
               );
             },
-            loading: () => const _LoadingCard(message: '正在加载书源'),
+            loading:
+                () => const PrivateBookSourceLoadingCard(message: '正在加载书源'),
             error:
-                (error, _) => _ErrorCard(
+                (error, _) => PrivateBookSourceErrorCard(
                   title: '书源加载失败',
                   message: _messageOf(error),
                   onRetry: () => ref.invalidate(privateBookSourcesProvider),
@@ -186,10 +192,15 @@ class PrivateBookSourcesPage extends ConsumerWidget {
           ),
         ];
       },
-      loading: () => const <Widget>[_LoadingCard(message: '正在检查登录状态')],
+      loading:
+          () => const <Widget>[
+            PrivateBookSourceLoadingCard(message: '正在检查登录状态'),
+          ],
       error:
           (error, _) => <Widget>[
-            _LoginRequiredCard(onLogin: () => context.push('/auth')),
+            PrivateBookSourceLoginRequiredCard(
+              onLogin: () => context.push('/auth'),
+            ),
           ],
     );
 
@@ -1761,10 +1772,7 @@ class _PrivateSourceTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final testStatus = item.lastTestStatus;
-    final testMessage = item.lastTestMessage;
-    final normalizationStatus = item.normalizationStatus.trim();
-    final normalizationMessage = item.normalizationError.trim();
+    final badges = PrivateBookSourcePresentation.badgesFor(item);
 
     return Material(
       color: colorScheme.surfaceContainerLow.withValues(alpha: 0.5),
@@ -1810,61 +1818,18 @@ class _PrivateSourceTile extends StatelessWidget {
                 spacing: 8,
                 runSpacing: 8,
                 children: <Widget>[
-                  _buildChip(
-                    context,
-                    _typeLabel(item.supportedTypes),
-                    colorScheme.primary.withValues(alpha: 0.12),
-                    colorScheme.primary,
-                  ),
-                  _buildChip(
-                    context,
-                    _groupLabel(item.groupName),
-                    colorScheme.surfaceContainerHighest,
-                    colorScheme.onSurfaceVariant,
-                  ),
-                  _buildChip(
-                    context,
-                    _reviewLabel(item.reviewStatus, item.visibility),
-                    _reviewStatusColor(
-                      item.reviewStatus,
-                      item.visibility,
-                      colorScheme,
-                    ).withValues(alpha: 0.12),
-                    _reviewStatusColor(
-                      item.reviewStatus,
-                      item.visibility,
-                      colorScheme,
-                    ),
-                  ),
-                  if (_showNormalizationChip(normalizationStatus))
+                  for (final badge in badges)
                     _buildChip(
                       context,
-                      '配置 ${_normalizationLabel(normalizationStatus)}${normalizationMessage.isEmpty ? '' : ' $normalizationMessage'}',
-                      _normalizationStatusColor(
-                        normalizationStatus,
+                      badge.label,
+                      PrivateBookSourcePresentation.toneForeground(
+                        badge.tone,
                         colorScheme,
                       ).withValues(alpha: 0.12),
-                      _normalizationStatusColor(
-                        normalizationStatus,
+                      PrivateBookSourcePresentation.toneForeground(
+                        badge.tone,
                         colorScheme,
                       ),
-                    ),
-                  if (testStatus.isNotEmpty || testMessage.isNotEmpty)
-                    _buildChip(
-                      context,
-                      '检测 ${_testLabel(testStatus)}${testMessage.isEmpty ? '' : ' $testMessage'}',
-                      _testStatusColor(
-                        testStatus,
-                        colorScheme,
-                      ).withValues(alpha: 0.12),
-                      _testStatusColor(testStatus, colorScheme),
-                    ),
-                  if (item.description.isNotEmpty)
-                    _buildChip(
-                      context,
-                      item.description,
-                      colorScheme.surfaceContainerHighest,
-                      colorScheme.onSurfaceVariant,
                     ),
                 ],
               ),
@@ -1895,68 +1860,6 @@ class _PrivateSourceTile extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  Color _reviewStatusColor(
-    String status,
-    String visibility,
-    ColorScheme colorScheme,
-  ) {
-    // 私有书源使用主题色
-    if (visibility == 'private') {
-      return colorScheme.primary;
-    }
-
-    // 提交审核的书源根据审核状态显示颜色
-    switch (status) {
-      case 'pending':
-        return Colors.orange;
-      case 'approved':
-        return Colors.green;
-      case 'rejected':
-        return Colors.red;
-      default:
-        return colorScheme.onSurfaceVariant;
-    }
-  }
-
-  Color _testStatusColor(String status, ColorScheme colorScheme) {
-    if (status.isEmpty) return colorScheme.onSurfaceVariant;
-    switch (status) {
-      case 'passed':
-      case 'pass':
-      case 'success':
-        return Colors.green;
-      case 'failed':
-      case 'fail':
-      case 'error':
-        return Colors.red;
-      case 'unknown':
-      case 'pending':
-        return colorScheme.onSurfaceVariant;
-      default:
-        return Colors.orange;
-    }
-  }
-
-  bool _showNormalizationChip(String status) {
-    return status.isNotEmpty && status != 'done';
-  }
-
-  String _normalizationLabel(String status) {
-    return switch (status) {
-      'pending' => '待规整',
-      'failed' => '配置异常',
-      _ => status,
-    };
-  }
-
-  Color _normalizationStatusColor(String status, ColorScheme colorScheme) {
-    return switch (status) {
-      'failed' => Colors.red,
-      'pending' => Colors.orange,
-      _ => colorScheme.onSurfaceVariant,
-    };
   }
 }
 
@@ -2303,7 +2206,7 @@ class _PrivateSourceMoreButton extends StatelessWidget {
       child: PopupMenuButton<_PrivateSourceAction>(
         tooltip: '更多',
         padding: EdgeInsets.zero,
-        icon: const Icon(Icons.more_horiz_rounded),
+        icon: const Icon(Icons.more_vert_rounded),
         onSelected: (action) {
           switch (action) {
             case _PrivateSourceAction.detail:
@@ -4114,140 +4017,14 @@ List<String> _uniqueGroupNames(List<PrivateBookSourceGroup> groups) {
   return names;
 }
 
-class _EmptySourcesCard extends StatelessWidget {
-  const _EmptySourcesCard({required this.onCreate});
-
-  final VoidCallback onCreate;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppEmptyStateCard(
-      icon: Icons.library_books_outlined,
-      title: '还没有私人书源',
-      description: '可以导入自己的 Legado JSON 书源，并按私人分组维护。',
-      actionLabel: '新增书源',
-      onAction: onCreate,
-    );
-  }
-}
-
-class _LoginRequiredCard extends StatelessWidget {
-  const _LoginRequiredCard({required this.onLogin});
-
-  final VoidCallback onLogin;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppEmptyStateCard(
-      icon: Icons.lock_outline_rounded,
-      title: '请登录后查看',
-      description: '私人书源、分组和额度会跟随账号同步，登录后即可管理。',
-      actionLabel: '去登录',
-      onAction: onLogin,
-    );
-  }
-}
-
-class _FilterEmptySourcesCard extends StatelessWidget {
-  const _FilterEmptySourcesCard({required this.keyword, required this.onClear});
-
-  final String keyword;
-  final VoidCallback onClear;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppEmptyStateCard(
-      icon: Icons.manage_search_outlined,
-      title: '没有匹配的书源',
-      description: keyword.trim().isEmpty ? '当前分组暂无书源。' : keyword.trim(),
-      actionLabel: '清空搜索',
-      onAction: onClear,
-      compact: true,
-    );
-  }
-}
-
-class _LoadingCard extends StatelessWidget {
-  const _LoadingCard({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.45),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Row(
-          children: <Widget>[
-            const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-            const SizedBox(width: 12),
-            Text(message),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ErrorCard extends StatelessWidget {
-  const _ErrorCard({
-    required this.title,
-    required this.message,
-    required this.onRetry,
-  });
-
-  final String title;
-  final String message;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppEmptyStateCard(
-      icon: Icons.error_outline_rounded,
-      title: title,
-      description: message,
-      actionLabel: '重试',
-      onAction: onRetry,
-      compact: true,
-      centered: false,
-    );
-  }
-}
-
 String _limitText(int value) => value < 0 ? '不限' : '$value';
 
 String _typeLabel(List<String> types) {
-  if (types.isEmpty) {
-    return '小说';
-  }
-  return types
-      .map((type) {
-        return switch (type) {
-          'novel' => '小说',
-          'comic' => '漫画',
-          'audio' => '音频',
-          'video' => '视频',
-          _ => type,
-        };
-      })
-      .join('、');
+  return PrivateBookSourcePresentation.typeLabel(types);
 }
 
 String _groupLabel(String value) {
-  final normalized = value.trim();
-  return normalized.isEmpty ? '未分组' : normalized;
+  return PrivateBookSourcePresentation.groupLabel(value);
 }
 
 bool _isDefaultGroup(PrivateBookSourceGroup group) {
@@ -4255,37 +4032,15 @@ bool _isDefaultGroup(PrivateBookSourceGroup group) {
 }
 
 String _reviewLabel(String value, String visibility) {
-  // 私有书源不显示审核状态
-  if (visibility == 'private') {
-    return '私有';
-  }
-
-  // 提交审核的书源显示审核状态
-  return switch (value) {
-    'pending' => '待审核',
-    'approved' => '已通过',
-    'rejected' => '已拒绝',
-    _ => value.isEmpty ? '待审核' : value,
-  };
+  return PrivateBookSourcePresentation.reviewLabel(value, visibility);
 }
 
 String _testLabel(String value) {
-  return switch (value) {
-    'passed' => '通过',
-    'failed' => '失败',
-    'unknown' => '未检测',
-    'pending' => '待检测',
-    _ => value.isEmpty ? '未检测' : value,
-  };
+  return PrivateBookSourcePresentation.testLabel(value);
 }
 
 String _formatPrivateSourceDate(DateTime? value) {
-  if (value == null) {
-    return '-';
-  }
-  final local = value.toLocal();
-  String two(int input) => input.toString().padLeft(2, '0');
-  return '${local.year}-${two(local.month)}-${two(local.day)} ${two(local.hour)}:${two(local.minute)}';
+  return PrivateBookSourcePresentation.formatDate(value);
 }
 
 String _checkItemLabel(String value) {
@@ -4357,12 +4112,7 @@ List<PrivateBookSourceItem> _filterPrivateSources(
 }
 
 String _normalizationSearchLabel(String status) {
-  return switch (status) {
-    'pending' => '待规整',
-    'failed' => '配置异常',
-    'done' => '配置正常',
-    _ => status,
-  };
+  return PrivateBookSourcePresentation.normalizationSearchLabel(status);
 }
 
 String _messageOf(Object error) {

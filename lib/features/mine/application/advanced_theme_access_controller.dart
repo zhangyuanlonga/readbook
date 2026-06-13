@@ -6,11 +6,13 @@ class AdvancedThemeAccessLoadResult {
     required this.canUseAdvancedThemes,
     required this.isAccessLoading,
     required this.shouldRefreshRemote,
+    this.shouldClearActiveTheme = false,
   });
 
   final bool canUseAdvancedThemes;
   final bool isAccessLoading;
   final bool shouldRefreshRemote;
+  final bool shouldClearActiveTheme;
 }
 
 class AdvancedThemeAccessController {
@@ -32,6 +34,7 @@ class AdvancedThemeAccessController {
           canUseAdvancedThemes: false,
           isAccessLoading: false,
           shouldRefreshRemote: false,
+          shouldClearActiveTheme: true,
         );
       }
 
@@ -59,6 +62,8 @@ class AdvancedThemeAccessController {
         canUseAdvancedThemes: snapshot.hasThemeCustom,
         isAccessLoading: false,
         shouldRefreshRemote: false,
+        shouldClearActiveTheme:
+            snapshot.hasExplicitMembershipState && !snapshot.hasThemeCustom,
       );
     } catch (_) {
       return const AdvancedThemeAccessLoadResult(

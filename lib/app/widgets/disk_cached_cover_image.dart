@@ -15,6 +15,8 @@ class DiskCachedCoverImage extends ConsumerWidget {
     this.fit = BoxFit.cover,
     this.cacheWidth,
     this.cacheHeight,
+    this.borderRadius,
+    this.clipBehavior = Clip.antiAlias,
   });
 
   final String? imageUrl;
@@ -24,28 +26,44 @@ class DiskCachedCoverImage extends ConsumerWidget {
   final BoxFit fit;
   final int? cacheWidth;
   final int? cacheHeight;
+  final BorderRadiusGeometry? borderRadius;
+  final Clip clipBehavior;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final normalizedUrl = (imageUrl ?? '').trim();
     if (normalizedUrl.isEmpty) {
-      return fallback;
+      return _clipIfNeeded(fallback);
     }
 
-    return CachedNetworkImage(
-      imageUrl: normalizedUrl,
-      cacheKey: normalizedUrl,
-      cacheManager: ref.watch(appCoverImageDiskCacheProvider).cacheManager,
-      httpHeaders: CoverImageDiskCache.defaultHttpHeaders,
-      width: width,
-      height: height,
-      fit: fit,
-      memCacheWidth: cacheWidth,
-      memCacheHeight: cacheHeight,
-      fadeInDuration: Duration.zero,
-      fadeOutDuration: Duration.zero,
-      placeholder: (_, __) => fallback,
-      errorWidget: (_, __, ___) => fallback,
+    return _clipIfNeeded(
+      CachedNetworkImage(
+        imageUrl: normalizedUrl,
+        cacheKey: normalizedUrl,
+        cacheManager: ref.watch(appCoverImageDiskCacheProvider).cacheManager,
+        httpHeaders: CoverImageDiskCache.defaultHttpHeaders,
+        width: width,
+        height: height,
+        fit: fit,
+        memCacheWidth: cacheWidth,
+        memCacheHeight: cacheHeight,
+        fadeInDuration: Duration.zero,
+        fadeOutDuration: Duration.zero,
+        placeholder: (_, __) => fallback,
+        errorWidget: (_, __, ___) => fallback,
+      ),
+    );
+  }
+
+  Widget _clipIfNeeded(Widget child) {
+    final radius = borderRadius;
+    if (radius == null) {
+      return child;
+    }
+    return ClipRRect(
+      borderRadius: radius,
+      clipBehavior: clipBehavior,
+      child: child,
     );
   }
 }

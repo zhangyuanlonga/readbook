@@ -237,10 +237,22 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       unawaited(_loadAccess(refreshRemote: true));
       return;
     }
+    final shouldClearActiveTheme =
+        result.shouldClearActiveTheme &&
+        (ref.read(activeAdvancedThemeIdProvider)?.trim().isNotEmpty ?? false);
+    if (shouldClearActiveTheme) {
+      await ref.read(activeAdvancedThemeIdProvider.notifier).disable();
+      if (!mounted) {
+        return;
+      }
+    }
     setState(() {
       _canUseAdvancedThemes = result.canUseAdvancedThemes;
       _isAccessLoading = result.isAccessLoading;
     });
+    if (shouldClearActiveTheme) {
+      _showMessage('会员权益已失效，已恢复默认主题');
+    }
   }
 
   @override

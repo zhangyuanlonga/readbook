@@ -264,14 +264,14 @@ extension on _BookDetailPageState {
                                 SizedBox(height: metrics.sectionGap),
                               ],
                               if (_isMissingParams)
-                                RuntimeFeedbackCard(
+                                BookDetailFeedbackCard(
                                   title: '参数不完整',
                                   message:
                                       '缺少 sourceId/detailUrl，无法加载详情。请从搜索结果进入。bookId=${widget.bookId}',
                                   tone: RuntimeFeedbackTone.warning,
                                 )
                               else if (errorText != null && result == null)
-                                RuntimeFeedbackCard(
+                                BookDetailFeedbackCard(
                                   title: '加载失败',
                                   message: errorText,
                                   tone: RuntimeFeedbackTone.error,

@@ -203,6 +203,9 @@ class AdaptiveBottomSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final metrics = AppAdaptiveMetrics.of(context);
+    final bottomSafeArea = MediaQuery.viewPaddingOf(context).bottom;
+    final bottomPadding =
+        metrics.sectionGap + (bottomSafeArea > 0 ? bottomSafeArea : 8);
     return AppFadeSlideTransition(
       child: Align(
         alignment: Alignment.bottomCenter,
@@ -218,7 +221,7 @@ class AdaptiveBottomSheet extends StatelessWidget {
                   metrics.pagePadding,
                   metrics.contentGap,
                   metrics.pagePadding,
-                  metrics.sectionGap,
+                  bottomPadding,
                 ),
             child: child,
           ),

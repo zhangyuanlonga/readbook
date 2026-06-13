@@ -141,6 +141,37 @@ void main() {
       expect(report.sourceCount, 1);
       await server.close(force: true);
     });
+
+    test(
+      'does not start network request when cancellation token is cancelled',
+      () async {
+        var requestCount = 0;
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        server.listen((request) async {
+          requestCount += 1;
+          request.response.statusCode = 500;
+          await request.response.close();
+        });
+
+        final service = ServerOnlineSearchService(
+          baseUrl: 'http://${server.address.host}:${server.port}/',
+          searchHitCacheService: SearchHitCacheService(),
+        );
+        final token = SearchCancellationToken()..cancel();
+
+        final report = await service.search(
+          keyword: '剑来',
+          contentMode: SearchContentMode.novel,
+          cancellationToken: token,
+        );
+
+        expect(report.books, isEmpty);
+        expect(report.sourceCount, 0);
+        expect(requestCount, 0);
+
+        await server.close(force: true);
+      },
+    );
   });
 }
 

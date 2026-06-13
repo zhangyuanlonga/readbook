@@ -65,7 +65,7 @@ class SearchBookCard extends ConsumerWidget {
         presentation.displayCover?.trim().isNotEmpty == true
             ? presentation.displayCover!.trim()
             : book.coverUrl;
-    final metaItems = _buildSearchMetaItems(book);
+    final metaItems = _buildSearchMetaItems(book, sourceName: sourceName);
     final visibleMetaItems =
         metrics.isCompactDensity ? metaItems.take(3).toList() : metaItems;
     final trailingWidth = metrics.isCompactDensity ? 32.0 : 36.0;
@@ -224,8 +224,11 @@ class SearchBookCard extends ConsumerWidget {
     return normalized.isEmpty ? null : normalized;
   }
 
-  List<String> _buildSearchMetaItems(Book book) {
-    final items = <String>[];
+  List<String> _buildSearchMetaItems(Book book, {required String sourceName}) {
+    final normalizedSourceName = sourceName.trim();
+    final items = <String>[
+      if (normalizedSourceName.isNotEmpty) '来源: $normalizedSourceName',
+    ];
     final wordCount = _cleanDisplayMetaValue(book.wordCount, label: '字数');
     if (wordCount != null && wordCount.isNotEmpty) {
       items.add(wordCount);

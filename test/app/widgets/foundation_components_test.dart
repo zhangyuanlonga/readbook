@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:shuxiang_reading_next/app/widgets/foundation/foundation.dart';
 
@@ -242,6 +243,101 @@ void main() {
     expect(find.byType(SnackBar), findsOneWidget);
   });
 
+  testWidgets('AppBatchActionBar handles selection and neutral actions', (
+    tester,
+  ) async {
+    var selectedAll = false;
+    var cleared = false;
+    var archived = false;
+
+    await tester.pumpWidget(
+      AdaptiveTestHarness(
+        width: 600,
+        height: 960,
+        wrapWithMaterialApp: true,
+        child: Scaffold(
+          body: AppBatchActionBar(
+            selectedCount: 2,
+            totalCount: 5,
+            onSelectAll: () {
+              selectedAll = true;
+            },
+            onClearSelection: () {
+              cleared = true;
+            },
+            actions: [
+              AppBatchAction(
+                label: '归档',
+                icon: Icons.archive_outlined,
+                onPressed: () {
+                  archived = true;
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('已选择 2 / 5 项'), findsOneWidget);
+
+    await tester.tap(find.text('全选'));
+    await tester.tap(find.text('取消选择'));
+    await tester.tap(find.text('归档'));
+    await tester.pump();
+
+    expect(selectedAll, isTrue);
+    expect(cleared, isTrue);
+    expect(archived, isTrue);
+  });
+
+  testWidgets('AppBatchActionBar confirms destructive batch actions', (
+    tester,
+  ) async {
+    var deleted = false;
+
+    await tester.pumpWidget(
+      AdaptiveTestHarness(
+        width: 390,
+        height: 844,
+        wrapWithMaterialApp: true,
+        child: Scaffold(
+          body: AppBatchActionBar(
+            selectedCount: 3,
+            totalCount: 3,
+            actions: [
+              AppBatchAction(
+                label: '删除',
+                icon: Icons.delete_outline,
+                tone: AppBatchActionTone.destructive,
+                confirmation: const AppBatchActionConfirmation(
+                  title: '删除所选项目',
+                  message: '删除后无法恢复，请确认是否继续。',
+                  confirmLabel: '确认删除',
+                ),
+                onPressed: () {
+                  deleted = true;
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('删除'));
+    await tester.pumpAndSettle();
+
+    expect(deleted, isFalse);
+    expect(find.text('删除所选项目'), findsOneWidget);
+    expect(find.text('删除后无法恢复，请确认是否继续。'), findsOneWidget);
+
+    await tester.tap(find.text('确认删除'));
+    await tester.pumpAndSettle();
+
+    expect(deleted, isTrue);
+  });
+
   testWidgets('AppContextMenu opens native menu actions', (tester) async {
     var archived = false;
 
@@ -281,6 +377,88 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(archived, isTrue);
+  });
+
+  testWidgets('AppShortcuts delegates key events to native actions', (
+    tester,
+  ) async {
+    var refreshed = false;
+
+    await tester.pumpWidget(
+      AdaptiveTestHarness(
+        width: 1280,
+        height: 800,
+        wrapWithMaterialApp: true,
+        child: Scaffold(
+          body: AppShortcuts(
+            actions: [
+              AppShortcutAction(
+                activator: const SingleActivator(LogicalKeyboardKey.f5),
+                onInvoke: () {
+                  refreshed = true;
+                },
+              ),
+            ],
+            child: const Text('桌面编辑区'),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.f5);
+    await tester.pump();
+
+    expect(refreshed, isTrue);
+  });
+
+  testWidgets('AppSlidableActionTile wraps mature slidable actions', (
+    tester,
+  ) async {
+    var deleted = false;
+
+    await tester.pumpWidget(
+      AdaptiveTestHarness(
+        width: 390,
+        height: 844,
+        wrapWithMaterialApp: true,
+        child: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 320,
+              height: 72,
+              child: AppSlidableActionGroup(
+                child: AppSlidableActionTile(
+                  actions: [
+                    AppSlidableAction(
+                      label: '删除',
+                      icon: Icons.delete_outline,
+                      tone: AppSlidableActionTone.destructive,
+                      onPressed: () {
+                        deleted = true;
+                      },
+                    ),
+                  ],
+                  child: const ListTile(title: Text('可滑动条目')),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(Slidable), findsOneWidget);
+
+    await tester.drag(find.text('可滑动条目'), const Offset(-260, 0));
+    await tester.pumpAndSettle();
+
+    expect(find.text('删除'), findsOneWidget);
+
+    await tester.tap(find.text('删除'));
+    await tester.pumpAndSettle();
+
+    expect(deleted, isTrue);
   });
 
   testWidgets('AppHaptics uses Flutter platform haptic channel', (
@@ -396,6 +574,40 @@ void main() {
     expect(find.byType(AppReorderableDragHandle), findsNWidgets(3));
     expect(find.byKey(const ValueKey<String>('one')), findsOneWidget);
     expect(reorderCalled, isFalse);
+  });
+
+  testWidgets('AppReorderableList supports 100+ keyed items lazily', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      AdaptiveTestHarness(
+        width: 600,
+        height: 960,
+        wrapWithMaterialApp: true,
+        child: Scaffold(
+          body: SizedBox(
+            height: 640,
+            child: AppReorderableList(
+              itemCount: 120,
+              buildDefaultDragHandles: false,
+              onReorder: (_, _) {},
+              itemBuilder: (context, index) {
+                return ListTile(
+                  key: ValueKey<String>('perf_item_$index'),
+                  title: Text('Item $index'),
+                  trailing: AppReorderableDragHandle(index: index),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(ReorderableListView), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('perf_item_0')), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('perf_item_119')), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('AppHighlightedText marks matching query spans', (tester) async {

@@ -43,7 +43,17 @@ class StorageManagementSnapshot {
   final int totalManagedAssetBytes;
 }
 
-class StorageManagementService {
+abstract interface class StorageManagementGateway {
+  Future<StorageManagementSnapshot> loadSnapshot();
+
+  Future<void> clearRebuildableCaches();
+
+  Future<AppCacheDeleteResult> clearCacheScope(AppCacheScope scope);
+
+  Future<AppDatabaseMaintenanceReport> clearOrphanedDatabaseData();
+}
+
+class StorageManagementService implements StorageManagementGateway {
   StorageManagementService({
     AppDatabase? database,
     AppCacheGovernanceService? cacheGovernanceService,
@@ -69,6 +79,7 @@ class StorageManagementService {
   final ManagedAssetStore _managedAssetStore;
   final LocalBookStorageService _localBookStorageService;
 
+  @override
   Future<StorageManagementSnapshot> loadSnapshot() async {
     final cacheSnapshot = await _cacheGovernanceService.loadSnapshot();
     final databasePath = await resolveAppDatabaseFilePath();
@@ -110,14 +121,17 @@ class StorageManagementService {
     );
   }
 
+  @override
   Future<void> clearRebuildableCaches() {
     return _cacheGovernanceService.clearRebuildableCaches();
   }
 
+  @override
   Future<AppCacheDeleteResult> clearCacheScope(AppCacheScope scope) {
     return _cacheGovernanceService.clearScope(scope);
   }
 
+  @override
   Future<AppDatabaseMaintenanceReport> clearOrphanedDatabaseData() {
     return _database.runStorageMaintenance();
   }

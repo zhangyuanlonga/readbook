@@ -82,6 +82,7 @@ import '../application/book_metadata_presentation_resolver.dart';
 import '../application/book_reading_status_service.dart';
 import 'book_reading_status_presentation.dart';
 import 'book_detail_switch_source_helper.dart';
+import 'widgets/book_detail_content_sections.dart';
 import 'widgets/book_detail_primary_actions.dart';
 import 'widgets/book_detail_sections.dart';
 part 'book_detail_page_models.dart';
@@ -1348,14 +1349,13 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
           localBookMeta != null &&
           localBookMeta.indexStatus != LocalBookIndexStatus.ready;
 
-      final detailCard = Transform.translate(
-        offset: Offset(
-          0,
-          (-_detailScrollOffset.clamp(0.0, 80.0) * 0.1).clamp(-8.0, 0.0),
-        ),
-        child: _buildDetailCard(result, auxiliaryState: auxiliaryState),
+      final detailCard = _buildDetailCard(
+        result,
+        auxiliaryState: auxiliaryState,
       );
-      final organizationCard = _buildDetailOrganizationCard();
+      final hasOrganization = _detailCategory != null || _detailTags.isNotEmpty;
+      final organizationCard =
+          hasOrganization ? _buildDetailOrganizationCard() : null;
       final quickActionsCard = _buildQuickActionsCard(
         auxiliaryState: auxiliaryState,
         hasCatalog: _canOpenCatalogForResult(result),
@@ -1373,103 +1373,53 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
         excludedValues: mobileMetaExcludedValues,
       );
       final hasChapterStatus = _hasDetailChapterStatus(result);
-      if (metrics.isMediumUpWindow) {
-        final compactDesktop = metrics.isMediumWindow;
-        final coverWidth = compactDesktop ? 188.0 : 240.0;
-        final desktopMetaExcludedValues = _detailServerMetaExcludedValues(
-          result,
-        );
-        final desktopLatestMetaLine = _buildMobileLatestMetaLine(
-          result,
-          excludedValues: desktopMetaExcludedValues,
-        );
-        final hasDesktopLatestMeta = _hasMobileLatestMetaStatus(
-          result,
-          excludedValues: desktopMetaExcludedValues,
-        );
-        sections.add(
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                width: coverWidth,
-                child: _buildDesktopCoverPane(result),
-              ),
-              SizedBox(width: metrics.sectionGap),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _buildDesktopSummaryText(
-                      result: result,
-                      auxiliaryState: auxiliaryState,
-                    ),
-                    if (hasDesktopLatestMeta) ...[
-                      SizedBox(height: metrics.sectionGap),
-                      desktopLatestMetaLine,
-                    ] else if (hasChapterStatus) ...[
-                      SizedBox(height: metrics.sectionGap),
-                      chapterStatusLine,
-                    ],
-                    SizedBox(height: metrics.sectionGap),
-                    quickActionsCard,
-                    if (introCard != null) ...[
-                      SizedBox(height: metrics.sectionGap),
-                      introCard,
-                    ],
-                    if (presentationState.tocWarningText != null) ...[
-                      SizedBox(height: metrics.sectionGap),
-                      _buildTocWarningCard(presentationState.tocWarningText!),
-                    ],
-                    if (hasServerMeta && !hasDesktopLatestMeta) ...[
-                      SizedBox(height: metrics.sectionGap),
-                      serverMetaLine,
-                    ],
-                    if (_detailCategory != null || _detailTags.isNotEmpty) ...[
-                      SizedBox(height: metrics.sectionGap),
-                      organizationCard,
-                    ],
-                    if (shouldShowLocalIndexStatus) ...[
-                      SizedBox(height: metrics.sectionGap),
-                      _buildLocalIndexStatusCard(localBookMeta),
-                    ],
-                  ],
-                ),
-              ),
-            ],
+      final desktopMetaExcludedValues = _detailServerMetaExcludedValues(result);
+      final desktopLatestMetaLine = _buildMobileLatestMetaLine(
+        result,
+        excludedValues: desktopMetaExcludedValues,
+      );
+      final hasDesktopLatestMeta = _hasMobileLatestMetaStatus(
+        result,
+        excludedValues: desktopMetaExcludedValues,
+      );
+      final localIndexStatusCard =
+          shouldShowLocalIndexStatus
+              ? _buildLocalIndexStatusCard(localBookMeta)
+              : null;
+
+      sections.add(
+        BookDetailOverviewLayout(
+          scrollOffset: _detailScrollOffset,
+          detailCard: detailCard,
+          desktopCoverPane: _buildDesktopCoverPane(result),
+          desktopSummaryText: _buildDesktopSummaryText(
+            result: result,
+            auxiliaryState: auxiliaryState,
           ),
-        );
-      } else {
-        final mobileHeaderInset = metrics.isCompactDensity ? 4.0 : 6.0;
-        sections.addAll(<Widget>[
-          Padding(
-            padding: EdgeInsets.only(left: mobileHeaderInset),
-            child: detailCard,
-          ),
-          SizedBox(height: metrics.sectionGap),
-          if (hasMobileLatestMeta) ...[
-            Padding(
-              padding: EdgeInsets.only(left: mobileHeaderInset),
-              child: mobileLatestMetaLine,
-            ),
-            SizedBox(height: metrics.sectionGap),
-          ],
-          quickActionsCard,
-          if (_detailCategory != null || _detailTags.isNotEmpty) ...[
-            SizedBox(height: metrics.sectionGap),
-            organizationCard,
-          ],
-          if (introCard != null) ...[
-            SizedBox(height: metrics.sectionGap),
-            introCard,
-          ],
-        ]);
-      }
+          quickActionsCard: quickActionsCard,
+          introCard: introCard,
+          organizationCard: organizationCard,
+          localIndexStatusCard: localIndexStatusCard,
+          serverMetaLine: serverMetaLine,
+          mobileLatestMetaLine: mobileLatestMetaLine,
+          desktopLatestMetaLine: desktopLatestMetaLine,
+          chapterStatusLine: chapterStatusLine,
+          tocWarningCard:
+              presentationState.tocWarningText == null
+                  ? null
+                  : _buildTocWarningCard(presentationState.tocWarningText!),
+          hasOrganization: hasOrganization,
+          hasServerMeta: hasServerMeta,
+          hasMobileLatestMeta: hasMobileLatestMeta,
+          hasDesktopLatestMeta: hasDesktopLatestMeta,
+          hasChapterStatus: hasChapterStatus,
+        ),
+      );
 
       sections.addAll(<Widget>[
-        if (shouldShowLocalIndexStatus) ...[
+        if (shouldShowLocalIndexStatus && !metrics.isMediumUpWindow) ...[
           SizedBox(height: metrics.sectionGap),
-          _buildLocalIndexStatusCard(localBookMeta),
+          localIndexStatusCard!,
         ],
       ]);
     }
@@ -2258,108 +2208,25 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     String? author,
     String? coverUrl,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
     final normalizedTitle = (title ?? '').trim();
     final normalizedAuthor = (author ?? '').trim();
     final normalizedCover = (coverUrl ?? '').trim();
 
-    Widget block({
-      required double height,
-      double? width,
-      BorderRadius? borderRadius,
-    }) {
-      return Container(
-        width: width,
-        height: height,
-        decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerHigh,
-          borderRadius: borderRadius ?? BorderRadius.circular(10),
-        ),
-      );
-    }
-
-    return Column(
-      children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (normalizedTitle.isNotEmpty || normalizedCover.isNotEmpty)
-                  _buildCoverPreview(
-                    normalizedCover.isEmpty ? null : normalizedCover,
-                    title:
-                        normalizedTitle.isEmpty ? '加载书籍详情中' : normalizedTitle,
-                    author: normalizedAuthor.isEmpty ? null : normalizedAuthor,
-                    heroTag: 'book_loading_${widget.bookId}',
-                    bookId: widget.bookId,
-                    sourceId: widget.sourceId,
-                    detailUrl: widget.detailUrl,
-                  )
-                else
-                  block(
-                    width: 104,
-                    height: 148,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (normalizedTitle.isNotEmpty)
-                        Text(
-                          normalizedTitle,
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                        )
-                      else
-                        block(height: 22, width: double.infinity),
-                      const SizedBox(height: 12),
-                      if (normalizedAuthor.isNotEmpty)
-                        Text(
-                          normalizedAuthor,
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(color: colorScheme.onSurfaceVariant),
-                        )
-                      else
-                        block(height: 16, width: 160),
-                      const SizedBox(height: 8),
-                      block(height: 16, width: 130),
-                      const SizedBox(height: 8),
-                      block(height: 16, width: 200),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              block(height: 18, width: 48),
-              const SizedBox(height: 10),
-              block(height: 14, width: double.infinity),
-              const SizedBox(height: 8),
-              block(height: 14, width: double.infinity),
-              const SizedBox(height: 8),
-              block(height: 14, width: 220),
-            ],
-          ),
-        ),
-      ],
+    return BookDetailLoadingSkeleton(
+      title: normalizedTitle,
+      author: normalizedAuthor,
+      cover:
+          normalizedTitle.isNotEmpty || normalizedCover.isNotEmpty
+              ? _buildCoverPreview(
+                normalizedCover.isEmpty ? null : normalizedCover,
+                title: normalizedTitle.isEmpty ? '加载书籍详情中' : normalizedTitle,
+                author: normalizedAuthor.isEmpty ? null : normalizedAuthor,
+                heroTag: 'book_loading_${widget.bookId}',
+                bookId: widget.bookId,
+                sourceId: widget.sourceId,
+                detailUrl: widget.detailUrl,
+              )
+              : null,
     );
   }
 
@@ -2399,82 +2266,19 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     );
   }
 
-  Widget _buildInlineRefreshNotice() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              '正在刷新最新详情…',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _buildInlineRefreshNotice() => const BookDetailInlineRefreshNotice();
 
   Widget _buildMetadataInlineNoticeCard(String message) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-      decoration: BoxDecoration(
-        color: colorScheme.primaryContainer.withValues(alpha: 0.72),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.check_circle_outline_rounded,
-            size: 18,
-            color: colorScheme.onPrimaryContainer,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              message,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: colorScheme.onPrimaryContainer,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            onPressed: () {
-              if (!mounted) {
-                return;
-              }
-              setState(() {
-                _metadataInlineNotice = null;
-              });
-            },
-            icon: Icon(
-              Icons.close_rounded,
-              size: 18,
-              color: colorScheme.onPrimaryContainer,
-            ),
-          ),
-        ],
-      ),
+    return BookDetailMetadataNoticeCard(
+      message: message,
+      onDismiss: () {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _metadataInlineNotice = null;
+        });
+      },
     );
   }
 
@@ -3462,98 +3266,14 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   }
 
   Widget _buildLocalIndexStatusCard(LocalBook localBook) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final (title, message, background, foreground, icon) = switch (localBook
-        .indexStatus) {
-      LocalBookIndexStatus.pending => (
-        LocalBookWorkflowPolicy.statusHeadline(localBook),
-        LocalBookWorkflowPolicy.statusDescription(localBook),
-        colorScheme.secondaryContainer,
-        colorScheme.onSecondaryContainer,
-        Icons.schedule_rounded,
-      ),
-      LocalBookIndexStatus.indexing => (
-        LocalBookWorkflowPolicy.statusHeadline(localBook),
-        LocalBookWorkflowPolicy.statusDescription(localBook),
-        colorScheme.tertiaryContainer,
-        colorScheme.onTertiaryContainer,
-        Icons.autorenew_rounded,
-      ),
-      LocalBookIndexStatus.stale => (
-        LocalBookWorkflowPolicy.statusHeadline(localBook),
-        LocalBookWorkflowPolicy.statusDescription(localBook),
-        colorScheme.secondaryContainer,
-        colorScheme.onSecondaryContainer,
-        Icons.refresh_rounded,
-      ),
-      LocalBookIndexStatus.failed => (
-        LocalBookWorkflowPolicy.statusHeadline(localBook),
-        LocalBookWorkflowPolicy.statusDescription(localBook),
-        colorScheme.errorContainer,
-        colorScheme.onErrorContainer,
-        Icons.error_outline_rounded,
-      ),
-      _ => (
-        LocalBookWorkflowPolicy.statusHeadline(localBook),
-        LocalBookWorkflowPolicy.statusDescription(localBook),
-        colorScheme.secondaryContainer,
-        colorScheme.onSecondaryContainer,
-        Icons.check_circle_outline_rounded,
-      ),
-    };
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: foreground, size: 20),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: foreground,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  message,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: foreground,
-                    height: 1.35,
-                  ),
-                ),
-              ],
-            ),
+    return BookDetailLocalIndexStatusCard(
+      localBook: localBook,
+      isLoading: _isLoading,
+      onRebuild:
+          () => _load(
+            forceRefresh: true,
+            includeCatalog: _result?.catalogLoaded ?? false,
           ),
-          if (localBook.indexStatus == LocalBookIndexStatus.failed ||
-              localBook.indexStatus == LocalBookIndexStatus.stale)
-            Padding(
-              padding: const EdgeInsets.only(left: 8),
-              child: TextButton.icon(
-                onPressed:
-                    _isLoading
-                        ? null
-                        : () => _load(
-                          forceRefresh: true,
-                          includeCatalog: _result?.catalogLoaded ?? false,
-                        ),
-                icon: Icon(Icons.refresh_rounded, color: foreground, size: 16),
-                label: Text('重建', style: TextStyle(color: foreground)),
-              ),
-            ),
-        ],
-      ),
     );
   }
 
@@ -3749,32 +3469,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   }
 
   Widget _buildTocWarningCard(String message) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Card(
-      color: colorScheme.tertiaryContainer,
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(
-              Icons.warning_amber_rounded,
-              color: colorScheme.onTertiaryContainer,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                message,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.onTertiaryContainer,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    return BookDetailTocWarningCard(message: message);
   }
 
   void _showMessage(String text) {

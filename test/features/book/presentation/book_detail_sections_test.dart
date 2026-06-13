@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shuxiang_reading_next/app/widgets/runtime_feedback_card.dart';
+import 'package:shuxiang_reading_next/domain/entities/local_book.dart';
+import 'package:shuxiang_reading_next/features/book/presentation/widgets/book_detail_content_sections.dart';
 
 import 'package:shuxiang_reading_next/features/book/presentation/widgets/book_detail_sections.dart';
 import '../../../test_utils/adaptive_test_harness.dart';
@@ -97,5 +100,96 @@ void main() {
     expect(find.text('最新: 忘语新书《玄界之门》'), findsOneWidget);
     expect(find.text('武侠'), findsOneWidget);
     expect(find.textContaining('更新'), findsNothing);
+  });
+
+  testWidgets('loading skeleton keeps route preview title visible', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const AdaptiveTestHarness(
+        width: 390,
+        height: 800,
+        wrapWithMaterialApp: true,
+        child: Scaffold(
+          body: BookDetailLoadingSkeleton(title: '剑来', author: '烽火戏诸侯'),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('剑来'), findsOneWidget);
+    expect(find.text('烽火戏诸侯'), findsOneWidget);
+  });
+
+  testWidgets('feedback card exposes retry action', (tester) async {
+    var retried = false;
+    await tester.pumpWidget(
+      AdaptiveTestHarness(
+        width: 390,
+        height: 800,
+        wrapWithMaterialApp: true,
+        child: Scaffold(
+          body: BookDetailFeedbackCard(
+            title: '加载失败',
+            message: '响应解析失败',
+            tone: RuntimeFeedbackTone.error,
+            actions: [
+              FilledButton(
+                onPressed: () {
+                  retried = true;
+                },
+                child: const Text('重试'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('加载失败'), findsOneWidget);
+    expect(find.text('响应解析失败'), findsOneWidget);
+
+    await tester.tap(find.text('重试'));
+    expect(retried, isTrue);
+  });
+
+  testWidgets('local index status card shows rebuild for failed index', (
+    tester,
+  ) async {
+    var rebuild = false;
+    final now = DateTime(2026, 6, 13);
+    final localBook = LocalBook(
+      id: 'local_1',
+      title: '本地图书',
+      format: LocalBookFormat.txt,
+      storagePath: '/tmp/book.txt',
+      fileSize: 1024,
+      createdAt: now,
+      updatedAt: now,
+      indexStatus: LocalBookIndexStatus.failed,
+      lastError: '解析失败',
+    );
+
+    await tester.pumpWidget(
+      AdaptiveTestHarness(
+        width: 390,
+        height: 800,
+        wrapWithMaterialApp: true,
+        child: Scaffold(
+          body: BookDetailLocalIndexStatusCard(
+            localBook: localBook,
+            isLoading: false,
+            onRebuild: () {
+              rebuild = true;
+            },
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('重建'), findsOneWidget);
+
+    await tester.tap(find.text('重建'));
+    expect(rebuild, isTrue);
   });
 }

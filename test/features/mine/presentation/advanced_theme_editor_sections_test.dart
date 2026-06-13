@@ -69,6 +69,7 @@ void main() {
             child: AdvancedThemeWallpaperResourceCard(
               title: '应用背景',
               subtitle: '已设置',
+              badges: const <String>['高级主题引用', '当前主题'],
               preview: const Icon(Icons.image_outlined),
               onTap: () => tapped = true,
             ),
@@ -81,6 +82,8 @@ void main() {
 
     expect(tapped, isTrue);
     expect(find.text('已设置'), findsOneWidget);
+    expect(find.text('高级主题引用'), findsOneWidget);
+    expect(find.text('当前主题'), findsOneWidget);
     expect(find.byIcon(Icons.image_outlined), findsOneWidget);
   });
 
@@ -94,11 +97,13 @@ void main() {
             children: [
               AdvancedThemeCoverGallerySection(
                 subtitle: '未设置',
+                badges: <String>['默认'],
                 preview: SizedBox.shrink(),
                 onTap: _noop,
               ),
               AdvancedThemeLaunchGallerySection(
                 subtitle: '已设置',
+                badges: <String>['高级主题引用'],
                 preview: SizedBox.shrink(),
                 onTap: _noop,
               ),
@@ -112,6 +117,8 @@ void main() {
     expect(find.text('启动图集'), findsOneWidget);
     expect(find.text('未设置'), findsOneWidget);
     expect(find.text('已设置'), findsOneWidget);
+    expect(find.text('默认'), findsOneWidget);
+    expect(find.text('高级主题引用'), findsOneWidget);
   });
 
   testWidgets('bottom nav and font sections expose style resource actions', (

@@ -35,26 +35,37 @@ final class _Finding {
 
 void main(List<String> args) {
   final failOnWarning = args.contains('--fail-on-warning');
+  final diffOnly = args.contains('--diff-only') || args.contains('--changed');
   final verbose = args.contains('--verbose');
+  final changedLines = diffOnly ? _changedDartLines() : <String, Set<int>>{};
   final findings = <_Finding>[];
 
-  for (final docPath in _docPaths) {
-    if (!File(docPath).existsSync()) {
-      findings.add(
-        _Finding(
-          kind: 'missing-doc',
-          path: docPath,
-          line: 1,
-          message: 'UI component governance document is missing.',
-        ),
-      );
+  if (!diffOnly) {
+    for (final docPath in _docPaths) {
+      if (!File(docPath).existsSync()) {
+        findings.add(
+          _Finding(
+            kind: 'missing-doc',
+            path: docPath,
+            line: 1,
+            message: 'UI component governance document is missing.',
+          ),
+        );
+      }
     }
   }
 
   for (final file in _dartFiles()) {
     final relativePath = _relativePath(file);
+    if (diffOnly && !changedLines.containsKey(relativePath)) {
+      continue;
+    }
     final lines = file.readAsLinesSync();
     for (var index = 0; index < lines.length; index += 1) {
+      final lineNumber = index + 1;
+      if (!_shouldScanLine(relativePath, lineNumber, changedLines, diffOnly)) {
+        continue;
+      }
       final line = lines[index];
       final trimmed = line.trimLeft();
       if (trimmed.startsWith('//')) {
@@ -68,7 +79,7 @@ void main(List<String> args) {
           _Finding(
             kind: 'modal-surface',
             path: relativePath,
-            line: index + 1,
+            line: lineNumber,
             message:
                 'Prefer showAdaptiveActionSurface for new filter, settings, resource picker, or detail surfaces.',
           ),
@@ -83,9 +94,48 @@ void main(List<String> args) {
           _Finding(
             kind: 'dialog-surface',
             path: relativePath,
-            line: index + 1,
+            line: lineNumber,
             message:
                 'Review direct showDialog; prefer an adaptive surface for new page-level actions.',
+          ),
+        );
+      }
+
+      if (RegExp(r'\bScaffoldMessenger\.of\s*\(').hasMatch(line) &&
+          _isBusinessPresentation(relativePath)) {
+        findings.add(
+          _Finding(
+            kind: 'feedback',
+            path: relativePath,
+            line: lineNumber,
+            message:
+                'Prefer AppFeedback for user-facing snack, toast, and inline feedback.',
+          ),
+        );
+      }
+
+      if (_hasDirectCapabilityUse(line) &&
+          _isBusinessPresentation(relativePath) &&
+          !_isAllowedDirectCapabilityFile(relativePath)) {
+        findings.add(
+          _Finding(
+            kind: 'capability-wrapper',
+            path: relativePath,
+            line: lineNumber,
+            message:
+                'Route Flutter native or mature UI capability through app/feature wrappers instead of using it directly in a page.',
+          ),
+        );
+      }
+
+      if (_hasHardcodedStyle(line) && _isBusinessPresentation(relativePath)) {
+        findings.add(
+          _Finding(
+            kind: 'hardcoded-style',
+            path: relativePath,
+            line: lineNumber,
+            message:
+                'Review hardcoded Color/Colors/fontSize/BoxShadow/radius; prefer Theme, tokens, or documented resource colors.',
           ),
         );
       }
@@ -96,7 +146,7 @@ void main(List<String> args) {
           _Finding(
             kind: 'platform-branch',
             path: relativePath,
-            line: index + 1,
+            line: lineNumber,
             message:
                 'Review page-level platform branch; prefer capability or adaptive metrics.',
           ),
@@ -109,9 +159,22 @@ void main(List<String> args) {
           _Finding(
             kind: 'loading-state',
             path: relativePath,
-            line: index + 1,
+            line: lineNumber,
             message:
                 'Review page-level spinner; prefer AppStatusStateCard or a feature status component when it blocks content.',
+          ),
+        );
+      }
+
+      if (RegExp(r'\bshrinkWrap\s*:\s*true\b').hasMatch(line) &&
+          _isBusinessPresentation(relativePath)) {
+        findings.add(
+          _Finding(
+            kind: 'list-performance',
+            path: relativePath,
+            line: lineNumber,
+            message:
+                'Review shrinkWrap:true in scrollable UI; long lists should stay lazy and bounded.',
           ),
         );
       }
@@ -122,7 +185,7 @@ void main(List<String> args) {
           _Finding(
             kind: 'list-children',
             path: relativePath,
-            line: index + 1,
+            line: lineNumber,
             message:
                 'Review ListView(children); long lists should use ListView.builder or SliverList.',
           ),
@@ -135,7 +198,7 @@ void main(List<String> args) {
           _Finding(
             kind: 'scaffold',
             path: relativePath,
-            line: index + 1,
+            line: lineNumber,
             message:
                 'New pages should prefer AdaptivePageScaffold or document why a custom scaffold is required.',
           ),
@@ -143,10 +206,18 @@ void main(List<String> args) {
       }
     }
 
-    findings.addAll(_layoutBuilderSideEffectFindings(relativePath, lines));
+    findings.addAll(
+      _layoutBuilderSideEffectFindings(
+        relativePath,
+        lines,
+        changedLines: changedLines,
+        diffOnly: diffOnly,
+      ),
+    );
   }
 
   stdout.writeln('==> UI component governance checks');
+  stdout.writeln('Mode: ${diffOnly ? 'diff-only report' : 'full report'}');
   stdout.writeln('Findings: ${findings.length}');
 
   if (findings.isNotEmpty) {
@@ -201,10 +272,16 @@ Iterable<File> _dartFiles() sync* {
 
 List<_Finding> _layoutBuilderSideEffectFindings(
   String relativePath,
-  List<String> lines,
-) {
+  List<String> lines, {
+  required Map<String, Set<int>> changedLines,
+  required bool diffOnly,
+}) {
   final findings = <_Finding>[];
   for (var index = 0; index < lines.length; index += 1) {
+    final lineNumber = index + 1;
+    if (!_shouldScanLine(relativePath, lineNumber, changedLines, diffOnly)) {
+      continue;
+    }
     if (!lines[index].contains('LayoutBuilder')) {
       continue;
     }
@@ -217,7 +294,7 @@ List<_Finding> _layoutBuilderSideEffectFindings(
         _Finding(
           kind: 'layout-builder',
           path: relativePath,
-          line: index + 1,
+          line: lineNumber,
           message:
               'Review LayoutBuilder body for side effects or heavy work; it should stay layout-only.',
         ),
@@ -227,9 +304,101 @@ List<_Finding> _layoutBuilderSideEffectFindings(
   return findings;
 }
 
+bool _shouldScanLine(
+  String path,
+  int line,
+  Map<String, Set<int>> changedLines,
+  bool diffOnly,
+) {
+  if (!diffOnly) {
+    return true;
+  }
+  return changedLines[path]?.contains(line) ?? false;
+}
+
+Map<String, Set<int>> _changedDartLines() {
+  final changed = <String, Set<int>>{};
+  _collectChangedLinesFromDiff(changed, const [
+    'diff',
+    '--unified=0',
+    '--no-ext-diff',
+    '--',
+    '*.dart',
+  ]);
+  _collectChangedLinesFromDiff(changed, const [
+    'diff',
+    '--cached',
+    '--unified=0',
+    '--no-ext-diff',
+    '--',
+    '*.dart',
+  ]);
+
+  final untracked = Process.runSync('git', const [
+    'ls-files',
+    '--others',
+    '--exclude-standard',
+    '--',
+    '*.dart',
+  ], runInShell: false);
+  if (untracked.exitCode == 0) {
+    for (final rawPath in '${untracked.stdout}'.split('\n')) {
+      final path = rawPath.trim();
+      if (path.isEmpty || !File(path).existsSync()) {
+        continue;
+      }
+      final lineCount = File(path).readAsLinesSync().length;
+      changed[path] = <int>{for (var line = 1; line <= lineCount; line++) line};
+    }
+  }
+  return changed;
+}
+
+void _collectChangedLinesFromDiff(
+  Map<String, Set<int>> changed,
+  List<String> arguments,
+) {
+  final result = Process.runSync('git', arguments, runInShell: false);
+  if (result.exitCode != 0) {
+    return;
+  }
+  String? currentPath;
+  var nextLine = 0;
+  for (final line in '${result.stdout}'.split('\n')) {
+    if (line.startsWith('+++ b/')) {
+      currentPath = line.substring('+++ b/'.length);
+      changed.putIfAbsent(currentPath, () => <int>{});
+      continue;
+    }
+    final hunk = RegExp(
+      r'^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@',
+    ).firstMatch(line);
+    if (hunk != null) {
+      nextLine = int.parse(hunk.group(1)!);
+      continue;
+    }
+    if (currentPath == null || nextLine <= 0) {
+      continue;
+    }
+    if (line.startsWith('+++') || line.startsWith('---')) {
+      continue;
+    }
+    if (line.startsWith('+')) {
+      changed[currentPath]!.add(nextLine);
+      nextLine += 1;
+      continue;
+    }
+    if (line.startsWith('-') || line.startsWith('\\')) {
+      continue;
+    }
+    nextLine += 1;
+  }
+}
+
 bool _isAllowedLocalSpinner(String path) {
   return path.contains('/reader/') ||
       path.contains('/app/widgets/import_export_task') ||
+      path.contains('/app/widgets/foundation/') ||
       path.endsWith('adaptive_setting_tile.dart') ||
       path.endsWith('runtime_feedback_card.dart') ||
       path.endsWith('search_progress_card.dart');
@@ -259,6 +428,27 @@ bool _isAllowedPlatformBranch(String path) {
       path.endsWith('app_adaptive.dart') ||
       path.endsWith('reader_layout_context.dart') ||
       path.endsWith('bootstrap.dart');
+}
+
+bool _isBusinessPresentation(String path) {
+  return path.startsWith('lib/features/') && path.contains('/presentation/');
+}
+
+bool _hasDirectCapabilityUse(String line) {
+  return RegExp(
+        r'\b(RefreshIndicator|ReorderableListView|HapticFeedback|MenuAnchor|Shimmer|Slidable|CachedNetworkImage)\b',
+      ).hasMatch(line) ||
+      line.contains('package:flutter_animate/');
+}
+
+bool _isAllowedDirectCapabilityFile(String path) {
+  return path.contains('/widgets/') && !path.endsWith('_page.dart');
+}
+
+bool _hasHardcodedStyle(String line) {
+  return RegExp(
+    r'\b(Color\s*\(0x|Colors\.|BoxShadow\s*\(|fontSize\s*:|BorderRadius\.circular\s*\()',
+  ).hasMatch(line);
 }
 
 String _relativePath(File file) {

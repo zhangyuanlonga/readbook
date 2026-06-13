@@ -8,11 +8,13 @@ class AdvancedThemeCoverGallerySection extends StatelessWidget {
     required this.subtitle,
     required this.preview,
     required this.onTap,
+    this.badges = const <String>[],
   });
 
   final String subtitle;
   final Widget preview;
   final VoidCallback onTap;
+  final List<String> badges;
 
   @override
   Widget build(BuildContext context) {
@@ -21,6 +23,7 @@ class AdvancedThemeCoverGallerySection extends StatelessWidget {
       subtitle: subtitle,
       preview: preview,
       onTap: onTap,
+      badges: badges,
     );
   }
 }

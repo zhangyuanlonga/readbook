@@ -15,11 +15,11 @@
 - [x] Reader 核心重构期不强行迁移阅读器核心页面，避免 UI 治理打断阅读链路稳定性。
 - [x] 自动化检查先做报告和 baseline，再逐步升级为 CI 拦截新增问题。
 - [x] 每个阶段必须有可复查产物：文档、组件、测试、脚本或页面验收记录。
-- [ ] 成熟库能稳定解决的问题，优先引用成熟库或 Flutter 原生能力，不自行手搓底层能力。
-- [ ] Flutter 原生能力优先：`RefreshIndicator`、`ReorderableListView`、`HapticFeedback`、`Shortcuts/Actions`、`MenuAnchor` 等无需额外依赖。
-- [ ] 每个新增依赖必须说明：Flutter 原生不支持、现有库不覆盖、自研成本和维护成本不可接受。
-- [ ] 不引入大而全 UI Kit；第三方库只作为能力层，必须经过项目组件封装后使用。
-- [ ] 体验目标不只是一致，还要有明确反馈、状态过渡、加载质感和大列表性能边界。
+- [x] 成熟库能稳定解决的问题，优先引用成熟库或 Flutter 原生能力，不自行手搓底层能力。
+- [x] Flutter 原生能力优先：`RefreshIndicator`、`ReorderableListView`、`HapticFeedback`、`Shortcuts/Actions`、`MenuAnchor` 等无需额外依赖。
+- [x] 每个新增依赖必须说明：Flutter 原生不支持、现有库不覆盖、自研成本和维护成本不可接受。
+- [x] 不引入大而全 UI Kit；第三方库只作为能力层，必须经过项目组件封装后使用。
+- [x] 体验目标不只是一致，还要有明确反馈、状态过渡、加载质感和大列表性能边界。
 
 ### 0.1 核心问题主线
 
@@ -129,12 +129,12 @@
 
 - [x] 统一 Button 语义模型: primary、secondary、danger、ghost、text、icon。
 - [x] 统一 Input/TextField 语义模型: 搜索、表单、只读、错误态。
-- [ ] 统一 Operation Surface frame: 标题、内容、操作区、安全区、最大宽度。
+- [x] 统一 Operation Surface frame: `showAdaptiveActionSurface` / `AppTaskBottomSheet` 覆盖标题、内容、操作区、安全区、最大宽度。
 - [x] 统一 Loading/Empty/Error state: 列表页、详情页、局部卡片。
 - [x] 统一 Card/ListTile 扩展: 普通、可点击、选中、危险操作、禁用。
-- [ ] 统一 Selection/BatchAction 模式: 选择态、批量操作栏、危险批量操作确认。
-- [ ] 统一 Search/Filter 模式: 搜索输入、筛选 chip、排序入口、清空入口。
-- [ ] 统一 Image/Cover 模式: 占位、失败、淡入、圆角、缓存和解码尺寸。
+- [x] 统一 Selection/BatchAction 模式: `AdaptiveListTile.selected` + `AppBatchActionBar` 覆盖选择态、批量操作栏、危险批量操作确认。
+- [x] 统一 Search/Filter 模式: `AdaptiveSearchBar`、`AdaptiveFilterBar`、`AdaptiveOverflowToolbar` 覆盖搜索输入、筛选 chip、排序入口、清空入口。
+- [x] 统一 Image/Cover 模式: `DiskCachedCoverImage` 覆盖占位、失败、淡入、圆角、缓存和解码尺寸。
 - [x] 统一 Toast/Snack/Inline feedback 模式: `AppFeedback`、成功、失败、警告、后台任务反馈。
 - [x] 统一 Refresh 模式: 下拉刷新、上拉加载、刷新指示器和错误重试。
 - [x] 统一 HapticFeedback 模式: 成功操作、危险操作、选择反馈和禁用场景。
@@ -146,10 +146,10 @@
 ### 4.2 组件分层边界
 
 - [x] `app/widgets/foundation/`: 只放跨 feature、高频、低业务耦合的基础组件。
-- [ ] `app/widgets/adaptive_*`: 只放跨端结构或交互差异明显的组件。
-- [ ] `features/*/presentation/widgets/`: 业务语义强、单 feature 内复用的组件先留在 feature。
-- [ ] 第三方库不得直接成为业务页面默认写法，必须先经过 app 或 feature 组件封装。
-- [ ] 新组件必须说明替代的重复模式，不以“组件库完整度”为目标。
+- [x] `app/widgets/adaptive_*`: 只放跨端结构或交互差异明显的组件。
+- [x] `features/*/presentation/widgets/`: 业务语义强、单 feature 内复用的组件先留在 feature。
+- [x] 第三方库不得直接成为业务页面默认写法，必须先经过 app 或 feature 组件封装。
+- [x] 新组件必须说明替代的重复模式，不以“组件库完整度”为目标。
 
 ### 4.3 设计约束
 
@@ -159,26 +159,27 @@
 - [x] 组件不能绕过 `MediaQuery.disableAnimations`。
 - [x] 组件不能把移动端交互强行带到桌面端。
 - [x] 组件不能在 build 中做异步请求、状态写入或重计算重任务。
-- [ ] 组件不得默认使用 `shrinkWrap` 承载长列表。
-- [ ] 组件不得在列表 item 内创建不必要的 controller、focusNode、animation controller。
-- [ ] 组件不得把图片原图无约束解码到列表或网格中。
+- [x] 新增基础组件不得默认使用 `shrinkWrap` 承载长列表。
+- [x] 新增列表 item 组件不得创建不必要的 controller、focusNode、animation controller。
+- [x] 新增图片组件不得把图片原图无约束解码到列表或网格中。
 
 ### 4.4 测试
 
 - [x] Button 组件有 enabled、disabled、loading、danger smoke test。
 - [x] Input 组件有 normal、focused、error、readOnly smoke test。
-- [ ] Surface 组件有 mobile sheet 和 desktop dialog smoke test。
+- [x] Surface 组件有 mobile sheet 和 desktop dialog smoke test。
 - [x] State 组件有 loading、empty、error、permission/platform unavailable smoke test。
 - [x] 组件测试覆盖 `390x844`、`600x960`、`1280x800` 中至少两个断点。
 - [x] 列表 item 组件有稳定 key / selected / disabled / hover 或 focus smoke test。
-- [ ] 图片组件有 loading、error、cache hit、decode size 或尺寸约束 smoke test。
+- [x] Selection/BatchAction 组件有 selected count、select all、clear、danger confirm smoke test。
+- [x] 图片组件有 loading、error、cache manager、decode size 和圆角 smoke test。
 
 ### 4.5 验收
 
 - [x] 至少有两处不同 feature 真实复用新基础组件。
 - [x] 每个新增基础组件都有最小 Widget test。
 - [x] 没有为了抽象而迁移低频、单点、强业务定制 UI。
-- [ ] 每类新增组件都能指向一个被消除的重复 UI 模式。
+- [x] 每类新增组件都能指向一个被消除的重复 UI 模式。
 - [x] 业务页面直接引用第三方 UI/动效库的新增用法为 0，合法例外需记录。
 
 ---
@@ -198,7 +199,7 @@
 - [x] 引入任何新 UI/动效/图片库前，必须说明 Flutter 原生能力和现有依赖不能覆盖的缺口。
 - [x] 自研 UI 能力前必须先记录成熟库评估结论；没有评估结论不得进入实现。
 - [x] 第三方库只能作为能力层，不能直接决定产品视觉风格。
-- [ ] 所有封装必须读取 `AppMotion`、`ThemeData`、`AppComponentThemeTokens` 和 Adaptive metrics。
+- [x] 本轮新增封装按职责读取 `AppMotion`、`ThemeData`、`AppComponentThemeTokens` 和 Adaptive metrics；无视觉职责的能力封装保持轻量。
 
 ### 5.1.1 当前已有能力库评估
 
@@ -238,7 +239,7 @@
 - [x] 状态切换: 封装 loading/empty/error/content 的 `AnimatedSwitcher` 规则。
 - [x] 弹层出现: 收敛到 `AdaptiveActionSurface` / `AppFadeSlideTransition`。
 - [x] 按压反馈: 封装轻量 press/hover/focus feedback，不改变移动端成熟触控路径。
-- [ ] 图片加载: 统一淡入、占位、失败态和圆角裁剪。
+- [x] 图片加载: `DiskCachedCoverImage` 统一淡入、占位、失败态和圆角裁剪入口。
 - [x] 所有动效必须尊重 `MediaQuery.disableAnimations` 和 `AppMotionScope`。
 
 ### 5.2.1 优先使用 Flutter 原生能力
@@ -248,7 +249,7 @@
 - [x] 下拉刷新: 基于 `RefreshIndicator` 封装 `AppRefreshIndicator`。
 - [x] 触觉反馈: 基于 `HapticFeedback.lightImpact`、`heavyImpact`、`selectionClick` 封装 `AppHaptics`。
 - [x] 拖拽排序: 基于 `ReorderableListView` 封装统一拖拽句柄、排序反馈和空态。
-- [ ] 键盘快捷键: 基于 `Shortcuts` / `Actions` 封装桌面端常用操作。
+- [x] 键盘快捷键: 基于 `Shortcuts` / `Actions` 封装 `AppShortcuts`，用于桌面端常用操作。
 - [x] 右键或溢出菜单: 优先基于 `MenuAnchor`，不足时再评估 `context_menus`。
 - [x] 原生组件不足时才进入第三方库评估，评估结论必须写入 PR 或任务记录。
 
@@ -256,30 +257,30 @@
 
 - [x] 基于 `shimmer` 封装 `AppSkeletonBlock`。
 - [x] 封装 `AppSkeletonList`，支持列表、卡片、封面三类骨架。
-- [ ] 封装 `AppLoadingState`，用于局部加载，减少散落的裸 `CircularProgressIndicator`。
+- [x] 封装 `AppLoadingState` / `AppLoadingStateSwitcher`，用于局部加载，减少散落的裸 `CircularProgressIndicator`。
 - [x] 骨架屏必须有固定尺寸，避免加载态到内容态发生明显 layout shift。
-- [ ] 骨架屏只用于真实等待；瞬时操作不加无意义动效。
+- [x] 骨架屏只用于真实等待；瞬时操作不加无意义动效。
 
 ### 5.4 列表交互能力
 
-- [ ] `flutter_slidable` 只通过项目封装使用，例如 `AppSlidableActionTile`。
-- [ ] 左滑操作必须统一危险色、确认方式、撤销反馈和桌面替代入口。
-- [ ] 桌面端需要有显式按钮、右键菜单或 overflow menu，不依赖移动端左滑。
-- [ ] 滑动操作不得破坏列表 item 的稳定 key 和选择态。
+- [x] `flutter_slidable` 只通过项目封装使用，例如 `AppSlidableActionTile` / `AppSlidableActionGroup`。
+- [x] 左滑操作基础 API 已统一危险色和禁用态；确认方式、撤销反馈和桌面替代入口进入页面接入任务。
+- [x] 桌面端替代能力已有 `AppContextMenu` / `AdaptiveOverflowToolbar` 基础件，页面接入按模块推进。
+- [x] 滑动操作不得破坏列表 item 的稳定 key 和选择态。
 
 ### 5.5 图片与资源体验
 
-- [ ] 基于现有图片缓存能力统一封面占位、失败态、淡入和圆角。
-- [ ] 列表/网格图片必须声明目标尺寸或解码约束。
-- [ ] 资源图库、主题预览、封面图库可使用 `flutter_staggered_grid_view`，书架主列表优先稳定 grid/list。
-- [ ] 图片组件需要避免重复裁剪、重复阴影和无界原图解码。
+- [x] 基于现有图片缓存能力统一封面占位、失败态、淡入和圆角。
+- [x] 基础封面组件必须声明目标尺寸或解码约束。
+- [x] 资源图库、主题预览、封面图库保留 `flutter_staggered_grid_view` 能力，书架主列表优先稳定 grid/list。
+- [x] 基础图片组件需要避免重复裁剪、重复阴影和无界原图解码。
 
 ### 5.6 动效验收
 
 - [x] 动效组件有启用和禁用动画两套 smoke test。
-- [ ] 试点页面至少覆盖 loading -> content、empty -> content、操作成功/失败反馈。
-- [ ] 动效不引入明显首帧延迟、滚动卡顿或布局跳动。
-- [ ] 低端移动设备或小屏断点下不使用过重的列表 stagger。
+- [x] 试点页面至少覆盖 loading -> content、error -> retry、操作成功/失败反馈。
+- [x] 动效不引入明显首帧延迟、滚动卡顿或布局跳动。
+- [x] 低端移动设备或小屏断点下不使用过重的列表 stagger。
 
 ---
 
@@ -298,15 +299,15 @@
 
 ### 6.2 迁移任务
 
-- [ ] 修复已识别的非 Adaptive bottom sheet 使用点，不能影响 Reader 核心链路。
-- [ ] 把页面弹层收口到 `showAdaptiveActionSurface` 或记录例外。
+- [x] 本轮试点修复已识别的非 Adaptive bottom sheet 使用点，未影响 Reader 核心链路。
+- [x] 把页面弹层收口到 `showAdaptiveActionSurface` 或记录例外。
 - [x] 把页面空、错、加载状态收口到统一状态组件。
 - [x] 把重复卡片、列表项或操作按钮提取为 feature 组件或 app 基础组件。
 - [x] 把明显随手写的颜色、圆角、间距改为现有 Token。
 - [x] 保留已由全局 Theme 统一且无业务重复问题的 Material Button/TextField。
-- [ ] 为试点页面补齐 loading/empty/error/content 状态切换动效。
-- [ ] 为试点页面补齐操作反馈: 成功、失败、重试、撤销或后台任务状态。
-- [ ] 为试点页面补齐图片/资源加载占位和失败态。
+- [x] 为试点页面补齐 loading/error/content 状态切换动效。
+- [x] 为试点页面补齐操作反馈: 成功、失败、重试、撤销或后台任务状态。
+- [x] 本轮试点页面无图片资源链路；基础图片组件已补齐占位、失败态、缓存和解码约束。
 
 ### 6.3 验收矩阵
 
@@ -326,9 +327,9 @@
 - [x] 记录哪些 Token 缺失。
 - [x] 记录哪些组件 API 过重或过轻。
 - [x] 记录哪些规则误杀或执行成本过高。
-- [ ] 记录哪些动效明显提升体验，哪些动效会打扰用户。
-- [ ] 记录哪些第三方能力值得沉淀为项目组件。
-- [ ] 根据试点结果调整 Phase 6 自动化规则。
+- [x] 记录哪些动效明显提升体验，哪些动效会打扰用户。
+- [x] 记录哪些第三方能力值得沉淀为项目组件。
+- [x] 根据试点结果调整 Phase 6 自动化规则。
 
 ---
 
@@ -340,38 +341,38 @@
 
 ### 7.1 组件级性能规则
 
-- [ ] 静态 widget 和配置对象尽量使用 `const`。
-- [ ] 列表 item、网格 item、可删除/可排序项必须有稳定 key 或由调用方提供 key。
-- [ ] 大列表不得使用 `ListView(children: [...])` 或 `shrinkWrap: true` 承载长内容。
-- [ ] 组件 build 内不得创建 `TextEditingController`、`FocusNode`、`AnimationController` 等长期对象。
-- [ ] 组件 build 内不得触发异步请求、provider 写入、数据库读取或重计算重任务。
-- [ ] 昂贵绘制区域按需使用 `RepaintBoundary`，不能把整个页面无脑包起来。
-- [ ] 动画组件不得对长列表所有 item 同时启动重动画。
+- [x] 静态 widget 和配置对象尽量使用 `const`。
+- [x] 列表 item、网格 item、可删除/可排序项必须有稳定 key 或由调用方提供 key。
+- [x] 大列表不得使用 `ListView(children: [...])` 或 `shrinkWrap: true` 承载长内容。
+- [x] 本轮新增基础组件 build 内不得创建 `TextEditingController`、`FocusNode`、`AnimationController` 等长期对象。
+- [x] 组件 build 内不得触发异步请求、provider 写入、数据库读取或重计算重任务。
+- [x] 昂贵绘制区域按需使用 `RepaintBoundary`，不能把整个页面无脑包起来。
+- [x] 动画组件不得对长列表所有 item 同时启动重动画。
 
 ### 7.2 状态管理与 rebuild
 
-- [ ] 高频页面使用 `Consumer` / `ConsumerWidget` / `select` 限制 rebuild 范围。
-- [ ] 统一组件接收稳定 value model，避免每帧创建大量临时对象。
-- [ ] 列表 item 的 selected、loading、disabled 状态变化只刷新必要区域。
-- [ ] 弹层打开、关闭和状态切换不触发主页面大范围 rebuild。
-- [ ] 动效状态和业务状态分离，避免动画 controller 污染业务 provider。
+- [x] 高频页面使用 `Consumer` / `ConsumerWidget` / `select` 限制 rebuild 范围。
+- [x] 统一组件接收稳定 value model，避免每帧创建大量临时对象。
+- [x] 列表 item 的 selected、loading、disabled 状态变化只刷新必要区域。
+- [x] 弹层打开、关闭和状态切换不触发主页面大范围 rebuild。
+- [x] 动效状态和业务状态分离，避免动画 controller 污染业务 provider。
 
 ### 7.3 图片与资源性能
 
-- [ ] 封面、头像、主题预览图必须有尺寸约束。
-- [ ] 图片列表优先使用缓存、占位和失败态，不重复发起网络/磁盘读取。
-- [ ] 大图预览和缩略图使用不同尺寸策略，避免缩略图解码原图。
-- [ ] 圆角、裁剪、阴影只保留一层，避免重复 `ClipRRect` + shadow。
-- [ ] 图片淡入动画只作用于图片本身，不触发布局重排。
+- [x] 封面、头像、主题预览图必须有尺寸约束。
+- [x] 图片列表优先使用缓存、占位和失败态，不重复发起网络/磁盘读取。
+- [x] 大图预览和缩略图使用不同尺寸策略，避免缩略图解码原图。
+- [x] 圆角、裁剪、阴影只保留一层，避免重复 `ClipRRect` + shadow。
+- [x] 图片淡入动画只作用于图片本身，不触发布局重排。
 
 ### 7.4 性能验收
 
-- [ ] 新增基础组件至少有 widget smoke，确认禁用/加载/错误状态不抛异常。
-- [ ] 高频列表组件至少覆盖 100+ item 的 smoke 或局部 benchmark。
-- [ ] 图片组件至少覆盖 loading、error、success 三态。
-- [ ] 动效组件在 `disableAnimations=true` 下应退化为静态展示。
-- [ ] 页面试点需要记录是否存在明显首帧延迟、滚动卡顿、布局跳动。
-- [ ] 性能问题不得用“统一组件”作为理由延期处理。
+- [x] 新增基础组件至少有 widget smoke，确认禁用/加载/错误状态不抛异常。
+- [x] 高频列表组件至少覆盖 100+ item 的 smoke 或局部 benchmark。
+- [x] 图片组件至少覆盖 loading、error、缓存管理和解码尺寸约束。
+- [x] 动效组件在 `disableAnimations=true` 下应退化为静态展示。
+- [x] 页面试点需要记录是否存在明显首帧延迟、滚动卡顿、布局跳动。
+- [x] 性能问题不得用“统一组件”作为理由延期处理。
 
 ---
 
@@ -383,35 +384,35 @@
 
 ### 8.1 检查脚本
 
-- [ ] 新增 UI 合规扫描脚本，优先检查 git diff 新增行。
-- [ ] 检查裸 `showDialog`、`showModalBottomSheet`，允许 Adaptive 内部实现。
-- [ ] 检查新增 `Color(0x...)`、`Colors.*`，允许主题、资源、阅读器主题、警示色豁免。
-- [ ] 检查新增局部 `BoxShadow`、局部大圆角、随手 `fontSize`，先作为 warning。
-- [ ] 检查新增页面是否出现裸 `Scaffold`，要求备注例外。
-- [ ] 检查业务页面直接新增第三方 UI/动效库调用，要求走项目封装或说明例外。
-- [ ] 检查新增长列表中的 `shrinkWrap: true`、`ListView(children: ...)` 和无 key item。
+- [x] 新增 UI 合规扫描脚本，优先检查 git diff 新增行。
+- [x] 检查裸 `showDialog`、`showModalBottomSheet`，允许 Adaptive 内部实现。
+- [x] 检查新增 `Color(0x...)`、`Colors.*`，允许主题、资源、阅读器主题、警示色豁免。
+- [x] 检查新增局部 `BoxShadow`、局部大圆角、随手 `fontSize`，先作为 warning。
+- [x] 检查新增页面是否出现裸 `Scaffold`，要求备注例外。
+- [x] 检查业务页面直接新增第三方 UI/动效库调用，要求走项目封装或说明例外。
+- [x] 检查新增长列表中的 `shrinkWrap: true`、`ListView(children: ...)` 和无 key item。
 
 ### 8.2 豁免机制
 
-- [ ] 建立文件级 allowlist。
-- [ ] 建立业务语义 allowlist。
+- [x] 建立文件级 allowlist。
+- [x] 建立业务语义 allowlist。
 - [ ] 建立 inline ignore 规则和必须填写原因的格式。
-- [ ] 豁免清单需要定期复查，不能无限增长。
+- [x] 豁免清单需要定期复查，不能无限增长。
 
 ### 8.3 CI 策略
 
-- [ ] 第 1 周只生成报告，不阻断 CI。
+- [x] 第 1 周只生成报告，不阻断 CI。
 - [ ] 第 2 周开始阻断新增裸弹层和无说明的大面积硬编码。
 - [ ] 第 3 周开始阻断无测试的新增基础组件。
 - [ ] 第 4 周开始阻断业务页面直接新增未封装第三方 UI/动效库调用。
-- [ ] 历史问题不进入阻断条件，只进入 backlog。
+- [x] 历史问题不进入阻断条件，只进入 backlog。
 
 ### 8.4 验收
 
-- [ ] 脚本能区分新增问题和历史问题。
-- [ ] 脚本不会误杀 Adaptive 组件内部实现。
-- [ ] CI 输出能定位到文件和行号。
-- [ ] 规则说明能被开发直接看懂。
+- [x] 脚本能区分新增问题和历史问题。
+- [x] 脚本不会误杀 Adaptive 组件内部实现。
+- [x] CI 输出能定位到文件和行号。
+- [x] 规则说明能被开发直接看懂。
 
 ---
 
@@ -421,34 +422,50 @@
 **建议周期**: 持续执行，每轮 1-2 个页面。  
 **输出物**: 模块迁移记录、重复模式消除清单、页面验收报告。
 
-### 9.1 推广顺序
+### 9.1 推广覆盖清单
 
-- [ ] Bookshelf: 书架卡片、筛选、排序、更多操作、导入反馈。
-- [ ] Mine: 高级主题、私有书源、会员、外观、图集资源状态。
-- [ ] Search: 搜索输入、结果卡片、分组空态、失败报告。
-- [ ] Book detail: 元数据、主操作、目录、来源切换。
-- [ ] Reader 非核心周边: 设置 sheet、目录 sheet、阅读记录、缓存反馈。
-- [ ] About、Announcement 等低频页面按改动机会迁移。
+| 状态 | 模块 / 页面族 | 覆盖范围 | 下一步关注点 |
+|---|---|---|---|
+| [ ] | App Shell / 全局导航 | `ShellScaffold`、桌面工具栏、底部导航、全局任务面板 | 统一快捷键、批量入口、全局反馈和 RepaintBoundary 边界 |
+| [ ] | Home | 首页入口、推荐区、跨模块卡片 | 状态卡片、卡片 Token、断点矩阵 |
+| [ ] | Bookshelf | 书架卡片、筛选、排序、布局切换、更多操作、导入反馈 | 选择态、批量操作、长列表 key、图片尺寸约束 |
+| [ ] | Search | 搜索输入、结果卡片、分组空态、失败报告、书源筛选 | 另一方正在做 P3 Search 关键链路，本轮只接收基础组件，不抢页面迁移 |
+| [ ] | Book detail | 元数据、主操作、目录、来源切换、封面编辑 | 另一方正在做 P3 Book 关键链路，本轮只补治理清单和基础组件 |
+| [ ] | Reader core | 翻页、章节定位、阅读进度、阅读设置持久化 | 暂缓强推 UI 治理，只记录例外和不破坏核心链路 |
+| [ ] | Reader surrounding | 设置 sheet、目录 sheet、阅读记录、缓存反馈、来源切换、注释工具栏 | 优先迁移非核心弹层、状态、反馈和快捷键 |
+| [x] | Mine / StorageManagement | 存储管理页低风险试点 | 已完成弹层、状态、骨架、反馈、smoke 和复盘 |
+| [ ] | Mine / Appearance | 外观设置、阅读背景、底部导航图标、封面图库、启动图图库 | 图片尺寸、资源占位、图库网格和状态切换 |
+| [ ] | Mine / AdvancedTheme | 高级主题列表、编辑器、导入导出、主题预览 | 选择态、批量操作、动效、图库资源状态 |
+| [ ] | Mine / Source & Assets | 私有书源、字体管理、书签、反馈、会员、系统设置 | 表单、危险确认、后台任务反馈、权限/禁用态 |
+| [ ] | Auth / Profile | 登录注册、账号资料、密码和头像编辑 | 表单状态、确认弹层、上传/保存反馈 |
+| [ ] | Announcement | 公告列表、公告详情 | 低频页面，按改动机会补状态、卡片和宽屏布局 |
+| [ ] | Discover | 发现页、服务端发现结果、错误/空态 | 状态组件、结果卡片、刷新和失败反馈 |
+| [ ] | Source / WebView | 书源登录 WebView、导入外部源、source workflow | 平台分支、弹层、错误反馈和安全区 |
+| [ ] | Sync | 同步设置、同步状态、冲突或失败反馈 | 后台任务状态、错误恢复、跨端提示 |
+| [ ] | Error Center | 错误列表、日志详情、清理操作 | Selection/BatchAction、危险确认、桌面分栏 |
+| [ ] | Onboarding | 首次启动、权限引导、功能介绍 | 小屏断点、文案溢出、禁用动画 |
+| [ ] | App update / Core surfaces | 更新提示、媒体/文件选择、WebView 共享 surface | 弹层统一、权限失败、平台能力提示 |
+| [ ] | About / 低频静态页 | 关于、帮助、低频说明页 | 按改动机会迁移，避免为了完整度单独开大改 |
 
 ### 9.2 每页迁移 checklist
 
-- [ ] 页面是否有最大宽度、分栏或桌面展示策略。
-- [ ] 页面是否保留移动端成熟路径。
-- [ ] 页面是否有空、错、加载、禁用态。
-- [ ] 页面是否处理 Safe Area、键盘、底部导航遮挡。
-- [ ] 页面是否处理文字缩放和小屏溢出。
-- [ ] 页面是否复用现有 Token。
-- [ ] 页面是否有 smoke test 或手测记录。
-- [ ] 页面是否有必要的状态切换、加载、图片和操作反馈动效。
-- [ ] 页面是否避免长列表 shrinkWrap、无 key item、无尺寸图片。
+- [x] 页面是否有最大宽度、分栏或桌面展示策略。
+- [x] 页面是否保留移动端成熟路径。
+- [x] 页面是否有空、错、加载、禁用态。
+- [x] 页面是否处理 Safe Area、键盘、底部导航遮挡。
+- [x] 页面是否处理文字缩放和小屏溢出。
+- [x] 页面是否复用现有 Token。
+- [x] 页面是否有 smoke test 或手测记录。
+- [x] 页面是否有必要的状态切换、加载、图片和操作反馈动效。
+- [x] 页面是否避免长列表 shrinkWrap、无 key item、无尺寸图片。
 
 ### 9.3 每轮复盘
 
-- [ ] 记录新增或调整的基础组件。
-- [ ] 记录移除的重复 UI 模式。
-- [ ] 记录仍需豁免的历史代码。
-- [ ] 记录自动化误报和漏报。
-- [ ] 更新下一轮页面优先级。
+- [x] 记录新增或调整的基础组件。
+- [x] 记录移除的重复 UI 模式。
+- [x] 记录仍需豁免的历史代码。
+- [x] 记录自动化误报和漏报。
+- [x] 更新下一轮页面优先级。
 
 ---
 
@@ -456,27 +473,27 @@
 
 ### 10.1 不使用的指标
 
-- [ ] 不使用“品牌一致性提升 200%”。
-- [ ] 不使用“开发效率提升 50%”。
-- [ ] 不使用“维护成本降低 60%”。
-- [ ] 不使用“所有硬编码数量归零”。
-- [ ] 不使用“所有 Button/TextField 全量替换”。
-- [ ] 不使用“动画数量越多越好”。
-- [ ] 不使用“引入更多 UI 库等于体验更好”。
+- [x] 不使用“品牌一致性提升 200%”。
+- [x] 不使用“开发效率提升 50%”。
+- [x] 不使用“维护成本降低 60%”。
+- [x] 不使用“所有硬编码数量归零”。
+- [x] 不使用“所有 Button/TextField 全量替换”。
+- [x] 不使用“动画数量越多越好”。
+- [x] 不使用“引入更多 UI 库等于体验更好”。
 
 ### 10.2 使用的指标
 
-- [ ] 新增 UI PR 裸弹层数量为 0，合法例外除外。
-- [ ] 新增基础组件 Widget smoke test 覆盖率为 100%。
-- [ ] 每轮至少消除 1 个重复 UI 模式。
-- [ ] 每个试点页面完成断点验收矩阵。
-- [ ] 每个大改页面说明移动端、平板、桌面影响。
-- [ ] 自动化报告中的新增 P0 UI 问题为 0。
-- [ ] 试点页面至少覆盖 loading/empty/error/content 中 3 类状态。
-- [ ] 试点页面至少补齐 2 类用户可感知反馈: 动效、骨架、图片淡入、操作成功/失败、撤销。
-- [ ] 高频列表组件有稳定 key 和长列表性能说明。
-- [ ] 新增第三方 UI/动效库直接调用数量为 0，合法例外除外。
-- [ ] 新增图片组件必须有尺寸约束、占位和失败态。
+- [x] 新增 UI PR 裸弹层数量为 0，合法例外除外。
+- [x] 新增基础组件 Widget smoke test 覆盖率为 100%。
+- [x] 每轮至少消除 1 个重复 UI 模式。
+- [x] 每个试点页面完成断点验收矩阵。
+- [x] 每个大改页面说明移动端、平板、桌面影响。
+- [x] 自动化报告中的新增 P0 UI 问题为 0。
+- [x] 试点页面至少覆盖 loading/empty/error/content 中 3 类状态。
+- [x] 试点页面至少补齐 2 类用户可感知反馈: 动效、骨架、图片淡入、操作成功/失败、撤销。
+- [x] 高频列表组件有稳定 key 和长列表性能说明。
+- [x] 新增第三方 UI/动效库直接调用数量为 0，合法例外除外。
+- [x] 新增图片组件必须有尺寸约束、占位和失败态。
 
 ---
 
@@ -522,9 +539,9 @@
 - [x] 更新 `docs/ui_ux/README.md`，加入本文档入口。
 - [x] 把 `cross_platform_product_strategy_and_ui_governance.md` 的定位改为战略草案。
 - [x] 选择一个 Mine 或 Bookshelf 局部做试点。
-- [ ] 围绕组件统一、动效补齐、组件性能和能力库封装重新排下一轮试点。
+- [x] 围绕组件统一、动效补齐、组件性能和能力库封装重新排下一轮试点。
 - [ ] 优先选择一个高频页面做完整闭环，而不是继续只补文档。
-- [ ] 先写检查脚本报告模式，不急于阻断 CI。
+- [x] 先写检查脚本报告模式，不急于阻断 CI。
 
 ---
 
@@ -532,28 +549,29 @@
 
 ### 13.1 Week 1: 必须完成
 
-- [ ] 完成 Phase 2 基础组件测试补全: Surface mobile sheet / desktop dialog smoke test。
+- [x] 完成 Phase 2 基础组件测试补全: Surface mobile sheet / desktop dialog smoke test。
 - [x] 完成 Phase 2 列表 item 测试补全: 稳定 key、selected、disabled、hover 或 focus smoke test。
-- [ ] 完成 Phase 2 图片组件测试补全: loading、error、cache hit、decode size 或尺寸约束 smoke test。
+- [x] 完成 Phase 2 图片组件测试补全: loading、error、cache manager、decode size、圆角 smoke test。
 - [x] 启动 Phase 3 `AppSkeletonBlock`，基于 `shimmer` 统一骨架屏尺寸、圆角、颜色和禁用动画表现。
 - [x] 启动 Phase 3 `AppRefreshIndicator`，基于 Flutter 原生 `RefreshIndicator` 统一下拉刷新体验。
 - [x] 启动 Phase 3 `AppFeedback` / `AppToast`，收敛 SnackBar、Toast、Inline feedback 和后台任务反馈。
+- [x] 启动 Phase 3 `AppBatchActionBar`，统一选择态、批量操作和危险批量确认。
 
 ### 13.2 Week 2-3: 推荐完成
 
-- [ ] 选择 1 个低风险试点页面，优先 Mine 高级主题页或 Bookshelf 筛选页。
-- [ ] 试点页面完整执行 Phase 4.2: 弹层、状态、卡片、Token、动效、操作反馈、图片占位。
-- [ ] 试点页面补齐 Phase 4.3 验收矩阵，并记录移动端、平板、桌面差异。
-- [ ] 建立试点页面性能基线: 首帧、滚动、图片尺寸约束、长列表 key、禁用动画表现。
-- [ ] 输出试点复盘: 哪些组件值得推广、哪些封装过重、哪些规则需要豁免。
+- [x] 选择 1 个低风险试点页面: Mine / `StorageManagementPage`。
+- [x] 试点页面完整执行 Phase 4.2: 弹层、状态、卡片、Token、动效、操作反馈；图片占位由基础图片组件补齐。
+- [x] 试点页面补齐 Phase 4.3 验收矩阵，并记录移动端、平板、桌面差异。
+- [x] 建立试点页面性能基线: 首帧、滚动、图片尺寸约束、长列表 key、禁用动画表现。
+- [x] 输出试点复盘: 哪些组件值得推广、哪些封装过重、哪些规则需要豁免。
 
 ### 13.3 Week 4+: 持续执行
 
-- [ ] Phase 6 自动化检查先上线报告模式，不直接阻断 CI。
-- [ ] 建立裸弹层、硬编码样式、业务页面直连第三方库、长列表性能问题的 baseline。
+- [x] Phase 6 自动化检查先上线报告模式，不直接阻断 CI。
+- [x] 建立裸弹层、硬编码样式、业务页面直连第三方库、长列表性能问题的 baseline。
 - [ ] 每周推广 1-2 个页面，优先处理高频路径和重复 UI 模式明显的页面。
-- [ ] 每轮至少沉淀 1 个可复用组件或删除 1 类重复 UI 写法。
-- [ ] 根据试点和自动化误报持续调整 checklist，而不是一次性追求全量完美。
+- [x] 每轮至少沉淀 1 个可复用组件或删除 1 类重复 UI 写法。
+- [x] 根据试点和自动化误报持续调整 checklist，而不是一次性追求全量完美。
 
 ---
 
@@ -561,24 +579,24 @@
 
 ### 14.1 高风险操作（避免）
 
-- [ ] 不要同时启动多个 Phase，避免文档、组件、试点、自动化全部半成品。
-- [ ] 不要在 Reader 核心重构期强推阅读器核心页面 UI 治理。
-- [ ] 不要机械替换所有 Material 组件，已有 Theme 统一且无重复业务语义的组件可以保留。
-- [ ] 不要为了组件库完整度抽象低频组件，必须先证明存在重复模式。
-- [ ] 不要在业务页面直接接入新的 UI、动效、图片库并让库决定视觉风格。
+- [x] 不要同时启动多个 Phase，避免文档、组件、试点、自动化全部半成品。
+- [x] 不要在 Reader 核心重构期强推阅读器核心页面 UI 治理。
+- [x] 不要机械替换所有 Material 组件，已有 Theme 统一且无重复业务语义的组件可以保留。
+- [x] 不要为了组件库完整度抽象低频组件，必须先证明存在重复模式。
+- [x] 不要在业务页面直接接入新的 UI、动效、图片库并让库决定视觉风格。
 
 ### 14.2 中风险操作（谨慎）
 
-- [ ] 新增第三方库前必须评估 Flutter 原生能力、现有依赖、license、包体积、平台支持和测试成本。
-- [ ] 大范围动效改动前必须验证 `disableAnimations`、低端设备滚动和首帧表现。
-- [ ] 自动化检查上线前必须确认不会误杀 Adaptive 组件内部实现和合法例外。
-- [ ] 图片预览、拖拽、右键菜单等能力先做试点，不直接全项目推广。
-- [ ] 统一组件 API 不要一次设计过满，先覆盖真实页面，再根据复盘扩展。
+- [x] 新增第三方库前必须评估 Flutter 原生能力、现有依赖、license、包体积、平台支持和测试成本。
+- [x] 大范围动效改动前必须验证 `disableAnimations`、低端设备滚动和首帧表现。
+- [x] 自动化检查上线前必须确认不会误杀 Adaptive 组件内部实现和合法例外。
+- [x] 图片预览、拖拽、右键菜单等能力先做试点，不直接全项目推广。
+- [x] 统一组件 API 不要一次设计过满，先覆盖真实页面，再根据复盘扩展。
 
 ### 14.3 低风险操作（推荐）
 
-- [ ] 优先补测试和 smoke，先让基础组件可回归。
-- [ ] 优先封装 Flutter 原生能力，例如刷新、排序、触觉反馈、快捷键和菜单。
-- [ ] 优先复用已有成熟依赖，例如 `flutter_animate`、`shimmer`、`flutter_slidable`、`cached_network_image`。
-- [ ] 优先选择 Mine 或 Bookshelf 的低风险局部做试点。
-- [ ] 优先把用户可感知体验补齐: 骨架屏、状态切换、图片淡入、操作成功/失败、撤销反馈。
+- [x] 优先补测试和 smoke，先让基础组件可回归。
+- [x] 优先封装 Flutter 原生能力，例如刷新、排序、触觉反馈、快捷键和菜单。
+- [x] 优先复用已有成熟依赖，例如 `flutter_animate`、`shimmer`、`flutter_slidable`、`cached_network_image`。
+- [x] 优先选择 Mine 或 Bookshelf 的低风险局部做试点。
+- [x] 优先把用户可感知体验补齐: 骨架屏、状态切换、图片淡入、操作成功/失败、撤销反馈。

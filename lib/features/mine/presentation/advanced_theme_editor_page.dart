@@ -2524,6 +2524,8 @@ class _AdvancedThemeEditorPageState
   ) {
     final wallpaperPath = _selectedWallpaperPreviewPath(draft);
     final readerWallpaperPath = _selectedReaderWallpaperPreviewPath(draft);
+    final coverGalleryPreviewPath = _selectedCoverGalleryPreviewPath();
+    final launchGalleryPreviewPath = _selectedLaunchImageGalleryPreviewPath();
     final bottomNavGallery = _selectedBottomNavGallery();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2541,6 +2543,10 @@ class _AdvancedThemeEditorPageState
                     child: AdvancedThemeWallpaperResourceCard(
                       title: '应用背景',
                       subtitle: wallpaperPath == null ? '未设置' : '已设置',
+                      badges: _visualResourceBadges(
+                        draft,
+                        hasResource: wallpaperPath != null,
+                      ),
                       preview: _buildGalleryPreviewThumb(
                         context,
                         previewPath: wallpaperPath,
@@ -2570,6 +2576,10 @@ class _AdvancedThemeEditorPageState
                     child: AdvancedThemeWallpaperResourceCard(
                       title: '阅读背景',
                       subtitle: readerWallpaperPath == null ? '未设置' : '已设置',
+                      badges: _visualResourceBadges(
+                        draft,
+                        hasResource: readerWallpaperPath != null,
+                      ),
                       preview: _buildGalleryPreviewThumb(
                         context,
                         previewPath: readerWallpaperPath,
@@ -2601,25 +2611,25 @@ class _AdvancedThemeEditorPageState
                 children: [
                   Expanded(
                     child: AdvancedThemeCoverGallerySection(
-                      subtitle:
-                          _selectedCoverGalleryPreviewPath() == null
-                              ? '未设置'
-                              : '已设置',
+                      subtitle: coverGalleryPreviewPath == null ? '未设置' : '已设置',
+                      badges: _visualResourceBadges(
+                        draft,
+                        hasResource: coverGalleryPreviewPath != null,
+                      ),
                       preview: _buildGalleryPreviewThumb(
                         context,
-                        previewPath: _selectedCoverGalleryPreviewPath(),
+                        previewPath: coverGalleryPreviewPath,
                         title: _selectedCoverGallery()?.name ?? '书籍封面',
                         width: 72,
                         height: 72,
                         borderRadius: 12,
                         useAddPlaceholder: true,
                         onLongPress:
-                            _selectedCoverGalleryPreviewPath() == null
+                            coverGalleryPreviewPath == null
                                 ? null
                                 : () => unawaited(
                                   _showImagePreviewDialog(
-                                    imagePath:
-                                        _selectedCoverGalleryPreviewPath()!,
+                                    imagePath: coverGalleryPreviewPath,
                                     title:
                                         _selectedCoverGallery()?.name ?? '书籍封面',
                                   ),
@@ -2632,24 +2642,25 @@ class _AdvancedThemeEditorPageState
                   Expanded(
                     child: AdvancedThemeLaunchGallerySection(
                       subtitle:
-                          _selectedLaunchImageGalleryPreviewPath() == null
-                              ? '未设置'
-                              : '已设置',
+                          launchGalleryPreviewPath == null ? '未设置' : '已设置',
+                      badges: _visualResourceBadges(
+                        draft,
+                        hasResource: launchGalleryPreviewPath != null,
+                      ),
                       preview: _buildGalleryPreviewThumb(
                         context,
-                        previewPath: _selectedLaunchImageGalleryPreviewPath(),
+                        previewPath: launchGalleryPreviewPath,
                         title: _selectedLaunchImageGallery()?.name ?? '启动图集',
                         width: 72,
                         height: 72,
                         borderRadius: 12,
                         useAddPlaceholder: true,
                         onLongPress:
-                            _selectedLaunchImageGalleryPreviewPath() == null
+                            launchGalleryPreviewPath == null
                                 ? null
                                 : () => unawaited(
                                   _showImagePreviewDialog(
-                                    imagePath:
-                                        _selectedLaunchImageGalleryPreviewPath()!,
+                                    imagePath: launchGalleryPreviewPath,
                                     title:
                                         _selectedLaunchImageGallery()?.name ??
                                         '启动图集',
@@ -2665,6 +2676,10 @@ class _AdvancedThemeEditorPageState
               AdvancedThemeWallpaperResourceCard(
                 title: '底栏图集',
                 subtitle: _resolvedBottomNavGalleryName(),
+                badges: _visualResourceBadges(
+                  draft,
+                  hasResource: bottomNavGallery != null,
+                ),
                 preview: _buildBottomNavGalleryPreview(
                   context,
                   gallery: bottomNavGallery,
@@ -2676,6 +2691,17 @@ class _AdvancedThemeEditorPageState
         ),
       ],
     );
+  }
+
+  List<String> _visualResourceBadges(
+    AppAdvancedTheme draft, {
+    required bool hasResource,
+  }) {
+    if (!hasResource) {
+      return const <String>['默认'];
+    }
+    final activeThemeId = ref.watch(activeAdvancedThemeIdProvider);
+    return <String>['高级主题引用', if (activeThemeId == draft.id) '当前主题'];
   }
 
   Widget _buildStyleResourceSection(

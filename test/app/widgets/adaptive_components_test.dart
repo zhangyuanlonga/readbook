@@ -683,6 +683,125 @@ void main() {
     expect(find.text('导入本地图书'), findsNothing);
   });
 
+  testWidgets('showAdaptiveActionSurface opens mobile sheet surface', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      AdaptiveTestHarness(
+        width: 390,
+        height: 844,
+        wrapWithMaterialApp: true,
+        child: Builder(
+          builder: (context) {
+            return Scaffold(
+              body: Center(
+                child: FilledButton(
+                  onPressed: () {
+                    showAdaptiveActionSurface<void>(
+                      context: context,
+                      mode: AdaptiveActionSurfaceMode.mobileSheet,
+                      showDragHandle: false,
+                      builder: (context) => const Text('移动端操作面'),
+                    );
+                  },
+                  child: const Text('打开操作面'),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('打开操作面'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AdaptiveActionSurface), findsOneWidget);
+    expect(find.byType(AdaptiveBottomSheet), findsOneWidget);
+    expect(find.text('移动端操作面'), findsOneWidget);
+  });
+
+  testWidgets('mobile adaptive sheet keeps bottom safe area spacing', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      AdaptiveTestHarness(
+        width: 390,
+        height: 844,
+        wrapWithMaterialApp: true,
+        child: MediaQuery(
+          data: const MediaQueryData(
+            size: Size(390, 844),
+            viewPadding: EdgeInsets.only(bottom: 34),
+          ),
+          child: const AdaptiveBottomSheet(child: Text('安全区内容')),
+        ),
+      ),
+    );
+
+    final padding = tester
+        .widgetList<Padding>(
+          find.descendant(
+            of: find.byType(AdaptiveBottomSheet),
+            matching: find.byType(Padding),
+          ),
+        )
+        .map((widget) => widget.padding)
+        .whereType<EdgeInsets>()
+        .firstWhere((padding) => padding.bottom > 34);
+
+    expect(find.text('安全区内容'), findsOneWidget);
+    expect(padding.bottom, greaterThan(34));
+  });
+
+  testWidgets('showAdaptiveActionSurface opens desktop dialog surface', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1280, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      AdaptiveTestHarness(
+        width: 1280,
+        height: 800,
+        dpr: 1,
+        wrapWithMaterialApp: true,
+        child: Builder(
+          builder: (context) {
+            return Scaffold(
+              body: Center(
+                child: FilledButton(
+                  onPressed: () {
+                    showAdaptiveActionSurface<void>(
+                      context: context,
+                      mode: AdaptiveActionSurfaceMode.desktopDialog,
+                      builder: (context) => const Text('桌面端操作面'),
+                    );
+                  },
+                  child: const Text('打开桌面操作面'),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('打开桌面操作面'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AdaptiveActionSurface), findsOneWidget);
+    expect(find.byType(AdaptiveDialogSurface), findsOneWidget);
+    expect(find.byType(Dialog), findsOneWidget);
+    expect(find.text('桌面端操作面'), findsOneWidget);
+  });
+
   testWidgets('AdaptiveRouteTopBar renders optional bottom area', (
     tester,
   ) async {
