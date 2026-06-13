@@ -67,7 +67,6 @@ import '../../mine/application/cover_gallery_provider.dart';
 import '../../mine/application/reader_background_service.dart';
 import '../../search/application/search_hit_cache_service.dart';
 import '../../search/application/search_service.dart';
-import '../../search/presentation/online_source_error_presentation.dart';
 import '../../source/application/source_health_service.dart';
 import '../../source/application/remote_content_task_conflict_service.dart';
 import '../../source/application/remote_content_task_scheduler_service.dart';
@@ -148,7 +147,6 @@ import '../application/text_reader_renderer.dart';
 import '../application/reader_volume_key_page_bridge.dart';
 import '../application/source_switch_score_service.dart';
 import '../application/switch_source_shared.dart';
-import '../application/local/local_book_workflow_policy.dart';
 import '../application/local/local_book_storage_service.dart';
 import '../application/reader_cached_chapter_store.dart';
 import '../application/reader_dependencies_provider.dart';
@@ -158,8 +156,10 @@ import 'reader_annotated_text.dart';
 import 'reader_audio_view.dart';
 import 'reader_annotation_interaction.dart';
 import 'reader_body_region.dart';
+import 'reader_bookmark_range_presenter.dart';
 import 'reader_content_loading_controller.dart';
 import 'reader_content_loading_presenter.dart';
+import 'reader_error_presenter.dart';
 import 'reader_feedback_widgets.dart';
 import 'reader_layout_context.dart';
 import 'paged_animation/curl_paged_animation_renderer.dart';
@@ -167,6 +167,8 @@ import 'paged_animation/reader_paged_animation_surface.dart';
 import 'reader_pdf_view.dart';
 import 'reader_paper_curl_paged_view.dart';
 import 'reader_page_lifecycle_delegate.dart';
+import 'reader_page_support_models.dart';
+import 'reader_pointer_input_controller.dart';
 import 'reader_selection_state.dart';
 import 'reader_shell.dart';
 import 'reader_source_switch_controller.dart';
@@ -181,11 +183,20 @@ import 'reader_tap_zone_resolver.dart';
 import 'reader_text_paged_view.dart';
 import 'reader_viewport_builder.dart';
 import 'widgets/chrome/reader_chrome_widgets.dart';
+import 'sheets/reader_settings/reader_audio_settings_section.dart';
+import 'sheets/reader_settings/reader_auto_read_settings_section.dart';
+import 'sheets/reader_settings/reader_floating_settings_sheet.dart';
+import 'sheets/reader_settings/reader_font_picker_sheet.dart';
+import 'sheets/reader_settings/reader_font_weight_sheet.dart';
+import 'sheets/reader_settings/reader_layout_settings_section.dart';
+import 'sheets/reader_settings/reader_manga_settings_section.dart';
+import 'sheets/reader_settings/reader_page_turn_settings_section.dart';
 import 'sheets/reader_settings/reader_settings_components.dart';
 import 'sheets/reader_settings/reader_settings_sections.dart';
-import 'widgets/reader_typography_slider_row.dart';
+import 'sheets/reader_settings/reader_tap_zone_editor_sheet.dart';
+import 'sheets/reader_settings/reader_theme_background_settings_section.dart';
+import 'sheets/reader_settings/reader_typography_settings_section.dart';
 
-part 'reader_page_widget.dart';
 part 'reader_page_content_loading.dart';
 part 'reader_page_selection.dart';
 part 'reader_page_background.dart';
@@ -198,12 +209,46 @@ part 'reader_desktop_input_layer.dart';
 part 'reader_touch_navigation_layer.dart';
 part 'reader_chrome_surface.dart';
 part 'reader_page_shell.dart';
-part 'reader_page_settings_panel.dart';
 part 'reader_page_settings_sheet.dart';
 part 'reader_page_source_switch.dart';
-part 'reader_page_support_models.dart';
 part 'reader_page_viewport.dart';
-part 'reader_content_mode_surface.dart';
+
+/// 阅读器页面的路由入口 widget。
+///
+/// 这里只保留 route 传入的章节身份参数，真实运行态继续由
+/// [_ReaderPageState] 和各个 part 承接；后续拆分 ReaderPage 时，不能在
+/// 入口 widget 里新增加载、缓存、平台桥或进度保存逻辑。
+class ReaderPage extends ConsumerStatefulWidget {
+  const ReaderPage({
+    super.key,
+    required this.bookId,
+    required this.chapterId,
+    this.chapterUrl,
+    this.chapterTitle,
+    this.sourceId,
+    this.detailUrl,
+    this.chapterIndex,
+    this.bookmarkId,
+    this.openRequestedAtMs,
+    this.openRouteKind,
+    this.heroTag,
+  });
+
+  final String bookId;
+  final String chapterId;
+  final String? chapterUrl;
+  final String? chapterTitle;
+  final String? sourceId;
+  final String? detailUrl;
+  final int? chapterIndex;
+  final String? bookmarkId;
+  final int? openRequestedAtMs;
+  final String? openRouteKind;
+  final String? heroTag;
+
+  @override
+  ConsumerState<ReaderPage> createState() => _ReaderPageState();
+}
 
 enum _ReaderSettingsTab { interface, reading }
 
@@ -224,7 +269,7 @@ enum ReaderAutoReadSessionState {
 }
 
 // 阅读器拆分索引：
-// 1. 路由入口与初始参数归一化放在 reader_page_widget.dart 与 ReaderPageBootstrapController。
+// 1. 路由入口保留在 reader_page.dart，初始参数归一化由 ReaderPageBootstrapController 承接。
 // 2. 启动加载流程继续放在 reader_page_bootstrap.dart，后续只搬独立业务决策。
 // 3. 应用生命周期、运行时暂停恢复放在 reader_page_lifecycle.dart 与 ReaderRuntimeLifecycleController。
 // 4. 内容加载延迟 UI 决策放在 reader_page_content_loading.dart / runtime part 与 ReaderContentLoadController。
@@ -232,7 +277,8 @@ enum ReaderAutoReadSessionState {
 // 6. 壳层、设置、换源、选区、视口渲染继续由现有 part 文件隔离，避免再次塞回主文件。
 class _ReaderPageState extends ConsumerState<ReaderPage>
     with TickerProviderStateMixin, WidgetsBindingObserver {
-  static const String _kBookmarkNoHighlightToken = '__none__';
+  static const String _kBookmarkNoHighlightToken =
+      ReaderBookmarkRangePresenter.defaultNoHighlightToken;
   static const String _kBookmarkDefaultHighlightToken = '__highlight__';
 
   late final ContentProviderRegistry _contentProviderRegistry;
@@ -264,8 +310,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const ReaderChapterCacheDecoder();
   final ReaderChapterLoadPlanner _chapterLoadPlanner =
       const ReaderChapterLoadPlanner();
-  final OnlineSourceErrorPresentationAdapter _onlineSourceErrorAdapter =
-      const OnlineSourceErrorPresentationAdapter();
+  final ReaderErrorPresenter _readerErrorPresenter =
+      const ReaderErrorPresenter();
+  final ReaderBookmarkRangePresenter _bookmarkRangePresenter =
+      const ReaderBookmarkRangePresenter();
   final ReaderChapterFlow _chapterFlow = const ReaderChapterFlow();
   final ReaderChapterNavigation _chapterNavigation =
       const ReaderChapterNavigation();
@@ -384,6 +432,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   final SelectionListenerNotifier _selectionNotifier =
       SelectionListenerNotifier();
   final ReaderTapZoneResolver _tapZoneResolver = const ReaderTapZoneResolver();
+  final ReaderPointerInputController _pointerInputController =
+      ReaderPointerInputController();
   late final ReaderAudioController _readerAudioController;
   late final BookmarkRepository _bookmarkRepository;
   late final BookMetadataOverrideRepository _bookMetadataOverrideRepository;
@@ -452,8 +502,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool _isEditingBookmarkNote = false;
   ReaderSelectionState _selectionState = const ReaderSelectionState();
   List<Bookmark> _chapterBookmarks = const [];
-  Map<int, List<_BookmarkRange>> _bookmarkRangesByParagraph =
-      const <int, List<_BookmarkRange>>{};
+  Map<int, List<ReaderBookmarkRange>> _bookmarkRangesByParagraph =
+      const <int, List<ReaderBookmarkRange>>{};
   List<ReaderCustomFontEntry> _customFonts = const [];
   final Map<String, int> _mangaImageRetryNonce = <String, int>{};
   int _mangaPageIndex = 0;
@@ -468,7 +518,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   Timer? _blockingLoadingCardTimer;
   Timer? _hiddenLoadingPlaceholderTimer;
   Timer? _readingRecordAutoCommitTimer;
-  Timer? _readerLongPressTimer;
   DateTime? _lastReaderSnackAt;
   String? _lastReaderSnackKey;
   StreamSubscription<ReaderVolumeKeyEvent>? _volumeKeyEventSubscription;
@@ -510,18 +559,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool _isAutoReadAdvancingChapter = false;
   bool _isAutoReadHandlingBoundary = false;
   bool _isScrollStepAnimating = false;
-  _ScrollEdgeAdvanceState _scrollEdgeAdvanceState =
-      const _ScrollEdgeAdvanceState();
-  double? _swipeDragStartDx;
-  double? _swipeDragStartDy;
-  double? _swipeDragCurrentDx;
-  double? _swipeDragCurrentDy;
-  int? _tapPointerId;
-  Offset? _tapPointerDownPosition;
-  DateTime? _tapPointerDownTime;
-  bool _tapPointerMoved = false;
-  bool _tapPointerLongPressTriggered = false;
-  bool _readerTapHandledByChild = false;
+  ReaderScrollEdgeAdvanceState _scrollEdgeAdvanceState =
+      const ReaderScrollEdgeAdvanceState();
   bool _isOverlayAutoHideSuspended = false;
   bool _hasShownToolbarHint = false;
   bool _hasShownTapZoneGuide = false;
@@ -552,9 +591,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool _showHiddenLoadingPlaceholder = false;
   double? _measuredPinnedChapterHeaderWidth;
   PagedTransitionState _pagedTransition = PagedTransitionController.idleState;
-  _CurlTransitionState _curlTransition = const _CurlTransitionState();
-  _CrossChapterSnapshotTransitionState _crossChapterSnapshotTransition =
-      const _CrossChapterSnapshotTransitionState();
+  ReaderCurlTransitionState _curlTransition = const ReaderCurlTransitionState();
+  ReaderCrossChapterSnapshotTransitionState _crossChapterSnapshotTransition =
+      const ReaderCrossChapterSnapshotTransitionState();
   int _crossChapterSnapshotGeneration = 0;
   Stopwatch? _firstPageTurnStopwatch;
   bool _hasLoggedFirstPageTurn = false;
@@ -570,8 +609,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const <String, List<ReaderCatalogSearchEntry>>{};
   final Map<String, GlobalKey> _continuousTextChapterKeys =
       <String, GlobalKey>{};
-  List<_ContinuousTextChapter> _continuousTextChapters =
-      const <_ContinuousTextChapter>[];
+  List<ReaderPageContinuousTextChapter> _continuousTextChapters =
+      const <ReaderPageContinuousTextChapter>[];
   DateTime? _lastInlineImagePrecacheAt;
   bool _deferredBootstrapWarmupStarted = false;
   _ReaderInteractionState _readerInteractionState =
@@ -594,8 +633,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   static const double _kBottomProgressReserve = 12;
   static const double _kBottomOverlayReserve = 96;
   static const double _kMarginControlStep = 0.5;
-  static const double _kBackgroundTileWidth = 72;
-  static const double _kBackgroundTileHeight = 44;
   static const double _kSwipeTurnDistanceThreshold = 42;
   static const double _kSwipeTurnVelocityThreshold = 120;
   static const double _kPagedPullRefreshDistanceThreshold = 48;
@@ -657,14 +694,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   static const double _kScrollAdvanceEdgeTolerance = 2;
   static const double _kScrollAdvanceNearEdgeThreshold = 24;
   static const int _kScrollRefreshCurrentChapterAction = -2;
-  static const Set<PointerDeviceKind> _kScrollDragDevices = <PointerDeviceKind>{
-    PointerDeviceKind.touch,
-    PointerDeviceKind.mouse,
-    PointerDeviceKind.trackpad,
-    PointerDeviceKind.stylus,
-    PointerDeviceKind.invertedStylus,
-    PointerDeviceKind.unknown,
-  };
 
   bool get _isCurlAutoTurning => _curlTransition.isAnimating;
   bool get _isCurlPreviewActive => _curlTransition.isPreview;
@@ -1289,7 +1318,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   void _restoreContinuousTextAnchorPositionAfterLayout({
-    required _ContinuousTextChapter chapter,
+    required ReaderPageContinuousTextChapter chapter,
     required double ratio,
     required int attempt,
   }) {
@@ -1416,6 +1445,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool get _isMangaViewport =>
       _currentViewportKind == ReaderModeViewportKind.imagePaged ||
       _currentViewportKind == ReaderModeViewportKind.imageScroll;
+
+  ReaderContentModeSurfaceModel get _currentContentModeSurfaceModel {
+    return _contentModeSurfaceController.buildModel(
+      mode: _currentContentMode,
+      isTextPagedViewport: _isTextPagedViewport,
+      isTextScrollViewport: _isTextScrollViewport,
+    );
+  }
 
   ReaderModeCapabilities get _readerModeCapabilities =>
       _sessionPresentationFacade.resolveModeCapabilities(
@@ -1552,7 +1589,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   void _resetScrollEdgeAdvanceState() {
-    _scrollEdgeAdvanceState = const _ScrollEdgeAdvanceState();
+    _scrollEdgeAdvanceState = const ReaderScrollEdgeAdvanceState();
   }
 
   void _updateScrollEdgeAdvanceState({
@@ -1611,7 +1648,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         _layoutResolver.resolveChapterHeaderBottomSpacing(_settings);
   }
 
-  _ReaderSurfaceReserves _resolveReaderSurfaceReserves(
+  ReaderSurfaceReserves _resolveReaderSurfaceReserves(
     BuildContext context, {
     ReaderModeViewportKind? viewportKind,
   }) {
@@ -1661,7 +1698,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       footerFontSize: fontSize,
       footerLineHeightFactor: lineHeightFactor,
     );
-    return _ReaderSurfaceReserves(
+    return ReaderSurfaceReserves(
       scrollBottomReserve: policy.scrollBottomReserve,
       pagedHeaderReserve: policy.pagedHeaderReserve,
       pagedBottomReserve: policy.pagedBottomReserve,
@@ -1709,9 +1746,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required double heightFactor,
     Color? backgroundColor,
     required Widget child,
-  }) => _buildFloatingReaderSettingsSheetImpl(
+  }) => buildReaderFloatingSettingsSheet(
     context: context,
     readerModalTheme: readerModalTheme,
+    viewportKind: _currentViewportKind,
     keyboardInset: keyboardInset,
     safeBottom: safeBottom,
     sheetHorizontal: sheetHorizontal,
@@ -1745,7 +1783,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   String _formatLayoutMarginValue(double value) =>
-      _formatLayoutMarginValueImpl(value);
+      _readerSettingsPresenter.layoutMarginValueLabel(value);
 
   void _bindDependencies() => _bindReaderDependencies();
 
@@ -1817,7 +1855,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     setState(mutation);
   }
 
-  Decoration _buildReaderBackgroundDecoration(_ReaderThemeColors colors) =>
+  Decoration _buildReaderBackgroundDecoration(ReaderThemeColors colors) =>
       _buildReaderBackgroundDecorationImpl(colors);
 
   bool _isPresetBackgroundValue(String? value) =>
@@ -1839,7 +1877,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     void Function(VoidCallback fn)? updateModalState,
   }) => _refreshSharedReaderAssetsImpl(updateModalState: updateModalState);
 
-  Widget _buildReaderContent(_ReaderThemeColors colors) {
+  Widget _buildReaderContent(ReaderThemeColors colors) {
     final hasRenderableContent =
         _content.trim().isNotEmpty ||
         _chapterImageUrls.isNotEmpty ||
@@ -1886,7 +1924,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
-  ReaderChromePalette _chromePalette(_ReaderThemeColors colors) {
+  ReaderChromePalette _chromePalette(ReaderThemeColors colors) {
     return ReaderChromePalette(
       background: colors.background,
       text: colors.text,
@@ -1896,7 +1934,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
-  Widget _buildPinnedChapterHeader(_ReaderThemeColors colors) {
+  Widget _buildPinnedChapterHeader(ReaderThemeColors colors) {
     final chapterTitle =
         _chapterTitle?.isNotEmpty == true ? _chapterTitle! : '未命名章节';
     return ReaderPinnedChapterHeader(
@@ -1935,7 +1973,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Widget _buildReaderInfoBar(
-    _ReaderThemeColors colors, {
+    ReaderThemeColors colors, {
     required bool isHeader,
   }) {
     final leadingItems = <ReaderInfoBarItemData>[
@@ -2000,12 +2038,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return '电量 --';
   }
 
-  Widget _buildBody(_ReaderThemeColors colors) => _composeReaderBody(colors);
+  Widget _buildBody(ReaderThemeColors colors) => _composeReaderBody(colors);
 
-  Widget _buildReaderList(_ReaderThemeColors colors) =>
+  Widget _buildReaderList(ReaderThemeColors colors) =>
       _buildReaderViewportContent(colors);
 
-  Widget _buildStandardReaderList(_ReaderThemeColors colors) {
+  Widget _buildStandardReaderList(ReaderThemeColors colors) {
     final surfaceMetrics = _resolveReaderSurfaceMetrics(context);
     final scrollModel = _presentationResolver.buildTextScrollModel(
       contentSession: _resolvedContentSession(),
@@ -2052,7 +2090,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
-  Widget _buildContinuousTextReader(_ReaderThemeColors colors) {
+  Widget _buildContinuousTextReader(ReaderThemeColors colors) {
     final surfaceMetrics = _resolveReaderSurfaceMetrics(context);
     final bodyPadding = surfaceMetrics.scrollBodyPadding;
     final contentSession = _resolvedContentSession();
@@ -2102,9 +2140,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Widget _buildContinuousTextChapterSection({
-    required _ContinuousTextChapter chapter,
+    required ReaderPageContinuousTextChapter chapter,
     required bool isActive,
-    required _ReaderThemeColors colors,
+    required ReaderThemeColors colors,
   }) => _ReaderPageContentRenderingExtension(
     this,
   )._buildContinuousTextChapterSection(
@@ -2122,7 +2160,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   Widget _buildSelectableReaderBlockItem({
     required ReaderRenderBlockItem item,
     required bool isLast,
-    required _ReaderThemeColors colors,
+    required ReaderThemeColors colors,
   }) => _ReaderPageContentRenderingExtension(
     this,
   )._buildSelectableReaderBlockItem(item: item, isLast: isLast, colors: colors);
@@ -2130,7 +2168,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   Widget _buildInlineImageParagraphItem({
     required String imageUrl,
     required bool isLast,
-    required _ReaderThemeColors colors,
+    required ReaderThemeColors colors,
   }) =>
       _ReaderPageContentRenderingExtension(this)._buildInlineImageParagraphItem(
         imageUrl: imageUrl,
@@ -2140,7 +2178,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   Widget _buildInlineReaderImageCard({
     required String imageUrl,
-    required _ReaderThemeColors colors,
+    required ReaderThemeColors colors,
   }) => _ReaderPageContentRenderingExtension(
     this,
   )._buildInlineReaderImageCard(imageUrl: imageUrl, colors: colors);
@@ -2457,13 +2495,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return uri.replace(queryParameters: updatedParameters).toString();
   }
 
-  Widget _buildMangaReader(_ReaderThemeColors colors) =>
+  Widget _buildMangaReader(ReaderThemeColors colors) =>
       _buildMangaViewport(colors);
 
   Widget _buildReaderImageWidget({
     required String requestUrl,
     required String sourceUrl,
-    required _ReaderThemeColors colors,
+    required ReaderThemeColors colors,
     required int retryNonce,
   }) => _ReaderPageContentRenderingExtension(this)._buildReaderImageWidget(
     requestUrl: requestUrl,
@@ -2704,11 +2742,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return _paragraphs.any(_isInlineImageParagraph);
   }
 
-  Widget _buildPagedReader(_ReaderThemeColors colors) =>
+  Widget _buildPagedReader(ReaderThemeColors colors) =>
       _buildPagedTextViewport(colors);
 
   Widget _buildPagedPageContainer({
-    required _ReaderThemeColors colors,
+    required ReaderThemeColors colors,
     required int pageIndex,
     required int total,
     required Size pageSize,
@@ -2724,14 +2762,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   );
 
   Widget _buildPagedHeaderSection(
-    _ReaderThemeColors colors,
+    ReaderThemeColors colors,
     ReaderSurfaceMetrics layoutMetrics,
   ) => _ReaderPageContentRenderingExtension(
     this,
   )._buildPagedHeaderSection(colors, layoutMetrics);
 
   Widget _buildPagedFooterSection({
-    required _ReaderThemeColors colors,
+    required ReaderThemeColors colors,
     required int index,
     required int total,
     required ReaderSurfaceMetrics layoutMetrics,
@@ -2743,7 +2781,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   );
 
   Widget _buildPageIndexOverlay({
-    required _ReaderThemeColors colors,
+    required ReaderThemeColors colors,
     required int index,
     required int total,
     required double bottomInset,
@@ -2761,13 +2799,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    final startDx = _swipeDragStartDx;
-    final currentDx = _swipeDragCurrentDx;
-    if (startDx == null || currentDx == null) {
+    final swipe = _pointerInputController.swipeSnapshot;
+    if (swipe == null) {
       return;
     }
 
-    final delta = currentDx - startDx;
+    final delta = swipe.dx;
     if (delta.abs() < _kCurlPreviewStartThreshold) {
       if (_isCurlPreviewActive) {
         setState(() {
@@ -2885,7 +2922,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     if (_isCurlCrossChapterTurn) {
       setState(() {
-        _curlTransition = const _CurlTransitionState();
+        _curlTransition = const ReaderCurlTransitionState();
       });
       _recordFirstPageTurnCompleted(mode: 'curl_cross_chapter');
       _scheduleReaderInteractionSettle();
@@ -2895,12 +2932,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final pageCount = _currentPagedPageCount;
     if (pageCount <= 0) {
       if (!mounted) {
-        _curlTransition = const _CurlTransitionState();
+        _curlTransition = const ReaderCurlTransitionState();
         _currentPageIndex = 0;
         return;
       }
       setState(() {
-        _curlTransition = const _CurlTransitionState();
+        _curlTransition = const ReaderCurlTransitionState();
         _currentPageIndex = 0;
       });
       _scheduleReaderInteractionSettle();
@@ -3106,7 +3143,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   void _resetCurlAnimationState() {
     _curlAutoTurnController.stop();
-    _curlTransition = const _CurlTransitionState();
+    _curlTransition = const ReaderCurlTransitionState();
   }
 
   void _resetPagedTransitionState() {
@@ -3135,7 +3172,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   List<ReaderPaginationParagraph> _buildPaginationParagraphModels(
-    _ReaderThemeColors colors,
+    ReaderThemeColors colors,
     List<String> paragraphs,
   ) {
     return List<ReaderPaginationParagraph>.generate(paragraphs.length, (index) {
@@ -3372,98 +3409,40 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           behavior: HitTestBehavior.translucent,
           onPointerSignal: _handleReaderPointerSignal,
           onPointerDown: (event) {
-            if (!_isPrimaryReaderPointerDown(event)) {
-              return;
-            }
-            if (_tapPointerId != null) {
-              return;
-            }
-            _tapPointerId = event.pointer;
-            _tapPointerDownPosition = event.localPosition;
-            _tapPointerDownTime = DateTime.now();
-            _tapPointerMoved = false;
-            _tapPointerLongPressTriggered = false;
-            _readerLongPressTimer?.cancel();
-            _logLongPressTrace(
-              'pointer_down',
-              context: <String, Object?>{
-                'pointer': event.pointer,
-                'dx': event.localPosition.dx.toStringAsFixed(1),
-                'dy': event.localPosition.dy.toStringAsFixed(1),
-                'shouldHandleLongPress': _shouldHandleReaderLongPress,
-                'selectionActive': _isTextSelectionActive,
-              },
+            final started = _pointerInputController.beginPointer(
+              event,
+              shouldHandleLongPress: _shouldHandleReaderLongPress,
+              selectionActive: _isTextSelectionActive,
+              resolveLongPressGuard:
+                  () => ReaderPointerLongPressGuard(
+                    mounted: mounted,
+                    selectionActive: _isTextSelectionActive,
+                  ),
+              logTrace: _logLongPressTrace,
+              onLongPress: () => unawaited(_handleReaderLongPress()),
             );
-            if (_shouldHandleReaderLongPress) {
-              _readerLongPressTimer = Timer(kLongPressTimeout, () {
-                final blocked =
-                    !mounted ||
-                    _tapPointerId != event.pointer ||
-                    _tapPointerMoved ||
-                    _tapPointerLongPressTriggered ||
-                    _isTextSelectionActive ||
-                    _readerTapHandledByChild;
-                _logLongPressTrace(
-                  blocked ? 'timer_fire_blocked' : 'timer_fire',
-                  context: <String, Object?>{
-                    'pointer': event.pointer,
-                    'mounted': mounted,
-                    'pointerMatches': _tapPointerId == event.pointer,
-                    'tapPointerMoved': _tapPointerMoved,
-                    'longPressTriggered': _tapPointerLongPressTriggered,
-                    'selectionActive': _isTextSelectionActive,
-                    'readerTapHandledByChild': _readerTapHandledByChild,
-                  },
-                );
-                if (!mounted ||
-                    _tapPointerId != event.pointer ||
-                    _tapPointerMoved ||
-                    _tapPointerLongPressTriggered ||
-                    _isTextSelectionActive ||
-                    _readerTapHandledByChild) {
-                  return;
-                }
-                _tapPointerLongPressTriggered = true;
-                _readerTapHandledByChild = true;
-                unawaited(_handleReaderLongPress());
-              });
+            if (!started) {
+              return;
             }
             if (enableSwipeTurn) {
-              _swipeDragStartDx = event.localPosition.dx;
-              _swipeDragStartDy = event.localPosition.dy;
-              _swipeDragCurrentDx = event.localPosition.dx;
-              _swipeDragCurrentDy = event.localPosition.dy;
+              _pointerInputController.startSwipe(event.localPosition);
             }
           },
           onPointerMove: (event) {
-            if (event.pointer != _tapPointerId) {
+            if (!_pointerInputController.updatePointerMove(
+              event,
+              logTrace: _logLongPressTrace,
+            )) {
               return;
             }
             if (enableSwipeTurn) {
-              _swipeDragCurrentDx = event.localPosition.dx;
-              _swipeDragCurrentDy = event.localPosition.dy;
               if (enableCurlPreview) {
                 _updateCurlPreviewProgress(constraints.biggest);
               }
             }
-            final down = _tapPointerDownPosition;
-            if (down != null && !_tapPointerMoved) {
-              final moved = (event.localPosition - down).distance;
-              if (moved > kTouchSlop) {
-                _tapPointerMoved = true;
-                _readerLongPressTimer?.cancel();
-                _logLongPressTrace(
-                  'pointer_move_cancel_long_press',
-                  context: <String, Object?>{
-                    'pointer': event.pointer,
-                    'distance': moved.toStringAsFixed(2),
-                  },
-                );
-              }
-            }
           },
           onPointerCancel: (event) {
-            if (event.pointer != _tapPointerId) {
+            if (!_pointerInputController.isTrackedPointer(event.pointer)) {
               return;
             }
             if (enableCurlPreview && _isCurlPreviewActive) {
@@ -3472,7 +3451,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             _resetPointerTracking();
           },
           onPointerUp: (event) {
-            if (event.pointer != _tapPointerId) {
+            final pointerSnapshot = _pointerInputController
+                .buildPointerUpSnapshot(event);
+            if (pointerSnapshot == null) {
               return;
             }
             if (_isInitialReaderInteractionCoolingDown) {
@@ -3480,22 +3461,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               return;
             }
             final size = constraints.biggest;
-            final downTime = _tapPointerDownTime;
-            final elapsedMs =
-                downTime == null
-                    ? 0
-                    : DateTime.now().difference(downTime).inMilliseconds;
-            final dx =
-                (_swipeDragCurrentDx ?? event.localPosition.dx) -
-                (_swipeDragStartDx ?? event.localPosition.dx);
-            final dy =
-                (_swipeDragCurrentDy ?? event.localPosition.dy) -
-                (_swipeDragStartDy ?? event.localPosition.dy);
-            final velocity = elapsedMs <= 0 ? 0.0 : dx / (elapsedMs / 1000.0);
+            final elapsedMs = pointerSnapshot.elapsedMs;
+            final dx = pointerSnapshot.dx;
+            final dy = pointerSnapshot.dy;
+            final velocity = pointerSnapshot.velocity;
 
-            if (enableSwipeTurn &&
-                _swipeDragStartDx != null &&
-                _swipeDragCurrentDx != null) {
+            if (enableSwipeTurn && pointerSnapshot.hasSwipeTracking) {
               final isSwipe =
                   dx.abs() >= _kSwipeTurnDistanceThreshold ||
                   velocity.abs() >= _kSwipeTurnVelocityThreshold;
@@ -3509,7 +3480,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   velocity: Velocity(pixelsPerSecond: Offset(velocity, 0)),
                   primaryVelocity: velocity,
                 );
-                _onSwipePaginationDragEnd(dragDetails, size);
+                _onSwipePaginationDragEnd(
+                  dragDetails,
+                  size,
+                  pointerSnapshot.swipe!,
+                );
                 _resetPointerTracking();
                 return;
               }
@@ -3526,14 +3501,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               }
             }
 
-            if (_readerTapHandledByChild) {
+            if (pointerSnapshot.childHandled) {
               _logLongPressTrace(
                 'pointer_up_child_handled',
                 context: <String, Object?>{
-                  'pointer': event.pointer,
+                  'pointer': pointerSnapshot.pointer,
                   'elapsedMs': elapsedMs,
                   'selectionActive': _isTextSelectionActive,
-                  'longPressTriggered': _tapPointerLongPressTriggered,
+                  'longPressTriggered': pointerSnapshot.longPressTriggered,
                 },
               );
               _resetPointerTracking();
@@ -3543,21 +3518,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             _logLongPressTrace(
               'pointer_up',
               context: <String, Object?>{
-                'pointer': event.pointer,
+                'pointer': pointerSnapshot.pointer,
                 'elapsedMs': elapsedMs,
-                'tapPointerMoved': _tapPointerMoved,
+                'tapPointerMoved': pointerSnapshot.moved,
                 'selectionActive': _isTextSelectionActive,
-                'longPressTriggered': _tapPointerLongPressTriggered,
+                'longPressTriggered': pointerSnapshot.longPressTriggered,
               },
             );
-            if (!_tapPointerMoved &&
-                !_tapPointerLongPressTriggered &&
+            if (!pointerSnapshot.moved &&
+                !pointerSnapshot.longPressTriggered &&
                 elapsedMs <= kLongPressTimeout.inMilliseconds &&
                 !_isTextSelectionActive) {
               _logLongPressTrace(
                 'pointer_up_fallback_tap',
                 context: <String, Object?>{
-                  'pointer': event.pointer,
+                  'pointer': pointerSnapshot.pointer,
                   'elapsedMs': elapsedMs,
                 },
               );
@@ -3571,15 +3546,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
-  void _onSwipePaginationDragEnd(DragEndDetails details, Size viewportSize) {
-    final startDx = _swipeDragStartDx;
-    final currentDx = _swipeDragCurrentDx;
-    _swipeDragStartDx = null;
-    _swipeDragStartDy = null;
-    _swipeDragCurrentDx = null;
-    _swipeDragCurrentDy = null;
-
-    if (!_isSwipePaginationEnabled() || startDx == null || currentDx == null) {
+  void _onSwipePaginationDragEnd(
+    DragEndDetails details,
+    Size viewportSize,
+    ReaderPointerSwipeSnapshot swipe,
+  ) {
+    if (!_isSwipePaginationEnabled()) {
       return;
     }
     if (_isInitialReaderInteractionCoolingDown) {
@@ -3602,7 +3574,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         gestureInsets.right +
             viewportSize.width * _kSystemBackGestureGuardRatio,
       );
-      if (startDx <= leftGuard || startDx >= viewportSize.width - rightGuard) {
+      if (swipe.startDx <= leftGuard ||
+          swipe.startDx >= viewportSize.width - rightGuard) {
         return;
       }
     }
@@ -3616,7 +3589,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _hideOverlayControls(resumeAutoRead: true);
     }
 
-    final delta = currentDx - startDx;
+    final delta = swipe.dx;
     final velocity = details.primaryVelocity ?? 0;
     final isLeftTurn =
         delta <= -_kSwipeTurnDistanceThreshold ||
@@ -3636,28 +3609,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   void _resetPointerTracking() {
-    _readerLongPressTimer?.cancel();
-    _readerLongPressTimer = null;
-    _tapPointerId = null;
-    _tapPointerDownPosition = null;
-    _tapPointerDownTime = null;
-    _tapPointerMoved = false;
-    _tapPointerLongPressTriggered = false;
-    _readerTapHandledByChild = false;
-    _swipeDragStartDx = null;
-    _swipeDragStartDy = null;
-    _swipeDragCurrentDx = null;
-    _swipeDragCurrentDy = null;
+    _pointerInputController.reset();
   }
 
-  bool _isPrimaryReaderPointerDown(PointerDownEvent event) {
-    if (event.kind == PointerDeviceKind.touch) {
-      return true;
-    }
-    return event.buttons == kPrimaryButton;
-  }
-
-  TextStyle _paragraphTextStyle(_ReaderThemeColors colors) =>
+  TextStyle _paragraphTextStyle(ReaderThemeColors colors) =>
       _ReaderPageContentRenderingExtension(this)._paragraphTextStyle(colors);
 
   Future<int?> _showBodyTextColorPickerDialog(
@@ -4037,7 +3992,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
-  Widget _buildTopOverlay(_ReaderThemeColors colors) {
+  Widget _buildTopOverlay(ReaderThemeColors colors) {
     final chapterTitle =
         _chapterTitle?.isNotEmpty == true ? _chapterTitle! : '阅读';
     final sourceName = _currentSourceNameForTopOverlay();
@@ -4237,7 +4192,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return '';
   }
 
-  Future<void> _showTopMoreActions(_ReaderThemeColors colors) async {
+  Future<void> _showTopMoreActions(ReaderThemeColors colors) async {
     final action = await showAdaptiveActionSurface<_ReaderTopMoreAction>(
       context: context,
       maxWidth: 420,
@@ -4335,7 +4290,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
   }
 
-  Widget _buildBottomOverlay(_ReaderThemeColors colors) {
+  Widget _buildBottomOverlay(ReaderThemeColors colors) {
     final layoutContext = ReaderLayoutContext.resolve(
       context,
       viewportKind: _currentViewportKind,
@@ -4492,7 +4447,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Widget _buildDesktopBottomProgressOverlay(
-    _ReaderThemeColors colors,
+    ReaderThemeColors colors,
     ReaderLayoutContext layoutContext,
   ) {
     return Positioned(
@@ -4564,7 +4519,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
-  Widget _buildAutoReadStatusOverlay(_ReaderThemeColors colors) {
+  Widget _buildAutoReadStatusOverlay(ReaderThemeColors colors) {
     if (_autoReadSessionState == ReaderAutoReadSessionState.off) {
       return const SizedBox.shrink();
     }
@@ -4637,7 +4592,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Widget _buildAutoReadFloatingHint({
-    required _ReaderThemeColors colors,
+    required ReaderThemeColors colors,
     required IconData icon,
     required String title,
     required String actionLabel,
@@ -4687,7 +4642,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
-  Widget _buildBottomProgressStrip(_ReaderThemeColors colors) {
+  Widget _buildBottomProgressStrip(ReaderThemeColors colors) {
     final progressValue = (_bottomOverlayDraftProgressRatio ??
             _safeCurrentScrollRatio())
         .clamp(0.0, 1.0);
@@ -4817,7 +4772,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required String tooltip,
     required VoidCallback? onPressed,
     required IconData icon,
-    required _ReaderThemeColors colors,
+    required ReaderThemeColors colors,
     bool loading = false,
     bool emphasizeHitArea = false,
   }) {
@@ -4858,7 +4813,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     required IconData icon,
     required String label,
     required Future<void> Function(BuildContext context) onTap,
-    required _ReaderThemeColors colors,
+    required ReaderThemeColors colors,
     Future<void> Function()? onLongPress,
     bool active = false,
   }) {
@@ -4936,43 +4891,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   ReaderFailurePresentation? _readerFailurePresentationFor(AppException error) {
-    final gatewayFailure = error.gatewayFailure;
-    if (gatewayFailure != null) {
-      return const ReaderFailurePresentationService().resolve(error);
-    }
-    return null;
+    return _readerErrorPresenter.gatewayPresentationFor(error);
   }
 
-  String _readerGatewayFailureStageFor(AppException error) {
-    final stage = error.gatewayFailure?.stage.trim();
-    if (_isWebViewTaskStage(stage)) {
-      return stage!;
-    }
-    final fallback =
-        error.gatewayFailure?.toErrorStage(fallback: error.stage) ??
-        error.stage;
-    return _isWebViewTaskStage(fallback.name) ? fallback.name : 'content';
-  }
+  String _readerGatewayFailureStageFor(AppException error) =>
+      _readerErrorPresenter.gatewayFailureStageFor(error);
 
-  bool _isWebViewTaskStage(String? value) {
-    return switch (value?.trim()) {
-      'search' || 'detail' || 'toc' || 'content' => true,
-      _ => false,
-    };
-  }
-
-  String _toUserReadableError(AppException error) {
-    final presentation = _readerFailurePresentationFor(error);
-    if (presentation != null) {
-      return presentation.message;
-    }
-    final message = error.briefMessage;
-    if (_isLocalContent) {
-      return LocalBookWorkflowPolicy.readerLoadError(message);
-    }
-
-    return _onlineSourceErrorAdapter.forReaderContentException(error);
-  }
+  String _toUserReadableError(AppException error) => _readerErrorPresenter
+      .userReadableError(error, isLocalContent: _isLocalContent);
 
   bool get _hasReaderGatewayRecoveryAction {
     final presentation = _readerFailurePresentation;
@@ -5032,129 +4958,35 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   bool _isBookmarkInCurrentChapter(Bookmark bookmark) {
-    final chapterId = _chapterId.trim();
-    if (chapterId.isNotEmpty && bookmark.chapterId.trim().isNotEmpty) {
-      return bookmark.chapterId.trim() == chapterId;
-    }
-    final index = _currentIndex;
-    if (index != null) {
-      return bookmark.chapterIndex == index;
-    }
-    return false;
+    return _bookmarkRangePresenter.isBookmarkInChapter(
+      bookmark,
+      chapterId: _chapterId,
+      chapterIndex: _currentIndex,
+    );
   }
 
-  Map<int, List<_BookmarkRange>> _buildBookmarkRangesByParagraph(
+  Map<int, List<ReaderBookmarkRange>> _buildBookmarkRangesByParagraph(
     List<Bookmark> bookmarks,
-  ) {
-    final paragraphs =
-        _paragraphs.isEmpty ? <String>[_content.trim()] : _paragraphs;
-    if (paragraphs.isEmpty || bookmarks.isEmpty) {
-      return const <int, List<_BookmarkRange>>{};
-    }
+  ) => _bookmarkRangePresenter.buildRangesByParagraph(
+    bookmarks: bookmarks,
+    paragraphs: _paragraphs,
+    fallbackContent: _content,
+  );
 
-    final totalLength =
-        paragraphs.fold<int>(0, (sum, item) => sum + item.length) +
-        max(0, paragraphs.length - 1) * 2;
-
-    final starts = <int>[];
-    var offset = 0;
-    for (final paragraph in paragraphs) {
-      starts.add(offset);
-      offset += paragraph.length + 2;
-    }
-
-    final result = <int, List<_BookmarkRange>>{};
-    for (final bookmark in bookmarks) {
-      var start = _clampInt(bookmark.startOffset, 0, totalLength);
-      var end = _clampInt(bookmark.endOffset, 0, totalLength);
-      if (end < start) {
-        final tmp = start;
-        start = end;
-        end = tmp;
-      }
-      if (end == start) {
-        continue;
-      }
-
-      var startIndex = _findParagraphIndexByOffset(starts, paragraphs, start);
-      var endIndex = _findParagraphIndexByOffset(starts, paragraphs, end);
-
-      for (var index = startIndex; index <= endIndex; index++) {
-        final paragraphStart = starts[index];
-        final paragraphLength = paragraphs[index].length;
-        final paragraphEnd = paragraphStart + paragraphLength;
-        final localStart = index == startIndex ? start - paragraphStart : 0;
-        final localEnd =
-            index == endIndex
-                ? min(end, paragraphEnd) - paragraphStart
-                : paragraphLength;
-        if (localEnd <= localStart) {
-          continue;
-        }
-        final list = result.putIfAbsent(index, () => <_BookmarkRange>[]);
-        list.add(
-          _BookmarkRange(
-            localStart,
-            localEnd,
-            hasHighlight: _bookmarkHasHighlight(bookmark),
-            isBold: bookmark.isBold,
-            isUnderline: bookmark.isUnderline,
-            isWavy: bookmark.isWavy,
-          ),
-        );
-      }
-    }
-
-    return result;
-  }
-
-  bool _bookmarkHasHighlight(Bookmark bookmark) {
-    final color = bookmark.color?.trim();
-    if (color == null || color.isEmpty) {
-      return !bookmark.isUnderline && !bookmark.isWavy;
-    }
-    return color != _kBookmarkNoHighlightToken;
-  }
-
-  int _findParagraphIndexByOffset(
-    List<int> starts,
-    List<String> paragraphs,
-    int offset,
-  ) {
-    for (var i = 0; i < starts.length; i++) {
-      final start = starts[i];
-      final end = start + paragraphs[i].length;
-      if (offset < start) {
-        return max(0, i - 1);
-      }
-      if (offset <= end) {
-        return i;
-      }
-    }
-    return max(0, paragraphs.length - 1);
-  }
+  bool _bookmarkHasHighlight(Bookmark bookmark) =>
+      _bookmarkRangePresenter.bookmarkHasHighlight(bookmark);
 
   Bookmark? _currentSelectionBookmark() {
     if (!_isTextSelectionActive || _selectedSnippet.isEmpty) {
       return null;
     }
-    return _findBookmarkByOffsets(_selectionStartOffset, _selectionEndOffset);
-  }
-
-  Bookmark? _findBookmarkByOffsets(int startOffset, int endOffset) {
-    if (_chapterBookmarks.isEmpty) {
-      return null;
-    }
-    for (final bookmark in _chapterBookmarks) {
-      if (!_isBookmarkInCurrentChapter(bookmark)) {
-        continue;
-      }
-      if (bookmark.startOffset == startOffset &&
-          bookmark.endOffset == endOffset) {
-        return bookmark;
-      }
-    }
-    return null;
+    return _bookmarkRangePresenter.findBookmarkByOffsets(
+      bookmarks: _chapterBookmarks,
+      chapterId: _chapterId,
+      chapterIndex: _currentIndex,
+      startOffset: _selectionStartOffset,
+      endOffset: _selectionEndOffset,
+    );
   }
 
   double _adaptiveReaderSheetHeightFactor(
@@ -5638,22 +5470,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     };
   }
 
-  String _mangaReadModeLabel(ReaderMangaReadMode mode) {
-    return switch (mode) {
-      ReaderMangaReadMode.continuous => '连续长图',
-      ReaderMangaReadMode.paged => '分页图',
-      ReaderMangaReadMode.horizontal => '横向翻页',
-    };
-  }
-
-  String _mangaLoadStrategyLabel(ReaderMangaLoadStrategy strategy) {
-    return switch (strategy) {
-      ReaderMangaLoadStrategy.balanced => '平衡',
-      ReaderMangaLoadStrategy.smooth => '流畅优先',
-      ReaderMangaLoadStrategy.saveData => '省流量',
-    };
-  }
-
   String _pageAnimationLabel(ReaderPageAnimationStyle style) =>
       _readerSettingsPresenter.pageAnimationLabel(style);
 
@@ -5694,12 +5510,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
-  _ReaderThemeColors _resolveThemeColors(
+  ReaderThemeColors _resolveThemeColors(
     ReaderThemeMode mode,
     ReaderSettings settings,
   ) {
     if (_isClassicLightReaderBackground(mode, settings)) {
-      return const _ReaderThemeColors(
+      return const ReaderThemeColors(
         background: Color(0xFFFDFDFD),
         text: Color(0xFF111827),
         meta: Color(0xFF6B7280),
@@ -5730,7 +5546,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       metaColor = const Color(0xFF6E563D);
     }
 
-    return _ReaderThemeColors(
+    return ReaderThemeColors(
       background: background,
       text: textColor,
       meta: metaColor,

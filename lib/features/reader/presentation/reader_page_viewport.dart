@@ -71,7 +71,7 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
     );
   }
 
-  Widget _composeReaderContent(_ReaderThemeColors colors) {
+  Widget _composeReaderContent(ReaderThemeColors colors) {
     return Column(
       children: [
         if (_showsPinnedChapterHeader) _buildPinnedChapterHeader(colors),
@@ -82,7 +82,7 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
     );
   }
 
-  Widget _composeReaderBody(_ReaderThemeColors colors) {
+  Widget _composeReaderBody(ReaderThemeColors colors) {
     final palette = ReaderBodyRegionPalette(
       textColor: colors.text,
       metaColor: colors.meta,
@@ -134,7 +134,7 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
     );
   }
 
-  Widget _buildReaderViewportContent(_ReaderThemeColors colors) {
+  Widget _buildReaderViewportContent(ReaderThemeColors colors) {
     final surfaceModel = _currentContentModeSurfaceModel;
     if (surfaceModel.mode == ReaderContentMode.audio) {
       return _buildAudioReader(colors);
@@ -145,7 +145,7 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
     return _buildStandardReaderList(colors);
   }
 
-  Widget _buildAudioReader(_ReaderThemeColors colors) {
+  Widget _buildAudioReader(ReaderThemeColors colors) {
     final snapshot = _bootstrapProgress?.positionSnapshot;
     final canGoPreviousChapter = (_currentIndex ?? 0) > 0;
     final canGoNextChapter =
@@ -180,7 +180,7 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
     );
   }
 
-  Widget _buildHybridReader(_ReaderThemeColors colors) {
+  Widget _buildHybridReader(ReaderThemeColors colors) {
     final session = _resolvedContentSession();
     final sourceFilePath = session.sourceFilePath?.trim();
     if (session.hybridSubMode == ReaderHybridSubMode.pdf &&
@@ -211,7 +211,7 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
     return _buildMangaReader(colors);
   }
 
-  Widget _buildMangaViewport(_ReaderThemeColors colors) {
+  Widget _buildMangaViewport(ReaderThemeColors colors) {
     final contentSession = _resolvedContentSession();
     final surfaceMetrics = _resolveReaderSurfaceMetrics(context);
     final mediaSize = MediaQuery.sizeOf(context);
@@ -288,7 +288,7 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
     );
   }
 
-  Widget _buildPagedTextViewport(_ReaderThemeColors colors) {
+  Widget _buildPagedTextViewport(ReaderThemeColors colors) {
     return _viewportBuilder.buildPagedViewport(
       builder: (context, constraints, palette) {
         final layoutMetrics = _resolvePagedLayoutMetrics(context, constraints);

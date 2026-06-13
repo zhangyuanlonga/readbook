@@ -43,7 +43,7 @@ class _ReaderBackgroundAssetStore {
   final Map<String, Uint8List> presetBytes = <String, Uint8List>{};
   final Map<String, String> presetBase64 = <String, String>{};
   final Map<String, Uint8List> customPreviewBytes = <String, Uint8List>{};
-  final List<_ReaderBackgroundPreset> presets = <_ReaderBackgroundPreset>[];
+  final List<ReaderBackgroundPreset> presets = <ReaderBackgroundPreset>[];
   String? cachedBackgroundImageKey;
   MemoryImage? cachedBackgroundImage;
   String? cachedManagedBackgroundPath;
@@ -63,7 +63,7 @@ extension _ReaderPageBackgroundAssetAccessors on _ReaderPageState {
   Map<String, Uint8List> get _customBackgroundPreviewBytes =>
       _backgroundAssets.customPreviewBytes;
 
-  List<_ReaderBackgroundPreset> get _backgroundPresets =>
+  List<ReaderBackgroundPreset> get _backgroundPresets =>
       _backgroundAssets.presets;
 
   String? get _cachedBackgroundImageKey =>
@@ -106,7 +106,7 @@ extension _ReaderPageBackgroundAssetAccessors on _ReaderPageState {
 }
 
 extension _ReaderPageBackgroundExtension on _ReaderPageState {
-  Decoration _buildReaderBackgroundDecorationImpl(_ReaderThemeColors colors) {
+  Decoration _buildReaderBackgroundDecorationImpl(ReaderThemeColors colors) {
     final resolvedBackground = _resolveReaderBackgroundVisualImpl();
     final (backgroundColor, surfaceColor) = switch (_settings.backgroundStyle) {
       ReaderBackgroundStyle.plain => (colors.background, colors.background),
@@ -131,7 +131,7 @@ extension _ReaderPageBackgroundExtension on _ReaderPageState {
     );
   }
 
-  _ResolvedReaderBackgroundVisual? _resolveReaderBackgroundVisualImpl() {
+  ReaderResolvedBackgroundVisual? _resolveReaderBackgroundVisualImpl() {
     final raw = _effectiveReaderBackgroundPath();
     if (raw == null || raw.isEmpty) {
       _cachedBackgroundImageKey = null;
@@ -160,7 +160,7 @@ extension _ReaderPageBackgroundExtension on _ReaderPageState {
       _cachedManagedBackgroundPath = null;
       _cachedManagedBackgroundImage = null;
       _cachedManagedBackgroundExists = null;
-      return _ResolvedReaderBackgroundVisual(
+      return ReaderResolvedBackgroundVisual(
         imageProvider: AssetImage(raw),
         fit: fit,
         opacity: opacity,
@@ -202,7 +202,7 @@ extension _ReaderPageBackgroundExtension on _ReaderPageState {
         _cachedBackgroundImage = null;
         return null;
       }
-      return _ResolvedReaderBackgroundVisual(
+      return ReaderResolvedBackgroundVisual(
         imageProvider: _cachedManagedBackgroundImage!,
         fit: fit,
         opacity: opacity,
@@ -225,7 +225,7 @@ extension _ReaderPageBackgroundExtension on _ReaderPageState {
       _cachedBackgroundImage = MemoryImage(bytes);
     }
 
-    return _ResolvedReaderBackgroundVisual(
+    return ReaderResolvedBackgroundVisual(
       imageProvider: _cachedBackgroundImage!,
       fit: fit,
       opacity: opacity,
@@ -448,7 +448,7 @@ extension _ReaderPageBackgroundExtension on _ReaderPageState {
 
       for (var index = 0; index < presetPaths.length; index += 1) {
         _backgroundPresets.add(
-          _ReaderBackgroundPreset(
+          ReaderBackgroundPreset(
             label: '预设${index + 1}',
             assetPath: presetPaths[index],
           ),

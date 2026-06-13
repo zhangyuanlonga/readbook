@@ -9,7 +9,7 @@ import '../../reader_shell.dart';
 
 /// Public palette for reader chrome widgets.
 ///
-/// `reader_page.dart` can map the existing private `_ReaderThemeColors`
+/// `reader_page.dart` can map the existing private `ReaderThemeColors`
 /// 1:1 into this object without reinterpreting any values.
 class ReaderChromePalette {
   const ReaderChromePalette({

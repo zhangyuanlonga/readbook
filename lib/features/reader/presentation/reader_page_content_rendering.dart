@@ -2,9 +2,9 @@ part of 'reader_page.dart';
 
 extension _ReaderPageContentRenderingExtension on _ReaderPageState {
   Widget _buildContinuousTextChapterSection({
-    required _ContinuousTextChapter chapter,
+    required ReaderPageContinuousTextChapter chapter,
     required bool isActive,
-    required _ReaderThemeColors colors,
+    required ReaderThemeColors colors,
   }) {
     final renderItems = buildReaderRenderBlockItems(chapter.document);
     final body = Column(
@@ -48,7 +48,7 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
   Widget _buildStaticParagraphItem({
     required String paragraph,
     required bool isLast,
-    required _ReaderThemeColors colors,
+    required ReaderThemeColors colors,
   }) {
     final inlineImageUrl = _tryParseInlineImageParagraph(paragraph);
     if (inlineImageUrl != null) {
@@ -120,7 +120,7 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
   Widget _buildStaticReaderBlockItem({
     required ReaderRenderBlockItem item,
     required bool isLast,
-    required _ReaderThemeColors colors,
+    required ReaderThemeColors colors,
   }) {
     if (item is ReaderRenderImageItem) {
       return _buildInlineImageParagraphItem(
@@ -158,7 +158,7 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
   Widget _buildSelectableReaderBlockItem({
     required ReaderRenderBlockItem item,
     required bool isLast,
-    required _ReaderThemeColors colors,
+    required ReaderThemeColors colors,
   }) {
     if (item is ReaderRenderImageItem) {
       return _buildInlineImageParagraphItem(
@@ -198,7 +198,7 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
           wavyColor: colors.text.withValues(alpha: 0.7),
           annotationRanges: (_bookmarkRangesByParagraph[item.paragraphIndex ??
                       0] ??
-                  const <_BookmarkRange>[])
+                  const <ReaderBookmarkRange>[])
               .map(
                 (range) => ReaderTextAnnotationRange(
                   range.start,
@@ -234,7 +234,7 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
     required String paragraph,
     required int paragraphIndex,
     required bool isLast,
-    required _ReaderThemeColors colors,
+    required ReaderThemeColors colors,
   }) {
     final inlineImageUrl = _tryParseInlineImageParagraph(paragraph);
     if (inlineImageUrl != null) {
@@ -265,7 +265,7 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
           highlightColor: colors.text,
           wavyColor: colors.text.withValues(alpha: 0.7),
           annotationRanges: (_bookmarkRangesByParagraph[paragraphIndex] ??
-                  const <_BookmarkRange>[])
+                  const <ReaderBookmarkRange>[])
               .map(
                 (range) => ReaderTextAnnotationRange(
                   range.start,
@@ -314,7 +314,7 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
   Widget _buildInlineImageParagraphItem({
     required String imageUrl,
     required bool isLast,
-    required _ReaderThemeColors colors,
+    required ReaderThemeColors colors,
   }) {
     final paddingBottom =
         isLast
@@ -332,7 +332,7 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
 
   Widget _buildInlineReaderImageCard({
     required String imageUrl,
-    required _ReaderThemeColors colors,
+    required ReaderThemeColors colors,
   }) {
     final retryNonce = _mangaImageRetryNonce[imageUrl] ?? 0;
     final requestUrl = _buildMangaImageUrl(imageUrl, retryNonce);
@@ -358,7 +358,7 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
 
   Future<void> _openInlineImagePreview(
     String requestUrl,
-    _ReaderThemeColors colors,
+    ReaderThemeColors colors,
   ) async {
     if (_autoReadSessionState == ReaderAutoReadSessionState.running) {
       _pauseAutoReadSession();
@@ -391,7 +391,7 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
   Widget _buildReaderImageWidget({
     required String requestUrl,
     required String sourceUrl,
-    required _ReaderThemeColors colors,
+    required ReaderThemeColors colors,
     required int retryNonce,
   }) {
     final mediaSize = MediaQuery.sizeOf(context);
@@ -472,7 +472,7 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
 
   Widget _buildSvgImageWidget({
     required String requestUrl,
-    required _ReaderThemeColors colors,
+    required ReaderThemeColors colors,
     required String sourceUrl,
     required int retryNonce,
   }) {
@@ -540,7 +540,7 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
 
   Widget _buildDataUriImage({
     required String dataUri,
-    required _ReaderThemeColors colors,
+    required ReaderThemeColors colors,
     required String sourceUrl,
     required int retryNonce,
     required ReaderImageDecodeBudget decodeBudget,
@@ -569,7 +569,7 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
     }
   }
 
-  _DecodedDataUriImage? _decodeDataUriImage({
+  ReaderDecodedDataUriImage? _decodeDataUriImage({
     required String dataUri,
     int? maxBytes,
   }) {
@@ -588,7 +588,7 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
     if (maxBytes != null && maxBytes >= 0 && bytes.length > maxBytes) {
       return null;
     }
-    return _DecodedDataUriImage(
+    return ReaderDecodedDataUriImage(
       mediaType: mediaType,
       bytes: bytes,
       text: utf8.decode(bytes, allowMalformed: true),
@@ -596,7 +596,7 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
   }
 
   Widget _buildMangaImageError(
-    _ReaderThemeColors colors,
+    ReaderThemeColors colors,
     String imageUrl,
     int retryNonce,
   ) {
@@ -637,7 +637,7 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
   }
 
   Widget _buildPagedPageContainer({
-    required _ReaderThemeColors colors,
+    required ReaderThemeColors colors,
     required int pageIndex,
     required int total,
     required Size pageSize,
@@ -691,14 +691,14 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
   }
 
   Widget _buildPagedHeaderSection(
-    _ReaderThemeColors colors,
+    ReaderThemeColors colors,
     ReaderSurfaceMetrics layoutMetrics,
   ) {
     return const SizedBox.shrink();
   }
 
   Widget _buildPagedFooterSection({
-    required _ReaderThemeColors colors,
+    required ReaderThemeColors colors,
     required int index,
     required int total,
     required ReaderSurfaceMetrics layoutMetrics,
@@ -781,7 +781,7 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
   }
 
   Widget _buildPageIndexOverlay({
-    required _ReaderThemeColors colors,
+    required ReaderThemeColors colors,
     required int index,
     required int total,
     required double bottomInset,
@@ -814,7 +814,7 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
   Widget _buildPagedResolvedSliceContent({
     required BuildContext context,
     required ReaderPagedResolvedSlice slice,
-    required _ReaderThemeColors colors,
+    required ReaderThemeColors colors,
   }) {
     final paragraphIndex = slice.paragraphIndex;
     if (paragraphIndex == null ||
@@ -825,8 +825,9 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
 
     final paragraph = _paragraphs[paragraphIndex];
     final ranges =
-        _bookmarkRangesByParagraph[paragraphIndex] ?? const <_BookmarkRange>[];
-    final localRanges = <_BookmarkRange>[];
+        _bookmarkRangesByParagraph[paragraphIndex] ??
+        const <ReaderBookmarkRange>[];
+    final localRanges = <ReaderBookmarkRange>[];
     if (ranges.isNotEmpty) {
       for (final range in ranges) {
         final overlapStart = max(range.start, slice.slice.start);
@@ -835,7 +836,7 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
           continue;
         }
         localRanges.add(
-          _BookmarkRange(
+          ReaderBookmarkRange(
             overlapStart - slice.slice.start,
             overlapEnd - slice.slice.start,
             hasHighlight: range.hasHighlight,
@@ -908,7 +909,7 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
     );
   }
 
-  TextStyle _paragraphTextStyle(_ReaderThemeColors colors) {
+  TextStyle _paragraphTextStyle(ReaderThemeColors colors) {
     final customColorValue = _settings.bodyTextColorValue;
     return _typographyResolver.resolveBodyStyle(
       settings: _settings,
@@ -918,7 +919,7 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
 
   TextStyle _readerBlockTextStyle(
     ReaderRenderTextItem item,
-    _ReaderThemeColors colors,
+    ReaderThemeColors colors,
   ) {
     return resolveReaderTextBlockPresentation(
       settings: _settings,

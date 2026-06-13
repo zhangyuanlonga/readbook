@@ -171,7 +171,7 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
     _curlAutoTurnController.stop();
     _crossChapterSnapshotController.stop();
     _pagedTransition = PagedTransitionController.idleState;
-    _curlTransition = const _CurlTransitionState();
+    _curlTransition = const ReaderCurlTransitionState();
     _clearCrossChapterSnapshotTransition();
     _progressDebounceTimer?.cancel();
     _autoReadResumeTimer?.cancel();
@@ -183,7 +183,7 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
     _blockingLoadingCardTimer?.cancel();
     _hiddenLoadingPlaceholderTimer?.cancel();
     _readingRecordAutoCommitTimer?.cancel();
-    _readerLongPressTimer?.cancel();
+    _pointerInputController.dispose();
     _readerInteractionSettleTimer?.cancel();
     _volumeKeyEventSubscription?.cancel();
     _appThemeModeSubscription?.close();

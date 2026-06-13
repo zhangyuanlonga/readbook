@@ -17,7 +17,7 @@ extension _ReaderPageSelectionExtension on _ReaderPageState {
     if (!handled) {
       return;
     }
-    _readerTapHandledByChild = true;
+    _markReaderTapHandledByChild();
     if (_isAutoReadSessionEnabled) {
       _pauseAutoReadSession();
     }
@@ -159,7 +159,7 @@ extension _ReaderPageSelectionExtension on _ReaderPageState {
     final hitRange =
         localRange == null
             ? null
-            : _BookmarkRange(
+            : ReaderBookmarkRange(
               localRange.start + slice.start,
               localRange.end + slice.start,
               hasHighlight: localRange.hasHighlight,
@@ -290,7 +290,7 @@ extension _ReaderPageSelectionExtension on _ReaderPageState {
       context: <String, Object?>{'status': details.status.name},
     );
     if (details.status != SelectionStatus.none) {
-      _readerTapHandledByChild = true;
+      _markReaderTapHandledByChild();
     }
     _selectionStatus = details.status;
     if (_isEditingBookmarkNote &&
@@ -502,13 +502,13 @@ extension _ReaderPageSelectionExtension on _ReaderPageState {
     );
   }
 
-  List<_ReaderInspirationActionItem> _buildInspirationActionItems({
+  List<ReaderInspirationActionItem> _buildInspirationActionItems({
     required SelectableRegionState? clearSelectionState,
     VoidCallback? hideToolbar,
   }) {
     final selectionState = _currentInspirationSelectionState();
     if (!selectionState.hasSelection) {
-      return const <_ReaderInspirationActionItem>[];
+      return const <ReaderInspirationActionItem>[];
     }
 
     void closeMenus() {
@@ -516,8 +516,8 @@ extension _ReaderPageSelectionExtension on _ReaderPageState {
       _hideBookmarkToolbar();
     }
 
-    return <_ReaderInspirationActionItem>[
-      _ReaderInspirationActionItem(
+    return <ReaderInspirationActionItem>[
+      ReaderInspirationActionItem(
         icon: Icons.copy_all_rounded,
         label: '复制',
         onPressed: () {
@@ -527,7 +527,7 @@ extension _ReaderPageSelectionExtension on _ReaderPageState {
           );
         },
       ),
-      _ReaderInspirationActionItem(
+      ReaderInspirationActionItem(
         icon:
             selectionState.hasExistingBookmark
                 ? Icons.delete_outline_rounded
@@ -549,7 +549,7 @@ extension _ReaderPageSelectionExtension on _ReaderPageState {
           );
         },
       ),
-      _ReaderInspirationActionItem(
+      ReaderInspirationActionItem(
         icon: Icons.edit_note_rounded,
         label:
             selectionState.existingBookmark?.hasNote == true ? '编辑笔记' : '记笔记',
@@ -564,7 +564,7 @@ extension _ReaderPageSelectionExtension on _ReaderPageState {
           );
         },
       ),
-      _ReaderInspirationActionItem(
+      ReaderInspirationActionItem(
         icon: Icons.highlight_alt_rounded,
         label: selectionState.isHighlight ? '取消高亮' : '高亮',
         isActive: selectionState.isHighlight,
@@ -572,7 +572,7 @@ extension _ReaderPageSelectionExtension on _ReaderPageState {
           unawaited(_toggleSelectionHighlight());
         },
       ),
-      _ReaderInspirationActionItem(
+      ReaderInspirationActionItem(
         icon: Icons.format_bold_rounded,
         label: selectionState.isBold ? '取消加粗重点' : '加粗重点',
         isActive: selectionState.isBold,
@@ -580,7 +580,7 @@ extension _ReaderPageSelectionExtension on _ReaderPageState {
           unawaited(_toggleSelectionBold());
         },
       ),
-      _ReaderInspirationActionItem(
+      ReaderInspirationActionItem(
         icon: Icons.format_underlined_rounded,
         label: selectionState.isUnderline ? '取消划线' : '划线',
         isActive: selectionState.isUnderline,
@@ -588,7 +588,7 @@ extension _ReaderPageSelectionExtension on _ReaderPageState {
           unawaited(_toggleSelectionUnderline());
         },
       ),
-      _ReaderInspirationActionItem(
+      ReaderInspirationActionItem(
         icon: Icons.multiline_chart_rounded,
         label: selectionState.isWavy ? '取消波浪线' : '波浪线',
         isActive: selectionState.isWavy,
@@ -596,7 +596,7 @@ extension _ReaderPageSelectionExtension on _ReaderPageState {
           unawaited(_toggleSelectionWavy());
         },
       ),
-      _ReaderInspirationActionItem(
+      ReaderInspirationActionItem(
         icon: Icons.close_rounded,
         label: '取消选择',
         onPressed: () {
@@ -611,7 +611,7 @@ extension _ReaderPageSelectionExtension on _ReaderPageState {
   Widget _buildInspirationActionPanel({
     required TextSelectionToolbarAnchors anchors,
     required VoidCallback dismiss,
-    required List<_ReaderInspirationActionItem> actions,
+    required List<ReaderInspirationActionItem> actions,
   }) {
     if (actions.isEmpty) {
       return const SizedBox.shrink();
@@ -722,7 +722,7 @@ extension _ReaderPageSelectionExtension on _ReaderPageState {
                         runSpacing: 10,
                         children: [
                           for (final action in actions)
-                            _ReaderInspirationActionChip(
+                            ReaderInspirationActionChip(
                               action: action,
                               colorScheme: colorScheme,
                             ),
@@ -739,9 +739,9 @@ extension _ReaderPageSelectionExtension on _ReaderPageState {
     );
   }
 
-  _ReaderInspirationSelectionState _currentInspirationSelectionState() {
+  ReaderInspirationSelectionState _currentInspirationSelectionState() {
     final existingBookmark = _currentSelectionBookmark();
-    return _ReaderInspirationSelectionState(
+    return ReaderInspirationSelectionState(
       hasSelection: _isTextSelectionActive && _selectedSnippet.isNotEmpty,
       existingBookmark: existingBookmark,
       isHighlight: _selectionHighlight,

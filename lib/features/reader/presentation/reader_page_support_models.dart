@@ -1,14 +1,25 @@
-part of 'reader_page.dart';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 
-class _ChapterLoadSnapshot {
-  const _ChapterLoadSnapshot({required this.result, required this.isCached});
+import 'package:flutter/material.dart';
+
+import '../../../domain/entities/bookmark.dart';
+import '../../../domain/entities/reader_document.dart';
+import '../../../domain/entities/reader_settings.dart';
+import '../application/chapter_content_service.dart';
+
+class ReaderPageChapterLoadSnapshot {
+  const ReaderPageChapterLoadSnapshot({
+    required this.result,
+    required this.isCached,
+  });
 
   final ChapterContentResult result;
   final bool isCached;
 }
 
-class _ContinuousTextChapter {
-  const _ContinuousTextChapter({
+class ReaderPageContinuousTextChapter {
+  const ReaderPageContinuousTextChapter({
     required this.chapterId,
     required this.chapterUrl,
     required this.chapterTitle,
@@ -31,8 +42,8 @@ class _ContinuousTextChapter {
   final bool isCached;
 }
 
-class _ContinuousTextChapterLayout {
-  const _ContinuousTextChapterLayout({
+class ReaderPageContinuousTextChapterLayout {
+  const ReaderPageContinuousTextChapterLayout({
     required this.startOffset,
     required this.endOffset,
   });
@@ -41,8 +52,8 @@ class _ContinuousTextChapterLayout {
   final double endOffset;
 }
 
-class _ScrollEdgeAdvanceState {
-  const _ScrollEdgeAdvanceState({
+class ReaderScrollEdgeAdvanceState {
+  const ReaderScrollEdgeAdvanceState({
     this.overscrollDistance = 0,
     this.isArmed = false,
     this.actionDirection = 0,
@@ -52,12 +63,12 @@ class _ScrollEdgeAdvanceState {
   final bool isArmed;
   final int actionDirection;
 
-  _ScrollEdgeAdvanceState copyWith({
+  ReaderScrollEdgeAdvanceState copyWith({
     double? overscrollDistance,
     bool? isArmed,
     int? actionDirection,
   }) {
-    return _ScrollEdgeAdvanceState(
+    return ReaderScrollEdgeAdvanceState(
       overscrollDistance: overscrollDistance ?? this.overscrollDistance,
       isArmed: isArmed ?? this.isArmed,
       actionDirection: actionDirection ?? this.actionDirection,
@@ -65,8 +76,8 @@ class _ScrollEdgeAdvanceState {
   }
 }
 
-class _ReaderThemeColors {
-  const _ReaderThemeColors({
+class ReaderThemeColors {
+  const ReaderThemeColors({
     required this.background,
     required this.text,
     required this.meta,
@@ -81,8 +92,8 @@ class _ReaderThemeColors {
   final Color overlay;
 }
 
-class _ReaderBackgroundColorOption {
-  const _ReaderBackgroundColorOption({
+class ReaderBackgroundColorOption {
+  const ReaderBackgroundColorOption({
     required this.label,
     required this.previewColor,
     required this.mode,
@@ -97,24 +108,28 @@ class _ReaderBackgroundColorOption {
   final ReaderBackgroundTone backgroundTone;
 }
 
-class _ReaderBackgroundPreset {
-  const _ReaderBackgroundPreset({required this.label, required this.assetPath});
+class ReaderBackgroundPreset {
+  const ReaderBackgroundPreset({required this.label, required this.assetPath});
 
   final String label;
   final String assetPath;
 }
 
-class _ReaderSizeReporter extends StatefulWidget {
-  const _ReaderSizeReporter({required this.child, required this.onSizeChanged});
+class ReaderSizeReporter extends StatefulWidget {
+  const ReaderSizeReporter({
+    super.key,
+    required this.child,
+    required this.onSizeChanged,
+  });
 
   final Widget child;
   final ValueChanged<Size> onSizeChanged;
 
   @override
-  State<_ReaderSizeReporter> createState() => _ReaderSizeReporterState();
+  State<ReaderSizeReporter> createState() => _ReaderSizeReporterState();
 }
 
-class _ReaderSizeReporterState extends State<_ReaderSizeReporter> {
+class _ReaderSizeReporterState extends State<ReaderSizeReporter> {
   Size? _lastSize;
 
   @override
@@ -149,8 +164,8 @@ class _ReaderSizeReporterState extends State<_ReaderSizeReporter> {
   }
 }
 
-class _CurlTransitionState {
-  const _CurlTransitionState({
+class ReaderCurlTransitionState {
+  const ReaderCurlTransitionState({
     this.isAnimating = false,
     this.isPreview = false,
     this.direction = 1,
@@ -170,7 +185,7 @@ class _CurlTransitionState {
   final bool commitOnAnimationEnd;
   final bool isCrossChapter;
 
-  _CurlTransitionState copyWith({
+  ReaderCurlTransitionState copyWith({
     bool? isAnimating,
     bool? isPreview,
     int? direction,
@@ -180,7 +195,7 @@ class _CurlTransitionState {
     bool? commitOnAnimationEnd,
     bool? isCrossChapter,
   }) {
-    return _CurlTransitionState(
+    return ReaderCurlTransitionState(
       isAnimating: isAnimating ?? this.isAnimating,
       isPreview: isPreview ?? this.isPreview,
       direction: direction ?? this.direction,
@@ -193,8 +208,8 @@ class _CurlTransitionState {
   }
 }
 
-class _CrossChapterSnapshotTransitionState {
-  const _CrossChapterSnapshotTransitionState({
+class ReaderCrossChapterSnapshotTransitionState {
+  const ReaderCrossChapterSnapshotTransitionState({
     this.fromImage,
     this.toImage,
     this.style = ReaderPageAnimationStyle.none,
@@ -213,7 +228,7 @@ class _CrossChapterSnapshotTransitionState {
   bool get isActive => fromImage != null;
   bool get hasTarget => fromImage != null && toImage != null;
 
-  _CrossChapterSnapshotTransitionState copyWith({
+  ReaderCrossChapterSnapshotTransitionState copyWith({
     ui.Image? fromImage,
     ui.Image? toImage,
     ReaderPageAnimationStyle? style,
@@ -221,7 +236,7 @@ class _CrossChapterSnapshotTransitionState {
     int? generation,
     String? completionMode,
   }) {
-    return _CrossChapterSnapshotTransitionState(
+    return ReaderCrossChapterSnapshotTransitionState(
       fromImage: fromImage ?? this.fromImage,
       toImage: toImage ?? this.toImage,
       style: style ?? this.style,
@@ -232,8 +247,8 @@ class _CrossChapterSnapshotTransitionState {
   }
 }
 
-class _BookmarkRange {
-  const _BookmarkRange(
+class ReaderBookmarkRange {
+  const ReaderBookmarkRange(
     this.start,
     this.end, {
     required this.hasHighlight,
@@ -250,8 +265,8 @@ class _BookmarkRange {
   final bool isWavy;
 }
 
-class _ReaderInspirationSelectionState {
-  const _ReaderInspirationSelectionState({
+class ReaderInspirationSelectionState {
+  const ReaderInspirationSelectionState({
     required this.hasSelection,
     required this.existingBookmark,
     required this.isHighlight,
@@ -270,8 +285,8 @@ class _ReaderInspirationSelectionState {
   bool get hasExistingBookmark => existingBookmark != null;
 }
 
-class _ReaderInspirationActionItem {
-  const _ReaderInspirationActionItem({
+class ReaderInspirationActionItem {
+  const ReaderInspirationActionItem({
     required this.icon,
     required this.label,
     required this.onPressed,
@@ -284,13 +299,14 @@ class _ReaderInspirationActionItem {
   final bool isActive;
 }
 
-class _ReaderInspirationActionChip extends StatelessWidget {
-  const _ReaderInspirationActionChip({
+class ReaderInspirationActionChip extends StatelessWidget {
+  const ReaderInspirationActionChip({
+    super.key,
     required this.action,
     required this.colorScheme,
   });
 
-  final _ReaderInspirationActionItem action;
+  final ReaderInspirationActionItem action;
   final ColorScheme colorScheme;
 
   @override
@@ -333,8 +349,8 @@ class _ReaderInspirationActionChip extends StatelessWidget {
   }
 }
 
-class _DecodedDataUriImage {
-  const _DecodedDataUriImage({
+class ReaderDecodedDataUriImage {
+  const ReaderDecodedDataUriImage({
     required this.mediaType,
     required this.bytes,
     required this.text,
@@ -345,8 +361,8 @@ class _DecodedDataUriImage {
   final String text;
 }
 
-class _ResolvedReaderBackgroundVisual {
-  const _ResolvedReaderBackgroundVisual({
+class ReaderResolvedBackgroundVisual {
+  const ReaderResolvedBackgroundVisual({
     required this.imageProvider,
     required this.fit,
     required this.opacity,
@@ -361,8 +377,8 @@ class _ResolvedReaderBackgroundVisual {
   final double overlayOpacity;
 }
 
-class _ReaderSurfaceReserves {
-  const _ReaderSurfaceReserves({
+class ReaderSurfaceReserves {
+  const ReaderSurfaceReserves({
     required this.scrollBottomReserve,
     required this.pagedHeaderReserve,
     required this.pagedBottomReserve,

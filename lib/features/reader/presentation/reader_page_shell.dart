@@ -220,7 +220,7 @@ extension _ReaderPageShellExtension on _ReaderPageState {
   }
 
   void _markReaderTapHandledByChild() {
-    _readerTapHandledByChild = true;
+    _pointerInputController.markChildHandled();
   }
 
   Widget _buildOverlayScrim() {
@@ -244,11 +244,11 @@ extension _ReaderPageShellExtension on _ReaderPageState {
     );
   }
 
-  Widget _buildBackgroundLayer(_ReaderThemeColors colors) {
+  Widget _buildBackgroundLayer(ReaderThemeColors colors) {
     return DecoratedBox(decoration: _buildReaderBackgroundDecoration(colors));
   }
 
-  Widget _buildChapterLoadingIndicator(_ReaderThemeColors colors) {
+  Widget _buildChapterLoadingIndicator(ReaderThemeColors colors) {
     final showIndicator =
         _showChapterLoadingIndicator && !_shouldShowBlockingReaderLoading;
     final topInset = _topSafeInset(context);

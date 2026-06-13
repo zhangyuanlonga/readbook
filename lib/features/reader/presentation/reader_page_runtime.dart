@@ -115,7 +115,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     );
   }
 
-  GlobalKey _continuousTextChapterKey(_ContinuousTextChapter chapter) {
+  GlobalKey _continuousTextChapterKey(ReaderPageContinuousTextChapter chapter) {
     final identity =
         chapter.chapterUrl.trim().isNotEmpty
             ? chapter.chapterUrl.trim()
@@ -123,31 +123,34 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     return _continuousTextChapterKeys.putIfAbsent(identity, () => GlobalKey());
   }
 
-  Future<_ContinuousTextChapter?> _loadAdjacentContinuousTextChapter({
+  Future<ReaderPageContinuousTextChapter?> _loadAdjacentContinuousTextChapter({
     required bool forward,
   }) {
     return _loadAdjacentContinuousTextChapterFlow(forward: forward);
   }
 
-  bool _isContinuousTextChapterActive(_ContinuousTextChapter chapter) {
+  bool _isContinuousTextChapterActive(ReaderPageContinuousTextChapter chapter) {
     return _isContinuousTextChapterActiveFlow(chapter);
   }
 
-  _ContinuousTextChapter? _findCurrentContinuousTextChapter() {
+  ReaderPageContinuousTextChapter? _findCurrentContinuousTextChapter() {
     return _findCurrentContinuousTextChapterFlow();
   }
 
-  double _continuousTextChapterScrollRatioFor(_ContinuousTextChapter chapter) {
+  double _continuousTextChapterScrollRatioFor(
+    ReaderPageContinuousTextChapter chapter,
+  ) {
     return _continuousTextChapterScrollRatioForFlow(chapter);
   }
 
   double _continuousTextChapterDocumentRatioFor(
-    _ContinuousTextChapter chapter,
+    ReaderPageContinuousTextChapter chapter,
   ) {
     return _continuousTextChapterDocumentRatioForFlow(chapter);
   }
 
-  _ContinuousTextChapter? _resolveActiveContinuousTextChapterForRuntime() {
+  ReaderPageContinuousTextChapter?
+  _resolveActiveContinuousTextChapterForRuntime() {
     return _resolveActiveContinuousTextChapterFlow();
   }
 
@@ -400,7 +403,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       }
       setState(() {
         _chapterBookmarks = const [];
-        _bookmarkRangesByParagraph = const <int, List<_BookmarkRange>>{};
+        _bookmarkRangesByParagraph = const <int, List<ReaderBookmarkRange>>{};
       });
     }
   }
@@ -1749,7 +1752,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     _crossChapterSnapshotController.stop();
     _crossChapterSnapshotController.value = 0;
     _replaceCrossChapterSnapshotTransition(
-      _CrossChapterSnapshotTransitionState(
+      ReaderCrossChapterSnapshotTransitionState(
         fromImage: fromImage,
         style: style,
         direction: direction,
@@ -1772,7 +1775,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
   }
 
   void _replaceCrossChapterSnapshotTransition(
-    _CrossChapterSnapshotTransitionState next,
+    ReaderCrossChapterSnapshotTransitionState next,
   ) {
     final previous = _crossChapterSnapshotTransition;
     final previousFrom = previous.fromImage;
@@ -1794,7 +1797,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     _crossChapterSnapshotController.stop();
     final previous = _crossChapterSnapshotTransition;
     _crossChapterSnapshotTransition =
-        const _CrossChapterSnapshotTransitionState();
+        const ReaderCrossChapterSnapshotTransitionState();
     if (mounted && setStateIfNeeded) {
       setState(() {});
       _disposeCrossChapterSnapshotImagesAfterFrame(previous);
@@ -1805,7 +1808,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
   }
 
   Future<void> _disposeCrossChapterSnapshotImagesAfterFrame(
-    _CrossChapterSnapshotTransitionState previous,
+    ReaderCrossChapterSnapshotTransitionState previous,
   ) async {
     await WidgetsBinding.instance.endOfFrame;
     previous.fromImage?.dispose();
