@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 
-import 'reader_overlay_z_order.dart';
-
 import '../../../domain/entities/reader_settings.dart';
 import '../application/reader_content_session.dart';
 import '../application/reader_surface_metrics.dart';
+import 'widgets/stack/reader_visual_stack.dart';
 
 enum ReaderPresentationViewportKind {
   textScroll,
@@ -122,108 +121,32 @@ class ReaderShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final content = Padding(padding: model.contentPadding, child: child);
     final contentSurfaceColor =
         model.background == null
             ? model.palette.surfaceColor
             : Colors.transparent;
-
-    final stackedContent = Stack(
-      clipBehavior: model.clipBehavior,
-      children: readerShellLayerOrder
-          .map(
-            (slot) => _buildLayer(
-              slot,
-              content: content,
-              contentSurfaceColor: contentSurfaceColor,
-            ),
-          )
-          .whereType<Widget>()
-          .toList(growable: false),
-    );
-
-    if (!model.callbacks.hasAnyHandler) {
-      return stackedContent;
-    }
-
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapUp: model.callbacks.onTapUp,
-      onLongPressStart: model.callbacks.onLongPressStart,
-      onDoubleTapDown: model.callbacks.onDoubleTapDown,
-      onDoubleTap: model.callbacks.onDoubleTap,
-      child: stackedContent,
-    );
-  }
-
-  Widget? _buildLayer(
-    ReaderShellLayerSlot slot, {
-    required Widget content,
-    required Color contentSurfaceColor,
-  }) {
-    return switch (slot) {
-      ReaderShellLayerSlot.background => Positioned.fill(
-        child: ColoredBox(
-          color: model.palette.backgroundColor,
-          child: model.background ?? const SizedBox.shrink(),
+    return ReaderVisualStack(
+      model: ReaderVisualStackModel(
+        backgroundColor: model.palette.backgroundColor,
+        contentSurfaceColor: contentSurfaceColor,
+        content: child,
+        background: model.background,
+        backgroundOverlay: model.chrome.backgroundOverlay,
+        center: model.chrome.center,
+        top: model.chrome.top,
+        bottom: model.chrome.bottom,
+        leading: model.chrome.leading,
+        trailing: model.chrome.trailing,
+        foregroundOverlay: model.chrome.foregroundOverlay,
+        callbacks: ReaderVisualStackCallbacks(
+          onTapUp: model.callbacks.onTapUp,
+          onLongPressStart: model.callbacks.onLongPressStart,
+          onDoubleTapDown: model.callbacks.onDoubleTapDown,
+          onDoubleTap: model.callbacks.onDoubleTap,
         ),
+        contentPadding: model.contentPadding,
+        clipBehavior: model.clipBehavior,
       ),
-      ReaderShellLayerSlot.backgroundOverlay =>
-        model.chrome.backgroundOverlay == null
-            ? null
-            : Positioned.fill(
-              child: IgnorePointer(child: model.chrome.backgroundOverlay),
-            ),
-      ReaderShellLayerSlot.content => Positioned.fill(
-        child: DecoratedBox(
-          decoration: BoxDecoration(color: contentSurfaceColor),
-          child: content,
-        ),
-      ),
-      ReaderShellLayerSlot.center =>
-        model.chrome.center == null
-            ? null
-            : Positioned.fill(child: IgnorePointer(child: model.chrome.center)),
-      ReaderShellLayerSlot.top =>
-        model.chrome.top == null
-            ? null
-            : Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: SafeArea(bottom: false, child: model.chrome.top!),
-            ),
-      ReaderShellLayerSlot.bottom =>
-        model.chrome.bottom == null
-            ? null
-            : Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: SafeArea(top: false, child: model.chrome.bottom!),
-            ),
-      ReaderShellLayerSlot.leading =>
-        model.chrome.leading == null
-            ? null
-            : Positioned(
-              left: 0,
-              top: 0,
-              bottom: 0,
-              child: SafeArea(right: false, child: model.chrome.leading!),
-            ),
-      ReaderShellLayerSlot.trailing =>
-        model.chrome.trailing == null
-            ? null
-            : Positioned(
-              top: 0,
-              right: 0,
-              bottom: 0,
-              child: SafeArea(left: false, child: model.chrome.trailing!),
-            ),
-      ReaderShellLayerSlot.foregroundOverlay =>
-        model.chrome.foregroundOverlay == null
-            ? null
-            : Positioned.fill(child: model.chrome.foregroundOverlay!),
-    };
+    );
   }
 }

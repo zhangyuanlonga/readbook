@@ -8,7 +8,7 @@ extension _ReaderPageShellExtension on _ReaderPageState {
         .resolveVolumeKeyInterception(
           platformSupported: _platformBridgeService.isVolumeKeyPagingSupported,
           enabledInSettings: _settings.volumeKeyPageEnabled,
-          overlayVisible: _showOverlayControls,
+          overlayVisible: _overlayController.showOverlayControls,
           textSelectionActive: _isTextSelectionActive,
           bootstrapping: _isBootstrapping,
           loadingContent: _isLoadingContent,
@@ -39,7 +39,7 @@ extension _ReaderPageShellExtension on _ReaderPageState {
     if (!mounted || !_settings.volumeKeyPageEnabled) {
       return;
     }
-    if (_showOverlayControls || _isTextSelectionActive) {
+    if (_overlayController.showOverlayControls || _isTextSelectionActive) {
       return;
     }
     if (_isBootstrapping || _isLoadingContent || _errorText != null) {
@@ -75,9 +75,10 @@ extension _ReaderPageShellExtension on _ReaderPageState {
 
   Future<void> _turnReaderByDirection({
     required bool forward,
+    ReaderPageTurnRequestSource source = ReaderPageTurnRequestSource.unknown,
     bool includeMangaPaged = true,
   }) async {
-    if (_showOverlayControls) {
+    if (_overlayController.showOverlayControls) {
       _hideOverlayControls(resumeAutoRead: false);
     }
     switch (_currentViewportKind) {
@@ -92,7 +93,7 @@ extension _ReaderPageShellExtension on _ReaderPageState {
         }
         return;
       case ReaderModeViewportKind.textPaged:
-        await _turnPagedTextPage(direction: forward ? 1 : -1);
+        await _turnPagedTextPage(direction: forward ? 1 : -1, source: source);
         return;
       case ReaderModeViewportKind.textScroll:
         if (_settings.pageTurnMode.usesScrollLayout) {
@@ -193,30 +194,26 @@ extension _ReaderPageShellExtension on _ReaderPageState {
   }
 
   bool get _isBackNavigationInteractionCoolingDown {
-    final lastAt = _lastBackNavigationAt;
-    if (lastAt == null) {
-      return false;
-    }
-    return DateTime.now().difference(lastAt) <
-        _ReaderPageState._kBackNavigationInteractionCooldown;
+    return _interactionRuntimeController.isBackNavigationCoolingDown(
+      DateTime.now(),
+      _ReaderPageState._kBackNavigationInteractionCooldown,
+    );
   }
 
   bool get _isInitialReaderInteractionCoolingDown {
-    final unlockAt = _readerInteractionUnlockAt;
-    if (unlockAt == null) {
-      return false;
-    }
-    return DateTime.now().isBefore(unlockAt);
+    return _interactionRuntimeController.isInitialInteractionCoolingDown(
+      DateTime.now(),
+    );
   }
 
   void _handleBackNavigation() {
     _markBackNavigationTriggered();
     _stopAutoReadSessionForReaderExit();
     final now = DateTime.now();
-    final previousBackAt = _lastReaderBackAt;
-    _lastReaderBackAt = now;
-    if (previousBackAt != null &&
-        now.difference(previousBackAt) <= const Duration(milliseconds: 700)) {
+    if (_interactionRuntimeController.recordReaderBackAndShouldExit(
+      now: now,
+      doubleBackWindow: const Duration(milliseconds: 700),
+    )) {
       context.go('/bookshelf');
       return;
     }
@@ -235,7 +232,7 @@ extension _ReaderPageShellExtension on _ReaderPageState {
   }
 
   void _markBackNavigationTriggered() {
-    _lastBackNavigationAt = DateTime.now();
+    _interactionRuntimeController.markBackNavigationTriggered(DateTime.now());
     _markReaderTapHandledByChild();
   }
 
@@ -244,55 +241,55 @@ extension _ReaderPageShellExtension on _ReaderPageState {
   }
 
   Widget _buildOverlayScrim() {
-    return Positioned.fill(
-      child: AnimatedBuilder(
-        animation: _overlayControlsController,
-        builder: (context, _) {
-          final opacity =
-              _overlayControlsFadeProgress *
-              _ReaderPageState._kOverlayScrimMaxAlpha;
-          return IgnorePointer(
-            ignoring: opacity <= 0.001,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => _hideOverlayControls(manual: true),
-              child: ColoredBox(color: Colors.black.withValues(alpha: opacity)),
-            ),
-          );
-        },
-      ),
+    return AnimatedBuilder(
+      animation: _overlayControlsController,
+      builder: (context, _) {
+        final opacity =
+            _overlayControlsFadeProgress *
+            _ReaderPageState._kOverlayScrimMaxAlpha;
+        return ReaderFullScreenHitTestLayer(
+          strategy: ReaderFullScreenHitTestStrategy.interceptWhenVisible,
+          visible: opacity > 0.001,
+          onTap: () => _hideOverlayControls(manual: true),
+          child: ColoredBox(color: Colors.black.withValues(alpha: opacity)),
+        );
+      },
     );
   }
 
   Widget _buildBackgroundLayer(ReaderThemeColors colors) {
-    return DecoratedBox(decoration: _buildReaderBackgroundDecoration(colors));
+    return ReaderBackgroundLayer(
+      model: ReaderBackgroundVisualModel(
+        decoration: _buildReaderBackgroundDecoration(colors),
+      ),
+    );
   }
 
   Widget _buildChapterLoadingIndicator(ReaderThemeColors colors) {
     final showIndicator =
-        _showChapterLoadingIndicator && !_shouldShowBlockingReaderLoading;
+        _overlayController.showChapterLoadingIndicator &&
+        !_shouldShowBlockingReaderLoading;
     final topInset = _topSafeInset(context);
 
-    return AnimatedBuilder(
-      animation: _overlayControlsController,
-      builder: (context, _) {
-        final overlayProgress = _overlayControlsShiftProgress;
-        final topOffset =
-            lerpDouble(topInset + 8, topInset + 60, overlayProgress)!;
-        return Positioned(
-          top: topOffset,
-          left: 20,
-          right: 20,
-          child: IgnorePointer(
-            child: AnimatedSlide(
-              duration: const Duration(milliseconds: 150),
-              curve: Curves.easeOutCubic,
-              offset: showIndicator ? Offset.zero : const Offset(0, -0.35),
-              child: AnimatedOpacity(
+    return ReaderFullScreenHitTestLayer(
+      strategy: ReaderFullScreenHitTestStrategy.passThrough,
+      child: AnimatedBuilder(
+        animation: _overlayControlsController,
+        builder: (context, _) {
+          final overlayProgress = _overlayControlsShiftProgress;
+          final topOffset =
+              lerpDouble(topInset + 8, topInset + 60, overlayProgress)!;
+          return Padding(
+            padding: EdgeInsets.fromLTRB(20, topOffset, 20, 0),
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: AnimatedSlide(
                 duration: const Duration(milliseconds: 150),
-                opacity: showIndicator ? 1 : 0,
-                child: Align(
-                  alignment: Alignment.topCenter,
+                curve: Curves.easeOutCubic,
+                offset: showIndicator ? Offset.zero : const Offset(0, -0.35),
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 150),
+                  opacity: showIndicator ? 1 : 0,
                   child: ConstrainedBox(
                     constraints: BoxConstraints(
                       maxWidth: AppLayout.dialogMaxWidth(
@@ -315,9 +312,9 @@ extension _ReaderPageShellExtension on _ReaderPageState {
                 ),
               ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 
@@ -340,7 +337,7 @@ extension _ReaderPageShellExtension on _ReaderPageState {
       return;
     }
 
-    if (_showOverlayControls) {
+    if (_overlayController.showOverlayControls) {
       _hideOverlayControls(resumeAutoRead: false);
     }
     _startAutoReadSession();

@@ -81,8 +81,10 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
     _pagedPages = resolvedContentState.pagedPages;
     _pagedBlockPages = const <List<ReaderPagedBlock>>[];
     _textPaginationFallbackDiagnostic = null;
-    _currentPageIndex = resolvedContentState.currentPageIndex;
-    _pagedPaginationState = resolvedContentState.paginationState;
+    _pageTurnRuntimeController.currentPageIndex =
+        resolvedContentState.currentPageIndex;
+    _pageTurnRuntimeController.pagedPaginationState =
+        resolvedContentState.paginationState;
     _resetCatalogSearchCache();
     _resetPagedTransitionState();
     _resetCurlAnimationState();
@@ -558,8 +560,10 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
           activation.contentState.renderTextItemsByParagraph;
       _pagedPages = activation.contentState.pagedPages;
       _pagedBlockPages = const <List<ReaderPagedBlock>>[];
-      _currentPageIndex = activation.contentState.currentPageIndex;
-      _pagedPaginationState = activation.contentState.paginationState;
+      _pageTurnRuntimeController.currentPageIndex =
+          activation.contentState.currentPageIndex;
+      _pageTurnRuntimeController.pagedPaginationState =
+          activation.contentState.paginationState;
       _isTextSelectionActive = false;
       _selectionRange = null;
       _selectionStatus = SelectionStatus.none;
@@ -624,8 +628,10 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
         document: _document,
         precomputedParagraphs: _paragraphs,
         precomputedPagedPages: _pagedPages,
-        precomputedCurrentPageIndex: _currentPageIndex,
-        precomputedPaginationSignature: _pagedPaginationState.signature,
+        precomputedCurrentPageIndex:
+            _pageTurnRuntimeController.currentPageIndex,
+        precomputedPaginationSignature:
+            _pageTurnRuntimeController.pagedPaginationState.signature,
       ),
       isCurrentChapterCached: _isCurrentChapterCached,
     );
@@ -825,7 +831,8 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
       } else {
         _continuousTextChapters = const <ReaderPageContinuousTextChapter>[];
       }
-      _pagedPaginationState = ReaderPaginationSessionState(
+      _pageTurnRuntimeController
+          .pagedPaginationState = ReaderPaginationSessionState(
         signature: precomputedPaginationSignature,
         pendingRestoreRatio: targetRatio,
       );
@@ -913,8 +920,10 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
           } else {
             _continuousTextChapters = const <ReaderPageContinuousTextChapter>[];
           }
-          _pagedPaginationState = ReaderPaginationSessionState(
-            signature: _pagedPaginationState.signature,
+          _pageTurnRuntimeController
+              .pagedPaginationState = ReaderPaginationSessionState(
+            signature:
+                _pageTurnRuntimeController.pagedPaginationState.signature,
             pendingRestoreRatio: previewRatio,
           );
         });
@@ -994,8 +1003,9 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
         } else {
           _continuousTextChapters = const <ReaderPageContinuousTextChapter>[];
         }
-        _pagedPaginationState = ReaderPaginationSessionState(
-          signature: _pagedPaginationState.signature,
+        _pageTurnRuntimeController
+            .pagedPaginationState = ReaderPaginationSessionState(
+          signature: _pageTurnRuntimeController.pagedPaginationState.signature,
           pendingRestoreRatio: previewRatio,
         );
       });
@@ -1189,7 +1199,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
 
   Future<void> _preloadNeighborsFlow({required int taskToken}) async {
     if (_isLowPriorityReaderWorkPaused) {
-      _deferredNeighborPreload = true;
+      _interactionRuntimeController.markDeferredNeighborPreload();
       return;
     }
     final sourceId = _sourceId;
@@ -1220,7 +1230,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
         return;
       }
       if (_isLowPriorityReaderWorkPaused) {
-        _deferredNeighborPreload = true;
+        _interactionRuntimeController.markDeferredNeighborPreload();
         return;
       }
 

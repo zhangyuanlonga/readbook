@@ -4,19 +4,14 @@ part of 'reader_page.dart';
 
 extension _ReaderPageRuntimeExtension on _ReaderPageState {
   void _markFirstPageTurnRequested() {
-    if (_hasLoggedFirstPageTurn || _firstPageTurnStopwatch != null) {
-      return;
-    }
-    _firstPageTurnStopwatch = Stopwatch()..start();
+    _pageTurnRuntimeController.markFirstPageTurnRequested();
   }
 
   void _recordFirstPageTurnCompleted({required String mode}) {
-    final stopwatch = _firstPageTurnStopwatch;
-    if (_hasLoggedFirstPageTurn || stopwatch == null) {
+    final stopwatch = _pageTurnRuntimeController.completeFirstPageTurn();
+    if (stopwatch == null) {
       return;
     }
-    _hasLoggedFirstPageTurn = true;
-    _firstPageTurnStopwatch = null;
     _logger.info(
       'Reader first page turn completed',
       context: <String, Object?>{
@@ -193,20 +188,21 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
   }
 
   bool get _isLowPriorityReaderWorkPaused =>
-      _readerInteractionState == _ReaderInteractionState.dragging ||
-      _readerInteractionState == _ReaderInteractionState.animating ||
-      _readerInteractionState == _ReaderInteractionState.settling;
+      _interactionRuntimeController.isLowPriorityWorkPaused;
 
-  void _setReaderInteractionState(_ReaderInteractionState state) {
-    if (_readerInteractionState == state) {
+  ReaderInteractionRuntimeState get _readerInteractionState =>
+      _interactionRuntimeController.state;
+
+  void _applyReaderInteractionTransition(
+    ReaderInteractionStateTransition? transition,
+  ) {
+    if (transition == null) {
       return;
     }
-    final previous = _readerInteractionState;
-    _readerInteractionState = state;
     final context = <String, Object?>{
       'chain': 'reader_interaction_state',
-      'from': previous.name,
-      'to': state.name,
+      'from': transition.from.name,
+      'to': transition.to.name,
       'chapterId': _chapterId,
       'viewportKind': _currentViewportKind.name,
       'contentMode': _currentContentMode.name,
@@ -216,39 +212,36 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       arguments: context,
     );
     _logger.debug('Reader interaction state changed', context: context);
-    if (state == _ReaderInteractionState.idle && _deferredNeighborPreload) {
-      _deferredNeighborPreload = false;
+    if (_interactionRuntimeController.consumeDeferredNeighborPreloadIfIdle()) {
       _startNeighborPreloadNow();
     }
   }
 
-  void _markReaderInteractionBusy(_ReaderInteractionState state) {
-    _readerInteractionSettleTimer?.cancel();
-    _readerInteractionSettleTimer = null;
-    _setReaderInteractionState(state);
+  void _markReaderInteractionBusy(ReaderInteractionRuntimeState state) {
+    _applyReaderInteractionTransition(
+      _interactionRuntimeController.markBusy(state),
+    );
   }
 
   void _scheduleReaderInteractionSettle() {
     if (!mounted) {
       return;
     }
-    _setReaderInteractionState(_ReaderInteractionState.settling);
-    _readerInteractionSettleTimer?.cancel();
-    _readerInteractionSettleTimer = Timer(
-      const Duration(milliseconds: 200),
-      () {
-        if (!mounted) {
-          return;
-        }
-        _readerInteractionSettleTimer = null;
-        _setReaderInteractionState(_ReaderInteractionState.idle);
-      },
+    _applyReaderInteractionTransition(
+      _interactionRuntimeController.beginSettling(
+        onSettled: (transition) {
+          if (!mounted) {
+            return;
+          }
+          _applyReaderInteractionTransition(transition);
+        },
+      ),
     );
   }
 
   void _handlePagedScrollInteractionChanged(bool isInteracting) {
     if (isInteracting) {
-      _markReaderInteractionBusy(_ReaderInteractionState.dragging);
+      _markReaderInteractionBusy(ReaderInteractionRuntimeState.dragging);
     } else {
       _scheduleReaderInteractionSettle();
     }
@@ -256,7 +249,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
 
   void _scheduleNeighborPreload() {
     if (_isLowPriorityReaderWorkPaused) {
-      _deferredNeighborPreload = true;
+      _interactionRuntimeController.markDeferredNeighborPreload();
       return;
     }
     _startNeighborPreloadNow();
@@ -286,13 +279,14 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
             metrics: _currentTextRenderMetrics(),
           );
           if (plan.shouldDefer) {
-            _pagedPaginationState = _pagedPaginationState.copyWith(
-              pendingRestoreRatio: plan.normalizedRatio,
-            );
+            _pageTurnRuntimeController
+                .pagedPaginationState = _pageTurnRuntimeController
+                .pagedPaginationState
+                .copyWith(pendingRestoreRatio: plan.normalizedRatio);
             return;
           }
           setState(() {
-            _currentPageIndex = plan.pageIndex ?? 0;
+            _pageTurnRuntimeController.currentPageIndex = plan.pageIndex ?? 0;
           });
           return;
         case ReaderModeViewportKind.imagePaged:
@@ -358,7 +352,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       isPagedTextReaderEnabled: _isPagedTextReaderEnabled(),
       isReaderVisible: _isReaderRuntimeVisible,
       isLowBattery: _isReaderBatteryLowForRuntime,
-      showOverlayControls: _showOverlayControls,
+      showOverlayControls: _overlayController.showOverlayControls,
       textSelectionActive: _isTextSelectionActive,
       isBootstrapping: _isBootstrapping,
       isLoadingContent: _isLoadingContent || _isRestoringContinuousTextAnchor,
@@ -381,13 +375,14 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       isPagedTextReaderEnabled: _isPagedTextReaderEnabled(),
       isReaderVisible: _isReaderRuntimeVisible,
       isLowBattery: _isReaderBatteryLowForRuntime,
-      showOverlayControls: _showOverlayControls,
+      showOverlayControls: _overlayController.showOverlayControls,
       textSelectionActive: _isTextSelectionActive,
       isBootstrapping: _isBootstrapping,
       isLoadingContent: _isLoadingContent,
       hasError: _errorText != null,
       hasTextContent: _content.trim().isNotEmpty,
-      isPaginating: _pagedPaginationState.isPaginating,
+      isPaginating:
+          _pageTurnRuntimeController.pagedPaginationState.isPaginating,
       isAnimating: _isPagedTransitionAnimating || _isCurlAutoTurning,
       pageCount: _currentPagedPageCount,
     );
@@ -464,7 +459,8 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     if (_settings.autoReadMode == ReaderAutoReadMode.page &&
         _isPagedTextReaderEnabled()) {
       final pageCount = _currentPagedPageCount;
-      return pageCount > 0 && _currentPageIndex >= pageCount - 1;
+      return pageCount > 0 &&
+          _pageTurnRuntimeController.currentPageIndex >= pageCount - 1;
     }
     if (_settings.autoReadMode == ReaderAutoReadMode.scroll &&
         _isTextScrollViewport &&
@@ -780,7 +776,10 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       return;
     }
 
-    await _turnPagedTextPage(direction: 1);
+    await _turnPagedTextPage(
+      direction: 1,
+      source: ReaderPageTurnRequestSource.autoRead,
+    );
     if (!mounted ||
         _autoReadSessionState != ReaderAutoReadSessionState.running) {
       return;
@@ -1046,7 +1045,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
   void _pauseAutoReadIfRuntimePolicyRequires() {
     if (!_runtimeWakePolicy.shouldPauseAutoRead(
       isReaderVisible: _isReaderRuntimeVisible,
-      showOverlayControls: _showOverlayControls,
+      showOverlayControls: _overlayController.showOverlayControls,
       isLowBattery: _isReaderBatteryLowForRuntime,
     )) {
       return;
@@ -1401,7 +1400,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
   void _scheduleBlockingLoadingCard() {
     _blockingLoadingCardTimer?.cancel();
     _blockingLoadingCardTimer = null;
-    _showBlockingLoadingCard = false;
+    _overlayController.showBlockingLoadingCard = false;
 
     final decision = _contentLoadController.resolveDelayedUi(
       needsBlockingLoadingUi: _needsBlockingLoadingUi,
@@ -1422,7 +1421,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
           return;
         }
         setState(() {
-          _showBlockingLoadingCard = true;
+          _overlayController.showBlockingLoadingCard = true;
         });
       },
     );
@@ -1431,7 +1430,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
   void _scheduleHiddenLoadingPlaceholder() {
     _hiddenLoadingPlaceholderTimer?.cancel();
     _hiddenLoadingPlaceholderTimer = null;
-    _showHiddenLoadingPlaceholder = false;
+    _overlayController.showHiddenLoadingPlaceholder = false;
 
     final decision = _contentLoadController.resolveDelayedUi(
       needsBlockingLoadingUi: _needsBlockingLoadingUi,
@@ -1452,7 +1451,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
           return;
         }
         setState(() {
-          _showHiddenLoadingPlaceholder = true;
+          _overlayController.showHiddenLoadingPlaceholder = true;
         });
       },
     );
@@ -1465,15 +1464,13 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     _blockingLoadingCardTimer = null;
     _hiddenLoadingPlaceholderTimer?.cancel();
     _hiddenLoadingPlaceholderTimer = null;
-    _showChapterLoadingIndicator = false;
-    _showBlockingLoadingCard = false;
-    _showHiddenLoadingPlaceholder = false;
+    _overlayController.resetLoadingIndicators();
   }
 
   void _scheduleChapterLoadingIndicator() {
     _chapterLoadingIndicatorTimer?.cancel();
     _chapterLoadingIndicatorTimer = null;
-    _showChapterLoadingIndicator = false;
+    _overlayController.showChapterLoadingIndicator = false;
 
     final decision = _contentLoadController.resolveDelayedUi(
       needsBlockingLoadingUi: _needsBlockingLoadingUi,
@@ -1496,7 +1493,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
           return;
         }
         setState(() {
-          _showChapterLoadingIndicator = true;
+          _overlayController.showChapterLoadingIndicator = true;
         });
       },
     );
@@ -1528,77 +1525,145 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     await _preferencesService.saveProgress(progress);
   }
 
-  Future<void> _turnPagedTextPage({required int direction}) async {
-    if (!_isTextPagedViewport) {
-      return;
-    }
-
-    _clearSelectionState();
-    _clearSystemSelection();
-
-    if (_pagedPaginationState.isPaginating) {
-      return;
-    }
-
-    final pageCount = _currentPagedPageCount;
-    if (pageCount <= 0) {
-      return;
-    }
-
-    final safeDirection = direction >= 0 ? 1 : -1;
-    if (_usesPaperCurlAnimation) {
-      _markFirstPageTurnRequested();
-      await _turnPaperCurlPage(safeDirection, pageCount);
-      return;
-    }
-
-    final action = _pagedTransitionLogic.planTurn(
-      direction: safeDirection,
-      currentPageIndex: _currentPageIndex,
-      pageCount: pageCount,
+  Future<void> _turnPagedTextPage({
+    required int direction,
+    ReaderPageTurnRequestSource source = ReaderPageTurnRequestSource.unknown,
+  }) async {
+    final request = ReaderPageTurnRequest(direction: direction, source: source);
+    final plan = _pageTurnCoordinator.resolvePagedTextTurn(
+      request: request,
+      snapshot: _readerPageTurnCoordinatorSnapshot(),
       settings: _settings,
-      isAnimating: _isPagedTransitionAnimating,
       renderer: _pagedTextRenderer,
       document: _document,
     );
-    switch (action.type) {
-      case PagedTransitionActionType.ignored:
-        return;
-      case PagedTransitionActionType.crossChapter:
-        _markFirstPageTurnRequested();
-        final style =
-            action.transitionState?.style ??
-            _pagedTextRenderer.resolveAnimationStyle(
-              _settings,
-              document: _document,
-            );
-        await _turnCrossChapterWithSnapshot(
-          forward: safeDirection >= 0,
-          style: style,
-          completionMode: 'cross_chapter',
-        );
-        return;
-      case PagedTransitionActionType.curl:
-        _markFirstPageTurnRequested();
-        await _autoTurnCurlPage(safeDirection);
-        return;
-      case PagedTransitionActionType.paperCurl:
-        _markFirstPageTurnRequested();
-        await _turnPaperCurlPage(safeDirection, pageCount);
-        return;
-      case PagedTransitionActionType.immediate:
-        _markFirstPageTurnRequested();
-        _snapToPagedTextPage(action.targetPageIndex);
-        _recordFirstPageTurnCompleted(mode: 'immediate');
-        return;
-      case PagedTransitionActionType.animated:
-        _markFirstPageTurnRequested();
-        _startPagedPageTransition(action);
-        return;
+    _logReaderPageTurnPlan(plan);
+
+    final results = await _pageTurnCoordinator.executePlan(
+      plan: plan,
+      handlers: ReaderPageTurnExecutionHandlers(
+        prepareForTurn: () {
+          _clearSelectionState();
+          _clearSystemSelection();
+        },
+        markFirstPageTurnRequested: _markFirstPageTurnRequested,
+        onSettleRequired: _scheduleReaderInteractionSettle,
+        executePaperCurl: _turnPaperCurlPage,
+        executeCrossChapter: _turnCrossChapterWithSnapshot,
+        executeCurl: _executeCurlPageTurn,
+        executeImmediate: _executeImmediatePageTurn,
+        executeAnimated: _executeAnimatedPageTurn,
+      ),
+    );
+    for (final result in results) {
+      _logReaderPageTurnResult(result);
     }
   }
 
-  void _startPagedPageTransition(PagedTransitionAction action) {
+  Future<ReaderPageTurnResult?> _executeCurlPageTurn(
+    ReaderPageTurnPlan plan,
+  ) async {
+    return _autoTurnCurlPage(plan.safeDirection, request: plan.request);
+  }
+
+  Future<ReaderPageTurnResult?> _executeImmediatePageTurn(
+    ReaderPageTurnPlan plan,
+  ) async {
+    final action = plan.action;
+    if (action == null) {
+      return ReaderPageTurnResult(
+        type: ReaderPageTurnResultType.rejected,
+        request: plan.request,
+        executionType: plan.executionType,
+        rejectReason: ReaderPageTurnRejectReason.missingAction,
+      );
+    }
+    _snapToPagedTextPage(action.targetPageIndex);
+    _recordFirstPageTurnCompleted(mode: 'immediate');
+    return _pageTurnCoordinator.resultFromPlan(
+      plan,
+      type: ReaderPageTurnResultType.committed,
+    );
+  }
+
+  Future<ReaderPageTurnResult?> _executeAnimatedPageTurn(
+    ReaderPageTurnPlan plan,
+  ) async {
+    final action = plan.action;
+    if (action == null) {
+      return ReaderPageTurnResult(
+        type: ReaderPageTurnResultType.rejected,
+        request: plan.request,
+        executionType: plan.executionType,
+        rejectReason: ReaderPageTurnRejectReason.missingAction,
+      );
+    }
+    _startPagedPageTransition(action, request: plan.request);
+    return null;
+  }
+
+  ReaderPageTurnCoordinatorSnapshot _readerPageTurnCoordinatorSnapshot() {
+    return ReaderPageTurnCoordinatorSnapshot(
+      isTextPagedViewport: _isTextPagedViewport,
+      isPaginating:
+          _pageTurnRuntimeController.pagedPaginationState.isPaginating,
+      pageCount: _currentPagedPageCount,
+      currentPageIndex: _pageTurnRuntimeController.currentPageIndex,
+      usesPaperCurlAnimation: _usesPaperCurlAnimation,
+      pagedTransitionAnimating: _isPagedTransitionAnimating,
+    );
+  }
+
+  void _logReaderPageTurnPlan(ReaderPageTurnPlan plan) {
+    final context = <String, Object?>{
+      'chain': 'reader_page_turn_coordinator',
+      'step': 'plan',
+      'executionType': plan.executionType.name,
+      'direction': plan.request.safeDirection,
+      'source': plan.request.source.name,
+      'targetPageIndex': plan.targetPageIndex,
+      'rejectReason': plan.rejectReason?.name,
+      'message': plan.message,
+      'chapterId': _chapterId,
+      'currentPageIndex': _pageTurnRuntimeController.currentPageIndex,
+      'pageCount': _currentPagedPageCount,
+      'viewportKind': _currentViewportKind.name,
+    };
+    developer.Timeline.instantSync('reader.page_turn_plan', arguments: context);
+    _logger.debug('Reader page turn plan', context: context);
+  }
+
+  void _logReaderPageTurnResult(ReaderPageTurnResult result) {
+    final context = <String, Object?>{
+      'chain': 'reader_page_turn_coordinator',
+      'step': 'result',
+      'type': result.type.name,
+      'executionType': result.executionType?.name,
+      'direction': result.request.safeDirection,
+      'source': result.request.source.name,
+      'targetPageIndex': result.targetPageIndex,
+      'rejectReason': result.rejectReason?.name,
+      'message': result.message,
+      'chapterId': _chapterId,
+      'currentPageIndex': _pageTurnRuntimeController.currentPageIndex,
+      'pageCount': _currentPagedPageCount,
+      'viewportKind': _currentViewportKind.name,
+    };
+    developer.Timeline.instantSync(
+      'reader.page_turn_result',
+      arguments: context,
+    );
+    if (result.isFailure) {
+      _logger.warn('Reader page turn result', context: context);
+    } else {
+      _logger.debug('Reader page turn result', context: context);
+    }
+  }
+
+  void _startPagedPageTransition(
+    PagedTransitionAction action, {
+    ReaderPageTurnRequest? request,
+  }) {
     if (_isPagedTransitionAnimating) {
       return;
     }
@@ -1607,22 +1672,35 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     if (transitionState == null || motion == null) {
       return;
     }
-    _markReaderInteractionBusy(_ReaderInteractionState.animating);
+    _markReaderInteractionBusy(ReaderInteractionRuntimeState.animating);
     _pagedTransitionController.duration = motion.duration;
     setState(() {
-      _pagedTransition = transitionState;
+      _pageTurnRuntimeController.beginPagedTransition(transitionState);
     });
     _pagedTransitionController.value = 0;
     _pagedTransitionController.forward();
   }
 
-  Future<bool> _turnCrossChapterWithSnapshot({
-    required bool forward,
-    required ReaderPageAnimationStyle style,
-    required String completionMode,
+  Future<ReaderPageTurnResult?> _turnCrossChapterWithSnapshot(
+    ReaderPageTurnPlan plan, {
+    ReaderPageAnimationStyle? style,
+    String completionMode = 'cross_chapter',
   }) async {
-    if (_crossChapterSnapshotTransition.isActive) {
-      return false;
+    final forward = plan.safeDirection >= 0;
+    final resolvedStyle =
+        style ??
+        plan.action?.transitionState?.style ??
+        _pagedTextRenderer.resolveAnimationStyle(
+          _settings,
+          document: _document,
+        );
+    if (_pageTurnRuntimeController.crossChapterSnapshotTransition.isActive) {
+      return ReaderPageTurnResult(
+        type: ReaderPageTurnResultType.rejected,
+        request: plan.request,
+        executionType: ReaderPageTurnExecutionType.crossChapter,
+        rejectReason: ReaderPageTurnRejectReason.pageTurnBusy,
+      );
     }
 
     final sessionState = _currentTextSessionState();
@@ -1633,26 +1711,43 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       initialScrollRatio: forward ? 0 : 1,
     );
     if (decision.type == ReaderAdjacentChapterDecisionType.noCurrent) {
-      return false;
+      return ReaderPageTurnResult(
+        type: ReaderPageTurnResultType.rejected,
+        request: plan.request,
+        executionType: ReaderPageTurnExecutionType.crossChapter,
+        rejectReason: ReaderPageTurnRejectReason.noAdjacentChapter,
+      );
     }
     if (decision.type == ReaderAdjacentChapterDecisionType.boundary) {
       _showChapterBoundaryHint(isFirst: decision.isFirstBoundary);
-      return false;
+      return ReaderPageTurnResult(
+        type: ReaderPageTurnResultType.boundary,
+        request: plan.request,
+        executionType: ReaderPageTurnExecutionType.crossChapter,
+      );
     }
 
     final direction = forward ? 1 : -1;
     final fromImage = await _captureReaderContentSnapshot();
     if (fromImage == null) {
-      await _jumpToAdjacentReadableChapter(forward: forward);
-      return true;
+      final jumped = await _jumpToAdjacentReadableChapter(forward: forward);
+      return ReaderPageTurnResult(
+        type:
+            jumped
+                ? ReaderPageTurnResultType.fallbackCommitted
+                : ReaderPageTurnResultType.rejected,
+        request: plan.request,
+        executionType: ReaderPageTurnExecutionType.crossChapter,
+      );
     }
 
-    final generation = ++_crossChapterSnapshotGeneration;
-    _markReaderInteractionBusy(_ReaderInteractionState.animating);
+    final generation =
+        _pageTurnRuntimeController.nextCrossChapterSnapshotGeneration();
+    _markReaderInteractionBusy(ReaderInteractionRuntimeState.animating);
     _startCrossChapterSnapshotTransition(
       generation: generation,
       fromImage: fromImage,
-      style: style,
+      style: resolvedStyle,
       direction: direction,
       completionMode: completionMode,
     );
@@ -1663,21 +1758,36 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       initialScrollRatio: decision.initialScrollRatio,
     );
     if (!mounted ||
-        generation != _crossChapterSnapshotGeneration ||
+        !_pageTurnRuntimeController.isCrossChapterSnapshotGenerationActive(
+          generation,
+        ) ||
         _currentIndex != targetChapterIndex) {
       _clearCrossChapterSnapshotTransition();
       _scheduleReaderInteractionSettle();
-      return false;
+      return ReaderPageTurnResult(
+        type: ReaderPageTurnResultType.rejected,
+        request: plan.request,
+        executionType: ReaderPageTurnExecutionType.crossChapter,
+        rejectReason: ReaderPageTurnRejectReason.crossChapterCancelled,
+      );
     }
 
     await _waitForCrossChapterSnapshotTarget(
       generation: generation,
       targetChapterIndex: targetChapterIndex,
     );
-    if (!mounted || generation != _crossChapterSnapshotGeneration) {
+    if (!mounted ||
+        !_pageTurnRuntimeController.isCrossChapterSnapshotGenerationActive(
+          generation,
+        )) {
       _clearCrossChapterSnapshotTransition();
       _scheduleReaderInteractionSettle();
-      return false;
+      return ReaderPageTurnResult(
+        type: ReaderPageTurnResultType.rejected,
+        request: plan.request,
+        executionType: ReaderPageTurnExecutionType.crossChapter,
+        rejectReason: ReaderPageTurnRejectReason.crossChapterCancelled,
+      );
     }
 
     final toImage = await _captureReaderContentSnapshot();
@@ -1685,20 +1795,24 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       _clearCrossChapterSnapshotTransition();
       _recordFirstPageTurnCompleted(mode: completionMode);
       _scheduleReaderInteractionSettle();
-      return true;
+      return ReaderPageTurnResult(
+        type: ReaderPageTurnResultType.fallbackCommitted,
+        request: plan.request,
+        executionType: ReaderPageTurnExecutionType.crossChapter,
+      );
     }
 
     _attachCrossChapterSnapshotTarget(generation: generation, toImage: toImage);
-    if (style == ReaderPageAnimationStyle.paperCurl) {
-      return true;
+    if (resolvedStyle == ReaderPageAnimationStyle.paperCurl) {
+      return null;
     }
 
-    final motion = _pagedTextRenderer.motionSpecForStyle(style);
+    final motion = _pagedTextRenderer.motionSpecForStyle(resolvedStyle);
     _crossChapterSnapshotController.duration = motion.duration;
     _crossChapterSnapshotController.value = 0;
     if (motion.duration <= Duration.zero) {
       _completeCrossChapterSnapshotAnimation();
-      return true;
+      return null;
     }
     try {
       await _crossChapterSnapshotController.forward().orCancel;
@@ -1708,7 +1822,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
         _scheduleReaderInteractionSettle();
       }
     }
-    return true;
+    return null;
   }
 
   Future<ui.Image?> _captureReaderContentSnapshot() async {
@@ -1741,13 +1855,15 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     const maxFrames = 60;
     for (var frame = 0; frame < maxFrames; frame++) {
       if (!mounted ||
-          generation != _crossChapterSnapshotGeneration ||
+          !_pageTurnRuntimeController.isCrossChapterSnapshotGenerationActive(
+            generation,
+          ) ||
           _currentIndex != targetChapterIndex) {
         return;
       }
       final hasPagedContent = _currentPagedPageCount > 0;
       if (!_isLoadingContent &&
-          !_pagedPaginationState.isPaginating &&
+          !_pageTurnRuntimeController.pagedPaginationState.isPaginating &&
           hasPagedContent) {
         await WidgetsBinding.instance.endOfFrame;
         return;
@@ -1766,11 +1882,11 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     _crossChapterSnapshotController.stop();
     _crossChapterSnapshotController.value = 0;
     _replaceCrossChapterSnapshotTransition(
-      ReaderCrossChapterSnapshotTransitionState(
+      _pageTurnRuntimeController.buildCrossChapterSnapshotTransition(
+        generation: generation,
         fromImage: fromImage,
         style: style,
         direction: direction,
-        generation: generation,
         completionMode: completionMode,
       ),
     );
@@ -1780,25 +1896,26 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     required int generation,
     required ui.Image toImage,
   }) {
-    final current = _crossChapterSnapshotTransition;
-    if (!current.isActive || current.generation != generation) {
+    if (!_pageTurnRuntimeController.attachCrossChapterSnapshotTarget(
+      generation: generation,
+      toImage: toImage,
+    )) {
       toImage.dispose();
       return;
     }
-    _replaceCrossChapterSnapshotTransition(current.copyWith(toImage: toImage));
+    setState(() {});
   }
 
   void _replaceCrossChapterSnapshotTransition(
     ReaderCrossChapterSnapshotTransitionState next,
   ) {
-    final previous = _crossChapterSnapshotTransition;
+    final previous = _pageTurnRuntimeController
+        .replaceCrossChapterSnapshotTransition(next);
     final previousFrom = previous.fromImage;
     final previousTo = previous.toImage;
     final nextFrom = next.fromImage;
     final nextTo = next.toImage;
-    setState(() {
-      _crossChapterSnapshotTransition = next;
-    });
+    setState(() {});
     if (previousFrom != null && previousFrom != nextFrom) {
       previousFrom.dispose();
     }
@@ -1809,9 +1926,8 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
 
   void _clearCrossChapterSnapshotTransition({bool setStateIfNeeded = false}) {
     _crossChapterSnapshotController.stop();
-    final previous = _crossChapterSnapshotTransition;
-    _crossChapterSnapshotTransition =
-        const ReaderCrossChapterSnapshotTransitionState();
+    final previous =
+        _pageTurnRuntimeController.clearCrossChapterSnapshotTransition();
     if (mounted && setStateIfNeeded) {
       setState(() {});
       _disposeCrossChapterSnapshotImagesAfterFrame(previous);
@@ -1832,15 +1948,27 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
   }
 
   void _completeCrossChapterSnapshotAnimation() {
-    if (!_crossChapterSnapshotTransition.hasTarget) {
+    if (!_pageTurnRuntimeController.crossChapterSnapshotTransition.hasTarget) {
       return;
     }
-    final completionMode = _crossChapterSnapshotTransition.completionMode;
+    final direction =
+        _pageTurnRuntimeController.crossChapterSnapshotTransition.direction;
+    final completionMode =
+        _pageTurnRuntimeController
+            .crossChapterSnapshotTransition
+            .completionMode;
     _clearCrossChapterSnapshotTransition(setStateIfNeeded: true);
     _recordFirstPageTurnCompleted(mode: completionMode);
     _syncActiveReadingRecordSessionProgress();
     _scheduleProgressSave();
     _scheduleReaderInteractionSettle();
+    _logReaderPageTurnResult(
+      ReaderPageTurnResult(
+        type: ReaderPageTurnResultType.committed,
+        request: ReaderPageTurnRequest(direction: direction),
+        executionType: ReaderPageTurnExecutionType.crossChapter,
+      ),
+    );
   }
 
   void _onCrossChapterSnapshotStatus(AnimationStatus status) {
@@ -1850,37 +1978,57 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     _completeCrossChapterSnapshotAnimation();
   }
 
-  Future<void> _turnPaperCurlPage(int direction, int pageCount) async {
+  Future<ReaderPageTurnResult?> _turnPaperCurlPage(
+    ReaderPageTurnPlan plan,
+  ) async {
     if (_paperCurlViewKey.currentState?.isAnimating ?? false) {
-      return;
+      return ReaderPageTurnResult(
+        type: ReaderPageTurnResultType.rejected,
+        request: plan.request,
+        executionType: ReaderPageTurnExecutionType.paperCurl,
+        rejectReason: ReaderPageTurnRejectReason.pageTurnBusy,
+      );
     }
-    final currentIndex = _currentPageIndex.clamp(0, pageCount - 1);
+    final direction = plan.safeDirection;
+    final pageCount = _currentPagedPageCount;
+    final currentIndex = _pageTurnRuntimeController.currentPageIndex.clamp(
+      0,
+      pageCount - 1,
+    );
     if (direction < 0 && currentIndex <= 0) {
-      await _turnCrossChapterWithSnapshot(
-        forward: false,
+      return _turnCrossChapterWithSnapshot(
+        plan,
         style: ReaderPageAnimationStyle.paperCurl,
         completionMode: 'paper_curl_cross_chapter',
       );
-      return;
     }
     if (direction > 0 && currentIndex >= pageCount - 1) {
-      await _turnCrossChapterWithSnapshot(
-        forward: true,
+      return _turnCrossChapterWithSnapshot(
+        plan,
         style: ReaderPageAnimationStyle.paperCurl,
         completionMode: 'paper_curl_cross_chapter',
       );
-      return;
     }
 
     final paperCurlState = _paperCurlViewKey.currentState;
     if (paperCurlState == null) {
-      _scheduleReaderInteractionSettle();
-      return;
+      return ReaderPageTurnResult(
+        type: ReaderPageTurnResultType.rejected,
+        request: plan.request,
+        executionType: ReaderPageTurnExecutionType.paperCurl,
+        rejectReason: ReaderPageTurnRejectReason.paperCurlUnavailable,
+      );
     }
     final turned = paperCurlState.turnPage(direction);
     if (!turned) {
-      _scheduleReaderInteractionSettle();
+      return ReaderPageTurnResult(
+        type: ReaderPageTurnResultType.rejected,
+        request: plan.request,
+        executionType: ReaderPageTurnExecutionType.paperCurl,
+        rejectReason: ReaderPageTurnRejectReason.paperCurlRejected,
+      );
     }
+    return null;
   }
 
   void _commitPaperCurlPage(int pageIndex) {
@@ -1891,16 +2039,25 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     if (pageCount <= 0) {
       return;
     }
+    final previousIndex = _pageTurnRuntimeController.currentPageIndex;
     final safeIndex = pageIndex.clamp(0, _safePageUpperBound(pageCount));
     _updateReaderState(() {
-      _currentPageIndex = safeIndex;
-      _pagedPaginationState = _pagedPaginationState.copyWith(
-        pendingRestoreRatio: safeIndex / max(1, pageCount - 1),
+      _pageTurnRuntimeController.commitPaperCurlTurn(
+        pageIndex: safeIndex,
+        pageCount: pageCount,
       );
     });
     _syncActiveReadingRecordSessionProgress();
     _scheduleProgressSave();
     _scheduleReaderInteractionSettle();
+    _logReaderPageTurnResult(
+      ReaderPageTurnResult(
+        type: ReaderPageTurnResultType.committed,
+        request: ReaderPageTurnRequest(direction: pageIndex - previousIndex),
+        executionType: ReaderPageTurnExecutionType.paperCurl,
+        targetPageIndex: safeIndex,
+      ),
+    );
   }
 
   void _handlePaperCurlTurnResult(ReaderPaperCurlResult result) {
@@ -1913,7 +2070,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       'failureReason': result.failureReason?.name,
       'message': result.message,
       'chapterId': _chapterId,
-      'currentPageIndex': _currentPageIndex,
+      'currentPageIndex': _pageTurnRuntimeController.currentPageIndex,
       'pageCount': _currentPagedPageCount,
       'viewportKind': _currentViewportKind.name,
     };
@@ -1931,19 +2088,27 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
   void _onPagedTransitionStatus(AnimationStatus status) {
     final commit = _pagedTransitionLogic.completeTransition(
       status: status,
-      state: _pagedTransition,
+      state: _pageTurnRuntimeController.pagedTransition,
     );
     if (commit == null) {
       return;
     }
 
     setState(() {
-      _currentPageIndex = commit.nextPageIndex;
-      _pagedTransition = commit.nextState;
+      _pageTurnRuntimeController.currentPageIndex = commit.nextPageIndex;
+      _pageTurnRuntimeController.beginPagedTransition(commit.nextState);
     });
     _syncActiveReadingRecordSessionProgress();
     _scheduleProgressSave();
     _recordFirstPageTurnCompleted(mode: 'animated');
     _scheduleReaderInteractionSettle();
+    _logReaderPageTurnResult(
+      ReaderPageTurnResult(
+        type: ReaderPageTurnResultType.committed,
+        request: ReaderPageTurnRequest(direction: commit.nextState.direction),
+        executionType: ReaderPageTurnExecutionType.animated,
+        targetPageIndex: commit.nextPageIndex,
+      ),
+    );
   }
 }

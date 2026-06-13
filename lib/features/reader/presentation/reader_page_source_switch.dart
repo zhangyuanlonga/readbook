@@ -383,7 +383,7 @@ extension _ReaderPageSourceSwitchExtension on _ReaderPageState {
     required bool scoreRankingEnabled,
   }) async {
     _stopAutoReadSession();
-    final shouldRestoreOverlay = _showOverlayControls;
+    final shouldRestoreOverlay = _overlayController.showOverlayControls;
     if (shouldRestoreOverlay) {
       _hideOverlayControls(resumeAutoRead: false, syncSystemUi: false);
     }
@@ -1012,9 +1012,10 @@ extension _ReaderPageSourceSwitchExtension on _ReaderPageState {
         logicalPosition: snapshot.contentSession?.sessionState?.logicalPosition,
         fallback: snapshot.scrollRatio,
       );
-      _pagedPaginationState = _pagedPaginationState.copyWith(
-        pendingRestoreRatio: restoreRatio,
-      );
+      _pageTurnRuntimeController
+          .pagedPaginationState = _pageTurnRuntimeController
+          .pagedPaginationState
+          .copyWith(pendingRestoreRatio: restoreRatio);
     });
 
     _restoreScrollPosition(restoreRatio);

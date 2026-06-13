@@ -7,7 +7,7 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
     bool startAutoReadAfterApplyInitially = false,
   }) async {
     final entryPlan = _settingsEntryController.buildOpenPlan(
-      overlayVisible: _showOverlayControls,
+      overlayVisible: _overlayController.showOverlayControls,
     );
     if (entryPlan.shouldStopAutoRead) {
       _stopAutoReadSession();
@@ -67,12 +67,11 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
         return AppFadeSlideTransition(
           child: Stack(
             children: [
-              Positioned.fill(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onTap: () => Navigator.of(context).maybePop(),
-                  child: const SizedBox.shrink(),
-                ),
+              ReaderFullScreenHitTestLayer(
+                strategy: ReaderFullScreenHitTestStrategy.interceptWhenVisible,
+                behavior: HitTestBehavior.translucent,
+                onTap: () => Navigator.of(context).maybePop(),
+                child: const SizedBox.shrink(),
               ),
               Theme(
                 data: readerModalTheme,

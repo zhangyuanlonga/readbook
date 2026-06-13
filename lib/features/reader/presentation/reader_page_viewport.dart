@@ -15,19 +15,14 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
         chrome: ReaderShellChromeSlots(
           backgroundOverlay:
               _readerBrightnessOverlayAlpha() > 0.001
-                  ? IgnorePointer(
-                    child: ColoredBox(
-                      color: Colors.black.withValues(
-                        alpha: _readerBrightnessOverlayAlpha(),
-                      ),
+                  ? ColoredBox(
+                    color: Colors.black.withValues(
+                      alpha: _readerBrightnessOverlayAlpha(),
                     ),
                   )
                   : null,
-          foregroundOverlay: Stack(
-            clipBehavior: Clip.hardEdge,
-            children: readerForegroundOverlayOrder
-                .map((slot) => _buildForegroundOverlaySlot(slot, colors))
-                .toList(growable: false),
+          foregroundOverlay: ReaderOverlayLayerRenderer(
+            model: _buildForegroundOverlayModel(colors),
           ),
         ),
       ),
@@ -59,6 +54,26 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
     );
   }
 
+  ReaderOverlayLayerModel _buildForegroundOverlayModel(
+    ReaderThemeColors colors,
+  ) {
+    return ReaderOverlayLayerModel(
+      layers: readerForegroundOverlayOrder
+          .asMap()
+          .entries
+          .map(
+            (entry) => ReaderOverlayLayer(
+              slot: entry.value,
+              zOrder: entry.key,
+              child: _buildForegroundOverlaySlot(entry.value, colors),
+              hitTestPolicy: _foregroundOverlayHitTestPolicy(entry.value),
+              semanticRole: _foregroundOverlaySemanticRole(entry.value),
+            ),
+          )
+          .toList(growable: false),
+    );
+  }
+
   Widget _buildForegroundOverlaySlot(
     ReaderForegroundOverlaySlot slot,
     ReaderThemeColors colors,
@@ -75,6 +90,36 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
     };
   }
 
+  ReaderOverlayHitTestPolicy _foregroundOverlayHitTestPolicy(
+    ReaderForegroundOverlaySlot slot,
+  ) {
+    return switch (slot) {
+      ReaderForegroundOverlaySlot.chapterLoading =>
+        ReaderOverlayHitTestPolicy.deferToChild,
+      ReaderForegroundOverlaySlot.autoReadStatus ||
+      ReaderForegroundOverlaySlot.overlayScrim ||
+      ReaderForegroundOverlaySlot.topChrome ||
+      ReaderForegroundOverlaySlot
+          .bottomChrome => ReaderOverlayHitTestPolicy.deferToChild,
+    };
+  }
+
+  ReaderOverlaySemanticRole _foregroundOverlaySemanticRole(
+    ReaderForegroundOverlaySlot slot,
+  ) {
+    return switch (slot) {
+      ReaderForegroundOverlaySlot.chapterLoading =>
+        ReaderOverlaySemanticRole.loading,
+      ReaderForegroundOverlaySlot.autoReadStatus =>
+        ReaderOverlaySemanticRole.status,
+      ReaderForegroundOverlaySlot.overlayScrim =>
+        ReaderOverlaySemanticRole.scrim,
+      ReaderForegroundOverlaySlot.topChrome ||
+      ReaderForegroundOverlaySlot
+          .bottomChrome => ReaderOverlaySemanticRole.chrome,
+    };
+  }
+
   Widget _composeReaderBody(ReaderThemeColors colors) {
     final palette = ReaderBodyRegionPalette(
       textColor: colors.text,
@@ -86,12 +131,12 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
       state: ReaderViewportBodyState(
         showBlockingLoading: _shouldShowBlockingReaderLoading,
         showHiddenLoading:
-            _showHiddenLoadingPlaceholder &&
+            _overlayController.showHiddenLoadingPlaceholder &&
             (_isBootstrapping || _isLoadingContent) &&
             !_hasVisibleReaderContent,
         showTransientLoadingGap:
             (_isBootstrapping || _isLoadingContent) &&
-            !_showHiddenLoadingPlaceholder &&
+            !_overlayController.showHiddenLoadingPlaceholder &&
             !_hasVisibleReaderContent,
         hasRenderableContent:
             _content.trim().isNotEmpty ||
@@ -304,7 +349,7 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
           paginationSpec: paginationSpec,
           palette: palette,
           pageCount: _currentPagedPageCount,
-          currentPageIndex: _currentPageIndex,
+          currentPageIndex: _pageTurnRuntimeController.currentPageIndex,
           document: _document,
           paragraphs: _paragraphs,
           pagedPages: _pagedPages,
@@ -323,7 +368,8 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
 
         final hasPagedContent =
             _pagedPages.isNotEmpty || _pagedBlockPages.isNotEmpty;
-        if (_pagedPaginationState.isPaginating && !hasPagedContent) {
+        if (_pageTurnRuntimeController.pagedPaginationState.isPaginating &&
+            !hasPagedContent) {
           return Column(
             children: [
               if (_showsPagedPinnedChapterHeaderFor(_currentViewportKind))
@@ -403,14 +449,14 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
         final transitionPlan = _pagedViewportTransitionResolver.resolve(
           requestedAnimationStyle: animationStyle,
           pageCount: pageCount,
-          currentPageIndex: _currentPageIndex,
-          pagedTransition: _pagedTransition,
+          currentPageIndex: _pageTurnRuntimeController.currentPageIndex,
+          pagedTransition: _pageTurnRuntimeController.pagedTransition,
           curlState: curlState,
         );
         final pageSize = constraints.biggest;
         final viewportInput = ReaderPagedViewportInput(
           chapterId: _chapterId,
-          pageIndex: _currentPageIndex,
+          pageIndex: _pageTurnRuntimeController.currentPageIndex,
           pageCount: pageCount,
           pageSize: pageSize,
           animationStyle: animationStyle,
@@ -445,7 +491,7 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
               return;
             }
             _updateReaderState(() {
-              _currentPageIndex = pageIndex;
+              _pageTurnRuntimeController.currentPageIndex = pageIndex;
             });
             _syncActiveReadingRecordSessionProgress();
             _scheduleProgressSave();
@@ -456,7 +502,7 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
           paperCurlSurface: ReaderPaperCurlPagedSurface(
             surfaceToken: viewportInput,
             pageCount: pageCount,
-            currentPageIndex: _currentPageIndex,
+            currentPageIndex: _pageTurnRuntimeController.currentPageIndex,
             pageBuilder:
                 (context, pageIndex) => _buildPagedPageContainer(
                   colors: colors,
@@ -468,7 +514,7 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
                 ),
           ),
           onPaperCurlTurnStarted: (_) {
-            _markReaderInteractionBusy(_ReaderInteractionState.animating);
+            _markReaderInteractionBusy(ReaderInteractionRuntimeState.animating);
             _recordFirstPageTurnCompleted(mode: 'paper_curl');
           },
           onPaperCurlTurnRejected: (_) {

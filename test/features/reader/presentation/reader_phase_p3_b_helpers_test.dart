@@ -9,6 +9,7 @@ import 'package:shuxiang_reading_next/features/reader/presentation/reader_chrome
 import 'package:shuxiang_reading_next/features/reader/presentation/reader_desktop_input_dispatcher.dart';
 import 'package:shuxiang_reading_next/features/reader/presentation/reader_page_support_models.dart';
 import 'package:shuxiang_reading_next/features/reader/presentation/reader_pointer_input_controller.dart';
+import 'package:shuxiang_reading_next/features/reader/presentation/reader_selection_overlay_policy.dart';
 import 'package:shuxiang_reading_next/features/reader/presentation/reader_selection_toolbar_presenter.dart';
 import 'package:shuxiang_reading_next/features/reader/presentation/reader_touch_navigation_controller.dart';
 import 'package:shuxiang_reading_next/features/reader/presentation/widgets/chrome/reader_overlay_bars.dart';
@@ -215,6 +216,35 @@ void main() {
       expect(longPressed, isFalse);
       controller.dispose();
     });
+  });
+
+  group('ReaderSelectionOverlayPolicy', () {
+    const policy = ReaderSelectionOverlayPolicy();
+
+    test('keeps selection toolbar in root overlay by default', () {
+      final decision = policy.resolveToolbarHost(
+        rootOverlayIssueVerified: false,
+        foregroundAnchorsValidated: false,
+      );
+
+      expect(decision.host, ReaderSelectionOverlayHost.rootOverlay);
+      expect(decision.usesRootOverlay, isTrue);
+      expect(decision.requiresDeviceValidation, isTrue);
+    });
+
+    test(
+      'allows foreground overlay only after issue and anchors are verified',
+      () {
+        final decision = policy.resolveToolbarHost(
+          rootOverlayIssueVerified: true,
+          foregroundAnchorsValidated: true,
+        );
+
+        expect(decision.host, ReaderSelectionOverlayHost.foregroundOverlay);
+        expect(decision.usesRootOverlay, isFalse);
+        expect(decision.requiresDeviceValidation, isFalse);
+      },
+    );
   });
 
   group('ReaderDesktopInputDispatcher', () {

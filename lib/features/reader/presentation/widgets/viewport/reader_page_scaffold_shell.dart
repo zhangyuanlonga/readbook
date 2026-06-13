@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../reader_page_support_models.dart';
 import '../../reader_shell.dart';
+import '../root/reader_root_scaffold.dart';
 
 class ReaderPageScaffoldShell extends StatelessWidget {
   const ReaderPageScaffoldShell({
@@ -25,27 +26,14 @@ class ReaderPageScaffoldShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PopScope<void>(
-      canPop: canPopRoute,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) {
-          onFallbackPop();
-        }
-      },
-      child: Focus(
+    return ReaderRootScaffold(
+      model: ReaderRootScaffoldModel(
+        canPopRoute: canPopRoute,
+        onFallbackPop: onFallbackPop,
         focusNode: focusNode,
-        autofocus: true,
         onKeyEvent: onKeyEvent,
-        child: Scaffold(
-          backgroundColor: colors.background,
-          body: SafeArea(
-            top: false,
-            bottom: false,
-            child: ClipRect(
-              child: ReaderShell(model: shellModel, child: child),
-            ),
-          ),
-        ),
+        backgroundColor: colors.background,
+        body: ReaderShell(model: shellModel, child: child),
       ),
     );
   }

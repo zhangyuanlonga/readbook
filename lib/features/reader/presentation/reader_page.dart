@@ -96,13 +96,16 @@ import '../application/reader_content_mode_surface_controller.dart';
 import '../application/reader_document_render_model.dart';
 import '../application/reader_font_registry_service.dart';
 import '../application/reader_image_decode_budget.dart';
+import '../application/reader_interaction_runtime_controller.dart';
 import '../application/removed_script_source_guard.dart';
 import '../application/reader_jump_facade.dart';
 import '../application/reader_jump_planner.dart';
 import '../application/reader_layout_resolver.dart';
 import '../application/reader_navigation_command_dispatcher.dart';
 import '../application/reader_navigation_entry_resolver.dart';
+import '../application/reader_overlay_controller.dart';
 import '../application/reader_page_turn_gate.dart';
+import '../application/reader_page_turn_coordinator.dart';
 import '../application/reader_page_bootstrap_controller.dart';
 import '../application/reader_pagination_controller.dart';
 import '../application/reader_pagination_cache_service.dart';
@@ -174,6 +177,7 @@ import 'reader_pdf_view.dart';
 import 'reader_paper_curl_paged_view.dart';
 import 'reader_page_lifecycle_delegate.dart';
 import 'reader_page_support_models.dart';
+import 'reader_page_turn_runtime_controller.dart';
 import 'reader_pointer_input_controller.dart';
 import 'reader_overlay_z_order.dart';
 import 'reader_selection_state.dart';
@@ -186,13 +190,16 @@ import 'reader_paged_viewport_support.dart';
 import 'reader_cross_chapter_snapshot_overlay.dart';
 import 'reader_presentation_resolver.dart';
 import 'reader_runtime_controller.dart';
+import 'reader_selection_overlay_policy.dart';
 import 'reader_selection_toolbar_presenter.dart';
 import 'reader_tap_zone_resolver.dart';
 import 'reader_text_paged_view.dart';
 import 'reader_touch_navigation_controller.dart';
 import 'reader_viewport_builder.dart';
+import 'widgets/background/reader_background_layer.dart';
 import 'widgets/chrome/reader_chrome_widgets.dart';
 import 'widgets/chrome/reader_overlay_bars.dart';
+import 'widgets/overlay/reader_overlay_layer_model.dart';
 import 'widgets/viewport/reader_page_scaffold_shell.dart';
 import 'sheets/reader_settings/reader_audio_settings_section.dart';
 import 'sheets/reader_settings/reader_auto_read_settings_section.dart';
@@ -266,8 +273,6 @@ enum _ReaderSettingsTab { interface, reading }
 
 enum _OverlayEdge { top, bottom }
 
-enum _ReaderInteractionState { idle, dragging, animating, settling }
-
 enum _ReaderAutoReadControlAction { catalog, toggle, settings, exit }
 
 enum ReaderAutoReadSessionState {
@@ -308,7 +313,7 @@ extension _ReaderDesktopInputLayer on _ReaderPageState {
       textSelectionActive: _isTextSelectionActive,
       editingText: _isEditingBookmarkNote,
       readerBusy: _isBootstrapping || _isLoadingContent || _errorText != null,
-      overlayVisible: _showOverlayControls,
+      overlayVisible: _overlayController.showOverlayControls,
       autoReadSessionEnabled: _isAutoReadSessionEnabled,
       isPagedViewport:
           _currentViewportKind == ReaderModeViewportKind.textPaged ||
@@ -324,7 +329,7 @@ extension _ReaderDesktopInputLayer on _ReaderPageState {
       case ReaderDesktopInputAction.none:
         return KeyEventResult.ignored;
       case ReaderDesktopInputAction.toggleOverlay:
-        if (_showOverlayControls) {
+        if (_overlayController.showOverlayControls) {
           _hideOverlayControls(resumeAutoRead: true);
         } else {
           _setOverlayControlsVisibility(true);
@@ -371,7 +376,7 @@ extension _ReaderTouchNavigationLayer on _ReaderPageState {
       autoReadSessionEnabled: _isAutoReadSessionEnabled,
       autoReadTapGuardUntil: _autoReadTapGuardUntil,
       now: DateTime.now(),
-      overlayVisible: _showOverlayControls,
+      overlayVisible: _overlayController.showOverlayControls,
       tapEnabled: _settings.pageTurnMode.tapEnabled,
       usesScrollLayout: _settings.pageTurnMode.usesScrollLayout,
     );
@@ -429,7 +434,7 @@ extension _ReaderTouchNavigationLayer on _ReaderPageState {
         }
         return;
       case ReaderInteractionCommandType.toggleToolbar:
-        final nextShow = !_showOverlayControls;
+        final nextShow = !_overlayController.showOverlayControls;
         _setOverlayControlsVisibility(nextShow);
         if (!nextShow) {
           _scheduleAutoReadResume();
@@ -636,6 +641,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const ReaderAnnotationPresenter();
   final ReaderSelectionToolbarPresenter _selectionToolbarPresenter =
       const ReaderSelectionToolbarPresenter();
+  final ReaderSelectionOverlayPolicy _selectionOverlayPolicy =
+      const ReaderSelectionOverlayPolicy();
   final ReaderSessionStateResolver _sessionStateResolver =
       const ReaderSessionStateResolver();
   final ReaderDesktopInputDispatcher _desktopInputDispatcher =
@@ -645,6 +652,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   final ReaderInteractionCoordinator _interactionCoordinator =
       const ReaderInteractionCoordinator();
   final ReaderPageTurnGate _pageTurnGate = const ReaderPageTurnGate();
+  final ReaderPageTurnCoordinator _pageTurnCoordinator =
+      const ReaderPageTurnCoordinator();
+  final ReaderInteractionRuntimeController _interactionRuntimeController =
+      ReaderInteractionRuntimeController();
+  final ReaderOverlayController _overlayController = ReaderOverlayController();
+  final ReaderPageTurnRuntimeController _pageTurnRuntimeController =
+      ReaderPageTurnRuntimeController();
   late final ReaderSystemSettingsService _systemSettingsService;
   late final ReaderBackgroundService _readerBackgroundService;
   late final LocalBookStorageService _localBookStorageService;
@@ -731,7 +745,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   bool _isBootstrapping = true;
   bool _isLoadingContent = false;
-  bool _showOverlayControls = false;
   bool _isInBookshelf = false;
   bool _isCurrentChapterCached = false;
   bool _isShelfActionLoading = false;
@@ -824,13 +837,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool _isScrollStepAnimating = false;
   ReaderScrollEdgeAdvanceState _scrollEdgeAdvanceState =
       const ReaderScrollEdgeAdvanceState();
-  bool _isOverlayAutoHideSuspended = false;
-  bool _hasShownToolbarHint = false;
-  bool _hasShownTapZoneGuide = false;
   DateTime? _lastPointerScrollPageTurnAt;
-  DateTime? _lastBackNavigationAt;
-  DateTime? _readerInteractionUnlockAt;
-  DateTime? _lastReaderBackAt;
   OverlayEntry? _bookmarkToolbarEntry;
   ReaderPageTurnMode _pageTurnModeBeforeAutoRead =
       ReaderPageTurnMode.tapAndSwipe;
@@ -839,27 +846,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   String? _lightModeBackgroundImageBackup;
   final _ReaderBackgroundAssetStore _backgroundAssets =
       _ReaderBackgroundAssetStore();
-  double? _bottomOverlayDraftProgressRatio;
   List<List<ReaderPagedSlice>> _pagedPages = const [];
   List<List<ReaderPagedBlock>> _pagedBlockPages = const [];
   String? _textPaginationFallbackDiagnostic;
-  int _currentPageIndex = 0;
-  int _pagedTextControllerSyncGeneration = 0;
-  ReaderPaginationSessionState _pagedPaginationState =
-      const ReaderPaginationSessionState();
   int get _paginationTaskId => _readerSessionController.paginationGeneration;
   ReaderPaginationSpec? _lastPaginationSpec;
-  bool _showChapterLoadingIndicator = false;
-  bool _showBlockingLoadingCard = false;
-  bool _showHiddenLoadingPlaceholder = false;
   double? _measuredPinnedChapterHeaderWidth;
-  PagedTransitionState _pagedTransition = PagedTransitionController.idleState;
-  ReaderCurlTransitionState _curlTransition = const ReaderCurlTransitionState();
-  ReaderCrossChapterSnapshotTransitionState _crossChapterSnapshotTransition =
-      const ReaderCrossChapterSnapshotTransitionState();
-  int _crossChapterSnapshotGeneration = 0;
-  Stopwatch? _firstPageTurnStopwatch;
-  bool _hasLoggedFirstPageTurn = false;
   bool _isSystemUiVisible = false;
   bool _isVolumeKeyPageInterceptionEnabled = false;
   late final AnimationController _overlayControlsController;
@@ -876,10 +868,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const <ReaderPageContinuousTextChapter>[];
   DateTime? _lastInlineImagePrecacheAt;
   bool _deferredBootstrapWarmupStarted = false;
-  _ReaderInteractionState _readerInteractionState =
-      _ReaderInteractionState.idle;
-  Timer? _readerInteractionSettleTimer;
-  bool _deferredNeighborPreload = false;
 
   static const List<String> _kFallbackBackgroundPresetPaths = [
     'assets/reader/backgrounds/20260224-212555-700782.jpeg',
@@ -958,15 +946,24 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   static const double _kScrollAdvanceNearEdgeThreshold = 24;
   static const int _kScrollRefreshCurrentChapterAction = -2;
 
-  bool get _isCurlAutoTurning => _curlTransition.isAnimating;
-  bool get _isCurlPreviewActive => _curlTransition.isPreview;
-  int get _curlAutoDirection => _curlTransition.direction;
-  int get _curlAnimationFromIndex => _curlTransition.fromIndex;
-  int get _curlAnimationToIndex => _curlTransition.toIndex;
-  double get _curlPreviewProgress => _curlTransition.previewProgress;
-  bool get _curlCommitOnAnimationEnd => _curlTransition.commitOnAnimationEnd;
-  bool get _isCurlCrossChapterTurn => _curlTransition.isCrossChapter;
-  bool get _isPagedTransitionAnimating => _pagedTransition.isAnimating;
+  bool get _isCurlAutoTurning =>
+      _pageTurnRuntimeController.curlTransition.isAnimating;
+  bool get _isCurlPreviewActive =>
+      _pageTurnRuntimeController.curlTransition.isPreview;
+  int get _curlAutoDirection =>
+      _pageTurnRuntimeController.curlTransition.direction;
+  int get _curlAnimationFromIndex =>
+      _pageTurnRuntimeController.curlTransition.fromIndex;
+  int get _curlAnimationToIndex =>
+      _pageTurnRuntimeController.curlTransition.toIndex;
+  double get _curlPreviewProgress =>
+      _pageTurnRuntimeController.curlTransition.previewProgress;
+  bool get _curlCommitOnAnimationEnd =>
+      _pageTurnRuntimeController.curlTransition.commitOnAnimationEnd;
+  bool get _isCurlCrossChapterTurn =>
+      _pageTurnRuntimeController.curlTransition.isCrossChapter;
+  bool get _isPagedTransitionAnimating =>
+      _pageTurnRuntimeController.pagedTransition.isAnimating;
   bool get _shouldUseContinuousTextFlow => _isTextScrollViewport;
   int get _currentPagedPageCount =>
       max(_pagedPages.length, _pagedBlockPages.length);
@@ -975,7 +972,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (pageCount <= 0) {
       return null;
     }
-    final safePage = _currentPageIndex.clamp(0, _safePageUpperBound(pageCount));
+    final safePage = _pageTurnRuntimeController.currentPageIndex.clamp(
+      0,
+      _safePageUpperBound(pageCount),
+    );
     final controller = _staticPagedTextPageControllerInstance;
     if (controller == null) {
       _staticPagedTextPageControllerInstance = PageController(
@@ -993,19 +993,22 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (controller.hasClients) {
       final current = _readSingleAttachedPage(controller);
       if (current != safePage &&
-          !_pagedTransition.isAnimating &&
+          !_pageTurnRuntimeController.pagedTransition.isAnimating &&
           !_isCurlAutoTurning) {
-        final syncGeneration = ++_pagedTextControllerSyncGeneration;
+        final syncGeneration =
+            ++_pageTurnRuntimeController.pagedTextControllerSyncGeneration;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted ||
-              syncGeneration != _pagedTextControllerSyncGeneration ||
+              syncGeneration !=
+                  _pageTurnRuntimeController
+                      .pagedTextControllerSyncGeneration ||
               _staticPagedTextPageControllerInstance != controller ||
               !controller.hasClients ||
-              _pagedTransition.isAnimating ||
+              _pageTurnRuntimeController.pagedTransition.isAnimating ||
               _isCurlAutoTurning) {
             return;
           }
-          final target = _currentPageIndex.clamp(
+          final target = _pageTurnRuntimeController.currentPageIndex.clamp(
             0,
             _safePageUpperBound(_currentPagedPageCount),
           );
@@ -1256,7 +1259,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (_isPagedTextReaderEnabled()) {
       return ReaderRenderMetrics(
         pageCount: _currentPagedPageCount,
-        currentPageIndex: _currentPageIndex,
+        currentPageIndex: _pageTurnRuntimeController.currentPageIndex,
       );
     }
     return ReaderRenderMetrics(
@@ -1285,7 +1288,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       document: continuousChapter?.document ?? _document,
       chapterIndex: chapterIndex,
       chapterPositionRatio: _currentLogicalPositionRatio(),
-      pageIndex: _isPagedTextReaderEnabled() ? _currentPageIndex : null,
+      pageIndex:
+          _isPagedTextReaderEnabled()
+              ? _pageTurnRuntimeController.currentPageIndex
+              : null,
     );
   }
 
@@ -1432,7 +1438,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           contentMode: _currentContentMode,
           mode: _currentReaderMode,
           chapterPositionRatio: ratio,
-          pageIndex: _currentPageIndex,
+          pageIndex: _pageTurnRuntimeController.currentPageIndex,
           pageCount: _currentPagedPageCount,
         );
       case ReaderModeViewportKind.imagePaged:
@@ -1541,9 +1547,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       fallback: fallbackRatio,
     );
     if (nextPagedTextEnabled) {
-      _pagedPaginationState = _pagedPaginationState.copyWith(
-        pendingRestoreRatio: anchorRatio,
-      );
+      _pageTurnRuntimeController
+          .pagedPaginationState = _pageTurnRuntimeController
+          .pagedPaginationState
+          .copyWith(pendingRestoreRatio: anchorRatio);
     } else if (_restoreContinuousTextAnchorPosition(anchorRatio)) {
       _scheduleProgressSave();
       return;
@@ -1835,7 +1842,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   bool get _shouldShowBlockingReaderLoading {
-    return _showBlockingLoadingCard && _needsBlockingLoadingUi;
+    return _overlayController.showBlockingLoadingCard &&
+        _needsBlockingLoadingUi;
   }
 
   bool get _supportsChapterPullToRefresh {
@@ -2158,29 +2166,29 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         child: _composeReaderContent(colors),
       ),
     );
-    final transition = _crossChapterSnapshotTransition;
+    final transition =
+        _pageTurnRuntimeController.crossChapterSnapshotTransition;
     return Stack(
       fit: StackFit.expand,
       children: [
         RepaintBoundary(key: _readerContentSnapshotKey, child: content),
         if (transition.isActive)
-          Positioned.fill(
-            child: IgnorePointer(
-              child: ReaderCrossChapterSnapshotOverlay(
-                key: ValueKey<int>(transition.generation),
-                fromImage: transition.fromImage!,
-                toImage: transition.toImage,
-                style: transition.style,
-                direction: transition.direction,
-                animation: _crossChapterSnapshotController,
-                generation: transition.generation,
-                curlColors: CurlRendererColors(
-                  backgroundColor: colors.background,
-                  dividerColor: colors.divider,
-                  overlayColor: colors.overlay,
-                ),
-                onPaperCurlCompleted: _completeCrossChapterSnapshotAnimation,
+          ReaderFullScreenHitTestLayer(
+            strategy: ReaderFullScreenHitTestStrategy.passThrough,
+            child: ReaderCrossChapterSnapshotOverlay(
+              key: ValueKey<int>(transition.generation),
+              fromImage: transition.fromImage!,
+              toImage: transition.toImage,
+              style: transition.style,
+              direction: transition.direction,
+              animation: _crossChapterSnapshotController,
+              generation: transition.generation,
+              curlColors: CurlRendererColors(
+                backgroundColor: colors.background,
+                dividerColor: colors.divider,
+                overlayColor: colors.overlay,
               ),
+              onPaperCurlCompleted: _completeCrossChapterSnapshotAnimation,
             ),
           ),
       ],
@@ -2493,7 +2501,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return text_offset_mapper.resolveChapterOffsetFromDisplayOffset(
       paragraphs: paragraphs,
       pagedPages: _pagedPages,
-      currentPageIndex: _currentPageIndex,
+      currentPageIndex: _pageTurnRuntimeController.currentPageIndex,
       paragraphIndentLength: _paragraphIndentLength(),
       displayOffset: displayOffset,
     );
@@ -3079,9 +3087,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (delta.abs() < _kCurlPreviewStartThreshold) {
       if (_isCurlPreviewActive) {
         setState(() {
-          _curlTransition = _curlTransition.copyWith(
-            isPreview: false,
-            previewProgress: 0,
+          _pageTurnRuntimeController.cancelCurlPreview(
+            currentIndex: _pageTurnRuntimeController.currentPageIndex,
           );
         });
       }
@@ -3094,14 +3101,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     final direction = delta < 0 ? 1 : -1;
-    final currentIndex = _currentPageIndex.clamp(0, pageCount - 1);
+    final currentIndex = _pageTurnRuntimeController.currentPageIndex.clamp(
+      0,
+      pageCount - 1,
+    );
     final targetIndex = currentIndex + direction;
     if (targetIndex < 0 || targetIndex >= pageCount) {
       if (_isCurlPreviewActive) {
         setState(() {
-          _curlTransition = _curlTransition.copyWith(
-            isPreview: false,
-            previewProgress: 0,
+          _pageTurnRuntimeController.cancelCurlPreview(
+            currentIndex: currentIndex,
           );
         });
       }
@@ -3121,12 +3130,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     setState(() {
-      _curlTransition = _curlTransition.copyWith(
+      _pageTurnRuntimeController.beginCurlPreview(
         direction: direction,
         fromIndex: currentIndex,
         toIndex: targetIndex,
-        previewProgress: progress,
-        isPreview: true,
+        progress: progress,
       );
     });
   }
@@ -3139,20 +3147,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final progress = _curlPreviewProgress.clamp(0.0, 1.0);
     if (progress <= 0) {
       setState(() {
-        _curlTransition = _curlTransition.copyWith(
-          isPreview: false,
-          previewProgress: 0,
+        _pageTurnRuntimeController.cancelCurlPreview(
+          currentIndex: _pageTurnRuntimeController.currentPageIndex,
         );
       });
       return;
     }
 
     setState(() {
-      _curlTransition = _curlTransition.copyWith(
-        commitOnAnimationEnd: commit,
-        isPreview: false,
-        isAnimating: true,
-      );
+      _pageTurnRuntimeController.finishCurlPreview(commit: commit);
     });
 
     _curlAutoTurnController.value = progress;
@@ -3173,14 +3176,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       final currentIndex =
           pageCount <= 0
               ? 0
-              : _currentPageIndex.clamp(0, _safePageUpperBound(pageCount));
+              : _pageTurnRuntimeController.currentPageIndex.clamp(
+                0,
+                _safePageUpperBound(pageCount),
+              );
       setState(() {
-        _curlTransition = _curlTransition.copyWith(
-          isAnimating: false,
-          isPreview: false,
-          previewProgress: 0,
-          fromIndex: currentIndex,
-          toIndex: currentIndex,
+        _pageTurnRuntimeController.cancelCurlPreview(
+          currentIndex: currentIndex,
         );
       });
       _scheduleReaderInteractionSettle();
@@ -3192,24 +3194,32 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     if (_isCurlCrossChapterTurn) {
+      final direction = _curlAutoDirection;
       setState(() {
-        _curlTransition = const ReaderCurlTransitionState();
+        _pageTurnRuntimeController.resetCurlTransition(
+          pageIndex: _pageTurnRuntimeController.currentPageIndex,
+        );
       });
       _recordFirstPageTurnCompleted(mode: 'curl_cross_chapter');
       _scheduleReaderInteractionSettle();
+      _logReaderPageTurnResult(
+        ReaderPageTurnResult(
+          type: ReaderPageTurnResultType.committed,
+          request: ReaderPageTurnRequest(direction: direction),
+          executionType: ReaderPageTurnExecutionType.crossChapter,
+        ),
+      );
       return;
     }
 
     final pageCount = _currentPagedPageCount;
     if (pageCount <= 0) {
       if (!mounted) {
-        _curlTransition = const ReaderCurlTransitionState();
-        _currentPageIndex = 0;
+        _pageTurnRuntimeController.resetCurlTransition();
         return;
       }
       setState(() {
-        _curlTransition = const ReaderCurlTransitionState();
-        _currentPageIndex = 0;
+        _pageTurnRuntimeController.resetCurlTransition();
       });
       _scheduleReaderInteractionSettle();
       return;
@@ -3220,64 +3230,83 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
 
     setState(() {
-      _curlTransition = _curlTransition.copyWith(
-        isAnimating: false,
-        isPreview: false,
-        previewProgress: 0,
-        fromIndex: nextIndex,
-        toIndex: nextIndex,
-      );
-      _currentPageIndex = nextIndex;
+      _pageTurnRuntimeController.commitCurlTurn(pageIndex: nextIndex);
     });
     _scheduleProgressSave();
     _recordFirstPageTurnCompleted(mode: 'curl');
     _scheduleReaderInteractionSettle();
+    _logReaderPageTurnResult(
+      ReaderPageTurnResult(
+        type: ReaderPageTurnResultType.committed,
+        request: ReaderPageTurnRequest(direction: _curlAutoDirection),
+        executionType: ReaderPageTurnExecutionType.curl,
+        targetPageIndex: nextIndex,
+      ),
+    );
   }
 
-  Future<void> _autoTurnCurlPage(int direction) async {
+  Future<ReaderPageTurnResult?> _autoTurnCurlPage(
+    int direction, {
+    ReaderPageTurnRequest? request,
+  }) async {
+    final turnRequest = request ?? ReaderPageTurnRequest(direction: direction);
     if (_isCurlAutoTurning) {
-      return;
+      return ReaderPageTurnResult(
+        type: ReaderPageTurnResultType.rejected,
+        request: turnRequest,
+        executionType: ReaderPageTurnExecutionType.curl,
+        rejectReason: ReaderPageTurnRejectReason.pageTurnBusy,
+      );
     }
 
     final pageCount = _currentPagedPageCount;
     if (pageCount <= 0) {
-      return;
+      return ReaderPageTurnResult(
+        type: ReaderPageTurnResultType.rejected,
+        request: turnRequest,
+        executionType: ReaderPageTurnExecutionType.curl,
+        rejectReason: ReaderPageTurnRejectReason.noPages,
+      );
     }
 
-    final currentIndex = _currentPageIndex.clamp(0, pageCount - 1);
+    final currentIndex = _pageTurnRuntimeController.currentPageIndex.clamp(
+      0,
+      pageCount - 1,
+    );
     if (direction < 0 && currentIndex <= 0) {
-      await _turnCrossChapterWithSnapshot(
-        forward: false,
+      return _turnCrossChapterWithSnapshot(
+        ReaderPageTurnPlan.execute(
+          request: turnRequest,
+          executionType: ReaderPageTurnExecutionType.crossChapter,
+        ),
         style: ReaderPageAnimationStyle.curl,
         completionMode: 'curl_cross_chapter',
       );
-      return;
     }
 
     if (direction > 0 && currentIndex >= pageCount - 1) {
-      await _turnCrossChapterWithSnapshot(
-        forward: true,
+      return _turnCrossChapterWithSnapshot(
+        ReaderPageTurnPlan.execute(
+          request: turnRequest,
+          executionType: ReaderPageTurnExecutionType.crossChapter,
+        ),
         style: ReaderPageAnimationStyle.curl,
         completionMode: 'curl_cross_chapter',
       );
-      return;
     }
 
-    _markReaderInteractionBusy(_ReaderInteractionState.animating);
+    _markReaderInteractionBusy(ReaderInteractionRuntimeState.animating);
     setState(() {
-      _curlTransition = _curlTransition.copyWith(
+      _pageTurnRuntimeController.beginCurlAutoTurn(
         direction: direction,
         fromIndex: currentIndex,
         toIndex: currentIndex + direction,
-        commitOnAnimationEnd: true,
-        isPreview: false,
-        previewProgress: 0,
-        isAnimating: true,
       );
     });
 
     _curlAutoTurnController.value = 0;
     _curlAutoTurnController.forward();
+    return null;
   }
 
   void _snapToPagedTextPage(int pageIndex) {
@@ -3288,16 +3317,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final safeIndex = pageIndex.clamp(0, _safePageUpperBound(pageCount));
     _resetPagedTransitionState();
     _resetCurlAnimationState();
-    _pagedTextControllerSyncGeneration += 1;
+    _pageTurnRuntimeController.pagedTextControllerSyncGeneration += 1;
     final pageController = _staticPagedTextPageControllerInstance;
     if (pageController != null && pageController.hasClients) {
       pageController.jumpToPage(safeIndex);
     }
     setState(() {
-      _currentPageIndex = safeIndex;
-      _pagedPaginationState = _pagedPaginationState.copyWith(
-        pendingRestoreRatio: safeIndex / max(1, pageCount - 1),
-      );
+      _pageTurnRuntimeController.currentPageIndex = safeIndex;
+      _pageTurnRuntimeController
+          .pagedPaginationState = _pageTurnRuntimeController
+          .pagedPaginationState
+          .copyWith(pendingRestoreRatio: safeIndex / max(1, pageCount - 1));
     });
     _syncActiveReadingRecordSessionProgress();
     _scheduleProgressSave();
@@ -3310,7 +3340,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final plan = _paginationController.buildEnsurePlan(
       spec: spec,
       chapterId: _chapterId,
-      currentState: _pagedPaginationState,
+      currentState: _pageTurnRuntimeController.pagedPaginationState,
       hasExistingPages: _pagedPages.isNotEmpty || _pagedBlockPages.isNotEmpty,
       currentProgressRatio: _currentScrollRatio(),
     );
@@ -3352,8 +3382,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         setState(() {
           _pagedPages = const <List<ReaderPagedSlice>>[];
           _pagedBlockPages = cachedLayout.pagedBlockPages;
-          _currentPageIndex = targetIndex;
-          _pagedPaginationState = ReaderPaginationSessionState(
+          _pageTurnRuntimeController.currentPageIndex = targetIndex;
+          _pageTurnRuntimeController
+              .pagedPaginationState = ReaderPaginationSessionState(
             signature: cachedLayout.paginationSignature,
           );
           if (_paragraphs.isEmpty && cachedLayout.paragraphs.isNotEmpty) {
@@ -3376,8 +3407,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         setState(() {
           _pagedPages = cachedLayout.pagedPages;
           _pagedBlockPages = const <List<ReaderPagedBlock>>[];
-          _currentPageIndex = targetIndex;
-          _pagedPaginationState = ReaderPaginationSessionState(
+          _pageTurnRuntimeController.currentPageIndex = targetIndex;
+          _pageTurnRuntimeController
+              .pagedPaginationState = ReaderPaginationSessionState(
             signature: cachedLayout.paginationSignature,
           );
           if (_paragraphs.isEmpty && cachedLayout.paragraphs.isNotEmpty) {
@@ -3399,10 +3431,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     setState(() {
       _textPaginationFallbackDiagnostic = null;
-      _pagedPaginationState = plan.buildLoadingState();
+      _pageTurnRuntimeController.pagedPaginationState =
+          plan.buildLoadingState();
       _pagedPages = const [];
       _pagedBlockPages = const <List<ReaderPagedBlock>>[];
-      _currentPageIndex = 0;
+      _pageTurnRuntimeController.currentPageIndex = 0;
     });
 
     await _paginateCurrentChapter(
@@ -3414,12 +3447,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   void _resetCurlAnimationState() {
     _curlAutoTurnController.stop();
-    _curlTransition = const ReaderCurlTransitionState();
+    _pageTurnRuntimeController.resetCurlTransition(
+      pageIndex: _pageTurnRuntimeController.currentPageIndex,
+    );
   }
 
   void _resetPagedTransitionState() {
     _pagedTransitionController.stop();
-    _pagedTransition = PagedTransitionController.idleState;
+    _pageTurnRuntimeController.resetPagedTransition();
   }
 
   String _buildPaginationSignature({
@@ -3435,7 +3470,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool _canWarmNeighborPaginationCache() {
     final paginationSpec = _lastPaginationSpec;
     return _isTextPagedViewport &&
-        !_pagedPaginationState.isPaginating &&
+        !_pageTurnRuntimeController.pagedPaginationState.isPaginating &&
         _pagedPages.isNotEmpty &&
         paginationSpec != null &&
         paginationSpec.contentWidth >= 20 &&
@@ -3501,7 +3536,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           shouldAbort: () => !mounted || taskId != _paginationTaskId,
           imagePlaceholderAspectRatio: spec.imagePlaceholderAspectRatio,
         ),
-        targetRatio: _pagedPaginationState.pendingRestoreRatio ?? 0,
+        targetRatio:
+            _pageTurnRuntimeController
+                .pagedPaginationState
+                .pendingRestoreRatio ??
+            0,
       )) {
         if (!mounted || taskId != _paginationTaskId) {
           return;
@@ -3518,22 +3557,27 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           }
           continue;
         }
-        final pendingRatio = _pagedPaginationState.pendingRestoreRatio;
+        final pendingRatio =
+            _pageTurnRuntimeController.pagedPaginationState.pendingRestoreRatio;
         final targetIndex =
             pendingRatio == null
-                ? _currentPageIndex.clamp(0, pages.length - 1)
+                ? _pageTurnRuntimeController.currentPageIndex.clamp(
+                  0,
+                  pages.length - 1,
+                )
                 : (pendingRatio.clamp(0.0, 1.0) * (pages.length - 1))
                     .round()
                     .clamp(0, pages.length - 1);
         setState(() {
           _textPaginationFallbackDiagnostic = null;
-          _pagedPaginationState = ReaderPaginationSessionState(
+          _pageTurnRuntimeController
+              .pagedPaginationState = ReaderPaginationSessionState(
             signature: signature,
             isPaginating: !event.completed,
           );
           _pagedPages = const <List<ReaderPagedSlice>>[];
           _pagedBlockPages = pages;
-          _currentPageIndex = targetIndex;
+          _pageTurnRuntimeController.currentPageIndex = targetIndex;
           _resetCurlAnimationState();
         });
         _traceReaderFirstPageReady(
@@ -3562,7 +3606,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     await for (final event in _streamingPaginationController.paginateText(
       request,
-      targetRatio: _pagedPaginationState.pendingRestoreRatio ?? 0,
+      targetRatio:
+          _pageTurnRuntimeController.pagedPaginationState.pendingRestoreRatio ??
+          0,
     )) {
       if (!mounted || taskId != _paginationTaskId) {
         return;
@@ -3573,10 +3619,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       final pages = event.pages;
       if (pages.isEmpty) {
         setState(() {
-          _pagedPaginationState = _pagedPaginationState.copyWith(
-            isPaginating: false,
-            pendingRestoreRatio: null,
-          );
+          _pageTurnRuntimeController
+              .pagedPaginationState = _pageTurnRuntimeController
+              .pagedPaginationState
+              .copyWith(isPaginating: false, pendingRestoreRatio: null);
           _pagedPages = const [];
           _pagedBlockPages = const <List<ReaderPagedBlock>>[];
           _resetCurlAnimationState();
@@ -3584,20 +3630,22 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         continue;
       }
       var targetIndex = 0;
-      final pendingRatio = _pagedPaginationState.pendingRestoreRatio;
+      final pendingRatio =
+          _pageTurnRuntimeController.pagedPaginationState.pendingRestoreRatio;
       if (pendingRatio != null && pages.isNotEmpty) {
         targetIndex = (pendingRatio.clamp(0.0, 1.0) * (pages.length - 1))
             .round()
             .clamp(0, pages.length - 1);
       }
       setState(() {
-        _pagedPaginationState = ReaderPaginationSessionState(
+        _pageTurnRuntimeController
+            .pagedPaginationState = ReaderPaginationSessionState(
           signature: signature,
           isPaginating: !event.completed,
         );
         _pagedPages = pages;
         _pagedBlockPages = const <List<ReaderPagedBlock>>[];
-        _currentPageIndex = targetIndex;
+        _pageTurnRuntimeController.currentPageIndex = targetIndex;
         _resetCurlAnimationState();
       });
       _traceReaderFirstPageReady(
@@ -3663,10 +3711,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _resetCurlAnimationState();
     setState(() {
       _textPaginationFallbackDiagnostic = diagnostic;
-      _pagedPaginationState = const ReaderPaginationSessionState();
+      _pageTurnRuntimeController.pagedPaginationState =
+          const ReaderPaginationSessionState();
       _pagedPages = const <List<ReaderPagedSlice>>[];
       _pagedBlockPages = const <List<ReaderPagedBlock>>[];
-      _currentPageIndex = 0;
+      _pageTurnRuntimeController.currentPageIndex = 0;
     });
   }
 
@@ -3856,7 +3905,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
 
-    if (_showOverlayControls) {
+    if (_overlayController.showOverlayControls) {
       _hideOverlayControls(resumeAutoRead: true);
     }
 
@@ -4300,7 +4349,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     return ReaderTopOverlayBar(
       colors: colors,
-      overlayVisible: _showOverlayControls,
+      overlayVisible: _overlayController.showOverlayControls,
       animation: _overlayControlsController,
       fadeProgress: _overlayControlsFadeProgress,
       transitionBuilder:
@@ -4387,7 +4436,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     return ReaderMobileBottomOverlayBar(
       colors: colors,
-      overlayVisible: _showOverlayControls,
+      overlayVisible: _overlayController.showOverlayControls,
       animation: _overlayControlsController,
       fadeProgress: _overlayControlsFadeProgress,
       transitionBuilder:
@@ -4431,7 +4480,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   ) {
     return ReaderDesktopBottomProgressOverlay(
       colors: colors,
-      overlayVisible: _showOverlayControls,
+      overlayVisible: _overlayController.showOverlayControls,
       animation: _overlayControlsController,
       fadeProgress: _overlayControlsFadeProgress,
       transitionBuilder:
@@ -4469,7 +4518,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Widget _buildBottomProgressStrip(ReaderThemeColors colors) {
-    final progressValue = (_bottomOverlayDraftProgressRatio ??
+    final progressValue = (_overlayController.bottomDraftProgressRatio ??
             _safeCurrentScrollRatio())
         .clamp(0.0, 1.0);
     final canNavigateChapters = _chapters.isNotEmpty;
@@ -4500,12 +4549,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       onChanged: (value) {
         _touchOverlayControls();
         setState(() {
-          _bottomOverlayDraftProgressRatio = value;
+          _overlayController.bottomDraftProgressRatio = value;
         });
       },
       onChangeEnd: (value) {
         setState(() {
-          _bottomOverlayDraftProgressRatio = null;
+          _overlayController.resetBottomDraftProgress();
         });
         final request = _navigationEntryResolver.resolveProgressSelection(
           scrollRatio: value,

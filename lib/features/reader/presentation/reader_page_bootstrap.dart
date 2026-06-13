@@ -359,8 +359,8 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
       _visualOverrides = loadedVisualOverrides;
       final toolbarHintShown = await toolbarHintShownFuture;
       final tapZoneGuideShown = await tapZoneGuideShownFuture;
-      _hasShownToolbarHint = toolbarHintShown;
-      _hasShownTapZoneGuide = tapZoneGuideShown;
+      _overlayController.hasShownToolbarHint = toolbarHintShown;
+      _overlayController.hasShownTapZoneGuide = tapZoneGuideShown;
       final activeTheme = _currentActiveAdvancedTheme();
       final appThemeMode = _currentAppThemeMode();
       final platformBrightness = _currentPlatformBrightness();
@@ -375,8 +375,8 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
         setState(() {
           _persistedReaderSettings = normalizedSettings;
           _visualOverrides = loadedVisualOverrides;
-          _hasShownToolbarHint = toolbarHintShown;
-          _hasShownTapZoneGuide = tapZoneGuideShown;
+          _overlayController.hasShownToolbarHint = toolbarHintShown;
+          _overlayController.hasShownTapZoneGuide = tapZoneGuideShown;
           _settings = bootSettings;
           _customFonts = const <ReaderCustomFontEntry>[];
           _customBackgroundImages = const <String>[];

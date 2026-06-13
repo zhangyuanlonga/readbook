@@ -87,8 +87,8 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
     _cancelBackgroundRefreshConflictForCurrentBook();
     _bookTitle = seed.chapterTitle ?? '';
     _currentIndex = seed.chapterIndex;
-    _readerInteractionUnlockAt = DateTime.now().add(
-      _ReaderPageState._kInitialReaderInteractionCooldown,
+    _interactionRuntimeController.lockInitialInteractionUntil(
+      DateTime.now().add(_ReaderPageState._kInitialReaderInteractionCooldown),
     );
     final incomingBookmarkId = seed.pendingBookmarkId;
     if (incomingBookmarkId != null) {
@@ -98,7 +98,7 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
       vsync: this,
       duration: _ReaderPageState._kOverlayControlsShowDuration,
       reverseDuration: _ReaderPageState._kOverlayControlsHideDuration,
-      value: _showOverlayControls ? 1 : 0,
+      value: _overlayController.showOverlayControls ? 1 : 0,
     );
     _pagedTransitionController = AnimationController(
       vsync: this,
@@ -170,8 +170,10 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
     _pagedTransitionController.stop();
     _curlAutoTurnController.stop();
     _crossChapterSnapshotController.stop();
-    _pagedTransition = PagedTransitionController.idleState;
-    _curlTransition = const ReaderCurlTransitionState();
+    _pageTurnRuntimeController.resetPagedTransition();
+    _pageTurnRuntimeController.resetCurlTransition(
+      pageIndex: _pageTurnRuntimeController.currentPageIndex,
+    );
     _clearCrossChapterSnapshotTransition();
     _progressDebounceTimer?.cancel();
     _autoReadResumeTimer?.cancel();
@@ -184,7 +186,7 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
     _hiddenLoadingPlaceholderTimer?.cancel();
     _readingRecordAutoCommitTimer?.cancel();
     _pointerInputController.dispose();
-    _readerInteractionSettleTimer?.cancel();
+    _interactionRuntimeController.dispose();
     _volumeKeyEventSubscription?.cancel();
     _appThemeModeSubscription?.close();
     _activeAdvancedThemeSubscription?.close();

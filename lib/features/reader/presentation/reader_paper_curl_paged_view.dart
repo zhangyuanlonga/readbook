@@ -7,6 +7,7 @@ import 'package:flutter/rendering.dart';
 import 'package:turnable_page/turnable_page.dart';
 
 import '../../../core/logging/app_logger.dart';
+import 'widgets/overlay/reader_overlay_layer_model.dart';
 
 typedef ReaderPaperCurlPageBuilder =
     Widget Function(BuildContext context, int pageIndex);
@@ -639,14 +640,13 @@ class ReaderPaperCurlPagedViewState extends State<ReaderPaperCurlPagedView> {
           fit: StackFit.expand,
           children: [
             if (pendingPageIndex != null && snapshots == null)
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: Transform.translate(
-                    offset: hiddenTargetOffset,
-                    child: RepaintBoundary(
-                      key: _targetPageKey,
-                      child: surface.pageBuilder(context, pendingPageIndex),
-                    ),
+              ReaderFullScreenHitTestLayer(
+                strategy: ReaderFullScreenHitTestStrategy.passThrough,
+                child: Transform.translate(
+                  offset: hiddenTargetOffset,
+                  child: RepaintBoundary(
+                    key: _targetPageKey,
+                    child: surface.pageBuilder(context, pendingPageIndex),
                   ),
                 ),
               ),
@@ -655,17 +655,16 @@ class ReaderPaperCurlPagedViewState extends State<ReaderPaperCurlPagedView> {
               child: surface.pageBuilder(context, safePageIndex),
             ),
             if (_overlayVisible && _controller != null && snapshots != null)
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: _PaperCurlSnapshotOverlay(
-                    key: ValueKey<Object>(
-                      Object.hash(surface.surfaceToken, _overlayGeneration),
-                    ),
-                    controller: _controller!,
-                    snapshots: snapshots,
-                    startPageIndex: _overlayDirection >= 0 ? 0 : 1,
-                    onPageChanged: _handleOverlayPageChanged,
+              ReaderFullScreenHitTestLayer(
+                strategy: ReaderFullScreenHitTestStrategy.passThrough,
+                child: _PaperCurlSnapshotOverlay(
+                  key: ValueKey<Object>(
+                    Object.hash(surface.surfaceToken, _overlayGeneration),
                   ),
+                  controller: _controller!,
+                  snapshots: snapshots,
+                  startPageIndex: _overlayDirection >= 0 ? 0 : 1,
+                  onPageChanged: _handleOverlayPageChanged,
                 ),
               ),
           ],

@@ -8,7 +8,7 @@ extension _ReaderChromeSurface on _ReaderPageState {
     bool syncSystemUi = true,
     bool manual = false,
   }) {
-    if (!_showOverlayControls || !mounted) {
+    if (!_overlayController.showOverlayControls || !mounted) {
       return;
     }
 
@@ -17,8 +17,8 @@ extension _ReaderChromeSurface on _ReaderPageState {
       _setOverlayControlsVisibility(false);
     } else {
       setState(() {
-        _showOverlayControls = false;
-        _bottomOverlayDraftProgressRatio = null;
+        _overlayController.showOverlayControls = false;
+        _overlayController.bottomDraftProgressRatio = null;
       });
       unawaited(_syncVolumeKeyPageInterception());
       _overlayControlsController.reverse();
@@ -29,7 +29,7 @@ extension _ReaderChromeSurface on _ReaderPageState {
   }
 
   void _setOverlayControlsVisibility(bool visible) {
-    if (!mounted || _showOverlayControls == visible) {
+    if (!mounted || _overlayController.showOverlayControls == visible) {
       if (visible) {
         _scheduleOverlayAutoHide();
       }
@@ -38,9 +38,9 @@ extension _ReaderChromeSurface on _ReaderPageState {
 
     _cancelPendingSystemUiHide();
     setState(() {
-      _showOverlayControls = visible;
+      _overlayController.showOverlayControls = visible;
       if (!visible) {
-        _bottomOverlayDraftProgressRatio = null;
+        _overlayController.bottomDraftProgressRatio = null;
       }
     });
     if (visible) {
@@ -66,7 +66,7 @@ extension _ReaderChromeSurface on _ReaderPageState {
       _ReaderPageState._kOverlayControlsHideDuration,
       () {
         _systemUiHideTimer = null;
-        if (!mounted || _showOverlayControls) {
+        if (!mounted || _overlayController.showOverlayControls) {
           return;
         }
         _syncSystemUiVisibility(visible: false);
@@ -81,14 +81,17 @@ extension _ReaderChromeSurface on _ReaderPageState {
 
   void _scheduleOverlayAutoHide() {
     _overlayAutoHideTimer?.cancel();
-    if (!_showOverlayControls || _isOverlayAutoHideSuspended) {
+    if (!_overlayController.showOverlayControls ||
+        _overlayController.isAutoHideSuspended) {
       return;
     }
     _overlayAutoHideTimer = Timer(
       _ReaderPageState._kOverlayControlsAutoHideDelay,
       () {
         _overlayAutoHideTimer = null;
-        if (!mounted || !_showOverlayControls || _isOverlayAutoHideSuspended) {
+        if (!mounted ||
+            !_overlayController.showOverlayControls ||
+            _overlayController.isAutoHideSuspended) {
           return;
         }
         _hideOverlayControls(resumeAutoRead: true);
@@ -102,30 +105,30 @@ extension _ReaderChromeSurface on _ReaderPageState {
   }
 
   void _suspendOverlayAutoHide() {
-    _isOverlayAutoHideSuspended = true;
+    _overlayController.isAutoHideSuspended = true;
     _cancelOverlayAutoHideTimer();
   }
 
   void _resumeOverlayAutoHide() {
-    if (!_isOverlayAutoHideSuspended) {
+    if (!_overlayController.isAutoHideSuspended) {
       return;
     }
-    _isOverlayAutoHideSuspended = false;
+    _overlayController.isAutoHideSuspended = false;
     _scheduleOverlayAutoHide();
   }
 
   void _touchOverlayControls() {
-    if (!_showOverlayControls) {
+    if (!_overlayController.showOverlayControls) {
       return;
     }
     _scheduleOverlayAutoHide();
   }
 
   void _maybeShowToolbarHint() {
-    if (_hasShownToolbarHint) {
+    if (_overlayController.hasShownToolbarHint) {
       return;
     }
-    _hasShownToolbarHint = true;
+    _overlayController.hasShownToolbarHint = true;
     unawaited(_preferencesService.saveToolbarHintShown(true));
     _showMessage(
       '轻触中间区域显示/隐藏工具栏',
@@ -135,10 +138,12 @@ extension _ReaderChromeSurface on _ReaderPageState {
   }
 
   Future<void> _maybePromptTapZoneGuide() async {
-    if (_hasShownTapZoneGuide || !mounted || _isMangaChapter) {
+    if (_overlayController.hasShownTapZoneGuide ||
+        !mounted ||
+        _isMangaChapter) {
       return;
     }
-    _hasShownTapZoneGuide = true;
+    _overlayController.hasShownTapZoneGuide = true;
     await _preferencesService.saveTapZoneGuideShown(true);
     if (!mounted) {
       return;
@@ -164,7 +169,7 @@ extension _ReaderChromeSurface on _ReaderPageState {
       return;
     }
     final decision = _readerPlatformFacade.resolveSystemUiVisibility(
-      overlayVisible: _showOverlayControls,
+      overlayVisible: _overlayController.showOverlayControls,
       forcedVisible: visible,
     );
     if (!force && _isSystemUiVisible == decision.visible) {

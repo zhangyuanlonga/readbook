@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../../app/layout/app_spacing.dart';
 import '../../../../../domain/entities/reader_settings.dart';
+import '../../widgets/overlay/reader_overlay_layer_model.dart';
 
 typedef ReaderFloatingSettingsSheetFrameBuilder =
     Widget Function({
@@ -209,12 +210,11 @@ Future<void> _showReaderFloatingSettingsSubSheet({
         data: readerModalTheme,
         child: Stack(
           children: [
-            Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onTap: () => Navigator.of(dialogContext).pop(),
-                child: const SizedBox.shrink(),
-              ),
+            ReaderFullScreenHitTestLayer(
+              strategy: ReaderFullScreenHitTestStrategy.interceptWhenVisible,
+              behavior: HitTestBehavior.translucent,
+              onTap: () => Navigator.of(dialogContext).pop(),
+              child: const SizedBox.shrink(),
             ),
             Builder(
               builder: (sheetContext) {

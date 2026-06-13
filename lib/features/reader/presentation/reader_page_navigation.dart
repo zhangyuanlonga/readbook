@@ -32,10 +32,16 @@ extension _ReaderPageNavigationExtension on _ReaderPageState {
 
     switch (command.type) {
       case ReaderNavigationCommandType.previousPage:
-        await _turnReaderByDirection(forward: false);
+        await _turnReaderByDirection(
+          forward: false,
+          source: _pageTurnRequestSourceForNavigation(command.source),
+        );
         return true;
       case ReaderNavigationCommandType.nextPage:
-        await _turnReaderByDirection(forward: true);
+        await _turnReaderByDirection(
+          forward: true,
+          source: _pageTurnRequestSourceForNavigation(command.source),
+        );
         return true;
       case ReaderNavigationCommandType.previousChapter:
         return _jumpToAdjacentReadableChapter(forward: false);
@@ -73,7 +79,7 @@ extension _ReaderPageNavigationExtension on _ReaderPageState {
           sessionState?.currentChapterIndex ??
           _currentIndex ??
           fallbackCurrentIndex,
-      overlayVisible: _showOverlayControls,
+      overlayVisible: _overlayController.showOverlayControls,
       isLocalContent: _isLocalContent,
       usesContinuousTextFlow: _shouldUseContinuousTextFlow,
       viewportKind: _currentViewportKind.name,
@@ -106,15 +112,41 @@ extension _ReaderPageNavigationExtension on _ReaderPageState {
     };
   }
 
+  ReaderPageTurnRequestSource _pageTurnRequestSourceForNavigation(
+    ReaderNavigationCommandSource source,
+  ) {
+    return switch (source) {
+      ReaderNavigationCommandSource.chrome =>
+        ReaderPageTurnRequestSource.chrome,
+      ReaderNavigationCommandSource.audio => ReaderPageTurnRequestSource.audio,
+      ReaderNavigationCommandSource.tapZone =>
+        ReaderPageTurnRequestSource.tapZone,
+      ReaderNavigationCommandSource.keyboard =>
+        ReaderPageTurnRequestSource.keyboard,
+      ReaderNavigationCommandSource.swipe => ReaderPageTurnRequestSource.swipe,
+      ReaderNavigationCommandSource.volumeKey =>
+        ReaderPageTurnRequestSource.volumeKey,
+      ReaderNavigationCommandSource.scrollEdge =>
+        ReaderPageTurnRequestSource.scrollEdge,
+      ReaderNavigationCommandSource.autoRead =>
+        ReaderPageTurnRequestSource.autoRead,
+      ReaderNavigationCommandSource.catalog =>
+        ReaderPageTurnRequestSource.catalog,
+      ReaderNavigationCommandSource.unknown =>
+        ReaderPageTurnRequestSource.navigationCommand,
+    };
+  }
+
   ReaderPageTurnGateSnapshot _readerPageTurnGateSnapshot() {
     return ReaderPageTurnGateSnapshot(
       pagedTransitionAnimating: _isPagedTransitionAnimating,
       curlAutoTurning: _isCurlAutoTurning,
       curlPreviewActive: _isCurlPreviewActive,
-      crossChapterSnapshotActive: _crossChapterSnapshotTransition.isActive,
+      crossChapterSnapshotActive:
+          _pageTurnRuntimeController.crossChapterSnapshotTransition.isActive,
       paperCurlAnimating: _paperCurlViewKey.currentState?.isAnimating ?? false,
       readerInteractionAnimating:
-          _readerInteractionState == _ReaderInteractionState.animating,
+          _readerInteractionState == ReaderInteractionRuntimeState.animating,
     );
   }
 
@@ -371,7 +403,7 @@ extension _ReaderPageNavigationExtension on _ReaderPageState {
           document: _document,
           currentChapterIndex: _currentIndex,
           isPagedTextReaderEnabled: _isPagedTextReaderEnabled(),
-          currentPageIndex: _currentPageIndex,
+          currentPageIndex: _pageTurnRuntimeController.currentPageIndex,
           chapterContent: _content,
         );
         if (restorePlan.logicalPosition != null) {
@@ -608,7 +640,7 @@ extension _ReaderPageNavigationExtension on _ReaderPageState {
       chapterParagraphs: _paragraphs,
       chapterDocument: _document,
       isPagedTextReaderEnabled: _isPagedTextReaderEnabled(),
-      currentPageIndex: _currentPageIndex,
+      currentPageIndex: _pageTurnRuntimeController.currentPageIndex,
     );
     _catalogSearchCacheFingerprint = result.state.fingerprint;
     _catalogSearchEntriesCache = result.state.entriesCache;

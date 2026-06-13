@@ -444,6 +444,13 @@ extension _ReaderPageSelectionExtension on _ReaderPageState {
       return;
     }
     _hideBookmarkToolbar();
+    final overlayDecision = _selectionOverlayPolicy.resolveToolbarHost(
+      rootOverlayIssueVerified: false,
+      foregroundAnchorsValidated: false,
+    );
+    if (!overlayDecision.usesRootOverlay) {
+      return;
+    }
 
     final entry = OverlayEntry(
       builder: (context) {
@@ -467,7 +474,10 @@ extension _ReaderPageSelectionExtension on _ReaderPageState {
       },
     );
     _bookmarkToolbarEntry = entry;
-    final overlay = Overlay.maybeOf(context, rootOverlay: true);
+    final overlay = Overlay.maybeOf(
+      context,
+      rootOverlay: overlayDecision.usesRootOverlay,
+    );
     if (overlay == null) {
       _bookmarkToolbarEntry = null;
       return;
@@ -623,12 +633,11 @@ extension _ReaderPageSelectionExtension on _ReaderPageState {
 
     return Stack(
       children: [
-        Positioned.fill(
-          child: GestureDetector(
-            behavior: HitTestBehavior.translucent,
-            onTap: dismiss,
-            child: const SizedBox.shrink(),
-          ),
+        ReaderFullScreenHitTestLayer(
+          strategy: ReaderFullScreenHitTestStrategy.interceptWhenVisible,
+          behavior: HitTestBehavior.translucent,
+          onTap: dismiss,
+          child: const SizedBox.shrink(),
         ),
         Positioned(
           left: left,
