@@ -9,6 +9,7 @@ import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/platform/app_platform_capabilities.dart';
+import '../../../app/widgets/foundation/foundation.dart';
 import '../../../app/widgets/import_export_task_overlay.dart';
 import '../../../app/widgets/import_export_task_sheet.dart';
 import '../../../core/errors/app_exception.dart';
@@ -256,7 +257,7 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    AppFeedback.showSnackBar(context, message: text, useHaptics: false);
   }
 
   void _showOrRefreshTaskSheet() {

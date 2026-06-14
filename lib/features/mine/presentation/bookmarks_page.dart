@@ -12,6 +12,8 @@ import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
 import '../../../app/widgets/app_status_state_card.dart';
+import '../../../app/widgets/foundation/app_feedback.dart';
+import '../../../app/widgets/foundation/app_refresh_indicator.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/bookshelf_book.dart';
@@ -266,7 +268,8 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
             .where((group) => group.bookmarks.any((item) => item.hasNote))
             .length;
 
-    return RefreshIndicator(
+    return AppRefreshIndicator(
+      semanticsLabel: '刷新书签',
       onRefresh: _reload,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -475,7 +478,8 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
     required String actionLabel,
     required VoidCallback onAction,
   }) {
-    return RefreshIndicator(
+    return AppRefreshIndicator(
+      semanticsLabel: '刷新书签状态',
       onRefresh: _reload,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -901,12 +905,12 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(text),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
-      ),
+    AppFeedback.showSnackBar(
+      context,
+      message: text,
+      tone: text.contains('失败') ? AppFeedbackTone.error : AppFeedbackTone.info,
+      duration: const Duration(seconds: 2),
+      useHaptics: false,
     );
   }
 

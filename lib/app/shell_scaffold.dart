@@ -32,6 +32,7 @@ import 'widgets/bottom_nav_icon_view.dart';
 import 'widgets/cupertino_dock_navigation_bar.dart';
 import 'widgets/app_task_queue_surface.dart';
 import 'widgets/adaptive_search_bar.dart';
+import 'widgets/foundation/foundation.dart';
 
 class ShellScaffold extends ConsumerStatefulWidget {
   const ShellScaffold({
@@ -246,16 +247,20 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
       setState(() {
         _topBarSession = null;
       });
-      ScaffoldMessenger.of(
+      AppFeedback.showSnackBar(
         context,
-      ).showSnackBar(const SnackBar(content: Text('已退出登录。')));
+        message: '已退出登录。',
+        tone: AppFeedbackTone.success,
+      );
     } catch (_) {
       if (!mounted || !context.mounted) {
         return;
       }
-      ScaffoldMessenger.of(
+      AppFeedback.showSnackBar(
         context,
-      ).showSnackBar(const SnackBar(content: Text('退出失败，请稍后再试。')));
+        message: '退出失败，请稍后再试。',
+        tone: AppFeedbackTone.error,
+      );
     } finally {
       if (mounted) {
         setState(() {

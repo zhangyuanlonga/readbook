@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:shorebird_code_push/shorebird_code_push.dart';
 
 import '../../core/logging/app_logger.dart';
 import '../../core/navigation/global_navigator.dart';
+import '../widgets/adaptive_bottom_sheet.dart';
+import '../widgets/foundation/app_feedback.dart';
 
 /// 热更新检查服务 - 启动时检查并显示 UI 提示
 class HotUpdateService {
@@ -96,23 +100,21 @@ class HotUpdateService {
 
   /// 显示更新对话框
   Future<bool?> _showUpdateDialog(BuildContext context) {
-    return showDialog<bool>(
+    return showAdaptiveActionSurface<bool>(
       context: context,
       barrierDismissible: false,
+      showDragHandle: false,
+      maxWidth: 420,
+      padding: EdgeInsets.zero,
       builder:
-          (context) => AlertDialog(
-            title: const Text('发现内容更新'),
-            content: const Text('有新的内容补丁，是否立即下载？重启应用后生效。'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('稍后'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('立即更新'),
-              ),
-            ],
+          (surfaceContext) => _HotUpdateActionSurface(
+            icon: Icons.system_update_alt_rounded,
+            title: '发现内容更新',
+            message: '有新的内容补丁，是否立即下载？重启应用后生效。',
+            secondaryLabel: '稍后',
+            onSecondary: () => Navigator.of(surfaceContext).pop(false),
+            primaryLabel: '立即更新',
+            onPrimary: () => Navigator.of(surfaceContext).pop(true),
           ),
     );
   }
@@ -120,21 +122,15 @@ class HotUpdateService {
   /// 下载并应用更新
   Future<void> _downloadAndApplyUpdate(BuildContext context) async {
     _logger.info('Hot update download started');
-    // 显示下载进度
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder:
-          (context) => const AlertDialog(
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 16),
-                Text('正在下载更新...'),
-              ],
-            ),
-          ),
+    unawaited(
+      showAdaptiveActionSurface<void>(
+        context: context,
+        barrierDismissible: false,
+        showDragHandle: false,
+        maxWidth: 360,
+        padding: EdgeInsets.zero,
+        builder: (surfaceContext) => const _HotUpdateProgressSurface(),
+      ),
     );
 
     try {
@@ -145,7 +141,7 @@ class HotUpdateService {
       if (!context.mounted) return;
 
       // 关闭下载进度
-      Navigator.pop(context);
+      Navigator.of(context, rootNavigator: true).pop();
 
       // 提示重启
       await _showRestartDialog(context);
@@ -156,33 +152,142 @@ class HotUpdateService {
       );
       if (!context.mounted) return;
 
-      Navigator.pop(context);
+      Navigator.of(context, rootNavigator: true).pop();
 
-      ScaffoldMessenger.of(
+      AppFeedback.showSnackBar(
         context,
-      ).showSnackBar(SnackBar(content: Text('更新失败: $e')));
+        message: '更新失败: $e',
+        tone: AppFeedbackTone.error,
+        useHaptics: false,
+      );
     }
   }
 
   /// 提示重启应用
   Future<void> _showRestartDialog(BuildContext context) {
-    return showDialog(
+    return showAdaptiveActionSurface<void>(
       context: context,
       barrierDismissible: false,
+      showDragHandle: false,
+      maxWidth: 420,
+      padding: EdgeInsets.zero,
       builder:
-          (context) => AlertDialog(
-            title: const Text('更新完成'),
-            content: const Text('更新已下载完成，请重启应用以应用更新。'),
-            actions: [
-              FilledButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  // 用户需要手动重启应用
-                },
-                child: const Text('知道了'),
+          (surfaceContext) => _HotUpdateActionSurface(
+            icon: Icons.restart_alt_rounded,
+            title: '更新完成',
+            message: '更新已下载完成，请重启应用以应用更新。',
+            primaryLabel: '知道了',
+            onPrimary: () {
+              Navigator.of(surfaceContext).pop();
+              // 用户需要手动重启应用。
+            },
+          ),
+    );
+  }
+}
+
+class _HotUpdateActionSurface extends StatelessWidget {
+  const _HotUpdateActionSurface({
+    required this.icon,
+    required this.title,
+    required this.message,
+    required this.primaryLabel,
+    required this.onPrimary,
+    this.secondaryLabel,
+    this.onSecondary,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+  final String primaryLabel;
+  final VoidCallback onPrimary;
+  final String? secondaryLabel;
+  final VoidCallback? onSecondary;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+    return PopScope(
+      canPop: false,
+      child: SafeArea(
+        top: false,
+        bottom: false,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(20, 4, 20, 20 + bottomInset),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(icon, color: colorScheme.primary),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                message,
+                style: theme.textTheme.bodyMedium?.copyWith(height: 1.42),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  if (secondaryLabel != null && onSecondary != null) ...[
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: onSecondary,
+                        child: Text(secondaryLabel!),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                  ],
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: onPrimary,
+                      child: Text(primaryLabel),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HotUpdateProgressSurface extends StatelessWidget {
+  const _HotUpdateProgressSurface();
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+    return PopScope(
+      canPop: false,
+      child: SafeArea(
+        top: false,
+        bottom: false,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(20, 4, 20, 20 + bottomInset),
+          child: const AppInlineFeedback(
+            title: '正在下载更新',
+            message: '请保持应用打开，下载完成后会提示重启。',
+            tone: AppFeedbackTone.loading,
+          ),
+        ),
+      ),
     );
   }
 }

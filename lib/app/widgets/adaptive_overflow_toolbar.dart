@@ -121,24 +121,28 @@ class _ToolbarMoreButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AppMenuButton<AdaptiveOverflowToolbarItem>(
-      tooltip: tooltip,
-      icon: Icons.more_horiz_rounded,
-      onSelected: (item) {
-        if (item.enabled) {
-          item.onPressed?.call();
-        }
-      },
-      actions: items
-          .map(
-            (item) => AppMenuAction<AdaptiveOverflowToolbarItem>(
-              value: item,
-              label: item.label,
-              icon: item.icon,
-              enabled: item.enabled,
-            ),
-          )
-          .toList(growable: false),
+    return SizedBox(
+      width: 44,
+      height: 44,
+      child: AppMenuButton<AdaptiveOverflowToolbarItem>(
+        tooltip: tooltip,
+        icon: Icons.more_horiz_rounded,
+        onSelected: (item) {
+          if (item.enabled) {
+            item.onPressed?.call();
+          }
+        },
+        actions: items
+            .map(
+              (item) => AppMenuAction<AdaptiveOverflowToolbarItem>(
+                value: item,
+                label: item.label,
+                icon: item.icon,
+                enabled: item.enabled,
+              ),
+            )
+            .toList(growable: false),
+      ),
     );
   }
 }

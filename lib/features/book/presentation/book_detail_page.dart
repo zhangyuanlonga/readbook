@@ -3469,7 +3469,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    AppFeedback.showSnackBar(context, message: text);
   }
 
   void _cancelActiveSwitchSourceSearch() {

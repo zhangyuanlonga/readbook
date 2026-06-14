@@ -20,6 +20,7 @@ import '../../../app/theme/app_theme_seed_provider.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/adaptive_fullscreen_preview.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/foundation/app_feedback.dart';
 import '../../../app/widgets/import_export_task_overlay.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../app/widgets/adaptive_overflow_toolbar.dart';
@@ -231,9 +232,13 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(
+    AppFeedback.showSnackBar(
       context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+      message: message,
+      tone:
+          message.contains('失败') ? AppFeedbackTone.error : AppFeedbackTone.info,
+      useHaptics: false,
+    );
   }
 
   static const List<_ThemeModeOption> _themeModeOptions = [
@@ -636,8 +641,12 @@ class _FontFamilyPickerDialogState
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(
+    AppFeedback.showSnackBar(
       context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+      message: message,
+      tone:
+          message.contains('失败') ? AppFeedbackTone.error : AppFeedbackTone.info,
+      useHaptics: false,
+    );
   }
 }

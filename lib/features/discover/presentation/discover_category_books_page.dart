@@ -13,6 +13,8 @@ import '../../../core/errors/gateway_failure.dart';
 import '../../../domain/entities/book.dart';
 import '../../book/presentation/book_detail_route.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
+import '../../../app/widgets/foundation/app_refresh_indicator.dart';
+import '../../../app/widgets/foundation/app_skeleton.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../mine/application/advanced_theme_provider.dart';
 import '../../mine/application/cover_gallery_provider.dart';
@@ -49,7 +51,7 @@ class DiscoverCategoryBooksPage extends ConsumerWidget {
             appBar: _buildAppBar(context, '分类'),
             body: DecoratedBox(
               decoration: buildAdvancedThemeBackdropDecoration(backdrop),
-              child: const Center(child: CircularProgressIndicator()),
+              child: _DiscoverCategoryShellLoading(metrics: metrics),
             ),
           ),
       error:
@@ -92,7 +94,7 @@ class DiscoverCategoryBooksPage extends ConsumerWidget {
                 ),
                 child:
                     categoriesAsync.isLoading
-                        ? const Center(child: CircularProgressIndicator())
+                        ? _DiscoverCategoryShellLoading(metrics: metrics)
                         : categoriesAsync.hasError
                         ? _CategoryLoadFailureState(
                           metrics: metrics,
@@ -282,7 +284,7 @@ class _CategoryBooksGrid extends ConsumerWidget {
     final booksAsync = ref.watch(discoverCategoryBooksProvider(request));
 
     if (booksAsync.isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return _DiscoverBooksGridLoadingState(metrics: metrics);
     }
 
     if (booksAsync.hasError) {
@@ -335,37 +337,44 @@ class _CategoryBooksGrid extends ConsumerWidget {
       );
     }
 
-    return CustomScrollView(
-      slivers: [
-        SliverPadding(
-          padding: EdgeInsets.fromLTRB(
-            metrics.pagePadding,
-            topInset + 8,
-            metrics.pagePadding,
-            bottomSafe + metrics.sectionGap,
-          ),
-          sliver: SliverGrid.builder(
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              mainAxisSpacing: 10,
-              crossAxisSpacing: 14,
-              childAspectRatio: 0.56,
+    return AppRefreshIndicator(
+      semanticsLabel: '刷新分类书籍',
+      onRefresh: () async {
+        ref.invalidate(discoverCategoryBooksProvider(request));
+      },
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          SliverPadding(
+            padding: EdgeInsets.fromLTRB(
+              metrics.pagePadding,
+              topInset + 8,
+              metrics.pagePadding,
+              bottomSafe + metrics.sectionGap,
             ),
-            itemCount: books.length,
-            itemBuilder: (context, index) {
-              final book = books[index];
-              return AppFadeSlideTransition(
-                delay: Duration(milliseconds: (index % 9) * 18),
-                child: _DiscoverBookTile(
-                  source: source,
-                  book: book,
-                  palette: palette,
-                ),
-              );
-            },
+            sliver: SliverGrid.builder(
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                mainAxisSpacing: 10,
+                crossAxisSpacing: 14,
+                childAspectRatio: 0.56,
+              ),
+              itemCount: books.length,
+              itemBuilder: (context, index) {
+                final book = books[index];
+                return AppFadeSlideTransition(
+                  delay: Duration(milliseconds: (index % 9) * 18),
+                  child: _DiscoverBookTile(
+                    source: source,
+                    book: book,
+                    palette: palette,
+                  ),
+                );
+              },
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -375,6 +384,78 @@ class _CategoryBooksGrid extends ConsumerWidget {
       return '${failure.displayCode}：${failure.displayHint}';
     }
     return '${failure.displayCode}：${failure.displayHint}\n$actionHint';
+  }
+}
+
+class _DiscoverCategoryShellLoading extends StatelessWidget {
+  const _DiscoverCategoryShellLoading({required this.metrics});
+
+  final AppAdaptiveMetrics metrics;
+
+  @override
+  Widget build(BuildContext context) {
+    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
+    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    return CustomScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      slivers: [
+        SliverPadding(
+          padding: EdgeInsets.fromLTRB(
+            metrics.pagePadding,
+            topInset + metrics.sectionGap,
+            metrics.pagePadding,
+            metrics.sectionGap + bottomSafe,
+          ),
+          sliver: const SliverToBoxAdapter(
+            child: AppSkeletonList(
+              itemCount: 4,
+              itemHeight: 56,
+              showLeading: false,
+              showTrailing: true,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DiscoverBooksGridLoadingState extends StatelessWidget {
+  const _DiscoverBooksGridLoadingState({required this.metrics});
+
+  final AppAdaptiveMetrics metrics;
+
+  @override
+  Widget build(BuildContext context) {
+    final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
+    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+    return GridView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: EdgeInsets.fromLTRB(
+        metrics.pagePadding,
+        topInset + 8,
+        metrics.pagePadding,
+        bottomSafe + metrics.sectionGap,
+      ),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        mainAxisSpacing: 10,
+        crossAxisSpacing: 14,
+        childAspectRatio: 0.56,
+      ),
+      itemCount: 6,
+      itemBuilder:
+          (context, index) => const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: AppSkeletonBlock(height: 160)),
+              SizedBox(height: 6),
+              AppSkeletonBlock(height: 12),
+              SizedBox(height: 5),
+              AppSkeletonBlock(width: 56, height: 12),
+            ],
+          ),
+    );
   }
 }
 

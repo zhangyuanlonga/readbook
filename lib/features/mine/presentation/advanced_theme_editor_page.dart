@@ -21,6 +21,7 @@ import '../../../app/widgets/adaptive_overflow_toolbar.dart';
 import '../../../app/widgets/adaptive_route_top_bar.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/bottom_nav_icon_view.dart';
+import '../../../app/widgets/foundation/app_feedback.dart';
 import '../../../app/widgets/text_cover_placeholder.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
@@ -2186,9 +2187,13 @@ class _AdvancedThemeEditorPageState
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(
+    AppFeedback.showSnackBar(
       context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+      message: message,
+      tone:
+          message.contains('失败') ? AppFeedbackTone.error : AppFeedbackTone.info,
+      useHaptics: false,
+    );
   }
 
   PreferredSizeWidget _buildRouteTopBar(

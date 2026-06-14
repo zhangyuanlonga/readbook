@@ -77,7 +77,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await _pumpReadingRecordsPage(tester);
 
       final emptyText = find.text('还没有可以展示的阅读热力图。');
       expect(emptyText, findsOneWidget);
@@ -114,7 +114,7 @@ void main() {
             ),
           ),
         );
-        await tester.pumpAndSettle();
+        await _pumpReadingRecordsPage(tester);
 
         expect(
           tester.takeException(),
@@ -172,7 +172,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await _pumpReadingRecordsPage(tester);
 
       expect(find.text('统计'), findsOneWidget);
       expect(find.text('当前周期内的阅读时长变化'), findsOneWidget);
@@ -238,7 +238,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await _pumpReadingRecordsPage(tester);
 
       expect(find.text('统计'), findsOneWidget);
       expect(find.text('当前周期内的阅读时长变化'), findsOneWidget);
@@ -257,6 +257,12 @@ class _ViewportCase {
   final String name;
   final Size size;
   final double dpr;
+}
+
+Future<void> _pumpReadingRecordsPage(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 350));
+  await tester.pump();
 }
 
 class _FakeReadingRecordService extends ReadingRecordService {

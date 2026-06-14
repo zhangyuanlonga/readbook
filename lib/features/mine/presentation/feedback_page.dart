@@ -158,7 +158,8 @@ class _FeedbackPageState extends ConsumerState<FeedbackPage>
               alignment: Alignment.topCenter,
               child: ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: maxWidth),
-                child: RefreshIndicator(
+                child: AppRefreshIndicator(
+                  semanticsLabel: '刷新反馈列表',
                   onRefresh: () => _loadEntries(),
                   child: ListView(
                     controller: _scrollController,
@@ -610,7 +611,8 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
                   alignment: Alignment.topCenter,
                   child: ConstrainedBox(
                     constraints: BoxConstraints(maxWidth: maxWidth),
-                    child: RefreshIndicator(
+                    child: AppRefreshIndicator(
+                      semanticsLabel: '刷新反馈详情',
                       onRefresh: _loadDetail,
                       child: ListView(
                         physics: const AlwaysScrollableScrollPhysics(),
@@ -1185,9 +1187,13 @@ class _FeedbackComposePageState extends State<FeedbackComposePage> {
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(
+    AppFeedback.showSnackBar(
       context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+      message: message,
+      tone:
+          message.contains('失败') ? AppFeedbackTone.error : AppFeedbackTone.info,
+      useHaptics: false,
+    );
   }
 }
 

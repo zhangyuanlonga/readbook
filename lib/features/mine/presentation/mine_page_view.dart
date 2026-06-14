@@ -107,7 +107,8 @@ extension on _MinePageState {
               alignment: Alignment.topCenter,
               child: ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: maxWidth),
-                child: RefreshIndicator(
+                child: AppRefreshIndicator(
+                  semanticsLabel: '刷新我的页面',
                   onRefresh: _refreshMine,
                   child: ListView(
                     physics: const AlwaysScrollableScrollPhysics(),

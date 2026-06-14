@@ -7,6 +7,7 @@ import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_component_theme_tokens.dart';
+import '../../../app/widgets/foundation/app_feedback.dart';
 import '../../../core/auth/auth_service.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/network/api_client.dart';
@@ -211,8 +212,16 @@ class _AuthPageState extends ConsumerState<AuthPage> {
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(
+    AppFeedback.showSnackBar(
       context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+      message: message,
+      tone:
+          message.contains('失败') ||
+                  message.contains('请') ||
+                  message.contains('已存在')
+              ? AppFeedbackTone.error
+              : AppFeedbackTone.success,
+      useHaptics: false,
+    );
   }
 }

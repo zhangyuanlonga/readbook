@@ -9,6 +9,8 @@ import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
+import '../../../app/widgets/foundation/app_feedback.dart';
+import '../../../app/widgets/foundation/app_refresh_indicator.dart';
 import '../../../core/auth/auth_event_bus.dart';
 import '../../../core/auth/auth_service.dart';
 import '../../../core/auth/auth_session.dart';
@@ -357,7 +359,8 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
               alignment: Alignment.topCenter,
               child: ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: maxWidth),
-                child: RefreshIndicator(
+                child: AppRefreshIndicator(
+                  semanticsLabel: '刷新账号资料',
                   onRefresh: _refreshPage,
                   child: AppAnimatedSwitcher(
                     child: ListView(
@@ -1166,9 +1169,7 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('退出失败，请稍后再试。')));
+      _showMessage('退出失败，请稍后再试。', tone: AppFeedbackTone.error);
     } finally {
       if (mounted) {
         setState(() {
@@ -1241,23 +1242,17 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
         _session = nextSession;
         _profile = updated;
       });
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('资料已更新')));
+      _showMessage('资料已更新', tone: AppFeedbackTone.success);
     } on AppException catch (error) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(error.briefMessage)));
+      _showMessage(error.briefMessage, tone: AppFeedbackTone.error);
     } catch (_) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('保存失败，请稍后再试。')));
+      _showMessage('保存失败，请稍后再试。', tone: AppFeedbackTone.error);
     } finally {
       if (mounted) {
         setState(() {
@@ -1265,6 +1260,21 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
         });
       }
     }
+  }
+
+  void _showMessage(
+    String message, {
+    AppFeedbackTone tone = AppFeedbackTone.info,
+  }) {
+    if (!mounted) {
+      return;
+    }
+    AppFeedback.showSnackBar(
+      context,
+      message: message,
+      tone: tone,
+      useHaptics: false,
+    );
   }
 }
 

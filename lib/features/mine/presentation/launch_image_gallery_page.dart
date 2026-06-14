@@ -251,9 +251,13 @@ class _LaunchImageGalleryPageState
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(
+    AppFeedback.showSnackBar(
       context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+      message: message,
+      tone:
+          message.contains('失败') ? AppFeedbackTone.error : AppFeedbackTone.info,
+      useHaptics: false,
+    );
   }
 
   Future<String?> _showNameDialog({

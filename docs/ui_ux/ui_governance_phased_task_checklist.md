@@ -303,7 +303,7 @@
 
 ### 6.2 迁移任务
 
-- [x] 本轮试点修复已识别的非 Adaptive bottom sheet 使用点，未影响 Reader 核心链路。
+- [x] 本轮修复非 Adaptive bottom sheet 使用点: Reader 点击分区编辑器和动作选择器已收口到 `showAdaptiveActionSurface`；Reader 目录 sheet 因透明背景、禁拖拽和专用转场暂列 Reader 周边例外。
 - [x] 把页面弹层收口到 `showAdaptiveActionSurface` 或记录例外。
 - [x] 把页面空、错、加载状态收口到统一状态组件。
 - [x] 把重复卡片、列表项或操作按钮提取为 feature 组件或 app 基础组件。
@@ -428,28 +428,113 @@
 
 ### 9.1 推广覆盖清单
 
-| 状态 | 模块 / 页面族 | 覆盖范围 | 下一步关注点 |
+> 表格第一列表示该页面族的 UI 治理迁移是否完成；覆盖归属已确认但页面尚未完成迁移时，仍保持未勾选。
+
+| 迁移完成 | 模块 / 页面族 | 覆盖范围 | 完成记录 |
 |---|---|---|---|
-| [ ] | App Shell / 全局导航 | `ShellScaffold`、桌面工具栏、底部导航、全局任务面板 | 统一快捷键、批量入口、全局反馈和 RepaintBoundary 边界 |
-| [ ] | Home | 首页入口、推荐区、跨模块卡片 | 状态卡片、卡片 Token、断点矩阵 |
-| [ ] | Bookshelf | 书架卡片、筛选、排序、布局切换、更多操作、导入反馈 | 更多操作和设置下拉已接入 `AppMenuButton` / `AppDropdownField`；后续看选择态、批量操作、长列表 key、图片尺寸约束 |
-| [ ] | Search | 搜索输入、结果卡片、分组空态、失败报告、书源筛选 | 搜索更多菜单已接入 `AppMenuButton`；另一方正在做 P3 Search 关键链路，本轮不抢页面迁移 |
-| [ ] | Book detail | 元数据、主操作、目录、来源切换、封面编辑 | 编码下拉已接入 `AppDropdownField`；另一方正在做 P3 Book 关键链路，本轮只补基础组件接入 |
-| [ ] | Reader core | 翻页、章节定位、阅读进度、阅读设置持久化 | 暂缓强推 UI 治理，只记录例外和不破坏核心链路 |
-| [ ] | Reader surrounding | 设置 sheet、目录 sheet、阅读记录、缓存反馈、来源切换、注释工具栏 | 阅读记录热力图菜单已接入 `AppMenuButton`；继续迁移非核心弹层、状态、反馈和快捷键 |
+| [x] | App Shell / 全局导航 | `ShellScaffold`、桌面工具栏、底部导航、全局任务面板 | 已完成全局反馈、Adaptive 账号弹层、任务面板反馈、导航结构确认和 RepaintBoundary 边界审查 |
+| [x] | Bookshelf | 书架卡片、筛选、排序、布局切换、更多操作、本地书库、导入反馈 | 已完成刷新、筛选/排序弹层、批量操作栏、危险确认、卡片图片尺寸、长列表 key 和 RepaintBoundary 收口 |
+| [x] | Search | 搜索输入、结果卡片、分组空态、失败报告、书源筛选、书架入口搜索 | 已完成菜单、书源筛选 sheet、失败报告弹层、结果卡片、空态、反馈和 P3 Search 边界记录 |
+| [x] | Book detail | 元数据、主操作、目录、来源切换、封面编辑 | 已完成详情刷新、提示反馈、编码下拉、封面/元数据弹层、主操作和来源切换弹层统一 |
+| [x] | Reader core | 翻页、章节定位、阅读进度、阅读设置持久化 | 已完成 Reader UI surface 的刷新、反馈、设置弹层和绘制边界收口；不在 UI 治理中改阅读算法和持久化语义 |
+| [x] | Reader surrounding / Stats | 设置 sheet、目录 sheet、统计页、阅读记录、缓存反馈、来源切换、注释工具栏 | 已完成阅读记录反馈、热力图菜单、Reader audio 反馈、缓存/来源切换弹层和设置 sheet 基础组件收口 |
 | [x] | Mine / StorageManagement | 存储管理页低风险试点 | 已完成弹层、状态、骨架、反馈、smoke 和复盘 |
-| [ ] | Mine / Appearance | 外观设置、阅读背景、底部导航图标、封面图库、启动图图库 | 图库更多菜单已接入 `AppMenuButton`；后续看图片尺寸、资源占位、图库网格和状态切换 |
-| [ ] | Mine / AdvancedTheme | 高级主题列表、编辑器、导入导出、主题预览 | 主题列表菜单、分类筛选和卡片操作已接入基础菜单；后续看选择态、批量操作、动效、图库资源状态 |
-| [ ] | Mine / Source & Assets | 私有书源、字体管理、书签、反馈、会员、系统设置 | 私有书源、字体、反馈的菜单/下拉已接入基础组件；后续看表单、危险确认、后台任务反馈、权限/禁用态 |
-| [ ] | Auth / Profile | 登录注册、账号资料、密码和头像编辑 | 表单状态、确认弹层、上传/保存反馈 |
-| [ ] | Announcement | 公告列表、公告详情 | 低频页面，按改动机会补状态、卡片和宽屏布局 |
-| [ ] | Discover | 发现页、服务端发现结果、错误/空态 | 状态组件、结果卡片、刷新和失败反馈 |
-| [ ] | Source / WebView | 书源登录 WebView、导入外部源、source workflow | 平台分支、弹层、错误反馈和安全区 |
-| [ ] | Sync | 同步设置、同步状态、冲突或失败反馈 | 后台任务状态、错误恢复、跨端提示 |
-| [ ] | Error Center | 错误列表、日志详情、清理操作 | Selection/BatchAction、危险确认、桌面分栏 |
-| [ ] | Onboarding | 首次启动、权限引导、功能介绍 | 小屏断点、文案溢出、禁用动画 |
-| [ ] | App update / Core surfaces | 更新提示、媒体/文件选择、WebView 共享 surface | 弹层统一、权限失败、平台能力提示 |
-| [ ] | About / 低频静态页 | 关于、帮助、低频说明页 | 按改动机会迁移，避免为了完整度单独开大改 |
+| [x] | Mine / Appearance | 外观设置、阅读背景、底部导航图标、封面图库、启动图图库 | 已完成图库菜单、资源反馈、背景/图集编辑提示和 Mine 入口刷新反馈收口 |
+| [x] | Mine / AdvancedTheme | 高级主题列表、编辑器、导入导出、主题预览 | 已完成菜单/筛选、导入导出反馈、编辑器保存反馈和任务状态收口 |
+| [x] | Mine / Source & Assets | 私有书源、标签/分类、字体管理、书签、反馈、会员、系统设置 | 已完成私有书源、字体、反馈、会员、书签、标签分类、系统设置的刷新与反馈收口 |
+| [x] | Auth / Profile | 登录注册、账号资料、密码、头像和启动鉴权入口 | 已完成登录/注册反馈、资料页刷新、编辑保存和退出失败反馈收口 |
+| [x] | Announcement | 公告列表、公告详情 | 已完成统一刷新、加载骨架、状态卡片、反馈和宽屏约束 |
+| [x] | Discover | 发现页、发现分类页、服务端发现结果、错误/空态 | 已完成统一刷新、加载骨架、状态卡片、结果卡片、失败反馈和图片尺寸约束 |
+| [x] | Source / WebView | 书源登录 WebView、导入外部源、source workflow | 已完成 WebView 平台分支、错误/会话提示、导入任务提示和安全区页面收口 |
+| [x] | Sync / Task status | 后台同步任务、`AppTaskChannel.sync`、全局任务队列状态 | 当前无独立同步页面路由；已按全局任务面板、取消/清理反馈和 `AppTaskChannel.sync` 状态治理 |
+| [x] | Error Center | 错误列表、日志详情、清理操作 | 已完成统一反馈、危险确认、桌面分栏、空态和导出任务状态 |
+| [x] | Onboarding / 预留入口 | 当前目录无页面文件和运行时路由 | 当前无运行时改造对象；恢复首次启动、权限引导或功能介绍入口时重新纳入迁移 |
+| [x] | App update / Core surfaces | 更新提示、媒体/文件选择、WebView 共享 surface | 已完成热更新 Adaptive surface、更新链接失败反馈和全局核心提示收口；媒体/文件选择已有 Adaptive surface |
+| [x] | About / 低频静态页 | 关于、帮助、低频说明页 | 已完成版本检查、外链失败和更新入口反馈统一 |
+
+> 注: 当前底部导航和 `AppShellNavigationState` 已无独立 `Home`，旧首页偏好 key 只用于清理历史数据；`lib/features/home` 当前为空目录且无运行时路由，“首页入口、推荐区、跨模块卡片”不再作为独立 Phase 7 模块，后续推荐/发现类能力归入 Discover 或 Bookshelf 对应页面族。
+
+### 9.1.1 模块迁移完成标准
+
+**App Shell / 全局导航**
+
+- [x] 退出登录成功、失败提示统一使用 `AppFeedback.showSnackBar`。
+- [x] 当前导航结构确认: `appShellDestinations` 为 Bookshelf、Discover、Stats、Mine，无独立 Home。
+- [x] 全局任务面板、账号菜单和桌面工具栏反馈统一到项目反馈组件。
+- [x] 桌面/移动导航入口的动效、禁用动画和文字缩放完成 smoke。
+- [x] 桌面工具栏和主要全局绘制区完成 RepaintBoundary 边界审查。
+
+**Bookshelf**
+
+- [x] 书架页和本地书库导入提示统一使用 `AppFeedback.showSnackBar`。
+- [x] 书架页下拉刷新从裸 `RefreshIndicator` 迁移到 `AppRefreshIndicator`。
+- [x] 排序和筛选弹层移除不必要的 `shrinkWrap` 写法。
+- [x] 书架选择态、批量操作和危险确认统一接入 `AppBatchActionBar`。
+- [x] 书架卡片、列表项、封面图片尺寸和占位/失败态完成页面级审查。
+- [x] 书架长列表 key、滚动性能和图片解码尺寸完成 smoke 或记录。
+
+**Search**
+
+- [x] 搜索取消等页面提示统一使用 `AppFeedback.showSnackBar`。
+- [x] 搜索更多菜单已接入 `AppMenuButton`。
+- [x] 来源选择和失败报告弹层移除不必要的 `shrinkWrap` 写法。
+- [x] Search P3 关键链路改动边界已确认: 本轮只做基础组件、反馈和性能模式收口，不抢搜索核心业务改动。
+- [x] 搜索输入和书源筛选 sheet 统一状态反馈、禁用态和加载态。
+- [x] 搜索结果卡片、空态、失败报告和导出反馈完成组件替换审查。
+- [x] Search P3 关键链路稳定后，如需调整业务搜索算法另立任务；本轮 UI 治理不抢核心业务改动。
+
+**Book / Reader / Source / Sync**
+
+- [x] Book detail 详情页从裸 `RefreshIndicator` 迁移到 `AppRefreshIndicator`。
+- [x] Book detail 主提示统一使用 `AppFeedback`，元数据、封面、编码、来源切换弹层继续走项目 Adaptive surface。
+- [x] Reader core 的页面级提示统一使用 `AppFeedback`，可刷新状态统一使用 `AppRefreshIndicator`。
+- [x] Reader core 的翻页、章节定位、阅读进度和设置持久化未被 UI 治理改写；本轮只收口 UI surface。
+- [x] Reader surrounding / Stats 阅读记录、音频地址复制/外部打开提示统一使用 `AppFeedback`。
+- [x] Reader surrounding / Stats 阅读记录热力图菜单、缓存和来源切换弹层继续使用项目组件。
+- [x] Source / WebView 登录页和任务页错误、会话、提交反馈统一使用 `AppFeedback`。
+- [x] Source / WebView 平台不支持分支保留 `FeatureDisabledPage`，不增加手搓替代 WebView。
+- [x] Sync / Task status 当前无独立同步页面路由，统一归入全局任务面板和 `AppTaskChannel.sync`。
+- [x] 全局任务面板取消任务、清理已完成任务统一使用 `AppFeedback`。
+
+**Auth / Mine management pages**
+
+- [x] Auth 登录/注册成功、失败提示统一使用 `AppFeedback`。
+- [x] Profile 页面从裸 `RefreshIndicator` 迁移到 `AppRefreshIndicator`。
+- [x] Profile 退出失败、资料保存成功/失败提示统一使用 `AppFeedback`。
+- [x] Mine 主入口刷新从裸 `RefreshIndicator` 迁移到 `AppRefreshIndicator`，入口提示统一到 `AppFeedback`。
+- [x] Mine / Appearance 外观页、阅读背景页、封面图库、启动图图库、底部导航图标图库提示统一使用 `AppFeedback`。
+- [x] Mine / AdvancedTheme 列表页和编辑器提示统一使用 `AppFeedback`，导入导出任务继续走项目任务状态组件。
+- [x] Mine / Source & Assets 中私有书源、反馈、书签、会员、字体管理页面从裸 `RefreshIndicator` 迁移到 `AppRefreshIndicator`。
+- [x] Mine / Source & Assets 中私有书源、标签分类、字体、书签、反馈、会员、系统设置提示统一使用 `AppFeedback`。
+- [x] 剩余 `shrinkWrap` 已审查：当前位于受限高度选择器、内嵌短列表、拖拽排序列表和资源网格中，不作为长列表违规；后续大改时再做结构化 Sliver 拆分。
+
+**Low-risk pages / Core surfaces**
+
+- [x] Announcement 列表和详情页从裸 `RefreshIndicator` 迁移到 `AppRefreshIndicator`。
+- [x] Announcement 列表和详情页加载态补齐 `AppSkeletonList` / `AppSkeletonBlock`。
+- [x] Announcement 页面提示统一使用 `AppFeedback.showSnackBar`。
+- [x] Discover 主列表接入 `AppRefreshIndicator`，加载态和远程搜索加载态接入骨架屏。
+- [x] Discover 分类页和分类书籍页接入骨架屏，分类书籍列表接入统一下拉刷新。
+- [x] Discover 状态组件、空态、错误态和书籍封面尺寸约束完成页面级审查。
+- [x] Error Center 日志复制、导出、清空提示统一使用 `AppFeedback`。
+- [x] Error Center 清空日志接入 `showAppBatchActionConfirmation` 危险确认。
+- [x] App update / Hot update 从裸 `AlertDialog` 收口到 `showAdaptiveActionSurface`。
+- [x] App update 链接失败、热更新失败和全局鉴权提示统一到 `AppFeedback`。
+- [x] About 页外链失败、版本检查和更新入口提示统一到 `AppFeedback`。
+- [x] Onboarding 当前无页面文件和运行时路由，本轮按“无改造对象”收尾记录。
+
+### 9.1.2 覆盖范围审查
+
+- [x] 一级导航覆盖已核对: `appShellDestinations` 为 Bookshelf、Discover、Stats、Mine。
+- [x] 路由入口覆盖已核对: `appRouter` 挂载 Mine、Announcement、Auth、Search、Source、Bookshelf、Book、Reader 路由。
+- [x] `lib/features/home` 当前为空目录且无运行时路由，不作为独立 Phase 7 模块。
+- [x] `local-library`、本地图书导入和本地书籍详情入口归入 Bookshelf / Book detail。
+- [x] `/stats` 和 `/read-records` 重定向归入 Reader surrounding / Stats。
+- [x] `/error-center` 由 Mine routes 挂载，归入 Error Center。
+- [x] `/source/webview-login` 和 `/source/webview-task` 归入 Source / WebView。
+- [x] `lib/features/sync` 当前无页面文件和独立路由，按后台同步任务、全局任务状态和错误恢复治理。
+- [x] `lib/features/onboarding` 当前无页面文件和运行时路由，作为预留入口记录，恢复时重新开启迁移任务。
+- [x] Mine 子路由覆盖已核对: 外观、高级主题、图库、标签/分类、私有书源、会员、关于、系统设置、存储、字体、书签、错误中心、反馈均有归属。
 
 ### 9.2 每页迁移 checklist
 
@@ -545,7 +630,7 @@
 - [x] 把 `cross_platform_product_strategy_and_ui_governance.md` 的定位改为战略草案。
 - [x] 选择一个 Mine 或 Bookshelf 局部做试点。
 - [x] 围绕组件统一、动效补齐、组件性能和能力库封装重新排下一轮试点。
-- [ ] 优先选择一个高频页面做完整闭环，而不是继续只补文档。
+- [x] 优先选择一个高频页面做完整闭环，而不是继续只补文档。
 - [x] 先写检查脚本报告模式，不急于阻断 CI。
 
 ---

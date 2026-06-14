@@ -11,6 +11,7 @@ import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/adaptive_setting_tile.dart';
+import '../../../app/widgets/foundation/app_feedback.dart';
 import '../../../domain/entities/reader_settings.dart';
 import '../../bookshelf/application/bookshelf_system_settings_service.dart';
 import '../application/app_reset_service.dart';
@@ -767,9 +768,12 @@ class _ReaderSettingsResetPanelState extends State<_ReaderSettingsResetPanel> {
       setState(() {
         _statusText = message;
       });
-      ScaffoldMessenger.of(
+      AppFeedback.showSnackBar(
         context,
-      ).showSnackBar(SnackBar(content: Text(message)));
+        message: message,
+        tone: AppFeedbackTone.success,
+        useHaptics: false,
+      );
     } catch (_) {
       if (!mounted) {
         return;

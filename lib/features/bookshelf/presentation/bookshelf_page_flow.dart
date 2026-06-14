@@ -135,8 +135,8 @@ extension on _BookshelfPageState {
             onChanged:
                 (value) =>
                     Navigator.of(sheetContext, rootNavigator: true).pop(value),
-            child: ListView(
-              shrinkWrap: true,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
@@ -1743,7 +1743,6 @@ extension on _BookshelfPageState {
                 child: ConstrainedBox(
                   constraints: BoxConstraints(maxHeight: maxHeight),
                   child: ListView(
-                    shrinkWrap: true,
                     children: [
                       TextField(
                         decoration: InputDecoration(

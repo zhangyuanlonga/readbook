@@ -365,7 +365,8 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
                   alignment: Alignment.topCenter,
                   child: ConstrainedBox(
                     constraints: BoxConstraints(maxWidth: maxWidth),
-                    child: RefreshIndicator(
+                    child: AppRefreshIndicator(
+                      semanticsLabel: '刷新字体管理',
                       onRefresh: _reload,
                       child: ListView(
                         controller: _scrollController,
@@ -1085,17 +1086,13 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
           result: ImportExportTaskResult.success,
         ).toAppTaskStatusData(kind: AppTaskStatusKind.fontImport),
       );
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(message)));
+      _showSnackBar(message, tone: AppFeedbackTone.success);
       return importedFonts;
     } on ReaderFontRegistryException catch (error) {
       if (!mounted) {
         return const <ReaderCustomFontEntry>[];
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(error.message)));
+      _showSnackBar(error.message, tone: AppFeedbackTone.error);
       taskManager.updateTask(
         taskId,
         initialStatus
@@ -1109,9 +1106,7 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
       if (!mounted) {
         return const <ReaderCustomFontEntry>[];
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('导入字体失败：$error')));
+      _showSnackBar('导入字体失败：$error', tone: AppFeedbackTone.error);
       taskManager.updateTask(
         taskId,
         initialStatus
@@ -1275,9 +1270,7 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
       final maxScrollExtent = _scrollController.position.maxScrollExtent;
       _scrollController.jumpTo(offset.clamp(0.0, maxScrollExtent));
     }
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('已删除字体：${font.displayName}')));
+    _showSnackBar('已删除字体：${font.displayName}');
   }
 
   Future<void> _setReaderDefaultSystemFont() async {
@@ -1389,26 +1382,28 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('已重命名字体：$normalized')));
+      _showSnackBar('已重命名字体：$normalized');
     } on ReaderFontRegistryException catch (error) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(error.message)));
+      _showSnackBar(error.message, tone: AppFeedbackTone.error);
     }
   }
 
-  void _showSnackBar(String message) {
+  void _showSnackBar(
+    String message, {
+    AppFeedbackTone tone = AppFeedbackTone.info,
+  }) {
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(
+    AppFeedback.showSnackBar(
       context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+      message: message,
+      tone: message.contains('失败') ? AppFeedbackTone.error : tone,
+      useHaptics: false,
+    );
   }
 
   String _formatTimeShort(DateTime time) {

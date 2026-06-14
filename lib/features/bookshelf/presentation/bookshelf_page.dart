@@ -705,7 +705,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
           children: [
             DecoratedBox(
               decoration: buildAdvancedThemeBackdropDecoration(backdrop),
-              child: RefreshIndicator(
+              child: AppRefreshIndicator(
                 onRefresh: () => _loadBookshelf(force: true),
                 child: CustomScrollView(
                   controller: _bookshelfScrollController,
@@ -2725,7 +2725,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   Widget _buildSelectionActionBar({
     required List<BookshelfBook> filteredBooks,
   }) {
-    final palette = _resolvedPalette(context);
     final selectedCount = _selectedBookKeys.length;
     final isSelectionActionBusy = _isBatchDeleting || _isBatchUpdatingCovers;
 
@@ -2733,114 +2732,33 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       top: false,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: palette.cardColor,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
-            border: Border.all(
-              color: palette.cardBorderColor.withValues(alpha: 0.55),
+        child: AppBatchActionBar(
+          selectedCount: selectedCount,
+          totalCount: filteredBooks.length,
+          enabled: !isSelectionActionBusy,
+          showWhenEmpty: true,
+          onSelectAll: filteredBooks.isEmpty ? null : _selectAllBooks,
+          onClearSelection: _exitSelectionMode,
+          actions: [
+            AppBatchAction(
+              label: '封面',
+              icon: Icons.image_outlined,
+              enabled: selectedCount > 0,
+              onPressed: _editSelectedBooksCover,
             ),
-            boxShadow: [
-              BoxShadow(
-                color: palette.shadowColor,
-                blurRadius: 14,
-                offset: const Offset(0, -2),
+            AppBatchAction(
+              label: '删除',
+              icon: Icons.delete_outline_rounded,
+              tone: AppBatchActionTone.destructive,
+              enabled: selectedCount > 0,
+              confirmation: AppBatchActionConfirmation(
+                title: '删除书籍',
+                message: '确定从书架删除选中的 $selectedCount 本书吗？此操作不可撤销。',
+                confirmLabel: '删除',
               ),
-            ],
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.checklist_rounded,
-                      size: 18,
-                      color: palette.primaryColor,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      '已选 $selectedCount / ${filteredBooks.length}',
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: palette.textSecondaryColor,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed:
-                            isSelectionActionBusy || filteredBooks.isEmpty
-                                ? null
-                                : _selectAllBooks,
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: const Size(0, 42),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        icon: const Icon(Icons.select_all_rounded),
-                        label: const Text('全选'),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: FilledButton.tonal(
-                        onPressed:
-                            isSelectionActionBusy || _selectedBookKeys.isEmpty
-                                ? null
-                                : _editSelectedBooksCover,
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size(0, 42),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.image_outlined, size: 18),
-                            const SizedBox(width: 6),
-                            Flexible(
-                              child: Text(
-                                '封面',
-                                maxLines: 2,
-                                overflow: TextOverflow.visible,
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed:
-                            isSelectionActionBusy || _selectedBookKeys.isEmpty
-                                ? null
-                                : _deleteSelectedBooks,
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size(0, 42),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        icon: const Icon(Icons.delete_outline_rounded),
-                        label: const Text('删除'),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+              onPressed: _deleteSelectedBooks,
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -5729,7 +5647,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    AppFeedback.showSnackBar(context, message: text, useHaptics: false);
   }
 
   Future<void> _maybeShowContinueReadingPrompt({required int ticket}) async {

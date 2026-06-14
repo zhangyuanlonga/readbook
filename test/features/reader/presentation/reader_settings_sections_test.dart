@@ -375,6 +375,32 @@ void main() {
 
     expect(latestActions, ReaderSettings.defaultTapZoneActions);
   });
+
+  testWidgets('tap zone editor action picker updates a cell', (tester) async {
+    var latestActions = <ReaderTapZoneAction>[];
+
+    await tester.pumpWidget(
+      _wrap(
+        ReaderTapZoneEditorContent(
+          actions: List<ReaderTapZoneAction>.filled(
+            9,
+            ReaderTapZoneAction.none,
+          ),
+          onChanged: (next) => latestActions = next,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byType(InkWell).first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('下一页'), findsOneWidget);
+
+    await tester.tap(find.text('下一页'));
+    await tester.pumpAndSettle();
+
+    expect(latestActions.first, ReaderTapZoneAction.nextPage);
+  });
 }
 
 Widget _wrap(Widget child) {

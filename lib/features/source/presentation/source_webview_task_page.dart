@@ -9,6 +9,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../../app/platform/app_platform_capabilities.dart';
 import '../../../app/widgets/feature_disabled_page.dart';
+import '../../../app/widgets/foundation/foundation.dart';
 import '../application/source_webview_task_service.dart';
 import '../application/webview_cookie_bridge.dart';
 
@@ -594,9 +595,7 @@ class _SourceWebViewTaskPageState extends ConsumerState<SourceWebViewTaskPage> {
 
   void _showMessage(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    AppFeedback.showSnackBar(context, message: message);
   }
 }
 

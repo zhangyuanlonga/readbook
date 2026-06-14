@@ -14,6 +14,7 @@ import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
 import '../../../app/widgets/app_status_state_card.dart';
+import '../../../app/widgets/foundation/app_feedback.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
 import '../application/advanced_theme_provider.dart';
 
@@ -885,12 +886,13 @@ class _BookshelfTaxonomyManagementPageState
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
-      ),
+    AppFeedback.showSnackBar(
+      context,
+      message: message,
+      tone:
+          message.contains('失败') ? AppFeedbackTone.error : AppFeedbackTone.info,
+      duration: const Duration(seconds: 2),
+      useHaptics: false,
     );
   }
 }

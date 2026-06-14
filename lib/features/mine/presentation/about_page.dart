@@ -9,6 +9,7 @@ import '../../../app/layout/app_layout.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/foundation/app_feedback.dart';
 import '../../../core/app_update/app_update_dialog.dart';
 import '../../../core/app_update/app_update_service.dart';
 import '../../../core/device/device_identity_service.dart';
@@ -550,9 +551,15 @@ class _AboutPageState extends ConsumerState<AboutPage> {
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(
+    AppFeedback.showSnackBar(
       context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+      message: message,
+      tone:
+          message.contains('失败') || message.contains('错误')
+              ? AppFeedbackTone.error
+              : AppFeedbackTone.info,
+      useHaptics: false,
+    );
   }
 
   Widget _buildMetricPill(BuildContext context, String label, String value) {

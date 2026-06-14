@@ -14,6 +14,8 @@ import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/foundation/app_feedback.dart';
+import '../../../app/widgets/foundation/app_refresh_indicator.dart';
 import '../../../core/auth/auth_session.dart';
 import '../../../core/auth/auth_session_store.dart';
 import '../../../core/device/device_identity.dart';
@@ -202,7 +204,8 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
                 alignment: Alignment.topCenter,
                 child: ConstrainedBox(
                   constraints: BoxConstraints(maxWidth: maxWidth),
-                  child: RefreshIndicator(
+                  child: AppRefreshIndicator(
+                    semanticsLabel: '刷新会员中心',
                     onRefresh: _refreshPage,
                     child: ListView(
                       controller: _scrollController,
@@ -1799,9 +1802,13 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    AppFeedback.showSnackBar(
+      context,
+      message: message,
+      tone:
+          message.contains('失败') ? AppFeedbackTone.error : AppFeedbackTone.info,
+      useHaptics: false,
+    );
   }
 }
 

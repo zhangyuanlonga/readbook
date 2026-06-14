@@ -10,6 +10,9 @@ import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/adaptive_overflow_toolbar.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/foundation/app_feedback.dart';
+import '../../../app/widgets/foundation/app_refresh_indicator.dart';
+import '../../../app/widgets/foundation/app_skeleton.dart';
 import '../../../app/widgets/app_status_state_card.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../domain/entities/announcement.dart';
@@ -242,10 +245,29 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
     required double topInset,
   }) {
     if (_isLoading) {
-      return Center(
-        child: Padding(
-          padding: EdgeInsets.only(bottom: bottomSafe),
-          child: const CircularProgressIndicator(),
+      final metrics = AppAdaptiveMetrics.of(context);
+      return AppAnimatedSwitcher(
+        child: CustomScrollView(
+          key: const ValueKey('announcement_list_loading'),
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(
+                horizontal,
+                topInset + metrics.sectionGap,
+                horizontal,
+                metrics.sectionGap + bottomSafe,
+              ),
+              sliver: const SliverToBoxAdapter(
+                child: AppSkeletonList(
+                  itemCount: 4,
+                  itemHeight: 88,
+                  showLeading: false,
+                  showTrailing: true,
+                ),
+              ),
+            ),
+          ],
         ),
       );
     }
@@ -286,7 +308,8 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
 
     final metrics = AppAdaptiveMetrics.of(context);
     return AppFadeSlideTransition(
-      child: RefreshIndicator(
+      child: AppRefreshIndicator(
+        semanticsLabel: '刷新公告',
         onRefresh: () => _loadInitial(forceRefresh: true),
         child: CustomScrollView(
           controller: _scrollController,
@@ -380,7 +403,8 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
   }) {
     final metrics = AppAdaptiveMetrics.of(context);
     return AppFadeSlideTransition(
-      child: RefreshIndicator(
+      child: AppRefreshIndicator(
+        semanticsLabel: '刷新公告状态',
         onRefresh: () => _loadInitial(forceRefresh: true),
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -614,6 +638,11 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    AppFeedback.showSnackBar(
+      context,
+      message: text,
+      tone: text.contains('失败') ? AppFeedbackTone.error : AppFeedbackTone.info,
+      useHaptics: false,
+    );
   }
 }

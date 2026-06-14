@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../app/widgets/foundation/foundation.dart';
 import '../application/audio_reading_mode.dart';
 import '../application/reader_audio_controller.dart';
 import '../application/reader_content_session.dart';
@@ -453,7 +454,7 @@ class _ReaderAudioViewState extends State<ReaderAudioView> {
   }
 
   void _showSnackBar(BuildContext context, String text) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    AppFeedback.showSnackBar(context, message: text);
   }
 
   String _formatDuration(Duration value) {

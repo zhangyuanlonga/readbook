@@ -241,7 +241,7 @@ extension on _BookDetailPageState {
                       alignment: Alignment.topCenter,
                       child: ConstrainedBox(
                         constraints: BoxConstraints(maxWidth: maxWidth),
-                        child: RefreshIndicator(
+                        child: AppRefreshIndicator(
                           onRefresh: () => _load(forceRefresh: true),
                           child: ListView(
                             controller: _detailScrollController,

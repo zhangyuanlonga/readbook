@@ -8,6 +8,8 @@ import '../../../app/layout/app_layout.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/foundation/app_refresh_indicator.dart';
+import '../../../app/widgets/foundation/app_skeleton.dart';
 import '../../../app/widgets/app_status_state_card.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../domain/entities/announcement.dart';
@@ -140,13 +142,37 @@ class _AnnouncementDetailPageState
     required double topInset,
   }) {
     if (_isLoading) {
+      final metrics = AppAdaptiveMetrics.of(context);
       return AppAnimatedSwitcher(
-        child: Center(
+        child: CustomScrollView(
           key: const ValueKey('announcement_detail_loading'),
-          child: Padding(
-            padding: EdgeInsets.only(bottom: bottomSafe),
-            child: const CircularProgressIndicator(),
-          ),
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(
+                horizontal,
+                topInset + metrics.sectionGap,
+                horizontal,
+                metrics.sectionGap + bottomSafe,
+              ),
+              sliver: const SliverToBoxAdapter(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    AppSkeletonBlock(width: 220, height: 24),
+                    SizedBox(height: 12),
+                    AppSkeletonBlock(width: 140, height: 14),
+                    SizedBox(height: 22),
+                    AppSkeletonBlock(height: 14),
+                    SizedBox(height: 10),
+                    AppSkeletonBlock(height: 14),
+                    SizedBox(height: 10),
+                    AppSkeletonBlock(width: 260, height: 14),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       );
     }
@@ -181,7 +207,8 @@ class _AnnouncementDetailPageState
 
     final metrics = AppAdaptiveMetrics.of(context);
     return AppFadeSlideTransition(
-      child: RefreshIndicator(
+      child: AppRefreshIndicator(
+        semanticsLabel: '刷新公告详情',
         onRefresh: () => _loadDetail(forceRefresh: true),
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -246,7 +273,8 @@ class _AnnouncementDetailPageState
     required VoidCallback onAction,
   }) {
     final metrics = AppAdaptiveMetrics.of(context);
-    return RefreshIndicator(
+    return AppRefreshIndicator(
+      semanticsLabel: '刷新公告详情状态',
       onRefresh: () => _loadDetail(forceRefresh: true),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),

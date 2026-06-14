@@ -827,15 +827,7 @@ extension _ReaderPageShellExtension on _ReaderPageState {
     _lastReaderSnackAt = decision.nextState.lastAt;
     _lastReaderSnackKey = decision.nextState.lastKey;
 
-    final messenger = ScaffoldMessenger.of(context);
-    if (replaceCurrent) {
-      messenger.hideCurrentSnackBar();
-    }
-
     final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    final horizontal = AppSpacing.pageHorizontal(context);
-    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     SnackBarAction? snackAction;
     final normalizedActionLabel = actionLabel?.trim() ?? '';
     if (normalizedActionLabel.isNotEmpty && onActionPressed != null) {
@@ -846,29 +838,12 @@ extension _ReaderPageShellExtension on _ReaderPageState {
       );
     }
 
-    messenger.showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        margin: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 12 + bottomSafe),
-        elevation: 0,
-        duration: duration,
-        dismissDirection: DismissDirection.down,
-        backgroundColor: colorScheme.surfaceContainerHigh,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.55),
-          ),
-        ),
-        content: Text(
-          text,
-          style: textTheme.bodyMedium?.copyWith(
-            color: colorScheme.onSurface,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        action: snackAction,
-      ),
+    AppFeedback.showSnackBar(
+      context,
+      message: text,
+      duration: duration,
+      action: snackAction,
+      clearPrevious: replaceCurrent,
     );
   }
 

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../../../domain/entities/reader_settings.dart';
 
 Future<void> showReaderTapZoneEditorSheet({
@@ -10,13 +11,14 @@ Future<void> showReaderTapZoneEditorSheet({
   required List<ReaderTapZoneAction> actions,
   required ValueChanged<List<ReaderTapZoneAction>> onChanged,
 }) {
-  return showModalBottomSheet<void>(
+  return showAdaptiveActionSurface<void>(
     context: context,
-    backgroundColor: backgroundColor,
+    mobileBackgroundColor: backgroundColor,
     showDragHandle: true,
-    isScrollControlled: true,
+    maxWidth: 520,
+    padding: EdgeInsets.zero,
     builder:
-        (sheetContext) =>
+        (surfaceContext) =>
             ReaderTapZoneEditorContent(actions: actions, onChanged: onChanged),
   );
 }
@@ -84,27 +86,26 @@ class _ReaderTapZoneEditorContentState
   }
 
   Future<void> _editCell(BuildContext context, int index) async {
-    final selected = await showModalBottomSheet<ReaderTapZoneAction>(
+    final selected = await showAdaptiveActionSurface<ReaderTapZoneAction>(
       context: context,
       showDragHandle: true,
+      maxWidth: 420,
       builder:
-          (menuContext) => SafeArea(
-            child: ListView(
-              shrinkWrap: true,
-              children: ReaderTapZoneAction.values
-                  .map(
-                    (action) => ListTile(
-                      leading: Icon(readerTapZoneActionIcon(action)),
-                      title: Text(readerTapZoneActionLabel(action)),
-                      trailing:
-                          _localActions[index] == action
-                              ? const Icon(Icons.check_rounded)
-                              : null,
-                      onTap: () => Navigator.of(menuContext).pop(action),
-                    ),
-                  )
-                  .toList(growable: false),
-            ),
+          (menuContext) => Column(
+            mainAxisSize: MainAxisSize.min,
+            children: ReaderTapZoneAction.values
+                .map(
+                  (action) => ListTile(
+                    leading: Icon(readerTapZoneActionIcon(action)),
+                    title: Text(readerTapZoneActionLabel(action)),
+                    trailing:
+                        _localActions[index] == action
+                            ? const Icon(Icons.check_rounded)
+                            : null,
+                    onTap: () => Navigator.of(menuContext).pop(action),
+                  ),
+                )
+                .toList(growable: false),
           ),
     );
     if (selected == null || !mounted) {

@@ -1329,7 +1329,6 @@ class _SearchPageState extends ConsumerState<SearchPage> {
               ),
               Flexible(
                 child: ListView.separated(
-                  shrinkWrap: true,
                   itemCount: candidates.length,
                   separatorBuilder:
                       (context, _) => const Divider(height: 1, thickness: 0.5),
@@ -1731,7 +1730,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
 
   void _showMessage(String text) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    AppFeedback.showSnackBar(context, message: text, useHaptics: false);
   }
 
   bool _onScrollNotification(ScrollNotification notification) {

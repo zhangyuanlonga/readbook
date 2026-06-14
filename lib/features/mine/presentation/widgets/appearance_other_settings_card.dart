@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../app/widgets/adaptive_bottom_sheet.dart';
+import '../../../../app/widgets/foundation/app_feedback.dart';
 import '../../application/mine_page_preferences_service.dart';
 import '../../providers.dart';
 
@@ -324,8 +325,11 @@ class _AppearanceOtherSettingsCardState
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(
+    AppFeedback.showSnackBar(
       context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+      message: message,
+      tone: AppFeedbackTone.error,
+      useHaptics: false,
+    );
   }
 }

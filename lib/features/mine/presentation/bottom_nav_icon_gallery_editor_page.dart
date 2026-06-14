@@ -13,6 +13,7 @@ import '../../../app/shell_navigation_provider.dart';
 import '../../../app/tasks/app_task_manager.dart';
 import '../../../app/widgets/app_task_status.dart';
 import '../../../app/widgets/bottom_nav_icon_view.dart';
+import '../../../app/widgets/foundation/app_feedback.dart';
 import '../../../app/navigation/bottom_nav_icon_resolver.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../domain/entities/bottom_nav_icon_gallery.dart';
@@ -188,9 +189,13 @@ class _BottomNavIconGalleryEditorPageState
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(
+    AppFeedback.showSnackBar(
       context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+      message: message,
+      tone:
+          message.contains('失败') ? AppFeedbackTone.error : AppFeedbackTone.info,
+      useHaptics: false,
+    );
   }
 
   Future<void> _clearSlot(
@@ -413,15 +418,7 @@ class _BottomNavIconGalleryEditorPageState
       setState(() {
         _gallery = saved;
       });
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('已保存'),
-            duration: Duration(seconds: 1),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
+      _showMessage('已保存');
     } finally {
       if (mounted) {
         setState(() {

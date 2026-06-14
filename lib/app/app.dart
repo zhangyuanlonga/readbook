@@ -22,6 +22,7 @@ import '../features/source/application/external_import_diagnostics.dart';
 import '../features/source/application/external_source_import_bridge.dart';
 import 'widgets/app_task_status.dart';
 import 'widgets/app_splash_screen.dart';
+import 'widgets/foundation/app_feedback.dart';
 import 'widgets/import_export_copy.dart';
 import 'widgets/import_export_task_overlay.dart';
 import 'lifecycle/auth_account_lifecycle_coordinator.dart';
@@ -369,7 +370,6 @@ class _SystemUiOverlayWrapperState
     if (event.type == AuthEventType.loggedIn) {
       return;
     }
-    final messenger = ScaffoldMessenger.of(context);
     if (!mounted) {
       return;
     }
@@ -387,8 +387,15 @@ class _SystemUiOverlayWrapperState
             )
             : null;
 
-    messenger.showSnackBar(
-      SnackBar(content: Text(event.message), action: action),
+    AppFeedback.showSnackBar(
+      context,
+      message: event.message,
+      tone:
+          event.type == AuthEventType.sessionExpired
+              ? AppFeedbackTone.warning
+              : AppFeedbackTone.info,
+      action: action,
+      useHaptics: false,
     );
     if (event.type == AuthEventType.sessionExpired) {
       WidgetsBinding.instance.addPostFrameCallback((_) {

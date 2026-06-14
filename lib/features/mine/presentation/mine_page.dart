@@ -21,6 +21,8 @@ import '../../../app/theme/app_theme_provider.dart';
 import '../../../app/theme/app_theme_seed_provider.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/foundation/app_feedback.dart';
+import '../../../app/widgets/foundation/app_refresh_indicator.dart';
 import '../../../core/auth/auth_event_bus.dart';
 import '../../../core/auth/auth_service.dart';
 import '../../../core/media/image_selection_service.dart';
@@ -1134,9 +1136,13 @@ class _MinePageState extends ConsumerState<MinePage> {
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(
+    AppFeedback.showSnackBar(
       context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+      message: message,
+      tone:
+          message.contains('失败') ? AppFeedbackTone.error : AppFeedbackTone.info,
+      useHaptics: false,
+    );
   }
 }
 

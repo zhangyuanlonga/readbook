@@ -226,7 +226,8 @@ class PrivateBookSourcesPage extends ConsumerWidget {
                   maxWidth: AppLayout.settingsContentMaxWidth,
                 ),
               ),
-              child: RefreshIndicator(
+              child: AppRefreshIndicator(
+                semanticsLabel: '刷新私有书源',
                 onRefresh: () async => _refresh(ref),
                 child: ListView(
                   physics: const AlwaysScrollableScrollPhysics(),
@@ -496,12 +497,11 @@ class PrivateBookSourcesPage extends ConsumerWidget {
     BuildContext context,
     _PreparedBookSourceImport imported,
   ) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '已加载书源 JSON：${formatBookSourceSize(imported.payload.sizeBytes)}',
-        ),
-      ),
+    AppFeedback.showSnackBar(
+      context,
+      message: '已加载书源 JSON：${formatBookSourceSize(imported.payload.sizeBytes)}',
+      tone: AppFeedbackTone.success,
+      useHaptics: false,
     );
   }
 
@@ -514,9 +514,12 @@ class PrivateBookSourcesPage extends ConsumerWidget {
       'Book source JSON import failed',
       context: <String, Object?>{'method': method.name, 'message': message},
     );
-    ScaffoldMessenger.of(
+    AppFeedback.showSnackBar(
       context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+      message: message,
+      tone: AppFeedbackTone.error,
+      useHaptics: false,
+    );
   }
 
   static Future<PrivateBookSourceItem?> _loadSourceDetailForEdit(
@@ -524,9 +527,11 @@ class PrivateBookSourcesPage extends ConsumerWidget {
     WidgetRef ref,
     PrivateBookSourceItem item,
   ) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final loading = messenger.showSnackBar(
-      const SnackBar(content: Text('正在读取书源详情')),
+    final loading = AppFeedback.showSnackBar(
+      context,
+      message: '正在读取书源详情',
+      tone: AppFeedbackTone.loading,
+      useHaptics: false,
     );
     try {
       final detail = await ref
@@ -537,8 +542,11 @@ class PrivateBookSourcesPage extends ConsumerWidget {
     } catch (error) {
       loading.close();
       if (context.mounted) {
-        messenger.showSnackBar(
-          SnackBar(content: Text('书源详情读取失败：${_messageOf(error)}')),
+        AppFeedback.showSnackBar(
+          context,
+          message: '书源详情读取失败：${_messageOf(error)}',
+          tone: AppFeedbackTone.error,
+          useHaptics: false,
         );
       }
       return null;
@@ -642,18 +650,21 @@ class PrivateBookSourcesPage extends ConsumerWidget {
         );
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('书源检测已记录：${_testLabel(result.item.lastTestStatus)}'),
-        ),
+      AppFeedback.showSnackBar(
+        context,
+        message: '书源检测已记录：${_testLabel(result.item.lastTestStatus)}',
+        useHaptics: false,
       );
     } catch (error) {
       if (!context.mounted) {
         return;
       }
-      ScaffoldMessenger.of(
+      AppFeedback.showSnackBar(
         context,
-      ).showSnackBar(SnackBar(content: Text(_messageOf(error))));
+        message: _messageOf(error),
+        tone: AppFeedbackTone.error,
+        useHaptics: false,
+      );
     }
   }
 
@@ -669,16 +680,22 @@ class PrivateBookSourcesPage extends ConsumerWidget {
         return;
       }
       _refresh(ref);
-      ScaffoldMessenger.of(
+      AppFeedback.showSnackBar(
         context,
-      ).showSnackBar(SnackBar(content: Text(success)));
+        message: success,
+        tone: AppFeedbackTone.success,
+        useHaptics: false,
+      );
     } catch (error) {
       if (!context.mounted) {
         return;
       }
-      ScaffoldMessenger.of(
+      AppFeedback.showSnackBar(
         context,
-      ).showSnackBar(SnackBar(content: Text(_messageOf(error))));
+        message: _messageOf(error),
+        tone: AppFeedbackTone.error,
+        useHaptics: false,
+      );
     }
   }
 }
@@ -1746,9 +1763,13 @@ class _PrivateSourceGroupManagerSheetState
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(
+    AppFeedback.showSnackBar(
       context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+      message: message,
+      tone:
+          message.contains('失败') ? AppFeedbackTone.error : AppFeedbackTone.info,
+      useHaptics: false,
+    );
   }
 }
 
@@ -2554,8 +2575,11 @@ class _SourceCheckReportSheet extends StatelessWidget {
                             Clipboard.setData(
                               ClipboardData(text: report.copyText),
                             );
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('检测日志已复制')),
+                            AppFeedback.showSnackBar(
+                              context,
+                              message: '检测日志已复制',
+                              tone: AppFeedbackTone.success,
+                              useHaptics: false,
                             );
                           },
                   icon: const Icon(Icons.copy_rounded),
@@ -3281,9 +3305,12 @@ class _PrivateSourceFormState extends ConsumerState<_PrivateSourceForm> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
+      AppFeedback.showSnackBar(
         context,
-      ).showSnackBar(SnackBar(content: Text(_messageOf(error))));
+        message: _messageOf(error),
+        tone: AppFeedbackTone.error,
+        useHaptics: false,
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -3443,9 +3470,12 @@ class _PrivateSourceFormState extends ConsumerState<_PrivateSourceForm> {
     setState(() {
       _loadError = message;
     });
-    ScaffoldMessenger.of(
+    AppFeedback.showSnackBar(
       context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+      message: message,
+      tone: AppFeedbackTone.error,
+      useHaptics: false,
+    );
   }
 }
 

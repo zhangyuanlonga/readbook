@@ -96,7 +96,6 @@ class SearchFailureBanner extends StatelessWidget {
                   const SizedBox(height: 12),
                   Flexible(
                     child: ListView.separated(
-                      shrinkWrap: true,
                       itemCount: report.failures.length,
                       separatorBuilder:
                           (_, __) => Divider(

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/widgets/adaptive_bottom_sheet.dart';
+import '../../app/widgets/foundation/app_feedback.dart';
 import 'app_update_release.dart';
 
 class AppUpdateDialog {
@@ -68,9 +69,12 @@ class AppUpdateDialog {
     if (launched || !context.mounted) {
       return;
     }
-    ScaffoldMessenger.of(
+    AppFeedback.showSnackBar(
       context,
-    ).showSnackBar(const SnackBar(content: Text('打开更新链接失败。')));
+      message: '打开更新链接失败。',
+      tone: AppFeedbackTone.error,
+      useHaptics: false,
+    );
   }
 
   static Future<void> showUpdateDialog(

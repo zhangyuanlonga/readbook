@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import '../../../app/widgets/foundation/foundation.dart';
 import '../../../domain/entities/reader_document.dart';
 import '../../../domain/entities/reader_settings.dart';
 import '../application/reader_content_session.dart';
@@ -206,7 +207,7 @@ class ReaderViewportBuilder {
     if (onPullToRefresh == null) {
       return child;
     }
-    return RefreshIndicator(
+    return AppRefreshIndicator(
       onRefresh: onPullToRefresh,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),

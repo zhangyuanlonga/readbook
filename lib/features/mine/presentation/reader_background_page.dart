@@ -12,6 +12,7 @@ import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/adaptive_fullscreen_preview.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/foundation/app_feedback.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
 import '../application/advanced_theme_provider.dart';
@@ -166,9 +167,13 @@ class _ReaderBackgroundPageState extends ConsumerState<ReaderBackgroundPage> {
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(
+    AppFeedback.showSnackBar(
       context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+      message: message,
+      tone:
+          message.contains('失败') ? AppFeedbackTone.error : AppFeedbackTone.info,
+      useHaptics: false,
+    );
   }
 
   @override

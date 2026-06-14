@@ -11,6 +11,8 @@ import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
+import '../../../app/widgets/foundation/app_refresh_indicator.dart';
+import '../../../app/widgets/foundation/app_skeleton.dart';
 import '../../../core/network/api_client.dart';
 import '../../mine/application/advanced_theme_provider.dart';
 import '../application/discover_source_provider.dart';
@@ -132,10 +134,13 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
     required double bottomSafe,
     required AppAdaptiveMetrics metrics,
   }) {
-    final theme = Theme.of(context);
-
     if (sourcesAsync.isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return _DiscoverLoadingState(
+        horizontal: horizontal,
+        topInset: topInset,
+        bottomSafe: bottomSafe,
+        metrics: metrics,
+      );
     }
 
     if (sourcesAsync.hasError) {
@@ -183,125 +188,125 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
       );
     }
 
-    return CustomScrollView(
-      controller: _scrollController,
-      slivers: [
-        // 顶部间距 + 搜索框
-        SliverPadding(
-          padding: EdgeInsets.fromLTRB(
-            horizontal,
-            topInset + 10,
-            horizontal,
-            0,
-          ),
-          sliver: SliverToBoxAdapter(
-            child: _buildSearchBar(
-              context,
-              palette,
-              counterText: _sourceCounterText(
-                pager: pager,
-                filteredCount: filteredSources.length,
-                isRemoteResult: remoteSearchAsync?.hasValue == true,
+    return AppRefreshIndicator(
+      semanticsLabel: '刷新发现书源',
+      onRefresh: _refreshSources,
+      child: CustomScrollView(
+        controller: _scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          // 顶部间距 + 搜索框
+          SliverPadding(
+            padding: EdgeInsets.fromLTRB(
+              horizontal,
+              topInset + 10,
+              horizontal,
+              0,
+            ),
+            sliver: SliverToBoxAdapter(
+              child: _buildSearchBar(
+                context,
+                palette,
+                counterText: _sourceCounterText(
+                  pager: pager,
+                  filteredCount: filteredSources.length,
+                  isRemoteResult: remoteSearchAsync?.hasValue == true,
+                ),
               ),
             ),
           ),
-        ),
-        // 书源列表
-        SliverPadding(
-          padding: EdgeInsets.fromLTRB(
-            horizontal,
-            12,
-            horizontal,
-            bottomSafe + metrics.sectionGap,
-          ),
-          sliver: SliverList.builder(
-            itemCount: filteredSources.length,
-            itemBuilder: (context, index) {
-              final source = filteredSources[index];
-              return AppFadeSlideTransition(
-                delay: Duration(milliseconds: (index % 10) * 18),
-                child: _SourceRow(
-                  source: source,
-                  isExpanded: _expandedSourceId == source.id,
-                  palette: palette,
-                  onTap: () {
-                    setState(() {
-                      _expandedSourceId =
-                          _expandedSourceId == source.id ? null : source.id;
-                    });
-                  },
-                  onCategoryTap: (sourceContext, loadedSource, category) {
-                    _openCategoryWithReveal(
-                      sourceContext,
-                      source: loadedSource,
-                      category: category,
-                    );
-                  },
-                ),
-              );
-            },
-          ),
-        ),
-        if (isRemoteSearchLoading)
-          const SliverPadding(
-            padding: EdgeInsets.only(top: 36),
-            sliver: SliverToBoxAdapter(
-              child: Center(child: CircularProgressIndicator()),
+          // 书源列表
+          SliverPadding(
+            padding: EdgeInsets.fromLTRB(
+              horizontal,
+              12,
+              horizontal,
+              bottomSafe + metrics.sectionGap,
+            ),
+            sliver: SliverList.builder(
+              itemCount: filteredSources.length,
+              itemBuilder: (context, index) {
+                final source = filteredSources[index];
+                return AppFadeSlideTransition(
+                  delay: Duration(milliseconds: (index % 10) * 18),
+                  child: _SourceRow(
+                    source: source,
+                    isExpanded: _expandedSourceId == source.id,
+                    palette: palette,
+                    onTap: () {
+                      setState(() {
+                        _expandedSourceId =
+                            _expandedSourceId == source.id ? null : source.id;
+                      });
+                    },
+                    onCategoryTap: (sourceContext, loadedSource, category) {
+                      _openCategoryWithReveal(
+                        sourceContext,
+                        source: loadedSource,
+                        category: category,
+                      );
+                    },
+                  ),
+                );
+              },
             ),
           ),
-        if (remoteSearchError)
-          SliverPadding(
-            padding: const EdgeInsets.only(top: 36),
-            sliver: SliverToBoxAdapter(
-              child: Center(
+          if (isRemoteSearchLoading)
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(horizontal, 24, horizontal, 0),
+              sliver: const SliverToBoxAdapter(
+                child: AppSkeletonList(
+                  itemCount: 2,
+                  itemHeight: 54,
+                  showLeading: false,
+                  showTrailing: true,
+                ),
+              ),
+            ),
+          if (remoteSearchError)
+            SliverPadding(
+              padding: const EdgeInsets.only(top: 36),
+              sliver: SliverToBoxAdapter(
+                child: Center(
+                  child: AppEmptyStateCard(
+                    icon: Icons.cloud_off_rounded,
+                    title: '服务器搜索失败',
+                    description: '本地未找到匹配书源，远程查询暂时不可用',
+                    actionLabel: '重试',
+                    onAction: () => _startRemoteSearch(normalizedKeyword),
+                  ),
+                ),
+              ),
+            ),
+          if (normalizedKeyword.isEmpty)
+            SliverToBoxAdapter(
+              child: _LoadMoreFooter(
+                state: pager,
+                onRetry:
+                    () =>
+                        ref
+                            .read(discoverSourcePagerProvider.notifier)
+                            .loadMore(),
+              ),
+            ),
+          // 无搜索结果提示
+          if (filteredSources.isEmpty &&
+              normalizedKeyword.isNotEmpty &&
+              !isRemoteSearchLoading &&
+              !remoteSearchError)
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(horizontal, 48, horizontal, 0),
+              sliver: SliverToBoxAdapter(
                 child: AppEmptyStateCard(
-                  icon: Icons.cloud_off_rounded,
-                  title: '服务器搜索失败',
-                  description: '本地未找到匹配书源，远程查询暂时不可用',
-                  actionLabel: '重试',
-                  onAction: () => _startRemoteSearch(normalizedKeyword),
+                  icon: Icons.search_off_rounded,
+                  title: '没有找到 "$normalizedKeyword"',
+                  description: '可以换个关键词，或稍后刷新书源后再试。',
+                  compact: true,
                 ),
               ),
             ),
-          ),
-        if (normalizedKeyword.isEmpty)
-          SliverToBoxAdapter(
-            child: _LoadMoreFooter(
-              state: pager,
-              onRetry:
-                  () =>
-                      ref.read(discoverSourcePagerProvider.notifier).loadMore(),
-            ),
-          ),
-        // 无搜索结果提示
-        if (filteredSources.isEmpty &&
-            normalizedKeyword.isNotEmpty &&
-            !isRemoteSearchLoading &&
-            !remoteSearchError)
-          SliverPadding(
-            padding: EdgeInsets.only(top: 48),
-            sliver: SliverToBoxAdapter(
-              child: Center(
-                child: Column(
-                  children: [
-                    Icon(
-                      Icons.search_off_rounded,
-                      size: 48,
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      '没有找到 "$normalizedKeyword"',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -532,7 +537,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
     );
   }
 
-  void _refreshSources() {
+  Future<void> _refreshSources() async {
     _searchDebounce?.cancel();
     _searchController.clear();
     setState(() {
@@ -541,7 +546,55 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
       _remoteSearchKeyword = '';
       _remoteSearchAsync = null;
     });
-    ref.read(discoverSourcePagerProvider.notifier).refresh();
+    await ref.read(discoverSourcePagerProvider.notifier).refresh();
+  }
+}
+
+class _DiscoverLoadingState extends StatelessWidget {
+  const _DiscoverLoadingState({
+    required this.horizontal,
+    required this.topInset,
+    required this.bottomSafe,
+    required this.metrics,
+  });
+
+  final double horizontal;
+  final double topInset;
+  final double bottomSafe;
+  final AppAdaptiveMetrics metrics;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppAnimatedSwitcher(
+      child: CustomScrollView(
+        key: const ValueKey('discover_loading'),
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          SliverPadding(
+            padding: EdgeInsets.fromLTRB(
+              horizontal,
+              topInset + 10,
+              horizontal,
+              bottomSafe + metrics.sectionGap,
+            ),
+            sliver: const SliverToBoxAdapter(
+              child: Column(
+                children: [
+                  AppSkeletonBlock(height: 48),
+                  SizedBox(height: 12),
+                  AppSkeletonList(
+                    itemCount: 6,
+                    itemHeight: 54,
+                    showLeading: false,
+                    showTrailing: true,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -782,8 +835,10 @@ class _SourceRow extends ConsumerWidget {
   ) {
     return switch (status) {
       DiscoverSourceStatus.available =>
-        latencyMs != null && latencyMs > 1500 ? Colors.orange : Colors.green,
-      DiscoverSourceStatus.slow => Colors.orange,
+        latencyMs != null && latencyMs > 1500
+            ? colorScheme.tertiary
+            : colorScheme.primary,
+      DiscoverSourceStatus.slow => colorScheme.tertiary,
       DiscoverSourceStatus.unavailable => colorScheme.error,
     };
   }

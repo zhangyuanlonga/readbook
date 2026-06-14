@@ -221,7 +221,7 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    AppFeedback.showSnackBar(context, message: text);
   }
 
   Future<void> _openDistributionCalendarSheet(

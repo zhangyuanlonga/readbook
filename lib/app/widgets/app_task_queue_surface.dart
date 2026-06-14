@@ -9,6 +9,7 @@ import 'adaptive_bottom_sheet.dart';
 import 'app_empty_state_card.dart';
 import 'app_task_bottom_sheet.dart';
 import 'app_task_status.dart';
+import 'foundation/foundation.dart';
 
 class AppTaskQueueButton extends ConsumerWidget {
   const AppTaskQueueButton({super.key, this.bottom = 24, this.right = 16});
@@ -105,7 +106,7 @@ class _AppTaskQueuePanel extends ConsumerWidget {
               ? IconButton(
                 tooltip: '清除已完成',
                 onPressed:
-                    () => ref.read(appTaskManagerProvider).clearFinished(),
+                    () => _clearFinishedTasks(context, ref, finishedCount),
                 icon: const Icon(Icons.cleaning_services_outlined),
               )
               : null,
@@ -128,6 +129,15 @@ class _AppTaskQueuePanel extends ConsumerWidget {
                   return _AppTaskQueueItem(task: tasks[index]);
                 },
               ),
+    );
+  }
+
+  void _clearFinishedTasks(BuildContext context, WidgetRef ref, int count) {
+    ref.read(appTaskManagerProvider).clearFinished();
+    AppFeedback.showSnackBar(
+      context,
+      message: '已清除 $count 个已完成任务。',
+      tone: AppFeedbackTone.success,
     );
   }
 }
@@ -214,10 +224,7 @@ class _AppTaskQueueItem extends ConsumerWidget {
                 if (task.canCancel && !task.isFinished)
                   IconButton(
                     tooltip: '取消任务',
-                    onPressed:
-                        () => ref
-                            .read(appTaskManagerProvider)
-                            .cancelTask(task.id),
+                    onPressed: () => _cancelTask(context, ref),
                     icon: const Icon(Icons.close_rounded),
                   ),
               ],
@@ -257,6 +264,23 @@ class _AppTaskQueueItem extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+
+  void _cancelTask(BuildContext context, WidgetRef ref) {
+    final cancelled = ref.read(appTaskManagerProvider).cancelTask(task.id);
+    if (cancelled == null) {
+      AppFeedback.showSnackBar(
+        context,
+        message: '任务已结束，无法取消。',
+        tone: AppFeedbackTone.warning,
+      );
+      return;
+    }
+    AppFeedback.showSnackBar(
+      context,
+      message: '已取消「${task.status.title}」。',
+      tone: AppFeedbackTone.info,
     );
   }
 

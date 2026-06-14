@@ -10,6 +10,8 @@ import '../../../app/platform/app_platform_capabilities.dart';
 import '../../../app/composition/app_providers.dart';
 import '../../../app/widgets/adaptive_overflow_toolbar.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
+import '../../../app/widgets/foundation/app_batch_action_bar.dart';
+import '../../../app/widgets/foundation/app_feedback.dart';
 import '../../../app/widgets/import_export_task_overlay.dart';
 import '../../../core/logging/diagnostic_log_export_service.dart';
 import '../../../core/logging/source_log_store.dart';
@@ -601,7 +603,20 @@ class _ErrorCenterPageState extends ConsumerState<ErrorCenterPage> {
     }
   }
 
-  void _clearLogs() {
+  Future<void> _clearLogs() async {
+    if (_store.entries.isEmpty) {
+      _showMessage('暂无可清空日志。');
+      return;
+    }
+    final confirmed = await showAppBatchActionConfirmation(
+      context: context,
+      title: '清空日志',
+      message: '清空后本地诊断日志会立即删除，导出或复制前请先确认是否需要保留。',
+      confirmLabel: '清空',
+    );
+    if (!mounted || confirmed != true) {
+      return;
+    }
     _store.clear();
     _showMessage('日志已清空。');
   }
@@ -623,6 +638,11 @@ class _ErrorCenterPageState extends ConsumerState<ErrorCenterPage> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    AppFeedback.showSnackBar(
+      context,
+      message: text,
+      tone: text.contains('失败') ? AppFeedbackTone.error : AppFeedbackTone.info,
+      useHaptics: false,
+    );
   }
 }

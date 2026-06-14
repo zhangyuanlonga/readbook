@@ -32,6 +32,7 @@ Future<T?> showAdaptiveActionSurface<T>({
   bool useRootNavigator = true,
   bool barrierDismissible = true,
   bool showDragHandle = true,
+  Color? mobileBackgroundColor,
   double? maxWidth,
   double maxHeightFactor = 0.82,
   EdgeInsetsGeometry? padding,
@@ -53,6 +54,7 @@ Future<T?> showAdaptiveActionSurface<T>({
       isScrollControlled: true,
       isDismissible: barrierDismissible,
       enableDrag: barrierDismissible,
+      backgroundColor: mobileBackgroundColor,
       builder:
           (surfaceContext) => Padding(
             padding: EdgeInsets.only(
