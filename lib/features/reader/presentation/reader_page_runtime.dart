@@ -1882,9 +1882,9 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     if (renderObject is! RenderRepaintBoundary) {
       return null;
     }
-    if (renderObject.debugNeedsPaint) {
-      await WidgetsBinding.instance.endOfFrame;
-    }
+    // In release mode, debugNeedsPaint is always false, so we unconditionally
+    // wait one more frame to ensure rendering is complete before capturing.
+    await WidgetsBinding.instance.endOfFrame;
     if (!mounted || !context.mounted) {
       return null;
     }

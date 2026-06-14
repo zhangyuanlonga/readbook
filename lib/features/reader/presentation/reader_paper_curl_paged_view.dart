@@ -319,13 +319,13 @@ class ReaderPaperCurlPagedViewState extends State<ReaderPaperCurlPagedView> {
       );
     }
     final pixelRatio = MediaQuery.devicePixelRatioOf(context).clamp(1.0, 2.0);
-    if (renderObject.debugNeedsPaint) {
-      _logPaperCurlTrace(
-        'capture_wait_paint',
-        context: <String, Object?>{'label': label},
-      );
-      await WidgetsBinding.instance.endOfFrame;
-    }
+    // In release mode, debugNeedsPaint is always false, so we unconditionally
+    // wait one more frame to ensure rendering is complete before capturing.
+    _logPaperCurlTrace(
+      'capture_wait_paint',
+      context: <String, Object?>{'label': label},
+    );
+    await WidgetsBinding.instance.endOfFrame;
     if (!mounted) {
       return const _PaperCurlSnapshotCapture.failure(
         ReaderPaperCurlFailureReason.missingContext,
