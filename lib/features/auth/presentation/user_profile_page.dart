@@ -107,9 +107,9 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
       _isLoadingProfile = true;
     });
     try {
-      final profile = await _userProfileService.fetchMe(
-        accessToken: session.accessToken,
-      );
+      // 不要使用 session.accessToken，因为它可能是旧的缓存值
+      // 让系统自动从 AuthSessionStore.getAccessToken() 获取最新 token
+      final profile = await _userProfileService.fetchMe();
       if (!mounted ||
           loadVersion != _sessionLoadVersion ||
           !_isSameSessionIdentity(_session, session) ||
