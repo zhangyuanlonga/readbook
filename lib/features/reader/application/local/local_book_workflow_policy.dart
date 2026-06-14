@@ -5,8 +5,8 @@ enum LocalBookImportExecutionMode { backgroundIndex, immediateIndex }
 class LocalBookWorkflowPolicy {
   const LocalBookWorkflowPolicy._();
 
-  static const bool directImportShouldWaitForIndexing = true;
-  static const bool externalImportShouldWaitForIndexing = true;
+  static const bool directImportShouldWaitForIndexing = false;
+  static const bool externalImportShouldWaitForIndexing = false;
 
   static LocalBookImportExecutionMode resolveImportExecutionMode({
     required LocalBookFormat format,
@@ -42,7 +42,7 @@ class LocalBookWorkflowPolicy {
     return importSuccessMessage(
       successCount: successCount,
       failureCount: failureCount,
-      directoryReady: true,
+      directoryReady: false,
     );
   }
 

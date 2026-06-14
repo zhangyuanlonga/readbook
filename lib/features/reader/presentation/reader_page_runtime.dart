@@ -1728,6 +1728,31 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     }
 
     final direction = forward ? 1 : -1;
+    final targetChapterIndex = decision.targetChapterIndex!;
+    if (resolvedStyle == ReaderPageAnimationStyle.none) {
+      await _jumpTo(
+        targetChapterIndex,
+        initialScrollRatio: decision.initialScrollRatio,
+      );
+      if (!mounted || _currentIndex != targetChapterIndex) {
+        return ReaderPageTurnResult(
+          type: ReaderPageTurnResultType.rejected,
+          request: plan.request,
+          executionType: ReaderPageTurnExecutionType.crossChapter,
+          rejectReason: ReaderPageTurnRejectReason.crossChapterCancelled,
+        );
+      }
+      _recordFirstPageTurnCompleted(mode: completionMode);
+      _syncActiveReadingRecordSessionProgress();
+      _scheduleProgressSave();
+      _scheduleReaderInteractionSettle();
+      return ReaderPageTurnResult(
+        type: ReaderPageTurnResultType.committed,
+        request: plan.request,
+        executionType: ReaderPageTurnExecutionType.crossChapter,
+      );
+    }
+
     final fromImage = await _captureReaderContentSnapshot();
     if (fromImage == null) {
       final jumped = await _jumpToAdjacentReadableChapter(forward: forward);
@@ -1752,7 +1777,6 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       completionMode: completionMode,
     );
 
-    final targetChapterIndex = decision.targetChapterIndex!;
     await _jumpTo(
       targetChapterIndex,
       initialScrollRatio: decision.initialScrollRatio,
@@ -1807,7 +1831,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       return null;
     }
 
-    final motion = _pagedTextRenderer.motionSpecForStyle(resolvedStyle);
+    final motion = _crossChapterMotionSpecForStyle(resolvedStyle);
     _crossChapterSnapshotController.duration = motion.duration;
     _crossChapterSnapshotController.value = 0;
     if (motion.duration <= Duration.zero) {
@@ -1823,6 +1847,26 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       }
     }
     return null;
+  }
+
+  PagedAnimationMotionSpec _crossChapterMotionSpecForStyle(
+    ReaderPageAnimationStyle style,
+  ) {
+    final base = _pagedTextRenderer.motionSpecForStyle(style);
+    final duration = switch (style) {
+      ReaderPageAnimationStyle.cover => const Duration(milliseconds: 280),
+      ReaderPageAnimationStyle.translate ||
+      ReaderPageAnimationStyle.vertical => const Duration(milliseconds: 260),
+      ReaderPageAnimationStyle.fade => const Duration(milliseconds: 220),
+      ReaderPageAnimationStyle.curl => const Duration(milliseconds: 360),
+      ReaderPageAnimationStyle.paperCurl => base.duration,
+      ReaderPageAnimationStyle.none => Duration.zero,
+    };
+    return PagedAnimationMotionSpec(
+      duration: duration,
+      switchInCurve: base.switchInCurve,
+      switchOutCurve: base.switchOutCurve,
+    );
   }
 
   Future<ui.Image?> _captureReaderContentSnapshot() async {

@@ -41,6 +41,10 @@ private struct ExternalImportSpec {
   private var suppressObservedVolumeChange = false
   private var lastObservedOutputVolume = AVAudioSession.sharedInstance().outputVolume
   private var previousReaderBrightness: CGFloat?
+  private let externalImportCacheQueue = DispatchQueue(
+    label: "com.jiangyan.selune.external_import_cache",
+    qos: .userInitiated
+  )
 
   private lazy var localBookImportSpec = ExternalImportSpec(
     type: payloadTypeLocalBook,
@@ -143,7 +147,7 @@ private struct ExternalImportSpec {
           result(nil as Any?)
           return
         }
-        result(self.cacheExternalFileFromUri(arguments))
+        self.cacheExternalFileFromUriAsync(arguments, result: result)
       default:
         result(FlutterMethodNotImplemented)
       }
@@ -538,6 +542,24 @@ private struct ExternalImportSpec {
       "label": normalizedLabel,
       "mimeType": mimeType,
     ]
+  }
+
+  private func cacheExternalFileFromUriAsync(
+    _ arguments: [String: Any],
+    result: @escaping FlutterResult
+  ) {
+    externalImportCacheQueue.async { [weak self] in
+      guard let self else {
+        DispatchQueue.main.async {
+          result(nil as Any?)
+        }
+        return
+      }
+      let cachedFile = self.cacheExternalFileFromUri(arguments)
+      DispatchQueue.main.async {
+        result(cachedFile)
+      }
+    }
   }
 
   private func resolveExternalImportExtension(

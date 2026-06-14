@@ -119,7 +119,7 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
       _taskStatus = ImportExportTaskStatus(
         title: '正在导入本地图书',
         message: '正在准备处理 ${files.length} 个文件…',
-        detail: '图文内容较多时，解析和提取资源会耗时更久。',
+        detail: '导入后会先回到书架，图文解析和目录建立会在后台继续。',
         progress: 0,
         progressLabel: '0/$files.length',
       );
@@ -157,7 +157,7 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
             final currentStageText = switch (progress.stage) {
               LocalBookImportStage.preparing => '准备文件',
               LocalBookImportStage.persisted => '写入书架',
-              LocalBookImportStage.indexing => '建立目录',
+              LocalBookImportStage.indexing => '后台解析',
               LocalBookImportStage.completed => '完成导入',
             };
             setState(() {
@@ -223,12 +223,12 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
 
     setState(() {
       _isImporting = false;
-      _currentStageText = successCount > 0 ? '完成导入，可直接阅读' : null;
+      _currentStageText = successCount > 0 ? '完成导入，后台继续解析' : null;
       _taskStatus =
           successCount > 0
               ? ImportExportTaskStatus(
                 title: '本地图书已导入',
-                message: '目录已建立，可直接阅读。',
+                message: '后台会继续解析目录，完成后可直接阅读。',
                 detail: _currentImportLabel,
                 progress: 1,
                 progressLabel: '$_importCompleted/$_importTotal',

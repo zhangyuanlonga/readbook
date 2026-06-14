@@ -164,9 +164,20 @@ extension _ReaderPageNavigationExtension on _ReaderPageState {
     }
 
     final message = decision.message;
+    if (decision.rejectReason ==
+            ReaderNavigationCommandRejectReason.pageTurnBusy &&
+        _shouldSuppressReaderBusyMessage(command)) {
+      return;
+    }
     if (message != null && message.isNotEmpty) {
       _showMessage(message);
     }
+  }
+
+  bool _shouldSuppressReaderBusyMessage(ReaderNavigationCommand command) {
+    final turnGateDecision = _readerPageTurnGateDecisionForCommand(command);
+    return turnGateDecision.blockReason ==
+        ReaderPageTurnBlockReason.crossChapterSnapshotActive;
   }
 
   void _logReaderNavigationCommand({

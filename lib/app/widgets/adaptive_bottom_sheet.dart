@@ -177,6 +177,7 @@ class AdaptiveActionSurface extends StatelessWidget {
     return switch (effectiveMode) {
       AdaptiveActionSurfaceMode.mobileSheet => AdaptiveBottomSheet(
         maxWidth: maxWidth,
+        maxHeightFactor: maxHeightFactor,
         padding: padding,
         child: child,
       ),
@@ -190,42 +191,96 @@ class AdaptiveActionSurface extends StatelessWidget {
   }
 }
 
-class AdaptiveBottomSheet extends StatelessWidget {
+class AdaptiveBottomSheet extends StatefulWidget {
   const AdaptiveBottomSheet({
     super.key,
     required this.child,
     this.maxWidth,
+    this.maxHeightFactor = 0.82,
     this.padding,
   });
 
   final Widget child;
   final double? maxWidth;
+  final double maxHeightFactor;
   final EdgeInsetsGeometry? padding;
+
+  @override
+  State<AdaptiveBottomSheet> createState() => _AdaptiveBottomSheetState();
+}
+
+class _AdaptiveBottomSheetState extends State<AdaptiveBottomSheet> {
+  static const double _expandedHeightFactor = 0.96;
+  static const double _minimumHeightFactor = 0.32;
+
+  late double _heightFactor;
+
+  @override
+  void initState() {
+    super.initState();
+    _heightFactor = _normalizedInitialHeightFactor;
+  }
+
+  @override
+  void didUpdateWidget(covariant AdaptiveBottomSheet oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.maxHeightFactor != widget.maxHeightFactor) {
+      _heightFactor = _normalizedInitialHeightFactor;
+    }
+  }
+
+  double get _normalizedInitialHeightFactor {
+    return widget.maxHeightFactor
+        .clamp(_minimumHeightFactor, _expandedHeightFactor)
+        .toDouble();
+  }
 
   @override
   Widget build(BuildContext context) {
     final metrics = AppAdaptiveMetrics.of(context);
+    final viewportHeight = MediaQuery.sizeOf(context).height;
     final bottomSafeArea = MediaQuery.viewPaddingOf(context).bottom;
     final bottomPadding =
         metrics.sectionGap + (bottomSafeArea > 0 ? bottomSafeArea : 8);
     return AppFadeSlideTransition(
-      child: Align(
-        alignment: Alignment.bottomCenter,
-        heightFactor: 1,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: maxWidth ?? metrics.bottomSheetMaxWidth,
-          ),
-          child: Padding(
-            padding:
-                padding ??
-                EdgeInsets.fromLTRB(
-                  metrics.pagePadding,
-                  metrics.contentGap,
-                  metrics.pagePadding,
-                  bottomPadding,
-                ),
-            child: child,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onVerticalDragUpdate: (details) {
+          final delta = details.primaryDelta ?? 0;
+          if (delta == 0 || viewportHeight <= 0) {
+            return;
+          }
+          setState(() {
+            _heightFactor =
+                (_heightFactor - delta / viewportHeight)
+                    .clamp(_minimumHeightFactor, _expandedHeightFactor)
+                    .toDouble();
+          });
+        },
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          heightFactor: 1,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: widget.maxWidth ?? metrics.bottomSheetMaxWidth,
+              maxHeight: viewportHeight * _heightFactor,
+            ),
+            child: Padding(
+              padding:
+                  widget.padding ??
+                  EdgeInsets.fromLTRB(
+                    metrics.pagePadding,
+                    metrics.contentGap,
+                    metrics.pagePadding,
+                    bottomPadding,
+                  ),
+              child: CustomScrollView(
+                shrinkWrap: true,
+                primary: false,
+                physics: const ClampingScrollPhysics(),
+                slivers: [SliverToBoxAdapter(child: widget.child)],
+              ),
+            ),
           ),
         ),
       ),

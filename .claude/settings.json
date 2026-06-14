@@ -6,11 +6,15 @@
       "WebFetch(domain:docs.shorebird.dev)",
       "Read(//Users/zhangyuanlong/storage/FlutterProject/read-admin/internal/application/booksource/**)",
       "Read(//Users/zhangyuanlong/storage/FlutterProject/read-admin/**)",
-      "Bash(go build *)"
+      "Bash(go build *)",
+      "Bash(cat)",
+      "Read(//tmp/**)",
+      "Bash(cat > *)"
     ],
     "additionalDirectories": [
       "/Users/zhangyuanlong/storage/FlutterProject/read-admin/internal/application/booksource",
-      "/Users/zhangyuanlong/storage/FlutterProject/read-admin/internal/transport/http"
+      "/Users/zhangyuanlong/storage/FlutterProject/read-admin/internal/transport/http",
+      "/tmp"
     ]
   }
 }

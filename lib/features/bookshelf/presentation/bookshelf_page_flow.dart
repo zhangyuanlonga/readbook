@@ -2244,7 +2244,7 @@ class _BookshelfExternalImportSheetState
             : (_started ? 1 : 0);
     return <AppTaskStep>[
       AppTaskStep(label: '接收文件', active: current >= 0),
-      AppTaskStep(label: '解析导入', active: current >= 1),
+      AppTaskStep(label: '写入书架', active: current >= 1),
       AppTaskStep(label: '完成', active: current >= 2),
     ];
   }
@@ -2323,7 +2323,7 @@ class _BookshelfExternalImportSheetState
           final stageText = switch (progress.stage) {
             LocalBookImportStage.preparing => '准备文件',
             LocalBookImportStage.persisted => '写入书架',
-            LocalBookImportStage.indexing => '建立目录',
+            LocalBookImportStage.indexing => '后台解析',
             LocalBookImportStage.completed => '完成导入',
           };
           _updateStatus(
@@ -2347,12 +2347,12 @@ class _BookshelfExternalImportSheetState
         ImportExportTaskStatus(
           title: '外部图书已导入',
           message: cached.label,
-          detail: '目录已建立，可直接阅读。',
+          detail: '后台会继续解析目录，完成后可直接阅读。',
           progress: 1,
           result: ImportExportTaskResult.success,
         ),
       );
-      widget.onShowMessage('已导入 ${cached.label}，目录已建立，可直接阅读。');
+      widget.onShowMessage('已导入 ${cached.label}，后台会继续解析。');
     } on AppException catch (error) {
       ExternalImportDiagnostics.logImportFailed(
         ExternalImportPayloadType.localBook,
@@ -2466,7 +2466,7 @@ class _BookshelfImportLocalBooksSheetState
             : (_isImporting ? 1 : 0);
     return <AppTaskStep>[
       AppTaskStep(label: '添加文件', active: current >= 0),
-      AppTaskStep(label: '解析导入', active: current >= 1),
+      AppTaskStep(label: '写入书架', active: current >= 1),
       AppTaskStep(label: '完成', active: current >= 2),
     ];
   }
@@ -2491,7 +2491,7 @@ class _BookshelfImportLocalBooksSheetState
       _total = files.length;
       _completed = 0;
       _currentLabel = null;
-      _detail = '图文内容较多时，解析和提取资源会耗时更久。';
+      _detail = '导入后会先回到书架，图文解析和目录建立会在后台继续。';
       _lastError = null;
       _stage = LocalBookImportStage.preparing;
       _lastImportedResult = null;
@@ -2555,7 +2555,7 @@ class _BookshelfImportLocalBooksSheetState
         _stage = LocalBookImportStage.completed;
         _detail =
             summary.hasSuccess
-                ? '目录已建立，可直接阅读。'
+                ? '后台会继续解析目录，完成后可直接阅读。'
                 : (summary.lastError ?? '导入失败，请重试。');
         _lastError = summary.lastError;
       });
@@ -2564,7 +2564,7 @@ class _BookshelfImportLocalBooksSheetState
             ? LocalBookWorkflowPolicy.importSuccessMessage(
               successCount: summary.successCount,
               failureCount: summary.failureCount,
-              directoryReady: true,
+              directoryReady: false,
             )
             : (summary.lastError ?? '导入失败，请重试。'),
       );
@@ -2586,7 +2586,7 @@ class _BookshelfImportLocalBooksSheetState
     final stageText = switch (_stage) {
       LocalBookImportStage.preparing => '准备文件',
       LocalBookImportStage.persisted => '写入书架',
-      LocalBookImportStage.indexing => '建立目录',
+      LocalBookImportStage.indexing => '后台解析',
       LocalBookImportStage.completed => '完成导入',
       null => '请选择本地图书文件',
     };
@@ -2636,8 +2636,8 @@ class _BookshelfImportLocalBooksSheetState
                   const SizedBox(height: 12),
                   const Text(
                     '支持 TXT、EPUB、Markdown、HTML、PDF；MOBI、AZW、AZW3 为实验支持。\n\n'
-                    '图文内容较多时，系统会继续解析结构和图片资源。\n\n'
-                    '导入阶段：添加文件 -> 解析导入 -> 完成。',
+                    '选中文件后会优先写入书架，图文结构和图片资源会在后台继续解析。\n\n'
+                    '导入阶段：添加文件 -> 写入书架 -> 后台解析。',
                   ),
                   const SizedBox(height: 20),
                   Align(

@@ -5,6 +5,8 @@ import android.database.Cursor
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.OpenableColumns
 import android.view.WindowManager
 import androidx.core.view.WindowCompat
@@ -102,6 +104,7 @@ class MainActivity : FlutterActivity() {
     private var readerScreenBrightnessMethodChannel: MethodChannel? = null
     private var pendingInitialPayload: Any? = null
     private var interceptReaderVolumeKeys = false
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -136,7 +139,7 @@ class MainActivity : FlutterActivity() {
                         pendingInitialPayload = null
                     }
                     METHOD_CACHE_EXTERNAL_FILE_FROM_URI -> {
-                        result.success(cacheExternalFileFromCall(call.arguments))
+                        cacheExternalFileFromCallAsync(call.arguments, result)
                     }
 
                     else -> result.notImplemented()
@@ -437,6 +440,19 @@ class MainActivity : FlutterActivity() {
             "label" to if (label.lowercase(Locale.ROOT).endsWith(extension)) label else "$label$extension",
             "mimeType" to (mimeType ?: "")
         )
+    }
+
+    private fun cacheExternalFileFromCallAsync(arguments: Any?, result: MethodChannel.Result) {
+        Thread {
+            val cached = try {
+                cacheExternalFileFromCall(arguments)
+            } catch (_: Exception) {
+                null
+            }
+            mainHandler.post {
+                result.success(cached)
+            }
+        }.start()
     }
 
     private fun openExternalInputStream(uri: Uri): InputStream? {
