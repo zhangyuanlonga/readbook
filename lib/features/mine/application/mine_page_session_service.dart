@@ -136,6 +136,35 @@ class MinePageSessionService {
         normalizedUserId.isEmpty
             ? null
             : await _remoteAccessSnapshotService.load(normalizedUserId);
+
+    // 检测会员状态不一致：如果 session/profile 显示有会员，但缓存显示无会员，强制刷新
+    final sessionAccess = MembershipAccessResolver.resolve(
+      session: session,
+      profile: profile,
+      entitlement: null,
+    );
+    final cacheHasMembership = cachedRemoteSnapshot?.hasMembership ?? false;
+    final sessionHasMembership = sessionAccess.hasMembership;
+    final membershipMismatch = sessionHasMembership != cacheHasMembership;
+
+    if (membershipMismatch) {
+      _logger.info(
+        'Membership mismatch detected, forcing remote refresh',
+        context: {
+          'sessionMembership': sessionHasMembership,
+          'cacheMembership': cacheHasMembership,
+        },
+      );
+      // 清除旧缓存，强制远程刷新
+      if (normalizedUserId.isNotEmpty) {
+        await _remoteAccessSnapshotService.clear(normalizedUserId);
+      }
+      // 如果本次调用是 refreshRemote=false，递归调用一次 refreshRemote=true
+      if (!refreshRemote) {
+        return loadSession(refreshRemote: true);
+      }
+    }
+
     if (!refreshRemote) {
       final mergedSnapshot = _mergeMembershipAccess(
         cachedRemoteSnapshot,
@@ -382,17 +411,11 @@ class MinePageSessionService {
     required AuthSession session,
     UserProfile? profile,
   }) {
-    if (snapshot == null) {
-      return true;
-    }
-    if (snapshot.hasMembership) {
-      return false;
-    }
-    final localAccess = MembershipAccessResolver.resolve(
-      session: session,
-      profile: profile,
-    );
-    return localAccess.hasMembership;
+    // 只在没有远程快照时才使用本地 fallback
+    // 如果有远程快照（即使是 hasMembership=false），也应该信任远程结果
+    // 修复：退出登录后，本地 session.profile 可能还残留旧账号的会员信息，
+    // 导致切换账号时显示错误的会员状态
+    return snapshot == null;
   }
 
   RemoteAccessSnapshot _defaultMembershipSnapshot() {

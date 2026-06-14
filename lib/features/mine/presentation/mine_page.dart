@@ -153,7 +153,10 @@ class _MinePageState extends ConsumerState<MinePage> {
     _pageFlowCoordinator.initialize(onAuthEvent: _handleAuthEvent);
     _snapshotRevisionSubscription = ref.listenManual<int>(
       mineRemoteAccessSnapshotRevisionProvider,
-      (_, __) => unawaited(_refreshMine()),
+      (_, __) {
+        // 会员中心更新缓存后，立即同步刷新本地状态，避免显示旧的会员状态
+        unawaited(_reloadSession(showLoading: false, refreshRemote: false));
+      },
     );
     _applyPrimedSession();
     _loadSession();
@@ -226,12 +229,14 @@ class _MinePageState extends ConsumerState<MinePage> {
   }
 
   Future<void> _loadSession() async {
+    // 先读缓存展示首屏
     await _reloadSession(showLoading: true, refreshRemote: false);
     if (!mounted || _userId == null) {
       return;
     }
     // 登录页返回、资料页返回都可能触发普通加载；先用缓存保障首屏，再补远端刷新，
     // 避免新账号或刚开通会员继续命中旧的本地权益快照。
+    // 远端刷新完成后，会通过 _reloadSession 的逻辑自动更新 UI 状态
     unawaited(_reloadSession(showLoading: false, refreshRemote: true));
   }
 
@@ -272,6 +277,8 @@ class _MinePageState extends ConsumerState<MinePage> {
     if (snapshot.session == null) {
       return;
     }
+    // 如果缓存过期或者会员信息不完整，触发远程刷新
+    // 注意：这里只在非远程刷新模式下检查，避免无限递归
     final shouldRefreshRemote =
         !refreshRemote &&
         (snapshot.shouldRefreshRemoteAccess ||
@@ -283,12 +290,15 @@ class _MinePageState extends ConsumerState<MinePage> {
 
   Future<void> _handleProfileCardTap() async {
     if (_userId == null) {
+      // 未登录：跳转到登录页
+      // 登录成功后会触发 AuthEventType.loggedIn 事件，_handleAuthEvent 会自动刷新
       await context.push('/auth');
-      await _loadSession();
       return;
     }
+    // 已登录：跳转到资料页
+    // 资料页可能修改了用户信息（如头像、昵称），返回后需要刷新
     await context.push('/profile');
-    await _loadSession();
+    await _refreshMine();
   }
 
   Future<void> _handleProfileActionButtonTap() async {
@@ -364,13 +374,11 @@ class _MinePageState extends ConsumerState<MinePage> {
     });
     try {
       await _authService.logout();
+      // logout() 会触发 AuthEventType.loggedOut 事件
+      // _handleAuthEvent 会处理状态清理，这里只显示消息
       if (!mounted) {
         return;
       }
-      ++_sessionReloadVersion;
-      setState(() {
-        _resetAccountScopedState();
-      });
       _showMessage('已退出登录。');
     } catch (_) {
       if (mounted) {
@@ -387,8 +395,9 @@ class _MinePageState extends ConsumerState<MinePage> {
 
   Future<void> _handleAvatarTap(BuildContext context) async {
     if (_userId == null) {
+      // 未登录：跳转到登录页
+      // 登录成功后会触发 AuthEventType.loggedIn 事件，_handleAuthEvent 会自动刷新
       await context.push('/auth');
-      await _loadSession();
       return;
     }
     final action = await showAdaptiveActionSurface<_ProfileAvatarAction>(
@@ -611,12 +620,16 @@ class _MinePageState extends ConsumerState<MinePage> {
   void _handleAuthEvent(AuthEvent event) {
     switch (event.type) {
       case AuthEventType.loggedIn:
+        // 用户登录成功，递增版本号防止旧的加载覆盖新账号数据
         ++_sessionReloadVersion;
         if (mounted) {
+          // 先清空旧账号的状态，避免显示旧账号的会员信息
+          // 重要：必须清空，否则会员A退出后登录普通账号B，会显示A的会员状态
           setState(() {
             _resetAccountScopedState(remoteAccessResolved: false);
           });
         }
+        // 触发远程刷新，加载新账号的会员信息
         unawaited(_reloadSession(showLoading: false, refreshRemote: true));
         break;
       case AuthEventType.loggedOut:

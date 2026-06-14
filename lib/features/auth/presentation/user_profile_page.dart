@@ -45,6 +45,7 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
   bool _isLoadingProfile = false;
   bool _isLoggingOut = false;
   bool _isSavingProfile = false;
+  bool _isClearingCache = false;
   int _sessionLoadVersion = 0;
 
   @override
@@ -532,7 +533,7 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
               ),
               const SizedBox(height: 6),
               Text(
-                '这里保留刷新和退出登录，后续可以继续扩展安全设置、设备管理等个人中心能力。',
+                '刷新资料可以同步最新的账号信息，清除缓存可以解决会员状态显示异常的问题。',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: colorScheme.onSurfaceVariant,
                   height: 1.45,
@@ -550,6 +551,18 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
                     onPressed: _isLoadingProfile ? null : _refreshPage,
                     icon: const Icon(Icons.refresh_rounded),
                     label: const Text('刷新资料'),
+                  );
+                  final clearCacheButton = OutlinedButton.icon(
+                    onPressed: _isClearingCache ? null : _handleClearCache,
+                    icon:
+                        _isClearingCache
+                            ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                            : const Icon(Icons.cleaning_services_outlined),
+                    label: Text(_isClearingCache ? '清除中...' : '清除缓存'),
                   );
                   final logoutButton = FilledButton.icon(
                     onPressed: _isLoggingOut ? null : _handleLogout,
@@ -576,15 +589,26 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
                       children: [
                         refreshButton,
                         SizedBox(height: metrics.contentGap),
+                        clearCacheButton,
+                        SizedBox(height: metrics.contentGap),
                         logoutButton,
                       ],
                     );
                   }
-                  return Row(
+                  return Column(
                     children: [
-                      Expanded(child: refreshButton),
-                      SizedBox(width: metrics.contentGap),
-                      Expanded(child: logoutButton),
+                      Row(
+                        children: [
+                          Expanded(child: refreshButton),
+                          SizedBox(width: metrics.contentGap),
+                          Expanded(child: clearCacheButton),
+                        ],
+                      ),
+                      SizedBox(height: metrics.contentGap),
+                      SizedBox(
+                        width: double.infinity,
+                        child: logoutButton,
+                      ),
                     ],
                   );
                 },
@@ -1174,6 +1198,86 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
       if (mounted) {
         setState(() {
           _isLoggingOut = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleClearCache() async {
+    final session = _session;
+    if (session == null) {
+      return;
+    }
+    final confirmed = await showAdaptiveActionSurface<bool>(
+      context: context,
+      maxWidth: 420,
+      builder: (surfaceContext) {
+        final colorScheme = Theme.of(surfaceContext).colorScheme;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '清除缓存',
+              style: Theme.of(
+                surfaceContext,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              '清除会员状态缓存并重新从服务器获取最新数据。如果你刚开通会员但界面未更新，可以尝试此操作。',
+              style: Theme.of(surfaceContext).textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(surfaceContext).pop(false),
+                  child: const Text('取消'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: () => Navigator.of(surfaceContext).pop(true),
+                  child: const Text('清除'),
+                ),
+              ],
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    setState(() {
+      _isClearingCache = true;
+    });
+
+    try {
+      final userId = session.userId?.trim() ?? '';
+      if (userId.isNotEmpty) {
+        await _minePageSessionService.clearUserScopedCache(userId);
+      }
+      if (!mounted) {
+        return;
+      }
+      // 清除缓存后立即刷新
+      await _refreshPage();
+      _showMessage('缓存已清除，会员状态已刷新', tone: AppFeedbackTone.success);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage('清除缓存失败，请稍后再试。', tone: AppFeedbackTone.error);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isClearingCache = false;
         });
       }
     }
