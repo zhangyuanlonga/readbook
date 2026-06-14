@@ -8,6 +8,7 @@ import '../../../domain/repositories/local_book_repository.dart';
 import '../../book/application/book_detail_service.dart';
 import '../../reader/application/reader_chapter_navigation.dart';
 import '../../reader/application/reader_entry_route_resolver.dart';
+import '../../reader/application/local/local_book_preview_service.dart';
 import '../../reader/application/local/local_reader_entry_guard_service.dart';
 import '../../reader/application/reader_preferences_service.dart';
 import '../../reader/application/local/local_book_workflow_policy.dart';
@@ -189,8 +190,7 @@ class BookshelfReaderOpenService {
           return plan;
         }
 
-        if (localBook.format == LocalBookFormat.txt &&
-            localBook.indexStatus != LocalBookIndexStatus.ready) {
+        if (LocalBookPreviewService.canOpenBootstrapPreview(localBook)) {
           plan = BookshelfReaderOpenPlan(
             action: BookshelfReaderOpenAction.openReader,
             kind: BookshelfReaderOpenKind.readerFallback,

@@ -139,9 +139,16 @@ class LocalBookStorageService {
       }
 
       if (format != LocalBookFormat.txt) {
-        final parentDir = targetFile.parent;
-        if (!await parentDir.exists()) {
-          await parentDir.create(recursive: true);
+        await _ensureParentDir(targetFile);
+        final movedStat = await _moveEphemeralSourceIntoStorageIfPossible(
+          sourceFile: effectiveSourceFile,
+          targetFile: targetFile,
+          sourcePath: normalizedSourcePath,
+          bookId: bookId,
+          format: format,
+        );
+        if (movedStat != null) {
+          return LocalBookStorageWriteResult(storageStat: movedStat);
         }
         await effectiveSourceFile.copy(targetFile.path);
         final copiedStat = await targetFile.stat();
@@ -225,6 +232,43 @@ class LocalBookStorageService {
     await _ensureParentDir(targetFile);
     await sourceFile.copy(targetFile.path);
     return targetFile.stat();
+  }
+
+  Future<FileStat?> _moveEphemeralSourceIntoStorageIfPossible({
+    required File sourceFile,
+    required File targetFile,
+    required String sourcePath,
+    required String bookId,
+    required LocalBookFormat format,
+  }) async {
+    if (!_isEphemeralSourcePath(sourcePath)) {
+      return null;
+    }
+    try {
+      final movedFile = await sourceFile.rename(targetFile.path);
+      final movedStat = await movedFile.stat();
+      _logger.info(
+        'Moved cached local book into managed storage',
+        context: <String, Object?>{
+          'bookId': bookId,
+          'format': format.name,
+          'size': movedStat.size,
+        },
+      );
+      return movedStat;
+    } on FileSystemException catch (error) {
+      _logger.debug(
+        'Move cached local book failed, fallback to copy',
+        context: <String, Object?>{
+          'bookId': bookId,
+          'format': format.name,
+          'sourcePath': sourcePath,
+          'targetPath': targetFile.path,
+          'error': error.toString(),
+        },
+      );
+      return null;
+    }
   }
 
   Future<String?> _resolveStoredTxtCharset({

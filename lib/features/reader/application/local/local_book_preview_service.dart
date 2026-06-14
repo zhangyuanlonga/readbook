@@ -24,6 +24,11 @@ class LocalBookPreviewService {
   final LocalTextEncodingDetector _textEncodingDetector;
   static const int _txtBootstrapReadBytes = 64 * 1024;
 
+  static bool canOpenBootstrapPreview(LocalBook book) {
+    return book.supportsBootstrapPreview &&
+        book.indexStatus != LocalBookIndexStatus.ready;
+  }
+
   Future<LocalChapter> loadTxtBootstrapPreview({required String bookId}) async {
     final normalizedBookId = bookId.trim();
     if (normalizedBookId.isEmpty) {

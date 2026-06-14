@@ -51,6 +51,10 @@ class BookshelfExternalImportCoordinator {
     return _externalImportBridge.cacheExternalFileFromUri(payload);
   }
 
+  Future<List<IncomingExternalImportPayload>> pickLocalBookFiles() {
+    return _externalImportBridge.pickLocalBookFiles();
+  }
+
   Future<void> dispose() async {
     await _payloadSubscription?.cancel();
     _payloadSubscription = null;

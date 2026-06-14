@@ -125,6 +125,50 @@ void main() {
         expect(result.convertedToUtf8, isFalse);
       },
     );
+
+    test('moves cached non-txt import into managed storage', () async {
+      final cacheDir = Directory('${tempDir.path}/cache/external_imports');
+      await cacheDir.create(recursive: true);
+      final sourceFile = File('${cacheDir.path}/cached_book.epub');
+      final bytes = List<int>.generate(128, (index) => index % 255);
+      await sourceFile.writeAsBytes(bytes, flush: true);
+      final targetFile = File('${tempDir.path}/local_books/book.epub');
+
+      final result = await storageService.copyIntoStorage(
+        sourceFile: sourceFile,
+        targetFile: targetFile,
+        format: LocalBookFormat.epub,
+        sourcePath: sourceFile.path,
+        bookId: 'local_storage_epub_move',
+      );
+
+      expect(await sourceFile.exists(), isFalse);
+      expect(await targetFile.readAsBytes(), bytes);
+      expect(result.storageStat.size, bytes.length);
+    });
+
+    test(
+      'copies non-ephemeral non-txt import and preserves source file',
+      () async {
+        final sourceFile = File('${tempDir.path}/original_book.epub');
+        final bytes = List<int>.generate(128, (index) => 255 - index);
+        await sourceFile.writeAsBytes(bytes, flush: true);
+        final targetFile = File('${tempDir.path}/local_books/copied_book.epub');
+
+        final result = await storageService.copyIntoStorage(
+          sourceFile: sourceFile,
+          targetFile: targetFile,
+          format: LocalBookFormat.epub,
+          sourcePath: sourceFile.path,
+          bookId: 'local_storage_epub_copy',
+        );
+
+        expect(await sourceFile.exists(), isTrue);
+        expect(await sourceFile.readAsBytes(), bytes);
+        expect(await targetFile.readAsBytes(), bytes);
+        expect(result.storageStat.size, bytes.length);
+      },
+    );
   });
 }
 

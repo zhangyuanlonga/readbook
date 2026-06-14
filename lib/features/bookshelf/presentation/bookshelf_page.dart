@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:circular_theme_reveal/circular_theme_reveal.dart';
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';

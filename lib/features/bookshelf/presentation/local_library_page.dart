@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -18,6 +19,8 @@ import '../../../domain/repositories/local_book_repository.dart';
 import '../../reader/application/local/local_book_index_service.dart';
 import '../../reader/application/local/local_book_workflow_policy.dart';
 import '../../source/application/external_import_catalog.dart';
+import '../../source/application/external_import_diagnostics.dart';
+import '../../source/application/external_source_import_bridge.dart';
 import '../application/bookshelf_reader_open_service.dart';
 import '../application/local_book_import_service.dart';
 import '../providers.dart';
@@ -34,17 +37,15 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
   late final BookshelfReaderOpenService _readerOpenService;
   late final LocalBookRepository _localBookRepository;
   late final LocalBookIndexService _localBookIndexService;
+  late final ExternalImportBridge _externalImportBridge;
   StreamSubscription<LocalBookIndexEvent>? _localIndexEventSubscription;
 
   bool _isImporting = false;
-  int _importTotal = 0;
-  int _importCompleted = 0;
   String? _currentImportLabel;
   String? _lastErrorText;
   String? _currentStageText;
   LocalBookImportResult? _lastImportedResult;
   ImportExportTaskStatus? _taskStatus;
-  LocalBookImportStage? _lastProgressStage;
   PersistentBottomSheetController? _taskSheetController;
   String? _reindexingBookId;
   String? _reindexStatusText;
@@ -57,6 +58,7 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
     _readerOpenService = ref.read(bookshelfReaderOpenServiceProvider);
     _localBookRepository = ref.read(bookshelfLocalBookRepositoryProvider);
     _localBookIndexService = ref.read(bookshelfLocalBookIndexServiceProvider);
+    _externalImportBridge = ExternalImportBridge.instance;
     _localIndexEventSubscription = LocalBookIndexService.watchEvents.listen(
       _handleLocalIndexEvent,
     );
@@ -77,7 +79,9 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
       _reindexStatusText =
           event.status == LocalBookIndexStatus.ready
               ? '重索引完成，共 ${event.chapterCount} 章'
-              : _localIndexStatusLabel(event.status);
+              : (event.message?.trim().isNotEmpty == true
+                  ? event.message!.trim()
+                  : _localIndexStatusLabel(event.status));
       if (event.status == LocalBookIndexStatus.ready ||
           event.status == LocalBookIndexStatus.failed) {
         _reindexingBookId = null;
@@ -96,6 +100,11 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
       return;
     }
 
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      await _pickAndImportAndroidFiles();
+      return;
+    }
+
     final files = await openFiles(
       acceptedTypeGroups: const <XTypeGroup>[
         ExternalImportCatalog.localBookTypeGroup,
@@ -109,13 +118,10 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
 
     setState(() {
       _isImporting = true;
-      _importTotal = files.length;
-      _importCompleted = 0;
       _currentImportLabel = null;
       _currentStageText = '正在准备导入';
       _lastErrorText = null;
       _lastImportedResult = null;
-      _lastProgressStage = null;
       _taskStatus = ImportExportTaskStatus(
         title: '正在导入本地图书',
         message: '正在准备处理 ${files.length} 个文件…',
@@ -126,96 +132,50 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
     });
     _showOrRefreshTaskSheet();
 
-    var successCount = 0;
-    final failedBooks = <String>[];
-    for (final file in files) {
-      final filePath = file.path.trim();
-      if (filePath.isEmpty) {
-        continue;
-      }
-
-      try {
-        final displayName =
-            file.name.trim().isEmpty
-                ? Uri.file(filePath).pathSegments.last
-                : file.name.trim();
-        setState(() {
-          _currentImportLabel =
-              LocalBookImportService.normalizeImportedDisplayName(displayName);
-        });
-        final result = await _localBookImportService.importFromFile(
+    final summary = await _localBookImportService.importFromFiles(
+      candidates: files.map((file) {
+        final filePath = file.path.trim();
+        final fallbackName =
+            filePath.isEmpty
+                ? file.name.trim()
+                : Uri.file(filePath).pathSegments.last;
+        return LocalBookImportBatchCandidate(
           filePath: filePath,
-          displayName: displayName,
-          waitForIndexing:
-              LocalBookWorkflowPolicy.directImportShouldWaitForIndexing,
-          onProgress: (progress) {
-            if (!mounted) {
-              return;
-            }
-            final nextStage = progress.stage;
-            final shouldUpdateStage = _lastProgressStage != nextStage;
-            final currentStageText = switch (progress.stage) {
-              LocalBookImportStage.preparing => '准备文件',
-              LocalBookImportStage.persisted => '写入书架',
-              LocalBookImportStage.indexing => '后台解析',
-              LocalBookImportStage.completed => '完成导入',
-            };
-            setState(() {
-              _lastProgressStage = nextStage;
-              _currentStageText = currentStageText;
-              if (shouldUpdateStage || _taskStatus == null) {
-                _taskStatus = ImportExportTaskStatus(
-                  title: '正在导入本地图书',
-                  message:
-                      '${progress.displayName} · ${_currentStageText ?? '处理中'}',
-                  detail: progress.detail,
-                  progress:
-                      _importTotal <= 0
-                          ? null
-                          : _importCompleted / _importTotal,
-                  progressLabel:
-                      _importTotal <= 0
-                          ? null
-                          : '$_importCompleted/$_importTotal',
-                );
-              }
-            });
-            _showOrRefreshTaskSheet();
-          },
+          displayName:
+              file.name.trim().isEmpty ? fallbackName : file.name.trim(),
         );
-        _lastImportedResult = result;
-        successCount += 1;
-      } on AppException catch (error) {
-        failedBooks.add(file.name.trim().isEmpty ? filePath : file.name.trim());
-        _lastErrorText = error.briefMessage;
-      } catch (error) {
-        failedBooks.add(file.name.trim().isEmpty ? filePath : file.name.trim());
-        _lastErrorText = '导入失败：$error';
-      } finally {
-        if (mounted) {
-          setState(() {
-            _importCompleted += 1;
-            if (_isImporting) {
-              _taskStatus = ImportExportTaskStatus(
-                title: '正在导入本地图书',
-                message:
-                    _currentImportLabel?.trim().isNotEmpty == true
-                        ? '${_currentImportLabel!} · ${_currentStageText ?? '处理中'}'
-                        : (_currentStageText ?? '处理中'),
-                detail: _taskStatus?.detail,
-                progress:
-                    _importTotal <= 0 ? null : _importCompleted / _importTotal,
-                progressLabel:
-                    _importTotal <= 0
-                        ? null
-                        : '$_importCompleted/$_importTotal',
-              );
-            }
-          });
-          _showOrRefreshTaskSheet();
+      }),
+      waitForIndexing:
+          LocalBookWorkflowPolicy.directImportShouldWaitForIndexing,
+      onProgress: (progress) {
+        if (!mounted) {
+          return;
         }
-      }
-    }
+        final importProgress = progress.importProgress;
+        final stageText =
+            importProgress == null
+                ? _batchImportStageText(progress.stage)
+                : _importStageText(importProgress.stage);
+        setState(() {
+          _currentImportLabel = progress.currentFileLabel;
+          _currentStageText = stageText;
+          _taskStatus = ImportExportTaskStatus(
+            title: '正在导入本地图书',
+            message:
+                _currentImportLabel?.trim().isNotEmpty == true
+                    ? '${_currentImportLabel!} · $stageText'
+                    : stageText,
+            detail: progress.detail,
+            progress: progress.progress,
+            progressLabel:
+                progress.totalCount <= 0
+                    ? null
+                    : '${progress.completedCount}/${progress.totalCount}',
+          );
+        });
+        _showOrRefreshTaskSheet();
+      },
+    );
 
     if (!mounted) {
       return;
@@ -223,33 +183,229 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
 
     setState(() {
       _isImporting = false;
-      _currentStageText = successCount > 0 ? '完成导入，后台继续解析' : null;
-      _taskStatus =
-          successCount > 0
-              ? ImportExportTaskStatus(
-                title: '本地图书已导入',
-                message: '后台会继续解析目录，完成后可直接阅读。',
-                detail: _currentImportLabel,
-                progress: 1,
-                progressLabel: '$_importCompleted/$_importTotal',
-                result: ImportExportTaskResult.success,
-              )
-              : null;
+      _lastImportedResult = summary.lastResult;
+      _lastErrorText = summary.lastError;
+      _currentStageText = summary.hasSuccess ? '完成导入，后台继续解析' : null;
+      _taskStatus = ImportExportTaskStatus(
+        title: summary.hasSuccess ? '本地图书已导入' : '导入本地图书失败',
+        message:
+            summary.hasSuccess
+                ? '后台会继续解析目录，完成后可直接阅读。'
+                : (summary.lastError ?? '导入失败，请重试。'),
+        detail: _currentImportLabel,
+        progress: summary.totalCount <= 0 ? null : 1,
+        progressLabel:
+            summary.totalCount <= 0
+                ? null
+                : '${summary.completedCount}/${summary.totalCount}',
+        result:
+            summary.hasSuccess
+                ? ImportExportTaskResult.success
+                : ImportExportTaskResult.failure,
+      );
     });
     _showOrRefreshTaskSheet();
 
-    if (successCount > 0) {
-      final failureCount = failedBooks.length;
+    if (summary.hasSuccess) {
       _showMessage(
         LocalBookWorkflowPolicy.localLibraryImportSuccessMessage(
-          successCount: successCount,
-          failureCount: failureCount,
+          successCount: summary.successCount,
+          failureCount: summary.failureCount + summary.skippedCount,
         ),
       );
       return;
     }
 
     _showMessage(_lastErrorText ?? '导入失败，请重试。');
+  }
+
+  Future<void> _pickAndImportAndroidFiles() async {
+    final payloads = await _externalImportBridge.pickLocalBookFiles();
+    if (!mounted || payloads.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _isImporting = true;
+      _currentImportLabel = null;
+      _currentStageText = '正在读取文件';
+      _lastErrorText = null;
+      _lastImportedResult = null;
+      _taskStatus = ImportExportTaskStatus(
+        title: '正在导入本地图书',
+        message: '已选择 ${payloads.length} 个文件，正在回到 App 内处理…',
+        detail: '后续复制、写入书架和目录解析都会在这里显示进度。',
+        progress: 0,
+        progressLabel: '0/${payloads.length}',
+      );
+    });
+    _showOrRefreshTaskSheet();
+
+    final summary = await _importAndroidPayloads(payloads);
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _isImporting = false;
+      _lastImportedResult = summary.lastResult;
+      _lastErrorText = summary.lastError;
+      _currentStageText = summary.hasSuccess ? '完成导入，后台继续解析' : null;
+      _taskStatus = ImportExportTaskStatus(
+        title: summary.hasSuccess ? '本地图书已导入' : '导入本地图书失败',
+        message:
+            summary.hasSuccess
+                ? '后台会继续解析目录，完成后可直接阅读。'
+                : (summary.lastError ?? '导入失败，请重试。'),
+        detail: _currentImportLabel,
+        progress: summary.totalCount <= 0 ? null : 1,
+        progressLabel:
+            summary.totalCount <= 0
+                ? null
+                : '${summary.completedCount}/${summary.totalCount}',
+        result:
+            summary.hasSuccess
+                ? ImportExportTaskResult.success
+                : ImportExportTaskResult.failure,
+      );
+    });
+    _showOrRefreshTaskSheet();
+
+    if (summary.hasSuccess) {
+      _showMessage(
+        LocalBookWorkflowPolicy.localLibraryImportSuccessMessage(
+          successCount: summary.successCount,
+          failureCount: summary.failureCount + summary.skippedCount,
+        ),
+      );
+      return;
+    }
+
+    _showMessage(_lastErrorText ?? '导入失败，请重试。');
+  }
+
+  Future<LocalBookImportBatchSummary> _importAndroidPayloads(
+    List<IncomingExternalImportPayload> payloads,
+  ) async {
+    var successCount = 0;
+    var failureCount = 0;
+    var skippedCount = 0;
+    String? lastError;
+    LocalBookImportResult? lastResult;
+
+    for (var index = 0; index < payloads.length; index += 1) {
+      final payload = payloads[index];
+      if (!mounted) {
+        break;
+      }
+      setState(() {
+        _currentImportLabel = payload.label;
+        _currentStageText = '读取文件';
+        _taskStatus = ImportExportTaskStatus(
+          title: '正在导入本地图书',
+          message: '${payload.label} · 读取文件',
+          detail: '正在从系统文件提供方读取，随后写入书架。',
+          progress: payloads.isEmpty ? null : index / payloads.length,
+          progressLabel: '$index/${payloads.length}',
+        );
+      });
+      _showOrRefreshTaskSheet();
+
+      if (!ExternalImportCatalog.supportsFileMetadata(
+        ExternalImportPayloadType.localBook,
+        label: payload.label,
+        mimeType: payload.mimeType,
+      )) {
+        skippedCount += 1;
+        lastError = ExternalImportCatalog.unsupportedFileMessage(
+          ExternalImportPayloadType.localBook,
+          payload.label,
+        );
+        continue;
+      }
+
+      final cached = await _externalImportBridge.cacheExternalFileFromUri(
+        payload,
+      );
+      if (cached == null) {
+        skippedCount += 1;
+        lastError = ExternalImportDiagnostics.readFailedMessage(
+          payload.type,
+          payload.label,
+        );
+        continue;
+      }
+
+      try {
+        final result = await _localBookImportService.importFromFile(
+          filePath: cached.path,
+          displayName: cached.label,
+          mimeType: cached.mimeType,
+          waitForIndexing:
+              LocalBookWorkflowPolicy.directImportShouldWaitForIndexing,
+          onProgress: (progress) {
+            if (!mounted) {
+              return;
+            }
+            final stageText = _importStageText(progress.stage);
+            setState(() {
+              _currentImportLabel = progress.displayName;
+              _currentStageText = stageText;
+              _taskStatus = ImportExportTaskStatus(
+                title: '正在导入本地图书',
+                message: '${progress.displayName} · $stageText',
+                detail: progress.detail,
+                progress:
+                    payloads.isEmpty
+                        ? null
+                        : (successCount + failureCount + skippedCount) /
+                            payloads.length,
+                progressLabel:
+                    '${successCount + failureCount + skippedCount}/${payloads.length}',
+              );
+            });
+            _showOrRefreshTaskSheet();
+          },
+        );
+        successCount += 1;
+        lastResult = result;
+      } on AppException catch (error) {
+        failureCount += 1;
+        lastError = error.briefMessage;
+      } catch (error) {
+        failureCount += 1;
+        lastError = '导入失败：$error';
+      }
+    }
+
+    return LocalBookImportBatchSummary(
+      successCount: successCount,
+      failureCount: failureCount,
+      skippedCount: skippedCount,
+      totalCount: payloads.length,
+      cancelled: false,
+      lastError: lastError,
+      lastResult: lastResult,
+    );
+  }
+
+  String _batchImportStageText(LocalBookImportBatchStage stage) {
+    return switch (stage) {
+      LocalBookImportBatchStage.validating => '校验文件',
+      LocalBookImportBatchStage.queued => '排队导入',
+      LocalBookImportBatchStage.importing => '写入书架',
+      LocalBookImportBatchStage.completed => '完成导入',
+      LocalBookImportBatchStage.cancelled => '已取消',
+    };
+  }
+
+  String _importStageText(LocalBookImportStage stage) {
+    return switch (stage) {
+      LocalBookImportStage.preparing => '准备文件',
+      LocalBookImportStage.persisted => '写入书架',
+      LocalBookImportStage.indexing => '后台解析',
+      LocalBookImportStage.completed => '完成导入',
+    };
   }
 
   void _showMessage(String text) {

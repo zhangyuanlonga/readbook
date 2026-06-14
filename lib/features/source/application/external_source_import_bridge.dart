@@ -57,6 +57,7 @@ class ExternalImportBridge {
       'getInitialImportPayload';
   static const String _methodCacheExternalFileFromUri =
       'cacheExternalFileFromUri';
+  static const String _methodPickLocalBookFiles = 'pickLocalBookFiles';
 
   final StreamController<IncomingExternalImportPayload> _payloadController =
       StreamController<IncomingExternalImportPayload>.broadcast();
@@ -156,6 +157,21 @@ class ExternalImportBridge {
       return null;
     } on PlatformException {
       return null;
+    }
+  }
+
+  Future<List<IncomingExternalImportPayload>> pickLocalBookFiles() async {
+    if (kIsWeb) {
+      return const <IncomingExternalImportPayload>[];
+    }
+    try {
+      return _parsePayloads(
+        await _channel.invokeMethod<dynamic>(_methodPickLocalBookFiles),
+      );
+    } on MissingPluginException {
+      return const <IncomingExternalImportPayload>[];
+    } on PlatformException {
+      return const <IncomingExternalImportPayload>[];
     }
   }
 

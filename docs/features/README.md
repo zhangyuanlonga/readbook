@@ -79,10 +79,11 @@
 **文档路径**: `docs/features/bookshelf/`
 
 **文档**:
-- 📖 [场景分析](./bookshelf/local_book_import_ux_optimization_2026_06_14.md) - 10个场景
+- 📖 [场景分析](./local_book_import_ux_optimization_2026_06_14.md) - 10个场景
 - 🔄 [业务流程](./bookshelf/local_book_import_business_flow.md) - 5个流程
 - 💡 [优化方案](./bookshelf/local_book_import_optimization_plan.md) - 7个方案
 - 🔧 [技术实现](./bookshelf/local_book_import_technical_implementation.md) - 技术方案
+- ✅ [阶段执行清单](./bookshelf/local_book_import_phased_execution_checklist_2026_06_14.md) - 成熟库优先版
 
 **关键成果**:
 - ✅ 体验评分: 6.75/10

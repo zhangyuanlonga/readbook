@@ -1324,6 +1324,7 @@ extension on _BookshelfPageState {
       builder: (sheetContext) {
         return _BookshelfImportLocalBooksSheet(
           flowCoordinator: _flowCoordinator,
+          externalImportCoordinator: _externalImportCoordinator,
           importService: _localBookImportService,
           onReload: () => _loadBookshelf(force: true),
           onOpenReader: (book, localBook) async {
@@ -2288,9 +2289,10 @@ class _BookshelfExternalImportSheetState
 
     final tempFile = File(cached.path);
     try {
-      if (!ExternalImportCatalog.supportsFileLabel(
+      if (!ExternalImportCatalog.supportsFileMetadata(
         ExternalImportPayloadType.localBook,
-        cached.label,
+        label: cached.label,
+        mimeType: cached.mimeType,
       )) {
         ExternalImportDiagnostics.logImportUnsupported(
           ExternalImportPayloadType.localBook,
@@ -2314,6 +2316,7 @@ class _BookshelfExternalImportSheetState
       await widget.importService.importFromFile(
         filePath: cached.path,
         displayName: cached.label,
+        mimeType: cached.mimeType,
         waitForIndexing:
             LocalBookWorkflowPolicy.externalImportShouldWaitForIndexing,
         onProgress: (progress) {
@@ -2428,6 +2431,7 @@ class _BookshelfExternalImportSheetState
 class _BookshelfImportLocalBooksSheet extends StatefulWidget {
   const _BookshelfImportLocalBooksSheet({
     required this.flowCoordinator,
+    required this.externalImportCoordinator,
     required this.importService,
     required this.onReload,
     required this.onOpenReader,
@@ -2436,6 +2440,7 @@ class _BookshelfImportLocalBooksSheet extends StatefulWidget {
   });
 
   final BookshelfFlowCoordinator flowCoordinator;
+  final BookshelfExternalImportCoordinator externalImportCoordinator;
   final LocalBookImportService importService;
   final Future<void> Function() onReload;
   final Future<void> Function(BookshelfBook book, LocalBook localBook)
@@ -2476,6 +2481,11 @@ class _BookshelfImportLocalBooksSheetState
       return;
     }
 
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      await _pickAndImportAndroidFiles();
+      return;
+    }
+
     final files = await openFiles(
       acceptedTypeGroups: const <XTypeGroup>[
         ExternalImportCatalog.localBookTypeGroup,
@@ -2498,51 +2508,34 @@ class _BookshelfImportLocalBooksSheetState
     });
 
     try {
-      final summary = await widget.flowCoordinator.importLocalBooks(
-        candidates: files.map(
-          (file) => BookshelfImportCandidate(
+      final summary = await widget.importService.importFromFiles(
+        candidates: files.map((file) {
+          final filePath = file.path.trim();
+          return LocalBookImportBatchCandidate(
             filePath: file.path.trim(),
             displayName:
                 file.name.trim().isEmpty
-                    ? p.basename(file.path.trim())
+                    ? p.basename(filePath)
                     : file.name.trim(),
-          ),
-        ),
-        importer: (candidate) async {
-          final result = await widget.importService.importFromFile(
-            filePath: candidate.filePath,
-            displayName: candidate.displayName,
-            waitForIndexing:
-                LocalBookWorkflowPolicy.directImportShouldWaitForIndexing,
-            onProgress: (progress) {
-              if (!mounted) {
-                return;
-              }
-              setState(() {
-                _currentLabel = progress.displayName;
-                _stage = progress.stage;
-                _detail = progress.detail;
-              });
-            },
           );
-          _lastImportedResult = result;
-        },
-        errorFormatter: (error) {
-          return switch (error) {
-            AppException() => error.briefMessage,
-            _ => '导入失败：$error',
-          };
-        },
+        }),
+        waitForIndexing:
+            LocalBookWorkflowPolicy.directImportShouldWaitForIndexing,
         onProgress: (progress) {
           if (!mounted) {
             return;
           }
+          final importProgress = progress.importProgress;
           setState(() {
             _currentLabel = progress.currentFileLabel;
             _completed = progress.completedCount;
+            _total = progress.totalCount;
+            _stage = importProgress?.stage ?? _stageForBatch(progress.stage);
+            _detail = progress.detail;
           });
         },
       );
+      _lastImportedResult = summary.lastResult;
 
       await widget.onReload();
 
@@ -2551,7 +2544,8 @@ class _BookshelfImportLocalBooksSheetState
       }
       setState(() {
         _isImporting = false;
-        _completed = _total;
+        _completed = summary.completedCount;
+        _total = summary.totalCount;
         _stage = LocalBookImportStage.completed;
         _detail =
             summary.hasSuccess
@@ -2563,7 +2557,7 @@ class _BookshelfImportLocalBooksSheetState
         summary.hasSuccess
             ? LocalBookWorkflowPolicy.importSuccessMessage(
               successCount: summary.successCount,
-              failureCount: summary.failureCount,
+              failureCount: summary.failureCount + summary.skippedCount,
               directoryReady: false,
             )
             : (summary.lastError ?? '导入失败，请重试。'),
@@ -2579,6 +2573,170 @@ class _BookshelfImportLocalBooksSheetState
       });
       widget.onShowMessage('导入失败：$error');
     }
+  }
+
+  Future<void> _pickAndImportAndroidFiles() async {
+    final payloads =
+        await widget.externalImportCoordinator.pickLocalBookFiles();
+    if (!mounted || payloads.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _isImporting = true;
+      _total = payloads.length;
+      _completed = 0;
+      _currentLabel = null;
+      _detail = '已选中文件，正在回到 App 内读取并写入书架。';
+      _lastError = null;
+      _stage = LocalBookImportStage.preparing;
+      _lastImportedResult = null;
+    });
+
+    try {
+      final summary = await _importAndroidPayloads(payloads);
+      _lastImportedResult = summary.lastResult;
+
+      await widget.onReload();
+
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isImporting = false;
+        _completed = summary.completedCount;
+        _total = summary.totalCount;
+        _stage = LocalBookImportStage.completed;
+        _detail =
+            summary.hasSuccess
+                ? '后台会继续解析目录，完成后可直接阅读。'
+                : (summary.lastError ?? '导入失败，请重试。');
+        _lastError = summary.lastError;
+      });
+      widget.onShowMessage(
+        summary.hasSuccess
+            ? LocalBookWorkflowPolicy.importSuccessMessage(
+              successCount: summary.successCount,
+              failureCount: summary.failureCount + summary.skippedCount,
+              directoryReady: false,
+            )
+            : (summary.lastError ?? '导入失败，请重试。'),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isImporting = false;
+        _lastError = '$error';
+        _detail = '$error';
+      });
+      widget.onShowMessage('导入失败：$error');
+    }
+  }
+
+  Future<LocalBookImportBatchSummary> _importAndroidPayloads(
+    List<IncomingExternalImportPayload> payloads,
+  ) async {
+    var successCount = 0;
+    var failureCount = 0;
+    var skippedCount = 0;
+    String? lastError;
+    LocalBookImportResult? lastResult;
+
+    for (var index = 0; index < payloads.length; index += 1) {
+      final payload = payloads[index];
+      if (!mounted) {
+        break;
+      }
+      setState(() {
+        _currentLabel = payload.label;
+        _completed = successCount + failureCount + skippedCount;
+        _stage = LocalBookImportStage.preparing;
+        _detail = '正在读取外部文件，完成后会写入书架';
+      });
+
+      if (!ExternalImportCatalog.supportsFileMetadata(
+        ExternalImportPayloadType.localBook,
+        label: payload.label,
+        mimeType: payload.mimeType,
+      )) {
+        skippedCount += 1;
+        lastError = ExternalImportCatalog.unsupportedFileMessage(
+          ExternalImportPayloadType.localBook,
+          payload.label,
+        );
+        continue;
+      }
+
+      final cached = await widget.externalImportCoordinator
+          .cacheExternalFileFromUri(payload);
+      if (cached == null) {
+        skippedCount += 1;
+        lastError = ExternalImportDiagnostics.readFailedMessage(
+          payload.type,
+          payload.label,
+        );
+        continue;
+      }
+
+      try {
+        final result = await widget.importService.importFromFile(
+          filePath: cached.path,
+          displayName: cached.label,
+          mimeType: cached.mimeType,
+          waitForIndexing:
+              LocalBookWorkflowPolicy.directImportShouldWaitForIndexing,
+          onProgress: (progress) {
+            if (!mounted) {
+              return;
+            }
+            setState(() {
+              _currentLabel = progress.displayName;
+              _completed = successCount + failureCount + skippedCount;
+              _total = payloads.length;
+              _stage = progress.stage;
+              _detail = progress.detail;
+            });
+          },
+        );
+        successCount += 1;
+        lastResult = result;
+      } on AppException catch (error) {
+        failureCount += 1;
+        lastError = error.briefMessage;
+      } catch (error) {
+        failureCount += 1;
+        lastError = '导入失败：$error';
+      }
+
+      if (!mounted) {
+        break;
+      }
+      setState(() {
+        _completed = successCount + failureCount + skippedCount;
+      });
+    }
+
+    return LocalBookImportBatchSummary(
+      successCount: successCount,
+      failureCount: failureCount,
+      skippedCount: skippedCount,
+      totalCount: payloads.length,
+      cancelled: false,
+      lastError: lastError,
+      lastResult: lastResult,
+    );
+  }
+
+  LocalBookImportStage _stageForBatch(LocalBookImportBatchStage stage) {
+    return switch (stage) {
+      LocalBookImportBatchStage.validating ||
+      LocalBookImportBatchStage.queued => LocalBookImportStage.preparing,
+      LocalBookImportBatchStage.importing => LocalBookImportStage.persisted,
+      LocalBookImportBatchStage.completed ||
+      LocalBookImportBatchStage.cancelled => LocalBookImportStage.completed,
+    };
   }
 
   @override

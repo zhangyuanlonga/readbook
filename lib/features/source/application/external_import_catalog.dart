@@ -130,6 +130,39 @@ class ExternalImportCatalog {
     };
   }
 
+  static bool supportsMimeType(
+    ExternalImportPayloadType type,
+    String? mimeType,
+  ) {
+    final normalized = mimeType?.trim().toLowerCase();
+    if (normalized == null || normalized.isEmpty) {
+      return false;
+    }
+    return switch (type) {
+      ExternalImportPayloadType.localBook => _localBookMimeTypes.contains(
+        normalized,
+      ),
+      ExternalImportPayloadType.advancedTheme => _advancedThemeMimeTypes
+          .contains(normalized),
+      ExternalImportPayloadType.font => _fontMimeTypes.contains(normalized),
+    };
+  }
+
+  static bool supportsFileMetadata(
+    ExternalImportPayloadType type, {
+    required String label,
+    String? mimeType,
+  }) {
+    if (supportsFileLabel(type, label)) {
+      return true;
+    }
+    final normalizedMimeType = mimeType?.trim().toLowerCase();
+    if (normalizedMimeType == 'application/octet-stream') {
+      return false;
+    }
+    return supportsMimeType(type, normalizedMimeType);
+  }
+
   static String unsupportedFileMessage(
     ExternalImportPayloadType type,
     String label,
@@ -162,6 +195,19 @@ class ExternalImportCatalog {
     '.azw3',
   };
 
+  static const Set<String> _localBookMimeTypes = <String>{
+    'text/plain',
+    'application/epub+zip',
+    'text/markdown',
+    'text/x-markdown',
+    'text/html',
+    'application/pdf',
+    'application/x-mobipocket-ebook',
+    'application/vnd.amazon.ebook',
+    'application/vnd.amazon.mobi8-ebook',
+    'application/octet-stream',
+  };
+
   static const Set<String> _advancedThemeExtensions = <String>{
     '.zip',
     '.json',
@@ -169,5 +215,22 @@ class ExternalImportCatalog {
     '.rgshare',
   };
 
+  static const Set<String> _advancedThemeMimeTypes = <String>{
+    'application/zip',
+    'application/x-zip-compressed',
+    'application/json',
+    'text/json',
+    'application/octet-stream',
+  };
+
   static const Set<String> _fontExtensions = <String>{'.ttf', '.otf'};
+
+  static const Set<String> _fontMimeTypes = <String>{
+    'font/ttf',
+    'font/otf',
+    'application/font-sfnt',
+    'application/x-font-ttf',
+    'application/x-font-opentype',
+    'application/octet-stream',
+  };
 }

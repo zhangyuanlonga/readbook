@@ -1,6 +1,7 @@
 package com.jiangyan.selune
 
 import android.content.Intent
+import android.app.Activity
 import android.database.Cursor
 import android.net.Uri
 import android.os.Build
@@ -33,6 +34,8 @@ class MainActivity : FlutterActivity() {
         private const val METHOD_GET_INITIAL_IMPORT_PAYLOAD = "getInitialImportPayload"
         private const val METHOD_ON_IMPORT_PAYLOAD = "onImportPayload"
         private const val METHOD_CACHE_EXTERNAL_FILE_FROM_URI = "cacheExternalFileFromUri"
+        private const val METHOD_PICK_LOCAL_BOOK_FILES = "pickLocalBookFiles"
+        private const val REQUEST_PICK_LOCAL_BOOK_FILES = 6201
         private const val READER_VOLUME_KEY_CHANNEL_NAME = "com.jiangyan.selune/reader_volume_keys"
         private const val READER_VOLUME_KEY_EVENT_CHANNEL_NAME = "com.jiangyan.selune/reader_volume_keys/events"
         private const val METHOD_SET_INTERCEPT_VOLUME_KEYS = "setInterceptVolumeKeys"
@@ -103,6 +106,7 @@ class MainActivity : FlutterActivity() {
     private var readerVolumeKeyEventSink: EventChannel.EventSink? = null
     private var readerScreenBrightnessMethodChannel: MethodChannel? = null
     private var pendingInitialPayload: Any? = null
+    private var pendingLocalBookPickerResult: MethodChannel.Result? = null
     private var interceptReaderVolumeKeys = false
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -140,6 +144,9 @@ class MainActivity : FlutterActivity() {
                     }
                     METHOD_CACHE_EXTERNAL_FILE_FROM_URI -> {
                         cacheExternalFileFromCallAsync(call.arguments, result)
+                    }
+                    METHOD_PICK_LOCAL_BOOK_FILES -> {
+                        pickLocalBookFiles(result)
                     }
 
                     else -> result.notImplemented()
@@ -220,6 +227,14 @@ class MainActivity : FlutterActivity() {
         sourceImportMethodChannel?.invokeMethod(METHOD_ON_IMPORT_PAYLOAD, payload)
     }
 
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == REQUEST_PICK_LOCAL_BOOK_FILES) {
+            handleLocalBookPickerResult(resultCode, data)
+            return
+        }
+        super.onActivityResult(requestCode, resultCode, data)
+    }
+
     override fun onDestroy() {
         sourceImportMethodChannel?.setMethodCallHandler(null)
         sourceImportMethodChannel = null
@@ -232,6 +247,91 @@ class MainActivity : FlutterActivity() {
         readerScreenBrightnessMethodChannel = null
         interceptReaderVolumeKeys = false
         super.onDestroy()
+    }
+
+    private fun pickLocalBookFiles(result: MethodChannel.Result) {
+        if (pendingLocalBookPickerResult != null) {
+            result.error("pick_in_progress", "A local book picker is already open.", null)
+            return
+        }
+
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+            putExtra(
+                Intent.EXTRA_MIME_TYPES,
+                arrayOf(
+                    "text/plain",
+                    "application/epub+zip",
+                    "text/markdown",
+                    "text/x-markdown",
+                    "text/html",
+                    "application/pdf",
+                    "application/x-mobipocket-ebook",
+                    "application/vnd.amazon.ebook",
+                    "application/vnd.amazon.mobi8-ebook",
+                    "application/octet-stream",
+                )
+            )
+        }
+
+        pendingLocalBookPickerResult = result
+        try {
+            startActivityForResult(intent, REQUEST_PICK_LOCAL_BOOK_FILES)
+        } catch (error: Exception) {
+            pendingLocalBookPickerResult = null
+            result.error("pick_failed", error.localizedMessage, null)
+        }
+    }
+
+    private fun handleLocalBookPickerResult(resultCode: Int, data: Intent?) {
+        val result = pendingLocalBookPickerResult ?: return
+        pendingLocalBookPickerResult = null
+
+        if (resultCode != Activity.RESULT_OK || data == null) {
+            result.success(emptyList<Map<String, Any>>())
+            return
+        }
+
+        val payloads = mutableListOf<Map<String, Any>>()
+        val seenUris = mutableSetOf<String>()
+        val clipData = data.clipData
+        if (clipData != null) {
+            for (index in 0 until clipData.itemCount) {
+                val uri = clipData.getItemAt(index).uri ?: continue
+                val uriKey = uri.toString()
+                if (!seenUris.add(uriKey)) {
+                    continue
+                }
+                persistReadPermissionIfPossible(data, uri)
+                buildPayloadFromUri(uri, data.type)?.let(payloads::add)
+            }
+        } else {
+            val uri = data.data
+            if (uri != null) {
+                persistReadPermissionIfPossible(data, uri)
+                buildPayloadFromUri(uri, data.type)?.let(payloads::add)
+            }
+        }
+        result.success(payloads)
+    }
+
+    private fun persistReadPermissionIfPossible(intent: Intent, uri: Uri) {
+        val flags = intent.flags and
+            (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+        if ((flags and Intent.FLAG_GRANT_READ_URI_PERMISSION) == 0) {
+            return
+        }
+        try {
+            contentResolver.takePersistableUriPermission(
+                uri,
+                flags and Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+        } catch (_: Exception) {
+            // Some providers grant only transient access. The cache step runs
+            // immediately after returning to Flutter, so transient access is enough.
+        }
     }
 
     private fun applyReaderBrightness(rawBrightness: Float) {

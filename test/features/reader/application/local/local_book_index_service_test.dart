@@ -49,6 +49,7 @@ void main() {
       required List<LocalBookParser> parsers,
       ReaderSystemSettingsService? systemSettingsService,
       LocalBookStorageService? localStorageService,
+      Duration indexTimeout = const Duration(minutes: 3),
     }) {
       return LocalBookIndexService(
         localBookRepository: repository,
@@ -58,6 +59,7 @@ void main() {
         storageService: localStorageService ?? storageService,
         bookshelfService: BookshelfService(),
         readingRecordService: ReadingRecordService(database: database),
+        indexTimeout: indexTimeout,
       );
     }
 
@@ -93,6 +95,50 @@ void main() {
       expect(_FakeSuccessParser.seenInputs.single.usesPathBackedFile, isTrue);
     });
 
+    test('emits staged index progress events from the shared stream', () async {
+      final now = DateTime.parse('2026-02-23T12:00:00.000Z');
+      final file = File('${tempDir.path}/index_events.txt');
+      await file.writeAsString('第一章\n内容');
+      await repository.upsertBook(
+        LocalBook(
+          id: 'local_index_events_1',
+          title: '索引事件测试',
+          format: LocalBookFormat.txt,
+          storagePath: file.path,
+          fileSize: await file.length(),
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+
+      final service = buildService(parsers: const [_FakeSuccessParser()]);
+      final events = <LocalBookIndexEvent>[];
+      final subscription = LocalBookIndexService.watchEvents
+          .where((event) => event.bookId == 'local_index_events_1')
+          .listen(events.add);
+
+      addTearDown(subscription.cancel);
+      await service.ensureIndexed(bookId: 'local_index_events_1');
+      await Future<void>.delayed(Duration.zero);
+
+      expect(
+        events.map((event) => event.stage),
+        containsAllInOrder(const <LocalBookIndexEventStage>[
+          LocalBookIndexEventStage.queued,
+          LocalBookIndexEventStage.preparing,
+          LocalBookIndexEventStage.parsing,
+          LocalBookIndexEventStage.persisting,
+          LocalBookIndexEventStage.ready,
+        ]),
+      );
+      final readyEvent = events.lastWhere(
+        (event) => event.stage == LocalBookIndexEventStage.ready,
+      );
+      expect(readyEvent.current, 2);
+      expect(readyEvent.total, 2);
+      expect(readyEvent.message, contains('目录已建立'));
+    });
+
     test('marks book failed when parser throws', () async {
       final now = DateTime.parse('2026-02-23T12:00:00.000Z');
       final file = File('${tempDir.path}/index_2.txt');
@@ -121,6 +167,83 @@ void main() {
       expect(updated!.indexStatus, LocalBookIndexStatus.failed);
       expect(updated.chapterCount, 0);
       expect(updated.lastError, contains('模拟解析失败'));
+    });
+
+    test('marks book failed when indexing times out', () async {
+      final now = DateTime.parse('2026-02-23T12:00:00.000Z');
+      final file = File('${tempDir.path}/timeout.txt');
+      await file.writeAsString('第一章\n内容');
+      await repository.upsertBook(
+        LocalBook(
+          id: 'local_index_timeout',
+          title: '超时测试',
+          format: LocalBookFormat.txt,
+          storagePath: file.path,
+          fileSize: await file.length(),
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+
+      final service = buildService(
+        parsers: const [_FakeSlowParser()],
+        indexTimeout: const Duration(milliseconds: 5),
+      );
+
+      await expectLater(
+        service.ensureIndexed(bookId: 'local_index_timeout'),
+        throwsA(
+          isA<AppException>().having(
+            (error) => error.briefMessage,
+            'briefMessage',
+            contains('解析超时'),
+          ),
+        ),
+      );
+
+      final updated = await repository.getBookById('local_index_timeout');
+      expect(updated, isNotNull);
+      expect(updated!.indexStatus, LocalBookIndexStatus.failed);
+      expect(updated.lastError, contains('解析超时'));
+    });
+
+    test('classifies file system failures with actionable message', () async {
+      final now = DateTime.parse('2026-02-23T12:00:00.000Z');
+      final file = File('${tempDir.path}/missing_source.txt');
+      await file.writeAsString('第一章\n内容');
+      await repository.upsertBook(
+        LocalBook(
+          id: 'local_index_file_system_failure',
+          title: '文件异常测试',
+          format: LocalBookFormat.txt,
+          storagePath: file.path,
+          fileSize: await file.length(),
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+
+      final service = buildService(
+        parsers: const [_FakeFileSystemFailureParser()],
+      );
+
+      await expectLater(
+        service.ensureIndexed(bookId: 'local_index_file_system_failure'),
+        throwsA(
+          isA<AppException>().having(
+            (error) => error.briefMessage,
+            'briefMessage',
+            contains('不存在'),
+          ),
+        ),
+      );
+
+      final updated = await repository.getBookById(
+        'local_index_file_system_failure',
+      );
+      expect(updated, isNotNull);
+      expect(updated!.indexStatus, LocalBookIndexStatus.failed);
+      expect(updated.lastError, contains('不存在'));
     });
 
     test('syncs split long chapter from persisted global setting', () async {
@@ -500,6 +623,38 @@ class _FakeFailureParser implements LocalBookParser {
       code: ErrorCode.ruleParse,
       stage: ErrorStage.content,
       briefMessage: '模拟解析失败',
+    );
+  }
+
+  @override
+  bool supports(LocalBookFormat format) => true;
+}
+
+class _FakeSlowParser implements LocalBookParser {
+  const _FakeSlowParser();
+
+  @override
+  Future<LocalParsedBook> parse(LocalBook book) async {
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    return const LocalParsedBook(
+      chapters: <LocalParsedChapter>[
+        LocalParsedChapter(title: '第一章', content: '正文'),
+      ],
+    );
+  }
+
+  @override
+  bool supports(LocalBookFormat format) => true;
+}
+
+class _FakeFileSystemFailureParser implements LocalBookParser {
+  const _FakeFileSystemFailureParser();
+
+  @override
+  Future<LocalParsedBook> parse(LocalBook book) {
+    throw const FileSystemException(
+      'Cannot open file',
+      '/tmp/missing_source.txt',
     );
   }
 

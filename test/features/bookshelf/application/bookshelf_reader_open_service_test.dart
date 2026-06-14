@@ -1,5 +1,7 @@
+import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shuxiang_reading_next/data/datasources/local/app_database.dart';
 import 'package:shuxiang_reading_next/domain/entities/bookshelf_book.dart';
 import 'package:shuxiang_reading_next/domain/entities/chapter.dart';
 import 'package:shuxiang_reading_next/domain/entities/local_book.dart';
@@ -21,10 +23,17 @@ void main() {
     late ReaderPreferencesService preferencesService;
     late _FakeLocalBookRepository localBookRepository;
     late BookshelfReaderOpenService service;
+    late AppDatabase database;
 
-    setUp(() {
+    setUp(() async {
       SharedPreferences.setMockInitialValues(<String, Object>{});
-      preferencesService = ReaderPreferencesService();
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.clear();
+      database = AppDatabase(executor: NativeDatabase.memory());
+      preferencesService = ReaderPreferencesService(
+        preferences: preferences,
+        database: database,
+      );
       localBookRepository = _FakeLocalBookRepository();
       service = BookshelfReaderOpenService(
         readerPreferencesService: preferencesService,
@@ -32,6 +41,10 @@ void main() {
         localBookRepository: localBookRepository,
         bookDetailService: BookDetailService(),
       );
+    });
+
+    tearDown(() async {
+      await database.close();
     });
 
     test(

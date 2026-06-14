@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
+import 'package:pool/pool.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/errors/app_exception.dart';
@@ -17,6 +18,8 @@ import '../../reader/application/reader_system_settings_service.dart';
 import '../../reader/application/local/local_book_index_service.dart';
 import '../../reader/application/local/local_book_storage_service.dart';
 import '../../reader/application/local/local_book_workflow_policy.dart';
+import '../../source/application/external_import_catalog.dart';
+import '../../source/application/external_source_import_bridge.dart';
 import 'bookshelf_service.dart';
 
 class LocalBookImportResult {
@@ -48,6 +51,123 @@ class LocalBookImportProgress {
 typedef LocalBookImportProgressCallback =
     void Function(LocalBookImportProgress progress);
 
+class LocalBookImportBatchCandidate {
+  const LocalBookImportBatchCandidate({
+    required this.filePath,
+    required this.displayName,
+    this.mimeType,
+  });
+
+  final String filePath;
+  final String displayName;
+  final String? mimeType;
+}
+
+enum LocalBookImportDuplicateMatch { none, sourcePath, importFingerprint }
+
+enum LocalBookImportDuplicateStrategy {
+  replacePreservingUserState,
+  skipExisting,
+  keepBoth,
+}
+
+class LocalBookImportPrecheckResult {
+  const LocalBookImportPrecheckResult({
+    required this.filePath,
+    required this.displayName,
+    required this.exists,
+    required this.readable,
+    required this.format,
+    required this.fileSize,
+    required this.sourceFileLastModifiedMs,
+    required this.duplicateMatch,
+    this.mimeType,
+    this.errorMessage,
+    this.duplicateBook,
+  });
+
+  final String filePath;
+  final String displayName;
+  final String? mimeType;
+  final bool exists;
+  final bool readable;
+  final LocalBookFormat? format;
+  final int? fileSize;
+  final int? sourceFileLastModifiedMs;
+  final String? errorMessage;
+  final LocalBook? duplicateBook;
+  final LocalBookImportDuplicateMatch duplicateMatch;
+
+  bool get isSupported => format != null;
+  bool get isEmptyFile => fileSize == 0;
+  bool get hasDuplicate => duplicateBook != null;
+  bool get canImport => errorMessage == null;
+
+  AppException toAppException() {
+    return AppException(
+      code: ErrorCode.validation,
+      stage: ErrorStage.detail,
+      briefMessage: errorMessage ?? '文件校验失败，请重新选择。',
+    );
+  }
+}
+
+enum LocalBookImportBatchStage {
+  validating,
+  queued,
+  importing,
+  completed,
+  cancelled,
+}
+
+class LocalBookImportBatchProgress {
+  const LocalBookImportBatchProgress({
+    required this.stage,
+    required this.completedCount,
+    required this.totalCount,
+    this.currentFileLabel,
+    this.currentFileIndex,
+    this.detail,
+    this.importProgress,
+  });
+
+  final LocalBookImportBatchStage stage;
+  final int completedCount;
+  final int totalCount;
+  final String? currentFileLabel;
+  final int? currentFileIndex;
+  final String? detail;
+  final LocalBookImportProgress? importProgress;
+
+  double? get progress => totalCount <= 0 ? null : completedCount / totalCount;
+}
+
+class LocalBookImportBatchSummary {
+  const LocalBookImportBatchSummary({
+    required this.successCount,
+    required this.failureCount,
+    required this.skippedCount,
+    required this.totalCount,
+    required this.cancelled,
+    this.lastError,
+    this.lastResult,
+  });
+
+  final int successCount;
+  final int failureCount;
+  final int skippedCount;
+  final int totalCount;
+  final bool cancelled;
+  final String? lastError;
+  final LocalBookImportResult? lastResult;
+
+  int get completedCount => successCount + failureCount + skippedCount;
+  bool get hasSuccess => successCount > 0;
+}
+
+typedef LocalBookImportBatchProgressCallback =
+    void Function(LocalBookImportBatchProgress progress);
+
 class LocalBookImportService {
   LocalBookImportService({
     required LocalBookRepository localBookRepository,
@@ -75,63 +195,220 @@ class LocalBookImportService {
   final LocalBookStorageService _localBookStorageService;
   final Duration _warmUpDelay;
   final Uuid _uuid = const Uuid();
+  static const int _batchValidationConcurrency = 4;
+  static const int _batchImportConcurrency = 1;
 
-  Future<LocalBookImportResult> importFromFile({
+  Future<LocalBookImportPrecheckResult> inspectImportCandidate({
     required String filePath,
     String? displayName,
-    bool waitForIndexing = false,
-    LocalBookImportProgressCallback? onProgress,
+    String? mimeType,
   }) async {
     final normalizedPath = filePath.trim();
+    final normalizedDisplayName = normalizeImportedDisplayName(
+      (displayName?.trim().isNotEmpty ?? false)
+          ? displayName!
+          : p.basename(normalizedPath),
+    );
+    final normalizedMimeType = _normalizeOptionalText(mimeType);
     if (normalizedPath.isEmpty) {
-      throw AppException(
-        code: ErrorCode.validation,
-        stage: ErrorStage.detail,
-        briefMessage: '文件路径不能为空。',
+      return LocalBookImportPrecheckResult(
+        filePath: normalizedPath,
+        displayName: normalizedDisplayName,
+        mimeType: normalizedMimeType,
+        exists: false,
+        readable: false,
+        format: null,
+        fileSize: null,
+        sourceFileLastModifiedMs: null,
+        duplicateMatch: LocalBookImportDuplicateMatch.none,
+        errorMessage: '文件路径不能为空。',
+      );
+    }
+
+    final format = _resolveFormat(
+      normalizedPath,
+      displayName: normalizedDisplayName,
+      mimeType: normalizedMimeType,
+    );
+    if (format == null) {
+      final unsupportedStat = await _statOrNull(File(normalizedPath));
+      return LocalBookImportPrecheckResult(
+        filePath: normalizedPath,
+        displayName: normalizedDisplayName,
+        mimeType: normalizedMimeType,
+        exists: unsupportedStat != null,
+        readable: false,
+        format: null,
+        fileSize: unsupportedStat?.size,
+        sourceFileLastModifiedMs:
+            unsupportedStat?.modified.millisecondsSinceEpoch,
+        duplicateMatch: LocalBookImportDuplicateMatch.none,
+        errorMessage: ExternalImportCatalog.unsupportedFileMessage(
+          ExternalImportPayloadType.localBook,
+          normalizedDisplayName,
+        ),
       );
     }
 
     final sourceFile = File(normalizedPath);
-    if (!await sourceFile.exists()) {
-      throw AppException(
-        code: ErrorCode.validation,
-        stage: ErrorStage.detail,
-        briefMessage: '本地文件不存在，请重新选择。',
+    FileStat? sourceStat;
+    try {
+      if (!await sourceFile.exists()) {
+        return LocalBookImportPrecheckResult(
+          filePath: normalizedPath,
+          displayName: normalizedDisplayName,
+          mimeType: normalizedMimeType,
+          exists: false,
+          readable: false,
+          format: format,
+          fileSize: null,
+          sourceFileLastModifiedMs: null,
+          duplicateMatch: LocalBookImportDuplicateMatch.none,
+          errorMessage: '本地文件不存在，请重新选择：$normalizedDisplayName',
+        );
+      }
+      sourceStat = await sourceFile.stat();
+    } on FileSystemException {
+      return LocalBookImportPrecheckResult(
+        filePath: normalizedPath,
+        displayName: normalizedDisplayName,
+        mimeType: normalizedMimeType,
+        exists: false,
+        readable: false,
+        format: format,
+        fileSize: null,
+        sourceFileLastModifiedMs: null,
+        duplicateMatch: LocalBookImportDuplicateMatch.none,
+        errorMessage: '无法访问本地文件，请检查权限后重试：$normalizedDisplayName',
       );
     }
 
-    final format = _resolveFormat(normalizedPath);
-    if (format == null) {
-      throw AppException(
-        code: ErrorCode.validation,
-        stage: ErrorStage.detail,
-        briefMessage: '仅支持导入 txt、epub、md、html、pdf、mobi、azw 或 azw3 文件。',
+    if (sourceStat.type == FileSystemEntityType.directory) {
+      return LocalBookImportPrecheckResult(
+        filePath: normalizedPath,
+        displayName: normalizedDisplayName,
+        mimeType: normalizedMimeType,
+        exists: true,
+        readable: false,
+        format: format,
+        fileSize: sourceStat.size,
+        sourceFileLastModifiedMs: sourceStat.modified.millisecondsSinceEpoch,
+        duplicateMatch: LocalBookImportDuplicateMatch.none,
+        errorMessage: '请选择具体文件，不支持直接导入文件夹：$normalizedDisplayName',
       );
     }
 
+    final readable = await _canOpenForRead(sourceFile);
+    if (!readable) {
+      return LocalBookImportPrecheckResult(
+        filePath: normalizedPath,
+        displayName: normalizedDisplayName,
+        mimeType: normalizedMimeType,
+        exists: true,
+        readable: false,
+        format: format,
+        fileSize: sourceStat.size,
+        sourceFileLastModifiedMs: sourceStat.modified.millisecondsSinceEpoch,
+        duplicateMatch: LocalBookImportDuplicateMatch.none,
+        errorMessage: '文件不可读，请检查文件权限或重新选择：$normalizedDisplayName',
+      );
+    }
+
+    if (sourceStat.size <= 0) {
+      return LocalBookImportPrecheckResult(
+        filePath: normalizedPath,
+        displayName: normalizedDisplayName,
+        mimeType: normalizedMimeType,
+        exists: true,
+        readable: true,
+        format: format,
+        fileSize: sourceStat.size,
+        sourceFileLastModifiedMs: sourceStat.modified.millisecondsSinceEpoch,
+        duplicateMatch: LocalBookImportDuplicateMatch.none,
+        errorMessage: '文件内容为空，无法导入：$normalizedDisplayName',
+      );
+    }
+
+    final title = _resolveTitle(normalizedDisplayName);
+    final sourcePathDuplicate = await _findBySourcePath(normalizedPath);
+    final fingerprintDuplicate =
+        sourcePathDuplicate == null
+            ? await _findByImportFingerprint(
+              format: format,
+              title: title,
+              sourceFileSize: sourceStat.size,
+            )
+            : null;
+    final duplicateBook = sourcePathDuplicate ?? fingerprintDuplicate;
+    final duplicateMatch =
+        sourcePathDuplicate != null
+            ? LocalBookImportDuplicateMatch.sourcePath
+            : fingerprintDuplicate != null
+            ? LocalBookImportDuplicateMatch.importFingerprint
+            : LocalBookImportDuplicateMatch.none;
+
+    return LocalBookImportPrecheckResult(
+      filePath: normalizedPath,
+      displayName: normalizedDisplayName,
+      mimeType: normalizedMimeType,
+      exists: true,
+      readable: true,
+      format: format,
+      fileSize: sourceStat.size,
+      sourceFileLastModifiedMs: sourceStat.modified.millisecondsSinceEpoch,
+      duplicateBook: duplicateBook,
+      duplicateMatch: duplicateMatch,
+    );
+  }
+
+  Future<LocalBookImportResult> importFromFile({
+    required String filePath,
+    String? displayName,
+    String? mimeType,
+    bool waitForIndexing = false,
+    LocalBookImportDuplicateStrategy duplicateStrategy =
+        LocalBookImportDuplicateStrategy.replacePreservingUserState,
+    LocalBookImportProgressCallback? onProgress,
+  }) async {
+    final precheck = await inspectImportCandidate(
+      filePath: filePath,
+      displayName: displayName,
+      mimeType: mimeType,
+    );
+    if (!precheck.canImport) {
+      throw precheck.toAppException();
+    }
+
+    if (duplicateStrategy == LocalBookImportDuplicateStrategy.skipExisting &&
+        precheck.duplicateBook != null) {
+      final existingBook = precheck.duplicateBook!;
+      return LocalBookImportResult(
+        localBook: existingBook,
+        bookshelfBook: _buildBookshelfBook(existingBook, now: DateTime.now()),
+      );
+    }
+
+    final normalizedPath = precheck.filePath;
+    final normalizedDisplayName = precheck.displayName;
+    final sourceFile = File(normalizedPath);
+    final format = precheck.format!;
     final sourceStat = await sourceFile.stat();
     final now = DateTime.now();
     final splitLongChapterDefault =
         await _readerSystemSettingsService
             .loadLocalTxtSplitLongChapterEnabled();
-    final normalizedDisplayName = normalizeImportedDisplayName(
-      displayName ?? p.basename(normalizedPath),
-    );
     final resolvedTitle = _resolveTitle(normalizedDisplayName);
     final existingBook =
-        await _findBySourcePath(normalizedPath) ??
-        await _findByImportFingerprint(
-          format: format,
-          title: resolvedTitle,
-          sourceFileSize: sourceStat.size,
-        );
+        duplicateStrategy == LocalBookImportDuplicateStrategy.keepBoth
+            ? null
+            : precheck.duplicateBook;
     final bookId = existingBook?.id ?? _buildBookId();
     onProgress?.call(
       LocalBookImportProgress(
         stage: LocalBookImportStage.preparing,
         bookId: bookId,
         displayName: normalizedDisplayName,
-        detail: '正在校验文件并准备导入',
+        detail: _preparingDetailForFormat(format, sourceStat.size),
       ),
     );
     final storedStoragePath = _localBookStorageService.buildStoredStoragePath(
@@ -152,7 +429,10 @@ class LocalBookImportService {
       title: resolvedTitle,
     );
     await _persistImportedBook(prepared.localBook);
-    await _bookshelfService.upsert(prepared.bookshelfBook);
+    await _persistImportedBookshelfBook(
+      bookshelfBook: prepared.bookshelfBook,
+      existingBook: existingBook,
+    );
     onProgress?.call(
       LocalBookImportProgress(
         stage: LocalBookImportStage.persisted,
@@ -213,6 +493,237 @@ class LocalBookImportService {
     );
   }
 
+  Future<LocalBookImportBatchSummary> importFromFiles({
+    required Iterable<LocalBookImportBatchCandidate> candidates,
+    bool waitForIndexing = false,
+    LocalBookImportBatchProgressCallback? onProgress,
+    bool Function()? shouldCancel,
+  }) async {
+    final importCandidates = candidates
+        .where((candidate) => candidate.filePath.trim().isNotEmpty)
+        .toList(growable: false);
+    if (importCandidates.isEmpty) {
+      return const LocalBookImportBatchSummary(
+        successCount: 0,
+        failureCount: 0,
+        skippedCount: 0,
+        totalCount: 0,
+        cancelled: false,
+      );
+    }
+
+    onProgress?.call(
+      LocalBookImportBatchProgress(
+        stage: LocalBookImportBatchStage.validating,
+        completedCount: 0,
+        totalCount: importCandidates.length,
+        detail: '正在校验文件并规划导入顺序',
+      ),
+    );
+    final plannedItems = await _planBatchImport(importCandidates);
+    onProgress?.call(
+      LocalBookImportBatchProgress(
+        stage: LocalBookImportBatchStage.queued,
+        completedCount: 0,
+        totalCount: plannedItems.length,
+        currentFileLabel:
+            plannedItems.isEmpty ? null : plannedItems.first.displayName,
+        currentFileIndex: plannedItems.isEmpty ? null : 1,
+        detail: '已按格式和文件大小排队，小文件会优先写入书架',
+      ),
+    );
+
+    var successCount = 0;
+    var failureCount = 0;
+    var skippedCount = 0;
+    var cancelled = false;
+    String? lastError;
+    LocalBookImportResult? lastResult;
+    final importPool = Pool(
+      _batchImportConcurrency,
+      timeout: const Duration(minutes: 10),
+    );
+    try {
+      for (var index = 0; index < plannedItems.length; index += 1) {
+        final item = plannedItems[index];
+        if (shouldCancel?.call() ?? false) {
+          cancelled = true;
+          break;
+        }
+        if (!item.canImport) {
+          skippedCount += 1;
+          lastError = item.errorMessage ?? '文件校验失败：${item.displayName}';
+          onProgress?.call(
+            LocalBookImportBatchProgress(
+              stage: LocalBookImportBatchStage.importing,
+              completedCount: successCount + failureCount + skippedCount,
+              totalCount: plannedItems.length,
+              currentFileLabel: item.displayName,
+              currentFileIndex: index + 1,
+              detail: lastError,
+            ),
+          );
+          continue;
+        }
+
+        onProgress?.call(
+          LocalBookImportBatchProgress(
+            stage: LocalBookImportBatchStage.importing,
+            completedCount: successCount + failureCount + skippedCount,
+            totalCount: plannedItems.length,
+            currentFileLabel: item.displayName,
+            currentFileIndex: index + 1,
+            detail: '正在写入书架，后台会继续解析目录',
+          ),
+        );
+        try {
+          final result = await importPool.withResource(
+            () => importFromFile(
+              filePath: item.filePath,
+              displayName: item.displayName,
+              mimeType: item.mimeType,
+              waitForIndexing: waitForIndexing,
+              onProgress: (progress) {
+                onProgress?.call(
+                  LocalBookImportBatchProgress(
+                    stage: LocalBookImportBatchStage.importing,
+                    completedCount: successCount + failureCount + skippedCount,
+                    totalCount: plannedItems.length,
+                    currentFileLabel: progress.displayName,
+                    currentFileIndex: index + 1,
+                    detail: progress.detail,
+                    importProgress: progress,
+                  ),
+                );
+              },
+            ),
+          );
+          successCount += 1;
+          lastResult = result;
+        } catch (error) {
+          failureCount += 1;
+          lastError = _formatBatchImportError(error);
+        }
+      }
+    } finally {
+      await importPool.close();
+    }
+
+    onProgress?.call(
+      LocalBookImportBatchProgress(
+        stage:
+            cancelled
+                ? LocalBookImportBatchStage.cancelled
+                : LocalBookImportBatchStage.completed,
+        completedCount: successCount + failureCount + skippedCount,
+        totalCount: plannedItems.length,
+        currentFileLabel: lastResult?.localBook.title,
+        detail:
+            cancelled ? '已取消排队中的导入，已写入书架的图书会继续后台解析' : '批量导入完成，成功导入的图书会继续后台解析',
+      ),
+    );
+    return LocalBookImportBatchSummary(
+      successCount: successCount,
+      failureCount: failureCount,
+      skippedCount: skippedCount,
+      totalCount: plannedItems.length,
+      cancelled: cancelled,
+      lastError: lastError,
+      lastResult: lastResult,
+    );
+  }
+
+  Future<List<_LocalBookImportBatchPlanItem>> _planBatchImport(
+    List<LocalBookImportBatchCandidate> candidates,
+  ) async {
+    final validationPool = Pool(
+      _batchValidationConcurrency,
+      timeout: const Duration(minutes: 2),
+    );
+    try {
+      final plannedItems = await Future.wait(
+        candidates.map(
+          (candidate) => validationPool.withResource(
+            () => _inspectBatchImportCandidate(candidate),
+          ),
+        ),
+      );
+      final sorted = plannedItems.toList(growable: false);
+      sorted.sort(_compareBatchImportPlanItems);
+      return sorted;
+    } finally {
+      await validationPool.close();
+    }
+  }
+
+  Future<_LocalBookImportBatchPlanItem> _inspectBatchImportCandidate(
+    LocalBookImportBatchCandidate candidate,
+  ) async {
+    final precheck = await inspectImportCandidate(
+      filePath: candidate.filePath,
+      displayName: candidate.displayName,
+      mimeType: candidate.mimeType,
+    );
+    return _LocalBookImportBatchPlanItem(
+      filePath: precheck.filePath,
+      displayName: precheck.displayName,
+      mimeType: precheck.mimeType,
+      format: precheck.format,
+      fileSize: precheck.fileSize,
+      canImport: precheck.canImport,
+      errorMessage: precheck.errorMessage,
+    );
+  }
+
+  int _compareBatchImportPlanItems(
+    _LocalBookImportBatchPlanItem a,
+    _LocalBookImportBatchPlanItem b,
+  ) {
+    final supportedCompare = _supportRank(a).compareTo(_supportRank(b));
+    if (supportedCompare != 0) {
+      return supportedCompare;
+    }
+    final formatCompare = _batchFormatRank(
+      a.format,
+    ).compareTo(_batchFormatRank(b.format));
+    if (formatCompare != 0) {
+      return formatCompare;
+    }
+    final sizeCompare = (a.fileSize ?? 0).compareTo(b.fileSize ?? 0);
+    if (sizeCompare != 0) {
+      return sizeCompare;
+    }
+    return a.displayName.compareTo(b.displayName);
+  }
+
+  int _supportRank(_LocalBookImportBatchPlanItem item) {
+    if (item.format == null) {
+      return 1;
+    }
+    if (!item.canImport) {
+      return 2;
+    }
+    return 0;
+  }
+
+  int _batchFormatRank(LocalBookFormat? format) {
+    return switch (format) {
+      LocalBookFormat.txt => 0,
+      LocalBookFormat.md || LocalBookFormat.html => 1,
+      LocalBookFormat.epub => 2,
+      LocalBookFormat.pdf => 3,
+      LocalBookFormat.mobi || LocalBookFormat.azw || LocalBookFormat.azw3 => 4,
+      null => 5,
+    };
+  }
+
+  String _formatBatchImportError(Object error) {
+    return switch (error) {
+      AppException() => error.briefMessage,
+      _ => '导入失败：$error',
+    };
+  }
+
   Future<void> _warmUpLocalBookIndex(String bookId) async {
     try {
       if (_warmUpDelay > Duration.zero) {
@@ -251,6 +762,31 @@ class LocalBookImportService {
       LocalBookFormat.azw3 => '正在解析电子书内容并建立目录',
       LocalBookFormat.txt => '正在切分章节并建立目录',
     };
+  }
+
+  String _preparingDetailForFormat(LocalBookFormat format, int fileSize) {
+    final sizeText = _formatFileSize(fileSize);
+    return switch (format) {
+      LocalBookFormat.epub => '正在复制 EPUB 到应用存储$sizeText，目录会在后台继续解析',
+      LocalBookFormat.pdf => '正在复制 PDF 到应用存储$sizeText，页面索引会在后台继续建立',
+      LocalBookFormat.mobi ||
+      LocalBookFormat.azw ||
+      LocalBookFormat.azw3 => '正在复制电子书到应用存储$sizeText，目录会在后台继续解析',
+      LocalBookFormat.md || LocalBookFormat.html => '正在复制图文文件到应用存储$sizeText',
+      LocalBookFormat.txt => '正在识别文本编码并写入应用存储$sizeText',
+    };
+  }
+
+  String _formatFileSize(int fileSize) {
+    if (fileSize <= 0) {
+      return '';
+    }
+    final sizeMb = fileSize / (1024 * 1024);
+    if (sizeMb >= 1) {
+      return '（${sizeMb.toStringAsFixed(sizeMb >= 10 ? 0 : 1)} MB）';
+    }
+    final sizeKb = fileSize / 1024;
+    return '（${sizeKb.toStringAsFixed(sizeKb >= 10 ? 0 : 1)} KB）';
   }
 
   bool _shouldIgnoreWarmUpError(Object error) {
@@ -383,6 +919,23 @@ class LocalBookImportService {
     );
   }
 
+  Future<void> _persistImportedBookshelfBook({
+    required BookshelfBook bookshelfBook,
+    required LocalBook? existingBook,
+  }) async {
+    if (existingBook == null) {
+      await _bookshelfService.upsert(bookshelfBook);
+      return;
+    }
+
+    await _bookshelfService.replace(
+      previousSourceId: localBookSourceId,
+      previousDetailUrl: buildLocalBookDetailUrl(existingBook.id),
+      nextBook: bookshelfBook,
+      preserveTags: true,
+    );
+  }
+
   BookshelfBook _buildBookshelfBook(
     LocalBook localBook, {
     required DateTime now,
@@ -444,8 +997,72 @@ class LocalBookImportService {
     return 'local_$raw';
   }
 
-  LocalBookFormat? _resolveFormat(String path) {
-    final ext = p.extension(path).toLowerCase();
+  Future<bool> _canOpenForRead(File file) async {
+    RandomAccessFile? opened;
+    try {
+      opened = await file.open(mode: FileMode.read);
+      return true;
+    } on FileSystemException {
+      return false;
+    } finally {
+      await opened?.close();
+    }
+  }
+
+  Future<FileStat?> _statOrNull(File file) async {
+    try {
+      if (!await file.exists()) {
+        return null;
+      }
+      return file.stat();
+    } on FileSystemException {
+      return null;
+    }
+  }
+
+  String? _normalizeOptionalText(String? value) {
+    final normalized = value?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    return normalized;
+  }
+
+  LocalBookFormat? _resolveFormat(
+    String path, {
+    String? displayName,
+    String? mimeType,
+  }) {
+    final labels = <String>[
+      if (displayName?.trim().isNotEmpty ?? false) displayName!.trim(),
+      path,
+      p.basename(path),
+    ];
+    final supportedByLabel = labels.any(
+      (label) => ExternalImportCatalog.supportsFileLabel(
+        ExternalImportPayloadType.localBook,
+        label,
+      ),
+    );
+    final supportedByMime = ExternalImportCatalog.supportsMimeType(
+      ExternalImportPayloadType.localBook,
+      mimeType,
+    );
+    if (!supportedByLabel && !supportedByMime) {
+      return null;
+    }
+
+    for (final label in labels) {
+      final format = _resolveFormatByExtension(p.extension(label));
+      if (format != null) {
+        return format;
+      }
+    }
+    return _resolveFormatByMimeType(mimeType);
+  }
+
+  LocalBookFormat? _resolveFormatByExtension(String extension) {
+    final ext = extension.toLowerCase();
     return switch (ext) {
       '.txt' => LocalBookFormat.txt,
       '.epub' => LocalBookFormat.epub,
@@ -457,6 +1074,21 @@ class LocalBookImportService {
       '.mobi' => LocalBookFormat.mobi,
       '.azw' => LocalBookFormat.azw,
       '.azw3' => LocalBookFormat.azw3,
+      _ => null,
+    };
+  }
+
+  LocalBookFormat? _resolveFormatByMimeType(String? mimeType) {
+    final normalized = mimeType?.trim().toLowerCase();
+    return switch (normalized) {
+      'text/plain' => LocalBookFormat.txt,
+      'application/epub+zip' => LocalBookFormat.epub,
+      'text/markdown' || 'text/x-markdown' => LocalBookFormat.md,
+      'text/html' => LocalBookFormat.html,
+      'application/pdf' => LocalBookFormat.pdf,
+      'application/x-mobipocket-ebook' => LocalBookFormat.mobi,
+      'application/vnd.amazon.ebook' => LocalBookFormat.azw,
+      'application/vnd.amazon.mobi8-ebook' => LocalBookFormat.azw3,
       _ => null,
     };
   }
@@ -548,4 +1180,24 @@ class _PreparedImportedBook {
   final LocalBook localBook;
   final BookshelfBook bookshelfBook;
   final LocalBookStorageWriteResult storageResult;
+}
+
+class _LocalBookImportBatchPlanItem {
+  const _LocalBookImportBatchPlanItem({
+    required this.filePath,
+    required this.displayName,
+    required this.mimeType,
+    required this.format,
+    required this.fileSize,
+    required this.canImport,
+    required this.errorMessage,
+  });
+
+  final String filePath;
+  final String displayName;
+  final String? mimeType;
+  final LocalBookFormat? format;
+  final int? fileSize;
+  final bool canImport;
+  final String? errorMessage;
 }

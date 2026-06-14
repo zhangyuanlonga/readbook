@@ -2,6 +2,9 @@ import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:io';
 
+import 'package:path/path.dart' as p;
+import 'package:pool/pool.dart';
+
 import '../../../../core/errors/app_exception.dart';
 import '../../../../core/errors/error_codes.dart';
 import '../../../../core/errors/error_stage.dart';
@@ -19,6 +22,7 @@ import 'kindle_local_book_parser.dart';
 import 'local_book_parser.dart';
 import 'local_reader_identity.dart';
 import 'local_book_storage_service.dart';
+import 'local_book_workflow_policy.dart';
 import 'markdown_local_book_parser.dart';
 import 'pdf_local_book_parser.dart';
 import 'txt_local_book_parser.dart';
@@ -32,6 +36,7 @@ class LocalBookIndexService {
     required LocalBookStorageService storageService,
     required BookshelfService bookshelfService,
     required ReadingRecordService readingRecordService,
+    Duration indexTimeout = const Duration(minutes: 3),
   }) : _localBookRepository = localBookRepository,
        _parsers =
            parsers ??
@@ -47,7 +52,8 @@ class LocalBookIndexService {
        _storageService = storageService,
        _bookshelfService = bookshelfService,
        _readingRecordService = readingRecordService,
-       _logger = logger ?? AppLogger.instance;
+       _logger = logger ?? AppLogger.instance,
+       _indexTimeout = indexTimeout;
 
   final LocalBookRepository _localBookRepository;
   final List<LocalBookParser> _parsers;
@@ -56,6 +62,8 @@ class LocalBookIndexService {
   final BookshelfService _bookshelfService;
   final ReadingRecordService _readingRecordService;
   final AppLogger _logger;
+  final Duration _indexTimeout;
+  static final Pool _indexPool = Pool(2);
   static final Map<String, Future<List<LocalChapter>>> _activeIndexTasks =
       <String, Future<List<LocalChapter>>>{};
   static final StreamController<LocalBookIndexEvent> _eventController =
@@ -81,9 +89,19 @@ class LocalBookIndexService {
       return activeTask;
     }
 
-    final task = _ensureIndexedInternal(
-      normalizedBookId: normalizedBookId,
-      force: force,
+    _emitIndexEvent(
+      bookId: normalizedBookId,
+      status: LocalBookIndexStatus.pending,
+      chapterCount: 0,
+      stage: LocalBookIndexEventStage.queued,
+      message: '已加入后台解析队列',
+    );
+
+    final task = _indexPool.withResource(
+      () => _ensureIndexedInternal(
+        normalizedBookId: normalizedBookId,
+        force: force,
+      ),
     );
     _activeIndexTasks[normalizedBookId] = task;
     try {
@@ -119,6 +137,10 @@ class LocalBookIndexService {
         bookId: normalizedBookId,
         status: nextBook.indexStatus,
         chapterCount: nextBook.chapterCount,
+        stage: LocalBookIndexEventStage.preparing,
+        current: nextBook.chapterCount > 0 ? nextBook.chapterCount : null,
+        total: nextBook.chapterCount > 0 ? nextBook.chapterCount : null,
+        message: LocalBookWorkflowPolicy.statusDescription(nextBook),
       );
     }
     return nextBook;
@@ -148,6 +170,15 @@ class LocalBookIndexService {
     )) {
       final chapters = await _localBookRepository.getChapters(normalizedBookId);
       if (chapters.isNotEmpty) {
+        _emitIndexEvent(
+          bookId: normalizedBookId,
+          status: LocalBookIndexStatus.ready,
+          chapterCount: chapters.length,
+          stage: LocalBookIndexEventStage.ready,
+          current: chapters.length,
+          total: chapters.length,
+          message: '目录已存在，共 ${chapters.length} 章',
+        );
         return chapters;
       }
     }
@@ -161,6 +192,9 @@ class LocalBookIndexService {
       bookId: normalizedBookId,
       status: LocalBookIndexStatus.indexing,
       chapterCount: preparedBook.chapterCount,
+      stage: LocalBookIndexEventStage.preparing,
+      message: '正在准备${preparedBook.format.displayLabel}解析任务',
+      estimatedSeconds: _estimateIndexSeconds(preparedBook),
     );
 
     final parser = _resolveParser(preparedBook.format);
@@ -176,10 +210,19 @@ class LocalBookIndexService {
     try {
       final bookForParsing = await _hydrateReadableBook(preparedBook);
       final parserInput = LocalBookParserInput.fromBook(bookForParsing);
+      _emitIndexEvent(
+        bookId: normalizedBookId,
+        status: LocalBookIndexStatus.indexing,
+        chapterCount: preparedBook.chapterCount,
+        stage: LocalBookIndexEventStage.parsing,
+        current: 0,
+        message: _indexingMessageForFormat(preparedBook.format),
+        estimatedSeconds: _estimateIndexSeconds(preparedBook),
+      );
       final parsedBook = await parseLocalBookInput(
         parser: parser,
         input: parserInput,
-      );
+      ).timeout(_indexTimeout);
       if (parsedBook.chapters.isEmpty) {
         throw AppException(
           code: ErrorCode.ruleMatchEmpty,
@@ -188,6 +231,15 @@ class LocalBookIndexService {
         );
       }
 
+      _emitIndexEvent(
+        bookId: normalizedBookId,
+        status: LocalBookIndexStatus.indexing,
+        chapterCount: parsedBook.chapters.length,
+        stage: LocalBookIndexEventStage.persisting,
+        current: parsedBook.chapters.length,
+        total: parsedBook.chapters.length,
+        message: '正在写入目录，共 ${parsedBook.chapters.length} 章',
+      );
       final persisted = await _persistParsedBook(
         book: preparedBook,
         parsedBook: parsedBook,
@@ -197,89 +249,60 @@ class LocalBookIndexService {
         context: {
           'bookId': normalizedBookId,
           'format': preparedBook.format.name,
+          'size': preparedBook.fileSize,
           'chapterCount': persisted.length,
           'force': force,
-          'costMs': DateTime.now().difference(startedAt).inMilliseconds,
+          'durationMs': DateTime.now().difference(startedAt).inMilliseconds,
+          'stage': LocalBookIndexEventStage.ready.name,
+          'result': 'ready',
         },
       );
       _emitIndexEvent(
         bookId: normalizedBookId,
         status: LocalBookIndexStatus.ready,
         chapterCount: persisted.length,
+        stage: LocalBookIndexEventStage.ready,
+        current: persisted.length,
+        total: persisted.length,
+        message: '目录已建立，共 ${persisted.length} 章',
       );
       timelineTask.finish(
         arguments: <String, Object?>{
           'status': 'ready',
           'chapterCount': persisted.length,
           'costMs': DateTime.now().difference(startedAt).inMilliseconds,
+          'format': preparedBook.format.name,
+          'size': preparedBook.fileSize,
+          'stage': LocalBookIndexEventStage.ready.name,
+          'result': 'ready',
         },
       );
       return persisted;
-    } on AppException catch (error) {
-      await _localBookRepository.updateBookIndexState(
+    } on AppException catch (error, stackTrace) {
+      await _markIndexFailed(
         bookId: normalizedBookId,
-        status: LocalBookIndexStatus.failed,
-        chapterCount: 0,
-        lastError: error.briefMessage,
-      );
-      _emitIndexEvent(
-        bookId: normalizedBookId,
-        status: LocalBookIndexStatus.failed,
-        chapterCount: 0,
-      );
-      timelineTask.finish(
-        arguments: <String, Object?>{
-          'status': 'failed',
-          'error': error.briefMessage,
-          'costMs': DateTime.now().difference(startedAt).inMilliseconds,
-        },
-      );
-      rethrow;
-    } catch (error) {
-      final message = '本地书籍索引失败：$error';
-      await _localBookRepository.updateBookIndexState(
-        bookId: normalizedBookId,
-        status: LocalBookIndexStatus.failed,
-        chapterCount: 0,
-        lastError: message,
-      );
-      _emitIndexEvent(
-        bookId: normalizedBookId,
-        status: LocalBookIndexStatus.failed,
-        chapterCount: 0,
-      );
-      _logger.warn(
-        'Local book index failed',
-        context: {
-          'bookId': normalizedBookId,
-          'format': preparedBook.format.name,
-          'force': force,
-          'costMs': DateTime.now().difference(startedAt).inMilliseconds,
-          'error': message,
-        },
-      );
-      _logger.error(
-        'Local book indexing failed',
-        exception: AppException(
-          code: ErrorCode.unknown,
-          stage: ErrorStage.content,
-          briefMessage: message,
-          cause: error,
-        ),
-      );
-      timelineTask.finish(
-        arguments: <String, Object?>{
-          'status': 'failed',
-          'error': message,
-          'costMs': DateTime.now().difference(startedAt).inMilliseconds,
-        },
-      );
-      throw AppException(
-        code: ErrorCode.unknown,
-        stage: ErrorStage.content,
-        briefMessage: message,
+        book: preparedBook,
+        force: force,
+        startedAt: startedAt,
+        timelineTask: timelineTask,
+        failure: error.copyWith(cause: error.cause ?? error),
         cause: error,
+        stackTrace: stackTrace,
       );
+      Error.throwWithStackTrace(error, stackTrace);
+    } catch (error, stackTrace) {
+      final failure = _classifyIndexFailure(error);
+      await _markIndexFailed(
+        bookId: normalizedBookId,
+        book: preparedBook,
+        force: force,
+        startedAt: startedAt,
+        timelineTask: timelineTask,
+        failure: failure,
+        cause: error,
+        stackTrace: stackTrace,
+      );
+      Error.throwWithStackTrace(failure, stackTrace);
     }
   }
 
@@ -412,6 +435,156 @@ class LocalBookIndexService {
     return _parsers.firstWhere(
       (parser) => parser.supports(format),
       orElse: () => _UnsupportedLocalBookParser(format),
+    );
+  }
+
+  String _indexingMessageForFormat(LocalBookFormat format) {
+    return switch (format) {
+      LocalBookFormat.epub => '正在解析 EPUB 结构、资源和目录',
+      LocalBookFormat.html => '正在解析 HTML 结构和图片资源',
+      LocalBookFormat.md => '正在解析 Markdown 内容',
+      LocalBookFormat.pdf => '正在建立 PDF 页面索引',
+      LocalBookFormat.mobi ||
+      LocalBookFormat.azw ||
+      LocalBookFormat.azw3 => '正在解析 Kindle 电子书结构',
+      LocalBookFormat.txt => '正在识别文本编码并切分章节',
+    };
+  }
+
+  int? _estimateIndexSeconds(LocalBook book) {
+    if (book.fileSize <= 0) {
+      return null;
+    }
+    final sizeMb = book.fileSize / (1024 * 1024);
+    final baseSeconds = switch (book.format) {
+      LocalBookFormat.txt => 2,
+      LocalBookFormat.md || LocalBookFormat.html => 3,
+      LocalBookFormat.epub => 5,
+      LocalBookFormat.pdf => 4,
+      LocalBookFormat.mobi || LocalBookFormat.azw || LocalBookFormat.azw3 => 8,
+    };
+    final estimate = (baseSeconds + sizeMb * 1.5).ceil();
+    return estimate.clamp(2, 180).toInt();
+  }
+
+  AppException _classifyIndexFailure(Object error) {
+    if (error is AppException) {
+      return error;
+    }
+    if (error is TimeoutException) {
+      return AppException(
+        code: ErrorCode.validation,
+        stage: ErrorStage.content,
+        briefMessage: '本地书籍解析超时，请重试或重新导入。',
+        cause: error,
+      );
+    }
+    if (error is FileSystemException) {
+      final osMessage = error.osError?.message.toLowerCase() ?? '';
+      final rawMessage = error.message.toLowerCase();
+      final path = error.path?.trim();
+      final suffix = path == null || path.isEmpty ? '' : '：${p.basename(path)}';
+      if (osMessage.contains('permission') ||
+          rawMessage.contains('permission')) {
+        return AppException(
+          code: ErrorCode.validation,
+          stage: ErrorStage.content,
+          briefMessage: '本地书籍文件权限不足，请重新授权或重新导入$suffix。',
+          cause: error,
+        );
+      }
+      if (osMessage.contains('no such file') ||
+          rawMessage.contains('no such file') ||
+          rawMessage.contains('cannot open file')) {
+        return AppException(
+          code: ErrorCode.validation,
+          stage: ErrorStage.content,
+          briefMessage: '本地书籍文件不存在或已被移动，请重新导入$suffix。',
+          cause: error,
+        );
+      }
+      return AppException(
+        code: ErrorCode.validation,
+        stage: ErrorStage.content,
+        briefMessage: '无法读取本地书籍文件，请检查文件状态后重试$suffix。',
+        cause: error,
+      );
+    }
+    if (error is FormatException) {
+      return AppException(
+        code: ErrorCode.ruleParse,
+        stage: ErrorStage.content,
+        briefMessage: '本地书籍格式异常，无法建立目录。',
+        cause: error,
+      );
+    }
+    if (error is UnsupportedError) {
+      return AppException(
+        code: ErrorCode.validation,
+        stage: ErrorStage.content,
+        briefMessage: '暂不支持该本地书籍格式的解析能力。',
+        cause: error,
+      );
+    }
+    return AppException(
+      code: ErrorCode.unknown,
+      stage: ErrorStage.content,
+      briefMessage: '本地书籍索引失败：$error',
+      cause: error,
+    );
+  }
+
+  Future<void> _markIndexFailed({
+    required String bookId,
+    required LocalBook book,
+    required bool force,
+    required DateTime startedAt,
+    required developer.TimelineTask timelineTask,
+    required AppException failure,
+    required Object cause,
+    required StackTrace stackTrace,
+  }) async {
+    final durationMs = DateTime.now().difference(startedAt).inMilliseconds;
+    await _localBookRepository.updateBookIndexState(
+      bookId: bookId,
+      status: LocalBookIndexStatus.failed,
+      chapterCount: 0,
+      lastError: failure.briefMessage,
+    );
+    _emitIndexEvent(
+      bookId: bookId,
+      status: LocalBookIndexStatus.failed,
+      chapterCount: 0,
+      stage: LocalBookIndexEventStage.failed,
+      message: failure.briefMessage,
+    );
+    final context = <String, Object?>{
+      'bookId': bookId,
+      'format': book.format.name,
+      'size': book.fileSize,
+      'durationMs': durationMs,
+      'stage': LocalBookIndexEventStage.failed.name,
+      'result': 'failed',
+      'force': force,
+      'error': failure.briefMessage,
+      'errorCode': failure.code.name,
+    };
+    _logger.warn('Local book index failed', context: context);
+    _logger.error(
+      'Local book indexing failed',
+      exception: failure.copyWith(cause: cause, stackTrace: stackTrace),
+      context: context,
+    );
+    timelineTask.finish(
+      arguments: <String, Object?>{
+        'status': 'failed',
+        'error': failure.briefMessage,
+        'costMs': durationMs,
+        'format': book.format.name,
+        'size': book.fileSize,
+        'stage': LocalBookIndexEventStage.failed.name,
+        'result': 'failed',
+      },
     );
   }
 
@@ -573,6 +746,11 @@ class LocalBookIndexService {
     required String bookId,
     required LocalBookIndexStatus status,
     required int chapterCount,
+    required LocalBookIndexEventStage stage,
+    int? current,
+    int? total,
+    String? message,
+    int? estimatedSeconds,
   }) {
     if (_eventController.isClosed) {
       return;
@@ -582,6 +760,11 @@ class LocalBookIndexService {
         bookId: bookId,
         status: status,
         chapterCount: chapterCount,
+        stage: stage,
+        current: current,
+        total: total,
+        message: message,
+        estimatedSeconds: estimatedSeconds,
       ),
     );
   }
@@ -646,16 +829,35 @@ class _PreparedBookResult {
   final bool shouldReindex;
 }
 
+enum LocalBookIndexEventStage {
+  queued,
+  preparing,
+  parsing,
+  persisting,
+  ready,
+  failed,
+}
+
 class LocalBookIndexEvent {
   const LocalBookIndexEvent({
     required this.bookId,
     required this.status,
     required this.chapterCount,
+    required this.stage,
+    this.current,
+    this.total,
+    this.message,
+    this.estimatedSeconds,
   });
 
   final String bookId;
   final LocalBookIndexStatus status;
   final int chapterCount;
+  final LocalBookIndexEventStage stage;
+  final int? current;
+  final int? total;
+  final String? message;
+  final int? estimatedSeconds;
 }
 
 class _UnsupportedLocalBookParser implements LocalBookParser {
