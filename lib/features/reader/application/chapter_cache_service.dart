@@ -100,16 +100,34 @@ class ChapterCacheService {
     final controller = StreamController<ChapterCacheProgress>();
 
     unawaited(() async {
-      await _cacheRangeInternal(
-        controller: controller,
-        bookId: bookId,
-        sourceId: sourceId,
-        chapters: chapters,
-        startIndex: startIndex,
-        endIndex: endIndex,
-        cancellationToken: cancellationToken,
-        perChapterTimeout: perChapterTimeout,
-      );
+      try {
+        await _cacheRangeInternal(
+          controller: controller,
+          bookId: bookId,
+          sourceId: sourceId,
+          chapters: chapters,
+          startIndex: startIndex,
+          endIndex: endIndex,
+          cancellationToken: cancellationToken,
+          perChapterTimeout: perChapterTimeout,
+        );
+      } catch (error, stackTrace) {
+        _logger.warn(
+          'Chapter cache range failed',
+          context: {
+            'bookId': bookId.trim(),
+            'sourceId': sourceId.trim(),
+            'error': error.toString(),
+          },
+        );
+        if (!controller.isClosed) {
+          controller.addError(error, stackTrace);
+        }
+      } finally {
+        if (!controller.isClosed) {
+          await controller.close();
+        }
+      }
     }());
 
     return controller.stream;
@@ -145,7 +163,6 @@ class ChapterCacheService {
           isCompleted: true,
         ),
       );
-      await controller.close();
       return;
     }
 
@@ -160,7 +177,6 @@ class ChapterCacheService {
           isCompleted: true,
         ),
       );
-      await controller.close();
       return;
     }
 
@@ -325,7 +341,6 @@ class ChapterCacheService {
         isCompleted: true,
       ),
     );
-    await controller.close();
   }
 
   Future<int> _resolveParallelism({
