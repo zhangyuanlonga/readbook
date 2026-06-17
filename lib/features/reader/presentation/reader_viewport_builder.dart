@@ -132,7 +132,7 @@ class ReaderViewportBuilder {
                               : onRetry),
                   child: Text(resolvedPrimaryActionLabel),
                 ),
-                if (isLocalContent)
+                if (isLocalContent || state.errorText != null)
                   OutlinedButton.icon(
                     onPressed: onCopyDiagnostics,
                     icon: const Icon(Icons.copy_rounded, size: 16),

@@ -290,6 +290,21 @@ extension on _BookDetailPageState {
                                           size: 16,
                                         ),
                                         label: const Text('复制诊断信息'),
+                                      )
+                                    else if (presentationState
+                                            .detailFailureDiagnostics !=
+                                        null)
+                                      OutlinedButton.icon(
+                                        onPressed:
+                                            () => _copyOnlineDetailDiagnostics(
+                                              presentationState
+                                                  .detailFailureDiagnostics!,
+                                            ),
+                                        icon: const Icon(
+                                          Icons.copy_rounded,
+                                          size: 16,
+                                        ),
+                                        label: const Text('复制诊断信息'),
                                       ),
                                   ],
                                 )

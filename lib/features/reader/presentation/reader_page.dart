@@ -35,6 +35,7 @@ import '../../../app/widgets/import_export_task_overlay.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../app/widgets/switch_source_candidate_sheet.dart';
 import '../../../core/errors/app_exception.dart';
+import '../../../core/errors/app_exception_diagnostics.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
 import '../../../core/logging/app_logger.dart';
@@ -756,6 +757,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool _isScrollEdgeAdvancingChapter = false;
   SearchCancellationToken? _activeSwitchSourceCancellationToken;
   String? _errorText;
+  AppExceptionDiagnostics? _contentFailureDiagnostics;
   ReaderFailurePresentation? _readerFailurePresentation;
   String? _readerGatewayFailureStage;
   ReaderDocument _document = ReaderDocument(blocks: const <ReaderBlock>[]);

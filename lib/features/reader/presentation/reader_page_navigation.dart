@@ -353,6 +353,7 @@ extension _ReaderPageNavigationExtension on _ReaderPageState {
 
     setState(() {
       _errorText = null;
+      _contentFailureDiagnostics = null;
     });
 
     _maybeStartReadingRecordSession(initialRatio: _currentScrollRatio());

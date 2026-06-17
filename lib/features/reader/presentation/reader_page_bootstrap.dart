@@ -106,6 +106,72 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
     _showMessage('已复制本地图书诊断信息。');
   }
 
+  Future<void> _copyReaderDiagnostics() async {
+    if (_isLocalContent) {
+      await _copyLocalReaderDiagnostics();
+      return;
+    }
+    final diagnostics =
+        _contentFailureDiagnostics ??
+        AppExceptionDiagnostics.fromMessage(
+          title: '章节正文诊断',
+          scene: 'reader_content',
+          userMessage: _errorText ?? '加载正文失败。',
+          context: _buildReaderDiagnosticsContext(),
+        );
+    await Clipboard.setData(ClipboardData(text: diagnostics.toClipboardText()));
+    if (!mounted) {
+      return;
+    }
+    _showMessage('已复制书源诊断信息。');
+  }
+
+  AppExceptionDiagnostics _buildReaderDiagnostics({
+    required String scene,
+    required String userMessage,
+    required AppException error,
+  }) {
+    return AppExceptionDiagnostics.fromException(
+      title: '章节正文诊断',
+      scene: scene,
+      userMessage: userMessage,
+      error: error,
+      context: _buildReaderDiagnosticsContext(),
+    );
+  }
+
+  AppExceptionDiagnostics _buildReaderDiagnosticsFromMessage({
+    required String scene,
+    required String userMessage,
+  }) {
+    return AppExceptionDiagnostics.fromMessage(
+      title: '章节正文诊断',
+      scene: scene,
+      userMessage: userMessage,
+      context: _buildReaderDiagnosticsContext(),
+    );
+  }
+
+  Map<String, Object?> _buildReaderDiagnosticsContext() {
+    return <String, Object?>{
+      'bookId': _currentBookId,
+      'title': _bookTitle,
+      'author': _bookAuthor,
+      'sourceId': _sourceId,
+      'detailUrl': _detailUrl,
+      'chapterId': _chapterId,
+      'chapterUrl': _chapterUrl,
+      'chapterTitle': _chapterTitle,
+      'chapterIndex': _currentIndex,
+      'chapterCount': _chapters.length,
+      'catalogComplete': _catalogComplete,
+      'hasChapterExecutionContext':
+          (_chapterExecutionContext?.trim().isNotEmpty ?? false),
+      'readerGatewayFailureStage': _readerGatewayFailureStage,
+      'openRouteKind': widget.openRouteKind,
+    };
+  }
+
   Future<void> _refreshReaderInfoSnapshot({bool force = false}) async {
     if (!mounted) {
       return;
@@ -466,7 +532,12 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
           return;
         }
         setState(() {
-          _errorText = '缺少 sourceId/detailUrl，无法加载正文。';
+          const message = '缺少 sourceId/detailUrl，无法加载正文。';
+          _contentFailureDiagnostics = _buildReaderDiagnosticsFromMessage(
+            scene: 'reader_bootstrap',
+            userMessage: message,
+          );
+          _errorText = message;
           _isBootstrapping = false;
         });
         return;
@@ -558,6 +629,11 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
       setState(() {
         _readerFailurePresentation = presentation;
         _readerGatewayFailureStage = _readerGatewayFailureStageFor(error);
+        _contentFailureDiagnostics = _buildReaderDiagnostics(
+          scene: 'reader_bootstrap',
+          userMessage: readableError,
+          error: error,
+        );
         _errorText = readableError;
       });
       _maybePromptSwitchSourceForMissingSource(error.code);
@@ -570,6 +646,10 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
       setState(() {
         _readerFailurePresentation = null;
         _readerGatewayFailureStage = null;
+        _contentFailureDiagnostics = _buildReaderDiagnosticsFromMessage(
+          scene: 'reader_bootstrap',
+          userMessage: fallbackError,
+        );
         _errorText = fallbackError;
       });
     } finally {
@@ -808,6 +888,7 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
           _chapterUrl = current.chapterUrl;
           _chapterTitle = current.title;
           _errorText = null;
+          _contentFailureDiagnostics = null;
         });
       } else {
         _bookTitle = snapshot.title;
@@ -821,6 +902,7 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
         _chapterUrl = current.chapterUrl;
         _chapterTitle = current.title;
         _errorText = null;
+        _contentFailureDiagnostics = null;
       }
 
       await _applyPresentedBookMetadata(

@@ -805,6 +805,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
       _readerFailurePresentation = null;
       _readerGatewayFailureStage = null;
       _errorText = null;
+      _contentFailureDiagnostics = null;
       _setContentFlow(
         snapshot.result.content,
         imageUrls: snapshot.result.imageUrls,
@@ -884,6 +885,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
         _updateReaderState(() {
           _isCurrentChapterCached = true;
           _errorText = null;
+          _contentFailureDiagnostics = null;
           _setContentFlow(
             readableChapter.content,
             imageUrls: readableChapter.imageUrls,
@@ -972,6 +974,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
       _updateReaderState(() {
         _isCurrentChapterCached = true;
         _errorText = null;
+        _contentFailureDiagnostics = null;
         _setContentFlow(
           decoded.content,
           imageUrls: decoded.imageUrls,
@@ -1063,7 +1066,12 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
     if (request == null) {
       _stopAutoRead();
       _updateReaderState(() {
-        _errorText = '当前章节信息不完整。';
+        const message = '当前章节信息不完整。';
+        _contentFailureDiagnostics = _buildReaderDiagnosticsFromMessage(
+          scene: 'reader_content',
+          userMessage: message,
+        );
+        _errorText = message;
       });
       return false;
     }
@@ -1079,6 +1087,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
     _updateReaderState(() {
       _isLoadingContent = true;
       _errorText = null;
+      _contentFailureDiagnostics = null;
     });
     if (suppressLoadingUi) {
       _clearDelayedLoadingUi();
@@ -1137,6 +1146,11 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
       _updateReaderState(() {
         _readerFailurePresentation = presentation;
         _readerGatewayFailureStage = _readerGatewayFailureStageFor(error);
+        _contentFailureDiagnostics = _buildReaderDiagnostics(
+          scene: 'reader_content',
+          userMessage: readableError,
+          error: error,
+        );
         _errorText = readableError;
       });
       _maybePromptSwitchSourceForMissingSource(error.code);
@@ -1151,6 +1165,10 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
       _updateReaderState(() {
         _readerFailurePresentation = null;
         _readerGatewayFailureStage = null;
+        _contentFailureDiagnostics = _buildReaderDiagnosticsFromMessage(
+          scene: 'reader_content',
+          userMessage: fallbackError,
+        );
         _errorText = fallbackError;
       });
       final switched = await _tryAutoSwitchSourceOnFailure();

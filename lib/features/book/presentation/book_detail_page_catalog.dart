@@ -60,6 +60,7 @@ extension on _BookDetailPageState {
       _presentationState.copyWith(
         isCatalogLoading: true,
         clearTocWarningText: true,
+        clearTocFailureDiagnostics: true,
       ),
     );
 
@@ -89,6 +90,18 @@ extension on _BookDetailPageState {
           isCatalogLoading: false,
           result: result,
           tocWarningText: _toTocWarningText(result.tocError),
+          clearTocWarningText: result.tocError == null,
+          tocFailureDiagnostics:
+              result.tocError == null
+                  ? null
+                  : _buildDetailDiagnostics(
+                    title: '书籍目录诊断',
+                    scene: 'book_detail_toc',
+                    userMessage: _toTocWarningText(result.tocError) ?? '',
+                    error: result.tocError!,
+                    result: result,
+                  ),
+          clearTocFailureDiagnostics: result.tocError == null,
         ),
       );
       unawaited(_loadSupplementaryState(result: result));
@@ -115,6 +128,13 @@ extension on _BookDetailPageState {
         _presentationState.copyWith(
           isCatalogLoading: false,
           tocWarningText: _toTocWarningText(error),
+          tocFailureDiagnostics: _buildDetailDiagnostics(
+            title: '书籍目录诊断',
+            scene: 'book_detail_toc',
+            userMessage: _toTocWarningText(error) ?? error.briefMessage,
+            error: error,
+            result: currentResult,
+          ),
         ),
       );
       _showMessage(error.briefMessage);
@@ -142,6 +162,12 @@ extension on _BookDetailPageState {
         _presentationState.copyWith(
           isCatalogLoading: false,
           tocWarningText: message,
+          tocFailureDiagnostics: _buildDetailDiagnosticsFromMessage(
+            title: '书籍目录诊断',
+            scene: 'book_detail_toc',
+            userMessage: message,
+            result: currentResult,
+          ),
         ),
       );
       _showMessage(message);
@@ -174,6 +200,7 @@ extension on _BookDetailPageState {
       _presentationState.copyWith(
         isCatalogLoading: true,
         clearTocWarningText: true,
+        clearTocFailureDiagnostics: true,
       ),
     );
 
@@ -195,6 +222,18 @@ extension on _BookDetailPageState {
           isCatalogLoading: false,
           result: result,
           tocWarningText: _toTocWarningText(result.tocError),
+          clearTocWarningText: result.tocError == null,
+          tocFailureDiagnostics:
+              result.tocError == null
+                  ? null
+                  : _buildDetailDiagnostics(
+                    title: '书籍目录诊断',
+                    scene: 'book_detail_toc_first_batch',
+                    userMessage: _toTocWarningText(result.tocError) ?? '',
+                    error: result.tocError!,
+                    result: result,
+                  ),
+          clearTocFailureDiagnostics: result.tocError == null,
         ),
       );
       unawaited(_loadSupplementaryState(result: result));
@@ -234,6 +273,13 @@ extension on _BookDetailPageState {
         _presentationState.copyWith(
           isCatalogLoading: false,
           tocWarningText: _toTocWarningText(error),
+          tocFailureDiagnostics: _buildDetailDiagnostics(
+            title: '书籍目录诊断',
+            scene: 'book_detail_toc_first_batch',
+            userMessage: _toTocWarningText(error) ?? error.briefMessage,
+            error: error,
+            result: currentResult,
+          ),
         ),
       );
       _showMessage(error.briefMessage);
@@ -261,6 +307,12 @@ extension on _BookDetailPageState {
         _presentationState.copyWith(
           isCatalogLoading: false,
           tocWarningText: message,
+          tocFailureDiagnostics: _buildDetailDiagnosticsFromMessage(
+            title: '书籍目录诊断',
+            scene: 'book_detail_toc_first_batch',
+            userMessage: message,
+            result: currentResult,
+          ),
         ),
       );
       _showMessage(message);

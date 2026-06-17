@@ -473,9 +473,14 @@ class BookDetailLocalIndexStatusCard extends StatelessWidget {
 }
 
 class BookDetailTocWarningCard extends StatelessWidget {
-  const BookDetailTocWarningCard({super.key, required this.message});
+  const BookDetailTocWarningCard({
+    super.key,
+    required this.message,
+    this.actions = const <Widget>[],
+  });
 
   final String message;
+  final List<Widget> actions;
 
   @override
   Widget build(BuildContext context) {
@@ -485,22 +490,31 @@ class BookDetailTocWarningCard extends StatelessWidget {
       color: colorScheme.tertiaryContainer,
       child: Padding(
         padding: const EdgeInsets.all(14),
-        child: Row(
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(
-              Icons.warning_amber_rounded,
-              color: colorScheme.onTertiaryContainer,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                message,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.warning_amber_rounded,
                   color: colorScheme.onTertiaryContainer,
                 ),
-              ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    message,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onTertiaryContainer,
+                    ),
+                  ),
+                ),
+              ],
             ),
+            if (actions.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Wrap(spacing: 8, runSpacing: 8, children: actions),
+            ],
           ],
         ),
       ),

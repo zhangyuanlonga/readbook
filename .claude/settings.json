@@ -13,7 +13,9 @@
       "Read(//Users/zhangyuanlong/storage/FlutterProject/reader-rust-master/src/api/**)",
       "Read(//Users/zhangyuanlong/storage/FlutterProject/reader-rust-master/src/storage/db/**)",
       "Bash(grep -n \"pub async fn list_search_source_groups\" /Users/zhangyuanlong/storage/FlutterProject/reader-rust-master/src/service/book_source_service.rs)",
-      "Read(//Users/zhangyuanlong/storage/FlutterProject/reader-rust-master/src/service/**)"
+      "Read(//Users/zhangyuanlong/storage/FlutterProject/reader-rust-master/src/service/**)",
+      "Bash(grep -B 5 -A 10 \"database_auto_migrate\" /Users/zhangyuanlong/storage/FlutterProject/reader-rust-master/src/app/config.rs | head -30)",
+      "Read(//Users/zhangyuanlong/storage/FlutterProject/reader-rust-master/src/app/**)"
     ],
     "additionalDirectories": [
       "/Users/zhangyuanlong/storage/FlutterProject/read-admin/internal/application/booksource",

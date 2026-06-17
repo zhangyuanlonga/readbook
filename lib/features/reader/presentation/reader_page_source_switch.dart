@@ -738,6 +738,7 @@ extension _ReaderPageSourceSwitchExtension on _ReaderPageState {
         _chapterUrl = targetChapter.chapterUrl;
         _chapterTitle = targetChapter.title;
         _errorText = null;
+        _contentFailureDiagnostics = null;
       });
       await _applyPresentedBookMetadata(
         fallbackTitle: detailResult.detail.title,

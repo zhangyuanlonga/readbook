@@ -166,7 +166,7 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
           _supportsChapterPullToRefresh
               ? () => _reloadCurrentChapterFromPullToRefresh()
               : null,
-      onCopyDiagnostics: _copyLocalReaderDiagnostics,
+      onCopyDiagnostics: _copyReaderDiagnostics,
       onSwitchSource: () => unawaited(_showSwitchSourceSheet()),
       isLocalContent: _isLocalContent,
     );

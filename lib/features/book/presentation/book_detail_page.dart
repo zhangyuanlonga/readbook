@@ -29,6 +29,7 @@ import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../app/widgets/runtime_feedback_card.dart';
 import '../../../app/widgets/switch_source_candidate_sheet.dart';
 import '../../../core/errors/app_exception.dart';
+import '../../../core/errors/app_exception_diagnostics.dart';
 import '../../../core/errors/error_codes.dart';
 import '../../../core/errors/error_stage.dart';
 import '../../../core/logging/app_logger.dart';
@@ -136,6 +137,8 @@ class _BookDetailPresentationState {
     this.isCatalogLoading = false,
     this.errorText,
     this.tocWarningText,
+    this.detailFailureDiagnostics,
+    this.tocFailureDiagnostics,
     this.result,
   });
 
@@ -143,6 +146,8 @@ class _BookDetailPresentationState {
   final bool isCatalogLoading;
   final String? errorText;
   final String? tocWarningText;
+  final AppExceptionDiagnostics? detailFailureDiagnostics;
+  final AppExceptionDiagnostics? tocFailureDiagnostics;
   final BookDetailLoadResult? result;
 
   _BookDetailPresentationState copyWith({
@@ -152,6 +157,10 @@ class _BookDetailPresentationState {
     bool clearErrorText = false,
     String? tocWarningText,
     bool clearTocWarningText = false,
+    AppExceptionDiagnostics? detailFailureDiagnostics,
+    bool clearDetailFailureDiagnostics = false,
+    AppExceptionDiagnostics? tocFailureDiagnostics,
+    bool clearTocFailureDiagnostics = false,
     BookDetailLoadResult? result,
     bool clearResult = false,
   }) {
@@ -161,6 +170,14 @@ class _BookDetailPresentationState {
       errorText: clearErrorText ? null : (errorText ?? this.errorText),
       tocWarningText:
           clearTocWarningText ? null : (tocWarningText ?? this.tocWarningText),
+      detailFailureDiagnostics:
+          clearDetailFailureDiagnostics
+              ? null
+              : (detailFailureDiagnostics ?? this.detailFailureDiagnostics),
+      tocFailureDiagnostics:
+          clearTocFailureDiagnostics
+              ? null
+              : (tocFailureDiagnostics ?? this.tocFailureDiagnostics),
       result: clearResult ? null : (result ?? this.result),
     );
   }
@@ -469,6 +486,12 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   String? get _errorText => _presentationState.errorText;
 
   String? get _tocWarningText => _presentationState.tocWarningText;
+
+  AppExceptionDiagnostics? get _detailFailureDiagnostics =>
+      _presentationState.detailFailureDiagnostics;
+
+  AppExceptionDiagnostics? get _tocFailureDiagnostics =>
+      _presentationState.tocFailureDiagnostics;
 
   BookDetailLoadResult? get _result => _presentationState.result;
 
@@ -2521,6 +2544,8 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     final previousResult = _result;
     final previousErrorText = _errorText;
     final previousTocWarning = _tocWarningText;
+    final previousDetailFailureDiagnostics = _detailFailureDiagnostics;
+    final previousTocFailureDiagnostics = _tocFailureDiagnostics;
     final previousInBookshelf = _isInBookshelf;
     final previousReadableChapter = _firstReadableChapter(
       previousResult?.chapters,
@@ -2567,6 +2592,8 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
           result: previousResult,
           errorText: previousErrorText,
           tocWarningText: previousTocWarning,
+          detailFailureDiagnostics: previousDetailFailureDiagnostics,
+          tocFailureDiagnostics: previousTocFailureDiagnostics,
         ),
       );
       _updateAuxiliaryState(
@@ -2790,6 +2817,8 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       isLoading: shouldShowLoading ? true : _presentationState.isLoading,
       clearErrorText: !backgroundRefresh,
       clearTocWarningText: !backgroundRefresh,
+      clearDetailFailureDiagnostics: !backgroundRefresh,
+      clearTocFailureDiagnostics: !backgroundRefresh,
       clearResult: clearResult,
     );
     _updatePresentationState(nextPresentationBeforeLoad);
@@ -2828,8 +2857,21 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
         _presentationState.copyWith(
           isLoading: false,
           clearErrorText: true,
+          clearDetailFailureDiagnostics: true,
           result: result,
           tocWarningText: _toTocWarningText(result.tocError),
+          clearTocWarningText: result.tocError == null,
+          tocFailureDiagnostics:
+              result.tocError == null
+                  ? null
+                  : _buildDetailDiagnostics(
+                    title: '书籍目录诊断',
+                    scene: 'book_detail_toc',
+                    userMessage: _toTocWarningText(result.tocError) ?? '',
+                    error: result.tocError!,
+                    result: result,
+                  ),
+          clearTocFailureDiagnostics: result.tocError == null,
         ),
       );
       _recordDetailBodyVisible(
@@ -2858,7 +2900,14 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       _updatePresentationState(
         _presentationState.copyWith(
           errorText: _toUserReadableError(error),
+          detailFailureDiagnostics: _buildDetailDiagnostics(
+            title: '书籍详情诊断',
+            scene: 'book_detail',
+            userMessage: _toUserReadableError(error),
+            error: error,
+          ),
           clearTocWarningText: true,
+          clearTocFailureDiagnostics: true,
         ),
       );
       _updateAuxiliaryState(
@@ -2881,7 +2930,13 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       _updatePresentationState(
         _presentationState.copyWith(
           errorText: '加载失败，请稍后重试。',
+          detailFailureDiagnostics: _buildDetailDiagnosticsFromMessage(
+            title: '书籍详情诊断',
+            scene: 'book_detail',
+            userMessage: '加载失败，请稍后重试。',
+          ),
           clearTocWarningText: true,
+          clearTocFailureDiagnostics: true,
         ),
       );
       _updateAuxiliaryState(
@@ -3350,6 +3405,67 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     await _copyLocalDiagnostics(book);
   }
 
+  Future<void> _copyOnlineDetailDiagnostics(
+    AppExceptionDiagnostics diagnostics,
+  ) async {
+    await Clipboard.setData(ClipboardData(text: diagnostics.toClipboardText()));
+    if (!mounted) {
+      return;
+    }
+    _showMessage('已复制书源诊断信息。');
+  }
+
+  AppExceptionDiagnostics _buildDetailDiagnostics({
+    required String title,
+    required String scene,
+    required String userMessage,
+    required AppException error,
+    BookDetailLoadResult? result,
+  }) {
+    return AppExceptionDiagnostics.fromException(
+      title: title,
+      scene: scene,
+      userMessage: userMessage,
+      error: error,
+      context: _buildDetailDiagnosticsContext(result: result),
+    );
+  }
+
+  AppExceptionDiagnostics _buildDetailDiagnosticsFromMessage({
+    required String title,
+    required String scene,
+    required String userMessage,
+    BookDetailLoadResult? result,
+  }) {
+    return AppExceptionDiagnostics.fromMessage(
+      title: title,
+      scene: scene,
+      userMessage: userMessage,
+      context: _buildDetailDiagnosticsContext(result: result),
+    );
+  }
+
+  Map<String, Object?> _buildDetailDiagnosticsContext({
+    BookDetailLoadResult? result,
+  }) {
+    final detail = result?.detail;
+    return <String, Object?>{
+      'bookId': detail?.id ?? _activeBookId,
+      'title': detail?.title ?? _displayTitle ?? widget.title,
+      'author': detail?.author ?? widget.author,
+      'sourceId': detail?.sourceId ?? _activeSourceId ?? widget.sourceId,
+      'sourceName': result?.sourceName,
+      'detailUrl': detail?.detailUrl ?? _activeDetailUrl ?? widget.detailUrl,
+      'tocUrl': detail?.tocUrl ?? widget.initialBook?.tocUrl,
+      'catalogLoaded': result?.catalogLoaded,
+      'catalogComplete': result?.catalogComplete,
+      'chapterCount': result?.chapters.length,
+      'routeBookId': widget.bookId,
+      'routeSourceId': widget.sourceId,
+      'routeDetailUrl': widget.detailUrl,
+    };
+  }
+
   Future<void> _pickAndApplyCustomCover(
     BookDetailLoadResult detailResult,
   ) async {
@@ -3461,7 +3577,20 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   }
 
   Widget _buildTocWarningCard(String message) {
-    return BookDetailTocWarningCard(message: message);
+    final diagnostics = _tocFailureDiagnostics;
+    return BookDetailTocWarningCard(
+      message: message,
+      actions:
+          diagnostics == null
+              ? const <Widget>[]
+              : <Widget>[
+                OutlinedButton.icon(
+                  onPressed: () => _copyOnlineDetailDiagnostics(diagnostics),
+                  icon: const Icon(Icons.copy_rounded, size: 16),
+                  label: const Text('复制诊断信息'),
+                ),
+              ],
+    );
   }
 
   void _showMessage(String text) {

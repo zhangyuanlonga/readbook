@@ -2279,37 +2279,29 @@ class _AdvancedThemeEditorPageState
   PreferredSizeWidget _buildModeTabBar(BuildContext context) {
     final theme = Theme.of(context);
     return PreferredSize(
-      preferredSize: const Size.fromHeight(42),
+      preferredSize: const Size.fromHeight(48),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
-        child: Container(
-          height: 36,
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+        child: DecoratedBox(
           decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerLow.withValues(alpha: 0.9),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.45),
-            ),
+            color: theme.colorScheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(14),
           ),
           child: TabBar(
             controller: _modeTabController,
             dividerColor: Colors.transparent,
             indicatorSize: TabBarIndicatorSize.tab,
             indicator: BoxDecoration(
-              color: theme.colorScheme.surface.withValues(alpha: 0.92),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
-              ),
+              color: theme.colorScheme.primaryContainer,
+              borderRadius: BorderRadius.circular(12),
             ),
-            indicatorPadding: const EdgeInsets.all(3),
-            labelColor: theme.colorScheme.onSurface,
+            labelColor: theme.colorScheme.onPrimaryContainer,
             unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
             labelStyle: theme.textTheme.labelMedium?.copyWith(
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w600,
             ),
             unselectedLabelStyle: theme.textTheme.labelMedium?.copyWith(
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w500,
             ),
             tabs: const [
               Tab(
@@ -2317,7 +2309,7 @@ class _AdvancedThemeEditorPageState
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(Icons.light_mode_outlined, size: 16),
-                    SizedBox(width: 4),
+                    SizedBox(width: 6),
                     Text('浅色主题'),
                   ],
                 ),
