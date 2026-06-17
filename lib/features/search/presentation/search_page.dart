@@ -58,6 +58,7 @@ class SearchPage extends ConsumerStatefulWidget {
 
 enum _SearchMoreAction {
   togglePrecise,
+  allSources,
   manageSources,
   serverSources,
   clearSourceFilter,
@@ -138,7 +139,7 @@ class _SearchMoreMenuItemContent extends StatelessWidget {
           SizedBox(
             width: 22,
             child: Icon(
-              checked ? Icons.check_circle_rounded : icon,
+              checked ? Icons.radio_button_checked_rounded : icon,
               size: 19,
               color:
                   checked ? colorScheme.primary : colorScheme.onSurfaceVariant,
@@ -269,23 +270,13 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     );
   }
 
-  String? get _selectedServerSourceId {
-    for (final id in _selectedServerSourceIds) {
-      final normalized = id.trim();
-      if (normalized.isNotEmpty) {
-        return normalized;
-      }
-    }
-    return null;
-  }
-
   bool get _hasServerSourceFilter =>
       _selectedServerSourceIds.isNotEmpty ||
       _selectedServerGroupNames.isNotEmpty;
 
   SearchSourceSelection get _serverSourceSelection => SearchSourceSelection(
     groupNames: Set<String>.of(_selectedServerGroupNames),
-    sourceId: _selectedServerSourceId,
+    sourceIds: Set<String>.of(_selectedServerSourceIds),
   );
 
   bool get _isAppendingResults => _pageState.isAppendingResults;
@@ -381,8 +372,8 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     if (!_hasServerSourceFilter) {
       return '搜索范围：全部书源';
     }
-    if (_selectedServerSourceId != null) {
-      return '搜索范围：指定书源';
+    if (_selectedServerSourceIds.isNotEmpty) {
+      return '搜索范围：已选 ${_selectedServerSourceIds.length} 个书源';
     }
     return '搜索范围：已选 ${_selectedServerGroupNames.length} 个分组';
   }
@@ -932,6 +923,10 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                   switch (action) {
                     case _SearchMoreAction.togglePrecise:
                       _onPreciseMatchChanged(!_isPreciseBookMatch);
+                    case _SearchMoreAction.allSources:
+                      if (_hasServerSourceFilter) {
+                        _clearActiveSourceFilter();
+                      }
                     case _SearchMoreAction.manageSources:
                       unawaited(context.push('/mine/book-sources'));
                     case _SearchMoreAction.serverSources:
@@ -945,9 +940,18 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                     value: _SearchMoreAction.togglePrecise,
                     label: '精准搜索',
                     child: _SearchMoreMenuItemContent(
-                      icon: Icons.check_circle_outline_rounded,
+                      icon: Icons.radio_button_unchecked_rounded,
                       checked: _isPreciseBookMatch,
                       title: '精准搜索',
+                    ),
+                  ),
+                  AppMenuAction(
+                    value: _SearchMoreAction.allSources,
+                    label: '全部书源',
+                    child: _SearchMoreMenuItemContent(
+                      icon: Icons.radio_button_unchecked_rounded,
+                      checked: !_hasServerSourceFilter,
+                      title: '全部书源',
                     ),
                   ),
                   const AppMenuAction(
@@ -1137,11 +1141,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
 
     setState(() {
       _selectedServerGroupNames = Set<String>.of(selected.groupNames);
-      final selectedSourceId = selected.sourceId?.trim();
-      _selectedServerSourceIds =
-          selectedSourceId == null || selectedSourceId.isEmpty
-              ? <String>{}
-              : <String>{selectedSourceId};
+      _selectedServerSourceIds = selected.effectiveSourceIds;
     });
     _clearSearchOutput();
   }

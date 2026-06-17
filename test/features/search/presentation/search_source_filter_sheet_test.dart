@@ -141,12 +141,10 @@ void main() {
     await tester.tap(find.text('玄幻源'));
     await tester.pump();
 
-    expect(find.text('搜索 1 个书源'), findsOneWidget);
+    expect(find.text('搜索已选 1 个书源'), findsOneWidget);
   });
 
-  testWidgets('shows all sources option and clears group selection', (
-    tester,
-  ) async {
+  testWidgets('supports selecting multiple sources', (tester) async {
     await tester.pumpWidget(
       AdaptiveTestHarness(
         width: 420,
@@ -163,9 +161,22 @@ void main() {
               return const ServerSearchSourcePage(
                 page: 1,
                 pageSize: 60,
-                total: 0,
+                total: 2,
                 hasMore: false,
-                items: <ServerSearchSourceSummary>[],
+                items: <ServerSearchSourceSummary>[
+                  ServerSearchSourceSummary(
+                    id: 'source_a',
+                    name: '源A',
+                    contentType: 'novel',
+                    enabled: true,
+                  ),
+                  ServerSearchSourceSummary(
+                    id: 'source_b',
+                    name: '源B',
+                    contentType: 'novel',
+                    enabled: true,
+                  ),
+                ],
               );
             },
             loadSourceGroups: ({
@@ -189,22 +200,25 @@ void main() {
               );
             },
             contentMode: SearchContentMode.novel,
-            initialSelection: const SearchSourceSelection(
-              groupNames: <String>{'免费公开书源'},
-            ),
+            initialSelection: SearchSourceSelection.all,
           ),
         ),
       ),
     );
     await tester.pumpAndSettle();
+    await tester.tap(find.text('书源'));
+    await tester.pumpAndSettle();
 
-    expect(find.text('全部书源'), findsOneWidget);
-    expect(find.text('搜索已选 1 个分组'), findsOneWidget);
+    expect(find.text('全部书源'), findsNothing);
+    expect(find.text('源A'), findsOneWidget);
+    expect(find.text('源B'), findsOneWidget);
 
-    await tester.tap(find.text('全部书源'));
+    await tester.tap(find.text('源A'));
+    await tester.pump();
+    await tester.tap(find.text('源B'));
     await tester.pump();
 
-    expect(find.text('搜索全部书源'), findsOneWidget);
+    expect(find.text('搜索已选 2 个书源'), findsOneWidget);
   });
 
   testWidgets('keeps source range lazy loaded until list scrolls', (

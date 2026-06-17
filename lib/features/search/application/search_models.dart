@@ -78,17 +78,34 @@ enum SearchPlanScenario { globalSearch, switchSource, autoSwitchSource }
 class SearchSourceSelection {
   const SearchSourceSelection({
     this.groupNames = const <String>{},
+    this.sourceIds = const <String>{},
     this.sourceId,
   });
 
   final Set<String> groupNames;
+  final Set<String> sourceIds;
   final String? sourceId;
 
-  bool get isAll => groupNames.isEmpty && (sourceId ?? '').trim().isEmpty;
+  Set<String> get effectiveSourceIds {
+    final ids =
+        sourceIds.map((id) => id.trim()).where((id) => id.isNotEmpty).toSet();
+    final legacySourceId = sourceId?.trim();
+    if (legacySourceId != null && legacySourceId.isNotEmpty) {
+      ids.add(legacySourceId);
+    }
+    return ids;
+  }
 
-  SearchSourceSelection copyWith({Set<String>? groupNames, String? sourceId}) {
+  bool get isAll => groupNames.isEmpty && effectiveSourceIds.isEmpty;
+
+  SearchSourceSelection copyWith({
+    Set<String>? groupNames,
+    Set<String>? sourceIds,
+    String? sourceId,
+  }) {
     return SearchSourceSelection(
       groupNames: groupNames ?? this.groupNames,
+      sourceIds: sourceIds ?? this.sourceIds,
       sourceId: sourceId,
     );
   }
