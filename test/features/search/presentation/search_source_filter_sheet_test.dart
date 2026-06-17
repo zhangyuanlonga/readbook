@@ -144,6 +144,69 @@ void main() {
     expect(find.text('搜索 1 个书源'), findsOneWidget);
   });
 
+  testWidgets('shows all sources option and clears group selection', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      AdaptiveTestHarness(
+        width: 420,
+        height: 760,
+        wrapWithMaterialApp: true,
+        child: Scaffold(
+          body: SearchSourceFilterSheet(
+            loadSourcePage: ({
+              required SearchContentMode contentMode,
+              int page = 1,
+              int pageSize = 80,
+              String? keyword,
+            }) async {
+              return const ServerSearchSourcePage(
+                page: 1,
+                pageSize: 60,
+                total: 0,
+                hasMore: false,
+                items: <ServerSearchSourceSummary>[],
+              );
+            },
+            loadSourceGroups: ({
+              required SearchContentMode contentMode,
+              int page = 1,
+              int pageSize = 50,
+              String? keyword,
+            }) async {
+              return const ServerSearchSourceGroupPage(
+                items: <ServerSearchSourceGroupSummary>[
+                  ServerSearchSourceGroupSummary(
+                    name: '免费公开书源',
+                    totalSourceCount: 15,
+                    availableSourceCount: 10,
+                  ),
+                ],
+                page: 1,
+                pageSize: 50,
+                total: 1,
+                hasMore: false,
+              );
+            },
+            contentMode: SearchContentMode.novel,
+            initialSelection: const SearchSourceSelection(
+              groupNames: <String>{'免费公开书源'},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('全部书源'), findsOneWidget);
+    expect(find.text('搜索已选 1 个分组'), findsOneWidget);
+
+    await tester.tap(find.text('全部书源'));
+    await tester.pump();
+
+    expect(find.text('搜索全部书源'), findsOneWidget);
+  });
+
   testWidgets('keeps source range lazy loaded until list scrolls', (
     tester,
   ) async {

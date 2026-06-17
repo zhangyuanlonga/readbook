@@ -348,9 +348,16 @@ class _SearchSourceFilterSheetState extends State<SearchSourceFilterSheet>
     });
   }
 
+  void _selectAllSources() {
+    setState(() {
+      _draftGroupNames.clear();
+      _draftSourceId = null;
+    });
+  }
+
   String get _selectionLabel {
     if (_allSourcesSelected) {
-      return _sourceTotal > 0 ? '搜索全部书源' : '暂无书源';
+      return '搜索全部书源';
     }
     if (_draftSourceId != null) {
       return '搜索 1 个书源';
@@ -416,9 +423,8 @@ class _SearchSourceFilterSheetState extends State<SearchSourceFilterSheet>
                 controller: _filterController,
                 onChanged: _onFilterChanged,
                 decoration: InputDecoration(
-                  hintText: _tabController.index == 0
-                      ? '搜索分组名称'
-                      : '搜索书源名称、URL或标签',
+                  hintText:
+                      _tabController.index == 0 ? '搜索分组名称' : '搜索书源名称、URL或标签',
                   prefixIcon: const Icon(Icons.search_rounded, size: 18),
                   suffixIcon:
                       _filterController.text.isEmpty
@@ -508,9 +514,19 @@ class _SearchSourceFilterSheetState extends State<SearchSourceFilterSheet>
       child: ListView.builder(
         controller: _groupScrollController,
         padding: const EdgeInsets.symmetric(vertical: 4),
-        itemCount: _groups.length + 1,
+        itemCount: _groups.length + 2,
         itemBuilder: (context, index) {
-          final groupIndex = index;
+          if (index == 0) {
+            return _SearchAllSourcesTile(
+              selected: _allSourcesSelected,
+              onChanged: (value) {
+                if (value == true) {
+                  _selectAllSources();
+                }
+              },
+            );
+          }
+          final groupIndex = index - 1;
           if (groupIndex >= _groups.length) {
             if (_isLoadingGroups || _isLoadingMoreGroups) {
               return const Padding(
@@ -580,7 +596,7 @@ class _SearchSourceFilterSheetState extends State<SearchSourceFilterSheet>
       child: ListView.builder(
         controller: _sourceScrollController,
         padding: const EdgeInsets.symmetric(vertical: 4),
-        itemCount: _sources.length + 1,
+        itemCount: _sources.length + 2,
         itemBuilder: _buildSourceListItem,
       ),
     );
@@ -588,7 +604,17 @@ class _SearchSourceFilterSheetState extends State<SearchSourceFilterSheet>
 
   Widget _buildSourceListItem(BuildContext context, int index) {
     final theme = Theme.of(context);
-    final sourceIndex = index;
+    if (index == 0) {
+      return _SearchAllSourcesTile(
+        selected: _allSourcesSelected,
+        onChanged: (value) {
+          if (value == true) {
+            _selectAllSources();
+          }
+        },
+      );
+    }
+    final sourceIndex = index - 1;
     if (sourceIndex >= _sources.length) {
       if (_isLoadingInitialSources || _isLoadingMoreSources) {
         return const Padding(
@@ -851,6 +877,42 @@ class _SearchGroupTile extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SearchAllSourcesTile extends StatelessWidget {
+  const _SearchAllSourcesTile({
+    required this.selected,
+    required this.onChanged,
+  });
+
+  final bool selected;
+  final ValueChanged<bool?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return _SearchScopeRowShell(
+      selected: selected,
+      onTap: () => onChanged(true),
+      leading: Icon(
+        selected
+            ? Icons.radio_button_checked_rounded
+            : Icons.radio_button_unchecked_rounded,
+        size: 24,
+        color: selected ? colorScheme.primary : colorScheme.onSurfaceVariant,
+      ),
+      child: Text(
+        '全部书源',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: colorScheme.onSurface,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }
