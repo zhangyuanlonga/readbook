@@ -416,7 +416,9 @@ class _SearchSourceFilterSheetState extends State<SearchSourceFilterSheet>
                 controller: _filterController,
                 onChanged: _onFilterChanged,
                 decoration: InputDecoration(
-                  hintText: '搜索分组或书源',
+                  hintText: _tabController.index == 0
+                      ? '搜索分组名称'
+                      : '搜索书源名称、URL或标签',
                   prefixIcon: const Icon(Icons.search_rounded, size: 18),
                   suffixIcon:
                       _filterController.text.isEmpty

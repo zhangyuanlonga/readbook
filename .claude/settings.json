@@ -9,12 +9,18 @@
       "Bash(go build *)",
       "Bash(cat)",
       "Read(//tmp/**)",
-      "Bash(cat > *)"
+      "Bash(cat > *)",
+      "Read(//Users/zhangyuanlong/storage/FlutterProject/reader-rust-master/src/api/**)",
+      "Read(//Users/zhangyuanlong/storage/FlutterProject/reader-rust-master/src/storage/db/**)",
+      "Bash(grep -n \"pub async fn list_search_source_groups\" /Users/zhangyuanlong/storage/FlutterProject/reader-rust-master/src/service/book_source_service.rs)",
+      "Read(//Users/zhangyuanlong/storage/FlutterProject/reader-rust-master/src/service/**)"
     ],
     "additionalDirectories": [
       "/Users/zhangyuanlong/storage/FlutterProject/read-admin/internal/application/booksource",
       "/Users/zhangyuanlong/storage/FlutterProject/read-admin/internal/transport/http",
-      "/tmp"
+      "/tmp",
+      "/Users/zhangyuanlong/storage/FlutterProject/reader-rust-master/src/service",
+      "/Users/zhangyuanlong/storage/FlutterProject/reader-rust-master/src/api"
     ]
   }
 }
