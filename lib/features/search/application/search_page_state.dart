@@ -29,6 +29,7 @@ abstract class SearchPageState with _$SearchPageState {
     @Default(true) bool aggregateByTitleAuthorEnabled,
     @Default(0) int availableServerSourceCount,
     @Default(<String>{}) Set<String> selectedServerSourceIds,
+    @Default(<String>{}) Set<String> selectedServerGroupNames,
     @Default(false) bool isAppendingResults,
     @Default(<String, BookDisplayState>{})
     Map<String, BookDisplayState> bookPresentationByTargetKey,

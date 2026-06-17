@@ -211,7 +211,6 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       SearchRenderStateController(pageSize: _searchResultPageSize);
   SearchCancellationToken? _activeSearchToken;
   final ScrollController _pageScrollController = ScrollController();
-  Set<String> _selectedServerGroupNames = <String>{};
   Timer? _progressUiTimer;
   Timer? _scrollUiResumeTimer;
   Timer? _scrollUiForceFlushTimer;
@@ -259,6 +258,14 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   set _selectedServerSourceIds(Set<String> value) {
     _pageStateNotifier.update(
       (state) => state.copyWith(selectedServerSourceIds: value),
+    );
+  }
+
+  Set<String> get _selectedServerGroupNames =>
+      _pageState.selectedServerGroupNames;
+  set _selectedServerGroupNames(Set<String> value) {
+    _pageStateNotifier.update(
+      (state) => state.copyWith(selectedServerGroupNames: value),
     );
   }
 

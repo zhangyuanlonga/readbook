@@ -223,6 +223,52 @@ void main() {
 
       await server.close(force: true);
     });
+
+    test('search stream sends selected source group names', () async {
+      Uri? searchUri;
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        searchUri = request.uri;
+        request.response.statusCode = 200;
+        request.response.headers.contentType = ContentType(
+          'text',
+          'event-stream',
+          charset: 'utf-8',
+        );
+        request.response.write('event: start\n');
+        request.response.write('data: {"sourceCount":2}\n\n');
+        request.response.write('event: end\n');
+        request.response.write(
+          'data: ${jsonEncode({
+            'items': <Object?>[],
+            'reports': <String, Object?>{'sourceCount': 2, 'processedSourceCount': 2, 'successSourceCount': 0, 'failures': <Object?>[]},
+            'sourceHits': <String, Object?>{},
+          })}\n\n',
+        );
+        await request.response.close();
+      });
+
+      final service = ServerOnlineSearchService(
+        baseUrl: 'http://${server.address.host}:${server.port}/',
+        searchHitCacheService: SearchHitCacheService(),
+      );
+
+      await service.search(
+        keyword: '剑来',
+        contentMode: SearchContentMode.novel,
+        groupNames: const <String>['免费公开书源'],
+      );
+
+      expect(searchUri, isNotNull);
+      expect(searchUri!.path, contains('/v1/books/search/stream'));
+      expect(searchUri!.queryParameters['sourceScopeMode'], 'include');
+      expect(
+        jsonDecode(searchUri!.queryParameters['groupNames']!) as List<dynamic>,
+        <String>['免费公开书源'],
+      );
+
+      await server.close(force: true);
+    });
   });
 }
 
