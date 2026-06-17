@@ -215,6 +215,18 @@ jobs:
           printf '%s\n' "${ANDROID_KEY_PROPERTIES}" > android/key.properties
           printf '%s' "${ANDROID_KEYSTORE_BASE64}" | base64 --decode > android/app/appread-release.jks
 
+      - name: Tune Android Gradle for CI
+        if: runner.os == 'Linux' && steps.platforms.outputs.should_build == 'true' && contains(steps.platforms.outputs.selected, 'android')
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo ""
+            echo "# GitHub Actions Android build overrides."
+            echo "org.gradle.daemon=false"
+            echo "org.gradle.vfs.watch=false"
+          } >> android/gradle.properties
+
       - name: Build selected platforms
         if: steps.platforms.outputs.should_build == 'true'
         shell: bash
