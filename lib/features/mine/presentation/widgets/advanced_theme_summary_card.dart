@@ -66,12 +66,17 @@ class AdvancedThemeSummaryCard extends StatelessWidget {
             Row(
               children: [
                 if (isSelectionMode) ...[
-                  Checkbox(
-                    value: isSelected,
-                    onChanged: isSaving ? null : onSelectionChanged,
-                    visualDensity: const VisualDensity(
-                      horizontal: -4,
-                      vertical: -4,
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap:
+                        isSaving ? null : () => onSelectionChanged(!isSelected),
+                    child: Padding(
+                      padding: const EdgeInsets.all(2),
+                      child: AppSelectionIndicator(
+                        selected: isSelected,
+                        enabled: !isSaving,
+                        semanticLabel: isSelected ? '已选择主题' : '未选择主题',
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),

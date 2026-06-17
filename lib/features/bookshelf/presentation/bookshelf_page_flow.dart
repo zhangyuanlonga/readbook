@@ -130,31 +130,25 @@ extension on _BookshelfPageState {
         final bottomInset = _bookshelfBottomSafeInset(sheetContext);
         return Padding(
           padding: EdgeInsets.fromLTRB(8, 0, 8, 10 + bottomInset),
-          child: RadioGroup<_BookshelfSortMode>(
-            groupValue: _sortMode,
-            onChanged:
-                (value) =>
-                    Navigator.of(sheetContext, rootNavigator: true).pop(value),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-                  child: Text(
-                    '书籍排序',
-                    style: Theme.of(sheetContext).textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w700),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+                child: Text(
+                  '书籍排序',
+                  style: Theme.of(sheetContext).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-                for (final mode in _BookshelfSortMode.values)
-                  RadioListTile<_BookshelfSortMode>(
-                    value: mode,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                    title: Text(_sortModeLabel(mode)),
-                    subtitle: Text(_sortModeDescription(mode)),
-                  ),
-              ],
-            ),
+              ),
+              for (final mode in _BookshelfSortMode.values)
+                _buildSortModeOption(
+                  sheetContext,
+                  mode: mode,
+                  selected: _sortMode == mode,
+                ),
+            ],
           ),
         );
       },
@@ -175,6 +169,66 @@ extension on _BookshelfPageState {
       }
       _showMessage('书籍排序保存失败，请重试。');
     }
+  }
+
+  Widget _buildSortModeOption(
+    BuildContext context, {
+    required _BookshelfSortMode mode,
+    required bool selected,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => Navigator.of(context, rootNavigator: true).pop(mode),
+        borderRadius: BorderRadius.circular(8),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOutCubic,
+          margin: const EdgeInsets.symmetric(vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color:
+                selected
+                    ? colorScheme.primaryContainer.withValues(alpha: 0.32)
+                    : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _sortModeLabel(mode),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onSurface,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _sortModeDescription(mode),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        height: 1.25,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              AppSelectionIndicator(
+                selected: selected,
+                semanticLabel: selected ? '当前排序方式' : '可选排序方式',
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _showBookshelfSettingsSheet() async {

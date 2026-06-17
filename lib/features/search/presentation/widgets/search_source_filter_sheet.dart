@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../../app/layout/app_adaptive.dart';
+import '../../../../app/widgets/foundation/foundation.dart';
 import '../../application/search_models.dart';
 import '../../application/server_online_search_service.dart';
 
@@ -816,11 +817,9 @@ class _SearchGroupTile extends StatelessWidget {
     return _SearchScopeRowShell(
       selected: selected,
       onTap: () => onChanged(!selected),
-      leading: Checkbox(
-        value: selected,
-        onChanged: onChanged,
-        visualDensity: VisualDensity.compact,
-        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      leading: AppSelectionIndicator(
+        selected: selected,
+        semanticLabel: selected ? '已选择分组' : '未选择分组',
       ),
       child: Row(
         children: [
@@ -878,12 +877,9 @@ class _SearchSourceTile extends StatelessWidget {
     return _SearchScopeRowShell(
       selected: selected,
       onTap: () => onChanged(!selected),
-      leading: Icon(
-        selected
-            ? Icons.radio_button_checked_rounded
-            : Icons.radio_button_unchecked_rounded,
-        size: 24,
-        color: selected ? colorScheme.primary : null,
+      leading: AppSelectionIndicator(
+        selected: selected,
+        semanticLabel: selected ? '已选择书源' : '未选择书源',
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

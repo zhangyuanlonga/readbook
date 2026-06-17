@@ -552,27 +552,8 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
-            RadioGroup<_AdvancedThemeSortMode>(
-              groupValue: _themeSortMode,
-              onChanged: (value) => Navigator.of(dialogContext).pop(value),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: const [
-                  RadioListTile<_AdvancedThemeSortMode>(
-                    value: _AdvancedThemeSortMode.updatedDesc,
-                    title: Text('最近更新'),
-                  ),
-                  RadioListTile<_AdvancedThemeSortMode>(
-                    value: _AdvancedThemeSortMode.nameAsc,
-                    title: Text('名称 A-Z'),
-                  ),
-                  RadioListTile<_AdvancedThemeSortMode>(
-                    value: _AdvancedThemeSortMode.categoryAsc,
-                    title: Text('分类优先'),
-                  ),
-                ],
-              ),
-            ),
+            for (final mode in _AdvancedThemeSortMode.values)
+              _buildThemeSortOption(dialogContext, mode),
           ],
         );
       },
@@ -585,6 +566,61 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       _themeSummaries = _sortThemeSummaries(_themeSummaries);
       _pruneSelectionForVisibleThemes();
     });
+  }
+
+  Widget _buildThemeSortOption(
+    BuildContext context,
+    _AdvancedThemeSortMode mode,
+  ) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final selected = _themeSortMode == mode;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => Navigator.of(context).pop(mode),
+        borderRadius: BorderRadius.circular(8),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOutCubic,
+          margin: const EdgeInsets.symmetric(vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          decoration: BoxDecoration(
+            color:
+                selected
+                    ? colorScheme.primaryContainer.withValues(alpha: 0.32)
+                    : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _themeSortModeLabel(mode),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurface,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              AppSelectionIndicator(
+                selected: selected,
+                semanticLabel: selected ? '当前排序方式' : '可选排序方式',
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _themeSortModeLabel(_AdvancedThemeSortMode mode) {
+    return switch (mode) {
+      _AdvancedThemeSortMode.updatedDesc => '最近更新',
+      _AdvancedThemeSortMode.nameAsc => '名称 A-Z',
+      _AdvancedThemeSortMode.categoryAsc => '分类优先',
+    };
   }
 
   Future<void> _duplicateTheme(String themeId) async {

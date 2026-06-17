@@ -219,29 +219,37 @@ class ChapterContentService {
     final cached = _chapterCache[cacheKey];
     if (cached != null) {
       final decoded = ReaderGatewayContentCacheCodec.decode(cached);
-      _logger.info(
-        'Chapter content cache hit',
-        context: <String, Object?>{
-          'chain': 'content',
-          'step': 'content',
-          'sourceId': normalizedSourceId,
-          'bookId': normalizedBookId,
-          'chapterUrl': normalizedChapterUrl,
-          'cacheHit': true,
-          'isImageContent': decoded.imageUrls.isNotEmpty,
-        },
-      );
-      return ChapterContentResult(
-        content: decoded.content,
-        fromCache: true,
-        imageUrls: decoded.imageUrls,
-        imageHeaders: decoded.imageHeaders,
-        contentType: decoded.contentType,
-        audioUrl: decoded.audioUrl,
-        audioManifestUrl: decoded.audioManifestUrl,
-        audioHeaders: decoded.audioHeaders,
-        executionContext: null,
-      );
+      if (_shouldBypassLegacyAudioListingCache(
+        sourceId: normalizedSourceId,
+        chapterUrl: normalizedChapterUrl,
+        decoded: decoded,
+      )) {
+        _chapterCache.remove(cacheKey);
+      } else {
+        _logger.info(
+          'Chapter content cache hit',
+          context: <String, Object?>{
+            'chain': 'content',
+            'step': 'content',
+            'sourceId': normalizedSourceId,
+            'bookId': normalizedBookId,
+            'chapterUrl': normalizedChapterUrl,
+            'cacheHit': true,
+            'isImageContent': decoded.imageUrls.isNotEmpty,
+          },
+        );
+        return ChapterContentResult(
+          content: decoded.content,
+          fromCache: true,
+          imageUrls: decoded.imageUrls,
+          imageHeaders: decoded.imageHeaders,
+          contentType: decoded.contentType,
+          audioUrl: decoded.audioUrl,
+          audioManifestUrl: decoded.audioManifestUrl,
+          audioHeaders: decoded.audioHeaders,
+          executionContext: null,
+        );
+      }
     }
 
     try {
@@ -267,30 +275,38 @@ class ChapterContentService {
       if (persistedContent.isNotEmpty) {
         _chapterCache[cacheKey] = persistedContent;
         final decoded = ReaderGatewayContentCacheCodec.decode(persistedContent);
-        _logger.info(
-          'Chapter content cache hit',
-          context: <String, Object?>{
-            'chain': 'content',
-            'step': 'content',
-            'sourceId': normalizedSourceId,
-            'bookId': normalizedBookId,
-            'chapterUrl': normalizedChapterUrl,
-            'cacheHit': true,
-            'cacheSource': 'database',
-            'isImageContent': decoded.imageUrls.isNotEmpty,
-          },
-        );
-        return ChapterContentResult(
-          content: decoded.content,
-          fromCache: true,
-          imageUrls: decoded.imageUrls,
-          imageHeaders: decoded.imageHeaders,
-          contentType: decoded.contentType,
-          audioUrl: decoded.audioUrl,
-          audioManifestUrl: decoded.audioManifestUrl,
-          audioHeaders: decoded.audioHeaders,
-          executionContext: null,
-        );
+        if (_shouldBypassLegacyAudioListingCache(
+          sourceId: normalizedSourceId,
+          chapterUrl: normalizedChapterUrl,
+          decoded: decoded,
+        )) {
+          _chapterCache.remove(cacheKey);
+        } else {
+          _logger.info(
+            'Chapter content cache hit',
+            context: <String, Object?>{
+              'chain': 'content',
+              'step': 'content',
+              'sourceId': normalizedSourceId,
+              'bookId': normalizedBookId,
+              'chapterUrl': normalizedChapterUrl,
+              'cacheHit': true,
+              'cacheSource': 'database',
+              'isImageContent': decoded.imageUrls.isNotEmpty,
+            },
+          );
+          return ChapterContentResult(
+            content: decoded.content,
+            fromCache: true,
+            imageUrls: decoded.imageUrls,
+            imageHeaders: decoded.imageHeaders,
+            contentType: decoded.contentType,
+            audioUrl: decoded.audioUrl,
+            audioManifestUrl: decoded.audioManifestUrl,
+            audioHeaders: decoded.audioHeaders,
+            executionContext: null,
+          );
+        }
       }
     } catch (error) {
       _logger.warn(
@@ -480,5 +496,31 @@ class ChapterContentService {
         },
       );
     }
+  }
+
+  bool _shouldBypassLegacyAudioListingCache({
+    required String sourceId,
+    required String chapterUrl,
+    required ReaderGatewayContentCachePayload decoded,
+  }) {
+    if (!isServerGatewaySourceId(sourceId)) {
+      return false;
+    }
+    final normalizedChapterUrl = chapterUrl.trim();
+    if (!_isXimalayaAlbumTrackListUrl(normalizedChapterUrl)) {
+      return false;
+    }
+    if (decoded.hasImageContent || decoded.hasAudioContent) {
+      return false;
+    }
+    return decoded.content.trim().isEmpty ||
+        decoded.content.trim() == normalizedChapterUrl;
+  }
+
+  bool _isXimalayaAlbumTrackListUrl(String value) {
+    final uri = Uri.tryParse(value.trim());
+    return uri != null &&
+        uri.host.toLowerCase() == 'mobile.ximalaya.com' &&
+        uri.path.contains('/album/track/');
   }
 }

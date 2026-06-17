@@ -9,6 +9,7 @@ export 'app_button.dart';
 export 'app_menu_button.dart';
 export 'app_refresh_indicator.dart';
 export 'app_reorderable_list.dart';
+export 'app_selection_indicator.dart';
 export 'app_shortcuts.dart';
 export 'app_slidable_action_tile.dart';
 export 'app_skeleton.dart';

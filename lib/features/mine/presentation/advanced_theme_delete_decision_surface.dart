@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
+import '../../../app/widgets/foundation/foundation.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
 import '../application/advanced_theme_resource_reference_service.dart';
 import '../application/advanced_theme_service.dart';
@@ -48,39 +49,71 @@ Future<AdvancedThemeDeleteDecision?> showAdvancedThemeDeleteDecisionSurface({
                   if (preview.sections.isNotEmpty) ...[
                     const SizedBox(height: 12),
                     for (final section in preview.sections) ...[
-                      Container(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        decoration: BoxDecoration(
-                          color: colorScheme.surfaceContainerLow,
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(
-                            color: colorScheme.outlineVariant.withValues(
-                              alpha: 0.45,
+                      Builder(
+                        builder: (context) {
+                          final selected = selections[section.kind] ?? false;
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            decoration: BoxDecoration(
+                              color:
+                                  selected
+                                      ? colorScheme.primaryContainer.withValues(
+                                        alpha: 0.26,
+                                      )
+                                      : colorScheme.surfaceContainerLow,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color:
+                                    selected
+                                        ? colorScheme.primary.withValues(
+                                          alpha: 0.42,
+                                        )
+                                        : colorScheme.outlineVariant.withValues(
+                                          alpha: 0.45,
+                                        ),
+                              ),
                             ),
-                          ),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          child: CheckboxListTile(
-                            value: selections[section.kind] ?? false,
-                            dense: true,
-                            contentPadding: EdgeInsets.zero,
-                            controlAffinity: ListTileControlAffinity.leading,
-                            title: Text(
-                              section.title,
-                              style: Theme.of(context).textTheme.titleSmall
-                                  ?.copyWith(fontWeight: FontWeight.w700),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(8),
+                                onTap: () {
+                                  setSheetState(() {
+                                    selections[section.kind] = !selected;
+                                  });
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    12,
+                                    10,
+                                    12,
+                                    10,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      AppSelectionIndicator(
+                                        selected: selected,
+                                        semanticLabel:
+                                            selected ? '已选择删除项' : '未选择删除项',
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          section.title,
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.titleSmall?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
                             ),
-                            onChanged: (value) {
-                              setSheetState(() {
-                                selections[section.kind] = value ?? false;
-                              });
-                            },
-                          ),
-                        ),
+                          );
+                        },
                       ),
                     ],
                   ],

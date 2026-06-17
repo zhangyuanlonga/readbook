@@ -8,6 +8,7 @@ import '../../../app/layout/app_layout.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_component_theme_tokens.dart';
 import '../../../app/widgets/foundation/app_feedback.dart';
+import '../../../app/widgets/foundation/app_selection_indicator.dart';
 import '../../../core/auth/auth_service.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/network/api_client.dart';

@@ -17,16 +17,13 @@ extension _AuthPageFormSections on _AuthPageState {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Checkbox.adaptive(
-                value: _rememberPassword,
-                onChanged:
-                    _isSubmitting
-                        ? null
-                        : (value) => _setRememberPassword(value ?? false),
-                visualDensity: VisualDensity.compact,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              AppSelectionIndicator(
+                selected: _rememberPassword,
+                enabled: !_isSubmitting,
+                size: 22,
+                semanticLabel: _rememberPassword ? '已记住密码' : '未记住密码',
               ),
-              const SizedBox(width: 4),
+              const SizedBox(width: 8),
               Text(
                 '记住密码',
                 style: textTheme.bodySmall?.copyWith(
