@@ -39,23 +39,35 @@ void main() {
                 ],
               );
             },
+            loadSourceGroups: ({
+              required SearchContentMode contentMode,
+              int page = 1,
+              int pageSize = 50,
+              String? keyword,
+            }) async {
+              return const ServerSearchSourceGroupPage(
+                items: <ServerSearchSourceGroupSummary>[],
+                page: 1,
+                pageSize: 50,
+                total: 0,
+                hasMore: false,
+              );
+            },
             contentMode: SearchContentMode.novel,
-            initialSelectedIds: const <String>{},
+            initialSelection: SearchSourceSelection.all,
           ),
         ),
       ),
     );
     await tester.pumpAndSettle();
+    await tester.tap(find.text('书源'));
+    await tester.pumpAndSettle();
 
     expect(find.text('私人失败源'), findsOneWidget);
-    expect(find.text('分组：玄幻'), findsOneWidget);
-    expect(find.text('【私人】'), findsOneWidget);
-    expect(find.text('【检测失败】'), findsOneWidget);
+    expect(find.text('私人 · 检测失败 · 玄幻'), findsOneWidget);
   });
 
-  testWidgets('filters sources and updates selected range summary', (
-    tester,
-  ) async {
+  testWidgets('filters sources and updates apply action', (tester) async {
     final calls = <_SourceLoadCall>[];
 
     Future<ServerSearchSourcePage> loadSourcePage({
@@ -93,12 +105,28 @@ void main() {
         child: Scaffold(
           body: SearchSourceFilterSheet(
             loadSourcePage: loadSourcePage,
+            loadSourceGroups: ({
+              required SearchContentMode contentMode,
+              int page = 1,
+              int pageSize = 50,
+              String? keyword,
+            }) async {
+              return const ServerSearchSourceGroupPage(
+                items: <ServerSearchSourceGroupSummary>[],
+                page: 1,
+                pageSize: 50,
+                total: 0,
+                hasMore: false,
+              );
+            },
             contentMode: SearchContentMode.novel,
-            initialSelectedIds: const <String>{},
+            initialSelection: SearchSourceSelection.all,
           ),
         ),
       ),
     );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('书源'));
     await tester.pumpAndSettle();
 
     expect(find.text('默认源'), findsOneWidget);
@@ -113,7 +141,7 @@ void main() {
     await tester.tap(find.text('玄幻源'));
     await tester.pump();
 
-    expect(find.text('已选 1 / 1'), findsOneWidget);
+    expect(find.text('搜索 1 个书源'), findsOneWidget);
   });
 
   testWidgets('keeps source range lazy loaded until list scrolls', (
@@ -131,28 +159,23 @@ void main() {
       return ServerSearchSourcePage(
         page: page,
         pageSize: pageSize,
-        total: 3,
+        total: 9,
         hasMore: page == 1,
         items:
             page == 1
-                ? const [
-                  ServerSearchSourceSummary(
-                    id: 'source_1',
-                    name: '源一',
+                ? List<ServerSearchSourceSummary>.generate(
+                  8,
+                  (index) => ServerSearchSourceSummary(
+                    id: 'source_${index + 1}',
+                    name: '源${index + 1}',
                     contentType: 'novel',
                     enabled: true,
                   ),
-                  ServerSearchSourceSummary(
-                    id: 'source_2',
-                    name: '源二',
-                    contentType: 'novel',
-                    enabled: true,
-                  ),
-                ]
+                )
                 : const [
                   ServerSearchSourceSummary(
-                    id: 'source_3',
-                    name: '源三',
+                    id: 'source_9',
+                    name: '源9',
                     contentType: 'novel',
                     enabled: true,
                   ),
@@ -168,25 +191,41 @@ void main() {
         child: Scaffold(
           body: SearchSourceFilterSheet(
             loadSourcePage: loadSourcePage,
+            loadSourceGroups: ({
+              required SearchContentMode contentMode,
+              int page = 1,
+              int pageSize = 50,
+              String? keyword,
+            }) async {
+              return const ServerSearchSourceGroupPage(
+                items: <ServerSearchSourceGroupSummary>[],
+                page: 1,
+                pageSize: 50,
+                total: 0,
+                hasMore: false,
+              );
+            },
             contentMode: SearchContentMode.novel,
-            initialSelectedIds: const <String>{},
-            pageSize: 2,
+            initialSelection: SearchSourceSelection.all,
+            pageSize: 8,
           ),
         ),
       ),
     );
     await tester.pumpAndSettle();
+    await tester.tap(find.text('书源'));
+    await tester.pumpAndSettle();
 
     expect(calls.map((call) => call.page), <int>[1]);
-    expect(find.text('源一'), findsOneWidget);
-    expect(find.text('已加载 2/3'), findsOneWidget);
-    expect(find.text('源三', skipOffstage: false), findsNothing);
+    expect(find.text('源1', skipOffstage: false), findsOneWidget);
+    expect(find.text('已加载 8/9'), findsOneWidget);
+    expect(find.text('源9', skipOffstage: false), findsNothing);
 
     await tester.drag(find.byType(ListView), const Offset(0, -420));
     await tester.pumpAndSettle();
 
     expect(calls.map((call) => call.page), contains(2));
-    expect(find.text('源三', skipOffstage: false), findsOneWidget);
+    expect(find.text('源9', skipOffstage: false), findsOneWidget);
   });
 }
 

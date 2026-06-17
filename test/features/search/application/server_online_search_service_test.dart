@@ -172,6 +172,57 @@ void main() {
         await server.close(force: true);
       },
     );
+
+    test('source range lists include current content type', () async {
+      final requests = <Uri>[];
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        requests.add(request.uri);
+        request.response.statusCode = 200;
+        request.response.headers.contentType = ContentType.json;
+        request.response.write(
+          jsonEncode({
+            'code': 'OK',
+            'message': 'ok',
+            'data': {
+              'items': <Object?>[],
+              'page': 1,
+              'pageSize': 20,
+              'total': 0,
+              'hasMore': false,
+            },
+          }),
+        );
+        await request.response.close();
+      });
+
+      final service = ServerOnlineSearchService(
+        baseUrl: 'http://${server.address.host}:${server.port}/',
+        searchHitCacheService: SearchHitCacheService(),
+      );
+
+      await service.loadSourcePage(
+        contentMode: SearchContentMode.manga,
+        page: 2,
+        pageSize: 20,
+        keyword: '热血',
+      );
+      await service.loadSourceGroupPage(
+        contentMode: SearchContentMode.audio,
+        page: 1,
+        pageSize: 20,
+      );
+
+      expect(requests, hasLength(2));
+      expect(requests[0].path, contains('/v1/sources'));
+      expect(requests[0].queryParameters['contentType'], 'manga');
+      expect(requests[0].queryParameters['accessScope'], 'me');
+      expect(requests[0].queryParameters['keyword'], '热血');
+      expect(requests[1].path, contains('/v1/search/source-groups'));
+      expect(requests[1].queryParameters['contentType'], 'audio');
+
+      await server.close(force: true);
+    });
   });
 }
 

@@ -45,18 +45,18 @@ class BookshelfCoverLayoutResolver {
     final hasMetaInfo =
         showTitle || showAuthor || showLatestChapter || showProgressBar;
     if (!hasMetaInfo) {
-      return 36;
+      return 44;
     }
     if (showTitle && titleMaxLines > 1) {
-      return 128;
+      return 144;
     }
     if (showLatestChapter) {
-      return 92;
+      return showProgressBar ? 112 : 108;
     }
     if (showProgressBar) {
-      return 78;
+      return 94;
     }
-    return 62;
+    return 78;
   }
 
   BookshelfListCoverLayout listCoverLayout({

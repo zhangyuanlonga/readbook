@@ -75,6 +75,27 @@ enum SearchContentMode { novel, manga, audio }
 
 enum SearchPlanScenario { globalSearch, switchSource, autoSwitchSource }
 
+class SearchSourceSelection {
+  const SearchSourceSelection({
+    this.groupNames = const <String>{},
+    this.sourceId,
+  });
+
+  final Set<String> groupNames;
+  final String? sourceId;
+
+  bool get isAll => groupNames.isEmpty && (sourceId ?? '').trim().isEmpty;
+
+  SearchSourceSelection copyWith({Set<String>? groupNames, String? sourceId}) {
+    return SearchSourceSelection(
+      groupNames: groupNames ?? this.groupNames,
+      sourceId: sourceId,
+    );
+  }
+
+  static const all = SearchSourceSelection();
+}
+
 class SearchCancellationToken {
   bool _cancelled = false;
   bool _paused = false;

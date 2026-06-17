@@ -68,6 +68,7 @@ class ServerOnlineSearchService {
     required String keyword,
     required SearchContentMode contentMode,
     Iterable<String>? sourceIds,
+    Iterable<String>? groupNames,
     bool preciseMatch = false,
     bool aggregateByTitleAuthor = true,
     int? maxConcurrentSources,
@@ -82,6 +83,7 @@ class ServerOnlineSearchService {
       keyword: keyword,
       contentMode: contentMode,
       sourceIds: sourceIds,
+      groupNames: groupNames,
       preciseMatch: preciseMatch,
       aggregateByTitleAuthor: aggregateByTitleAuthor,
       maxConcurrentSources: maxConcurrentSources,
@@ -94,6 +96,7 @@ class ServerOnlineSearchService {
     required String keyword,
     required SearchContentMode contentMode,
     Iterable<String>? sourceIds,
+    Iterable<String>? groupNames,
     required bool preciseMatch,
     required bool aggregateByTitleAuthor,
     int? maxConcurrentSources,
@@ -101,6 +104,7 @@ class ServerOnlineSearchService {
     SearchProgressCallback? onProgress,
   }) async {
     final selectedSourceIds = _normalizedList(sourceIds);
+    final selectedGroupNames = _normalizedList(groupNames);
     final concurrency = _normalizedConcurrency(maxConcurrentSources);
     final payload = <String, Object?>{
       'keyword': keyword,
@@ -108,8 +112,12 @@ class ServerOnlineSearchService {
       'matchMode': preciseMatch ? 'exact' : 'fuzzy',
       'scenario': 'globalSearch',
       'sourceScope': {
-        'mode': selectedSourceIds.isEmpty ? 'all' : 'include',
+        'mode':
+            selectedSourceIds.isEmpty && selectedGroupNames.isEmpty
+                ? 'all'
+                : 'include',
         if (selectedSourceIds.isNotEmpty) 'sourceIds': selectedSourceIds,
+        if (selectedGroupNames.isNotEmpty) 'groupNames': selectedGroupNames,
       },
       'page': 1,
       'pageSize': _rawSearchPageSize,
@@ -151,6 +159,7 @@ class ServerOnlineSearchService {
     required String keyword,
     required SearchContentMode contentMode,
     Iterable<String>? sourceIds,
+    Iterable<String>? groupNames,
     required bool preciseMatch,
     required bool aggregateByTitleAuthor,
     int? maxConcurrentSources,
@@ -159,15 +168,21 @@ class ServerOnlineSearchService {
   }) async {
     final normalizedKeyword = keyword.trim();
     final selectedSourceIds = _normalizedList(sourceIds);
+    final selectedGroupNames = _normalizedList(groupNames);
     final concurrency = _normalizedConcurrency(maxConcurrentSources);
     final queryParameters = <String, String>{
       'keyword': normalizedKeyword,
       'contentType': _contentTypeParam(contentMode),
       'matchMode': preciseMatch ? 'exact' : 'fuzzy',
       'scenario': 'globalSearch',
-      'sourceScopeMode': selectedSourceIds.isEmpty ? 'all' : 'include',
+      'sourceScopeMode':
+          selectedSourceIds.isEmpty && selectedGroupNames.isEmpty
+              ? 'all'
+              : 'include',
       if (selectedSourceIds.isNotEmpty)
         'sourceIds': jsonEncode(selectedSourceIds),
+      if (selectedGroupNames.isNotEmpty)
+        'groupNames': jsonEncode(selectedGroupNames),
       'page': '1',
       'pageSize': '$_rawSearchPageSize',
       'aggregateByTitleAuthor': 'false',
@@ -285,6 +300,7 @@ class ServerOnlineSearchService {
           keyword: keyword,
           contentMode: contentMode,
           sourceIds: sourceIds,
+          groupNames: groupNames,
           preciseMatch: preciseMatch,
           aggregateByTitleAuthor: aggregateByTitleAuthor,
           maxConcurrentSources: maxConcurrentSources,
@@ -335,7 +351,6 @@ class ServerOnlineSearchService {
       path: _gatewayPath('v1/sources'),
       queryParameters: <String, dynamic>{
         'contentType': _contentTypeParam(contentMode),
-        'enabled': true,
         'accessScope': 'me',
         if ((keyword ?? '').trim().isNotEmpty) 'keyword': keyword!.trim(),
         'page': page.clamp(1, 1 << 30),
@@ -348,6 +363,29 @@ class ServerOnlineSearchService {
       decoder: ServerSearchSourcePage.fromEnvelopeData,
     );
     return response;
+  }
+
+  Future<ServerSearchSourceGroupPage> loadSourceGroupPage({
+    required SearchContentMode contentMode,
+    int page = 1,
+    int pageSize = 50,
+    String? keyword,
+  }) async {
+    return _client.request<ServerSearchSourceGroupPage>(
+      method: ApiMethod.get,
+      path: _gatewayPath('v1/search/source-groups'),
+      queryParameters: <String, dynamic>{
+        'contentType': _contentTypeParam(contentMode),
+        if ((keyword ?? '').trim().isNotEmpty) 'keyword': keyword!.trim(),
+        'page': page.clamp(1, 1 << 30),
+        'pageSize': pageSize.clamp(1, 100),
+      },
+      attachAccessToken: true,
+      enableRetry: false,
+      timeout: const Duration(seconds: 12),
+      stage: ErrorStage.source,
+      decoder: ServerSearchSourceGroupPage.fromEnvelopeData,
+    );
   }
 
   SearchExecutionReport _emptyReport(String keyword) {
@@ -488,6 +526,72 @@ class ServerSearchSourcePage {
     return ServerSearchSourcePage(
       items: (map['items'] as List? ?? const <Object?>[])
           .map(ServerSearchSourceSummary.fromJson)
+          .toList(growable: false),
+      page: _intOrDefault(map['page'], 1),
+      pageSize: _intOrDefault(map['pageSize'], 0),
+      total: _intOrDefault(map['total'], 0),
+      hasMore: map['hasMore'] == true,
+    );
+  }
+}
+
+class ServerSearchSourceGroupSummary {
+  const ServerSearchSourceGroupSummary({
+    required this.name,
+    required this.totalSourceCount,
+    required this.availableSourceCount,
+  });
+
+  final String name;
+  final int totalSourceCount;
+  final int availableSourceCount;
+
+  String get displayName => name.trim().isEmpty ? '未命名分组' : name.trim();
+  String get countLabel => '$totalSourceCount/$availableSourceCount';
+
+  factory ServerSearchSourceGroupSummary.fromJson(Object? value) {
+    if (value is! Map) {
+      throw const FormatException('Invalid server source group item');
+    }
+    final map = value.map((key, value) => MapEntry(key.toString(), value));
+    final legacySourceCount = _intOrDefault(map['sourceCount'], 0);
+    return ServerSearchSourceGroupSummary(
+      name: _requiredString(map, 'name'),
+      totalSourceCount: _intOrDefault(
+        map['totalSourceCount'],
+        legacySourceCount,
+      ),
+      availableSourceCount: _intOrDefault(
+        map['availableSourceCount'],
+        legacySourceCount,
+      ),
+    );
+  }
+}
+
+class ServerSearchSourceGroupPage {
+  const ServerSearchSourceGroupPage({
+    required this.items,
+    required this.page,
+    required this.pageSize,
+    required this.total,
+    required this.hasMore,
+  });
+
+  final List<ServerSearchSourceGroupSummary> items;
+  final int page;
+  final int pageSize;
+  final int total;
+  final bool hasMore;
+
+  factory ServerSearchSourceGroupPage.fromEnvelopeData(Object? data) {
+    if (data is! Map) {
+      throw const FormatException('Invalid server source group list');
+    }
+    final map = data.map((key, value) => MapEntry(key.toString(), value));
+    return ServerSearchSourceGroupPage(
+      items: (map['items'] as List? ?? const <Object?>[])
+          .map(ServerSearchSourceGroupSummary.fromJson)
           .toList(growable: false),
       page: _intOrDefault(map['page'], 1),
       pageSize: _intOrDefault(map['pageSize'], 0),

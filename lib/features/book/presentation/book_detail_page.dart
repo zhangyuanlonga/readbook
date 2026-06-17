@@ -402,7 +402,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       if (_isLocalContent) {
         unawaited(_loadInitialLocalDetail());
       } else {
-        unawaited(_load(includeCatalog: false));
+        unawaited(_load(includeCatalog: true));
       }
     }
   }
@@ -2534,7 +2534,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     final switched = await _load(
       forceRefresh: true,
       clearResult: true,
-      includeCatalog: false,
+      includeCatalog: true,
     );
     if (switched) {
       final bookshelfSyncFailed = await _migrateBookshelfAfterSwitch(

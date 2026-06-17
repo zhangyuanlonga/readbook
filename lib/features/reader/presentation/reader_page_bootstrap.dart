@@ -6,7 +6,6 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
   bool _canBootstrapCurrentChapterWithoutCatalog() {
     final sourceId = (_sourceId ?? '').trim();
     final chapterId = _chapterId.trim();
-    final chapterUrl = (_chapterUrl ?? '').trim();
     if (sourceId.isEmpty) {
       return false;
     }
@@ -16,7 +15,7 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
     if (LocalReaderIdentity.isLocalSourceId(sourceId)) {
       return chapterId.isNotEmpty && chapterId.toLowerCase() != 'bootstrap';
     }
-    return chapterUrl.isNotEmpty;
+    return false;
   }
 
   Future<bool> _bootstrapCurrentChapterWithoutCatalog() async {

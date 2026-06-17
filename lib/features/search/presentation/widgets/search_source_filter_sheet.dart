@@ -14,18 +14,28 @@ typedef SearchSourcePageLoader =
       String? keyword,
     });
 
+typedef SearchSourceGroupLoader =
+    Future<ServerSearchSourceGroupPage> Function({
+      required SearchContentMode contentMode,
+      int page,
+      int pageSize,
+      String? keyword,
+    });
+
 class SearchSourceFilterSheet extends StatefulWidget {
   const SearchSourceFilterSheet({
     super.key,
     required this.loadSourcePage,
+    required this.loadSourceGroups,
     required this.contentMode,
-    required this.initialSelectedIds,
+    required this.initialSelection,
     this.pageSize = 60,
   });
 
   final SearchSourcePageLoader loadSourcePage;
+  final SearchSourceGroupLoader loadSourceGroups;
   final SearchContentMode contentMode;
-  final Set<String> initialSelectedIds;
+  final SearchSourceSelection initialSelection;
   final int pageSize;
 
   @override
@@ -33,62 +43,156 @@ class SearchSourceFilterSheet extends StatefulWidget {
       _SearchSourceFilterSheetState();
 }
 
-class _SearchSourceFilterSheetState extends State<SearchSourceFilterSheet> {
+class _SearchSourceFilterSheetState extends State<SearchSourceFilterSheet>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
   final TextEditingController _filterController = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
+  final ScrollController _groupScrollController = ScrollController();
+  final ScrollController _sourceScrollController = ScrollController();
+  List<ServerSearchSourceGroupSummary> _groups =
+      const <ServerSearchSourceGroupSummary>[];
   List<ServerSearchSourceSummary> _sources =
       const <ServerSearchSourceSummary>[];
-  late Set<String> _draftSelectedIds;
-  bool _allSourcesSelected = true;
-  bool _isLoadingInitial = false;
-  bool _isLoadingMore = false;
-  bool _hasMore = true;
-  int _page = 0;
-  int _total = 0;
+  late Set<String> _draftGroupNames;
+  String? _draftSourceId;
+  bool _isLoadingGroups = false;
+  bool _isLoadingMoreGroups = false;
+  bool _isLoadingInitialSources = false;
+  bool _isLoadingMoreSources = false;
+  bool _hasLoadedGroups = false;
+  bool _hasLoadedSources = false;
+  bool _hasMoreGroups = true;
+  bool _hasMoreSources = true;
+  int _groupPage = 0;
+  int _groupTotal = 0;
+  int _sourcePage = 0;
+  int _sourceTotal = 0;
   String _filterKeyword = '';
-  String? _errorText;
+  String? _groupErrorText;
+  String? _sourceErrorText;
   Timer? _filterDebounceTimer;
-  int _loadGeneration = 0;
+  int _groupLoadGeneration = 0;
+  int _sourceLoadGeneration = 0;
+
+  bool get _allSourcesSelected =>
+      _draftGroupNames.isEmpty && (_draftSourceId ?? '').trim().isEmpty;
 
   @override
   void initState() {
     super.initState();
-    _draftSelectedIds = Set<String>.of(widget.initialSelectedIds);
-    _allSourcesSelected = widget.initialSelectedIds.isEmpty;
-    _scrollController.addListener(_maybeLoadMore);
-    unawaited(_reloadSources());
+    _tabController = TabController(length: 2, vsync: this);
+    _draftGroupNames = Set<String>.of(widget.initialSelection.groupNames);
+    _draftSourceId = widget.initialSelection.sourceId?.trim();
+    if ((_draftSourceId ?? '').isEmpty) {
+      _draftSourceId = null;
+    }
+    _groupScrollController.addListener(_maybeLoadMoreGroups);
+    _sourceScrollController.addListener(_maybeLoadMoreSources);
+    unawaited(_ensureActiveTabLoaded());
   }
 
   @override
   void dispose() {
     _filterDebounceTimer?.cancel();
-    _scrollController.dispose();
+    _tabController.dispose();
+    _groupScrollController.dispose();
+    _sourceScrollController.dispose();
     _filterController.dispose();
     super.dispose();
   }
 
-  Future<void> _reloadSources() async {
-    final generation = ++_loadGeneration;
+  Future<void> _reloadGroups() async {
+    final generation = ++_groupLoadGeneration;
     setState(() {
-      _isLoadingInitial = true;
-      _isLoadingMore = false;
-      _hasMore = true;
-      _page = 0;
-      _total = 0;
-      _sources = const <ServerSearchSourceSummary>[];
-      _errorText = null;
+      _isLoadingGroups = true;
+      _isLoadingMoreGroups = false;
+      _hasLoadedGroups = true;
+      _hasMoreGroups = true;
+      _groupPage = 0;
+      _groupTotal = 0;
+      _groups = const <ServerSearchSourceGroupSummary>[];
+      _groupErrorText = null;
     });
+    await _loadGroupPage(page: 1, generation: generation, reset: true);
+  }
 
+  Future<void> _loadMoreGroups() async {
+    if (_isLoadingGroups || _isLoadingMoreGroups || !_hasMoreGroups) {
+      return;
+    }
+    await _loadGroupPage(
+      page: _groupPage + 1,
+      generation: _groupLoadGeneration,
+      reset: false,
+    );
+  }
+
+  Future<void> _loadGroupPage({
+    required int page,
+    required int generation,
+    required bool reset,
+  }) async {
+    if (!reset) {
+      setState(() {
+        _isLoadingMoreGroups = true;
+        _groupErrorText = null;
+      });
+    }
+    try {
+      final groupPage = await widget.loadSourceGroups(
+        contentMode: widget.contentMode,
+        page: page,
+        pageSize: 50,
+        keyword: _filterKeyword,
+      );
+      if (!mounted || generation != _groupLoadGeneration) return;
+      final nextGroups =
+          reset
+              ? groupPage.items
+              : _mergeGroupSummaries(_groups, groupPage.items);
+      setState(() {
+        _groups = nextGroups;
+        _groupPage = groupPage.page;
+        _groupTotal = groupPage.total;
+        _hasMoreGroups = groupPage.hasMore;
+      });
+    } catch (error) {
+      if (!mounted || generation != _groupLoadGeneration) return;
+      setState(() {
+        _groupErrorText = '分组加载失败：$error';
+      });
+    } finally {
+      if (mounted && generation == _groupLoadGeneration) {
+        setState(() {
+          _isLoadingGroups = false;
+          _isLoadingMoreGroups = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _reloadSources() async {
+    final generation = ++_sourceLoadGeneration;
+    setState(() {
+      _isLoadingInitialSources = true;
+      _isLoadingMoreSources = false;
+      _hasLoadedSources = true;
+      _hasMoreSources = true;
+      _sourcePage = 0;
+      _sourceTotal = 0;
+      _sources = const <ServerSearchSourceSummary>[];
+      _sourceErrorText = null;
+    });
     await _loadSourcePage(page: 1, generation: generation, reset: true);
   }
 
   Future<void> _loadMoreSources() async {
-    if (_isLoadingInitial || _isLoadingMore || !_hasMore) {
+    if (_isLoadingInitialSources || _isLoadingMoreSources || !_hasMoreSources) {
       return;
     }
     await _loadSourcePage(
-      page: _page + 1,
-      generation: _loadGeneration,
+      page: _sourcePage + 1,
+      generation: _sourceLoadGeneration,
       reset: false,
     );
   }
@@ -100,8 +204,8 @@ class _SearchSourceFilterSheetState extends State<SearchSourceFilterSheet> {
   }) async {
     if (!reset) {
       setState(() {
-        _isLoadingMore = true;
-        _errorText = null;
+        _isLoadingMoreSources = true;
+        _sourceErrorText = null;
       });
     }
     try {
@@ -111,27 +215,27 @@ class _SearchSourceFilterSheetState extends State<SearchSourceFilterSheet> {
         pageSize: widget.pageSize,
         keyword: _filterKeyword,
       );
-      if (!mounted || generation != _loadGeneration) return;
+      if (!mounted || generation != _sourceLoadGeneration) return;
       final nextSources =
           reset
               ? sourcePage.items
               : _mergeSourceSummaries(_sources, sourcePage.items);
       setState(() {
         _sources = nextSources;
-        _page = sourcePage.page;
-        _total = sourcePage.total;
-        _hasMore = sourcePage.hasMore;
+        _sourcePage = sourcePage.page;
+        _sourceTotal = sourcePage.total;
+        _hasMoreSources = sourcePage.hasMore;
       });
     } catch (error) {
-      if (!mounted || generation != _loadGeneration) return;
+      if (!mounted || generation != _sourceLoadGeneration) return;
       setState(() {
-        _errorText = '可用书源加载失败：$error';
+        _sourceErrorText = '书源加载失败：$error';
       });
     } finally {
-      if (mounted && generation == _loadGeneration) {
+      if (mounted && generation == _sourceLoadGeneration) {
         setState(() {
-          _isLoadingInitial = false;
-          _isLoadingMore = false;
+          _isLoadingInitialSources = false;
+          _isLoadingMoreSources = false;
         });
       }
     }
@@ -152,12 +256,35 @@ class _SearchSourceFilterSheetState extends State<SearchSourceFilterSheet> {
     return merged;
   }
 
-  void _maybeLoadMore() {
-    if (!_scrollController.hasClients) {
+  List<ServerSearchSourceGroupSummary> _mergeGroupSummaries(
+    List<ServerSearchSourceGroupSummary> current,
+    List<ServerSearchSourceGroupSummary> next,
+  ) {
+    if (next.isEmpty) return current;
+    final seen = current.map((group) => group.name).toSet();
+    final merged = <ServerSearchSourceGroupSummary>[...current];
+    for (final group in next) {
+      if (seen.add(group.name)) {
+        merged.add(group);
+      }
+    }
+    return merged;
+  }
+
+  void _maybeLoadMoreGroups() {
+    if (!_groupScrollController.hasClients) {
       return;
     }
-    final position = _scrollController.position;
-    if (position.extentAfter < 420) {
+    if (_groupScrollController.position.extentAfter < 420) {
+      unawaited(_loadMoreGroups());
+    }
+  }
+
+  void _maybeLoadMoreSources() {
+    if (!_sourceScrollController.hasClients) {
+      return;
+    }
+    if (_sourceScrollController.position.extentAfter < 420) {
       unawaited(_loadMoreSources());
     }
   }
@@ -171,107 +298,74 @@ class _SearchSourceFilterSheetState extends State<SearchSourceFilterSheet> {
         return;
       }
       _filterKeyword = nextKeyword;
-      unawaited(_reloadSources());
+      setState(() {
+        _hasLoadedGroups = false;
+        _hasLoadedSources = false;
+        _groups = const <ServerSearchSourceGroupSummary>[];
+        _sources = const <ServerSearchSourceSummary>[];
+      });
+      unawaited(_ensureActiveTabLoaded(force: true));
     });
   }
 
-  Set<String> _resultSelection() {
-    if (_allSourcesSelected) {
-      return <String>{};
+  Future<void> _ensureActiveTabLoaded({bool force = false}) async {
+    if (_tabController.index == 0) {
+      if (force || !_hasLoadedGroups) {
+        await _reloadGroups();
+      }
+      return;
     }
-    return Set<String>.of(_draftSelectedIds);
+    if (force || !_hasLoadedSources) {
+      await _reloadSources();
+    }
   }
 
-  void _toggleItem(String id, bool selected) {
+  SearchSourceSelection _resultSelection() {
+    if (_allSourcesSelected) {
+      return SearchSourceSelection.all;
+    }
+    return SearchSourceSelection(
+      groupNames: Set<String>.of(_draftGroupNames),
+      sourceId: _draftSourceId,
+    );
+  }
+
+  void _toggleGroup(String name, bool selected) {
     setState(() {
-      if (_allSourcesSelected) {
-        _allSourcesSelected = false;
-        _draftSelectedIds.clear();
-      }
+      _draftSourceId = null;
       if (selected) {
-        _draftSelectedIds.add(id);
+        _draftGroupNames.add(name);
       } else {
-        _draftSelectedIds.remove(id);
+        _draftGroupNames.remove(name);
       }
-      if (_draftSelectedIds.isEmpty) {
-        _allSourcesSelected = true;
-      }
+    });
+  }
+
+  void _selectSource(String? id) {
+    setState(() {
+      _draftGroupNames.clear();
+      _draftSourceId = id?.trim().isEmpty == true ? null : id;
     });
   }
 
   String get _selectionLabel {
     if (_allSourcesSelected) {
-      return _total > 0 ? '搜索全部可用书源' : '暂无可用书源';
+      return _sourceTotal > 0 ? '搜索全部书源' : '暂无书源';
     }
-    return '搜索已选 ${_draftSelectedIds.length} 个书源';
+    if (_draftSourceId != null) {
+      return '搜索 1 个书源';
+    }
+    return '搜索已选 ${_draftGroupNames.length} 个分组';
   }
 
-  Widget _buildSourceListItem(BuildContext context, int index) {
-    final theme = Theme.of(context);
-    if (index == 0) {
-      return _SearchSourceAllTile(
-        total: _total,
-        selected: _allSourcesSelected,
-        onChanged: (value) {
-          setState(() {
-            _allSourcesSelected = value != false;
-            if (_allSourcesSelected) {
-              _draftSelectedIds.clear();
-            }
-          });
-        },
-      );
+  String get _countLabel {
+    if (_tabController.index == 0) {
+      if (_isLoadingGroups && _groups.isEmpty) return '加载中';
+      return _groupTotal == 0 ? '暂无分组' : '已加载 ${_groups.length}/$_groupTotal';
     }
-
-    final groupIndex = index - 1;
-    if (groupIndex >= _sources.length) {
-      if (_isLoadingInitial || _isLoadingMore) {
-        return const Padding(
-          padding: EdgeInsets.symmetric(vertical: 18),
-          child: Center(
-            child: SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          ),
-        );
-      }
-      if (_sources.isEmpty) {
-        return Padding(
-          padding: const EdgeInsets.all(24),
-          child: Center(
-            child: Text(
-              _filterKeyword.isEmpty ? '暂无可用书源' : '没有匹配的书源或分组',
-              style: theme.textTheme.bodyMedium,
-            ),
-          ),
-        );
-      }
-      if (!_hasMore) {
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Center(
-            child: Text(
-              '已加载全部书源',
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        );
-      }
-      return const SizedBox(height: 8);
-    }
-
-    final source = _sources[groupIndex];
-    return _SearchSourceTile(
-      source: source,
-      allSourcesSelected: _allSourcesSelected,
-      selected: !_allSourcesSelected && _draftSelectedIds.contains(source.id),
-      onChanged: (value) => _toggleItem(source.id, value == true),
-    );
+    if (_isLoadingInitialSources && _sourceTotal == 0) return '加载中';
+    if (_sourceTotal == 0) return '暂无书源';
+    return '已加载 ${_sources.length}/$_sourceTotal';
   }
 
   @override
@@ -295,20 +389,25 @@ class _SearchSourceFilterSheetState extends State<SearchSourceFilterSheet> {
                 children: [
                   Expanded(
                     child: Text(
-                      '选择搜索范围',
+                      '搜索范围',
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                   ),
-                  _SearchSourceCountPill(
-                    label:
-                        _isLoadingInitial && _total == 0
-                            ? '加载中'
-                            : _total > 0
-                            ? '已加载 ${_sources.length}/$_total'
-                            : '暂无可用',
-                    loading: _isLoadingInitial && _total == 0,
+                  AnimatedBuilder(
+                    animation: _tabController,
+                    builder:
+                        (context, _) => _SearchSourceCountPill(
+                          label: _countLabel,
+                          loading:
+                              (_tabController.index == 0 &&
+                                  _isLoadingGroups &&
+                                  _groups.isEmpty) ||
+                              (_tabController.index == 1 &&
+                                  _isLoadingInitialSources &&
+                                  _sourceTotal == 0),
+                        ),
                   ),
                 ],
               ),
@@ -317,7 +416,7 @@ class _SearchSourceFilterSheetState extends State<SearchSourceFilterSheet> {
                 controller: _filterController,
                 onChanged: _onFilterChanged,
                 decoration: InputDecoration(
-                  hintText: '搜索书源或分组',
+                  hintText: '搜索分组或书源',
                   prefixIcon: const Icon(Icons.search_rounded, size: 18),
                   suffixIcon:
                       _filterController.text.isEmpty
@@ -337,59 +436,45 @@ class _SearchSourceFilterSheetState extends State<SearchSourceFilterSheet> {
                 ),
               ),
               SizedBox(height: metrics.contentGap),
-              _SearchSourceSelectionSummary(
-                allSourcesSelected: _allSourcesSelected,
-                selectedCount: _draftSelectedIds.length,
-                total: _total,
-                onSelectAll:
-                    _allSourcesSelected
-                        ? null
-                        : () {
-                          setState(() {
-                            _allSourcesSelected = true;
-                            _draftSelectedIds.clear();
-                          });
-                        },
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: TabBar(
+                  controller: _tabController,
+                  indicatorSize: TabBarIndicatorSize.tab,
+                  dividerColor: Colors.transparent,
+                  labelColor: theme.colorScheme.onPrimaryContainer,
+                  unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
+                  indicator: BoxDecoration(
+                    color: theme.colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  tabs: const [Tab(text: '分组'), Tab(text: '书源')],
+                  onTap: (_) {
+                    setState(() {});
+                    unawaited(_ensureActiveTabLoaded());
+                  },
+                ),
               ),
               SizedBox(height: metrics.contentGap),
               Expanded(
-                child:
-                    _errorText != null && _sources.isEmpty
-                        ? Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Text(
-                              _errorText!,
-                              textAlign: TextAlign.center,
-                              style: theme.textTheme.bodyMedium,
-                            ),
-                          ),
-                        )
-                        : DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.surfaceContainerLow
-                                .withValues(alpha: 0.72),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: theme.colorScheme.outlineVariant
-                                  .withValues(alpha: 0.36),
-                            ),
-                          ),
-                          child: Material(
-                            color: Colors.transparent,
-                            child: ListView.builder(
-                              controller: _scrollController,
-                              padding: const EdgeInsets.symmetric(vertical: 4),
-                              itemCount: _sources.length + 2,
-                              itemBuilder: _buildSourceListItem,
-                            ),
-                          ),
-                        ),
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildGroupPane(context),
+                    _buildSourcePane(context),
+                  ],
+                ),
               ),
               SizedBox(height: metrics.contentGap),
               _SearchSourcePickerActions(
                 selectionLabel: _selectionLabel,
-                canApply: _allSourcesSelected || _draftSelectedIds.isNotEmpty,
+                canApply:
+                    _allSourcesSelected ||
+                    _draftGroupNames.isNotEmpty ||
+                    _draftSourceId != null,
                 onCancel: () => Navigator.of(context).pop(),
                 onApply: () => Navigator.of(context).pop(_resultSelection()),
               ),
@@ -397,6 +482,157 @@ class _SearchSourceFilterSheetState extends State<SearchSourceFilterSheet> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildGroupPane(BuildContext context) {
+    final theme = Theme.of(context);
+    if (_groupErrorText != null && _groups.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(
+            _groupErrorText!,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium,
+          ),
+        ),
+      );
+    }
+    if (_isLoadingGroups && _groups.isEmpty) {
+      return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+    }
+    return _SearchPanelFrame(
+      child: ListView.builder(
+        controller: _groupScrollController,
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        itemCount: _groups.length + 1,
+        itemBuilder: (context, index) {
+          final groupIndex = index;
+          if (groupIndex >= _groups.length) {
+            if (_isLoadingGroups || _isLoadingMoreGroups) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 18),
+                child: Center(
+                  child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              );
+            }
+            if (_groups.isEmpty) {
+              return Padding(
+                padding: const EdgeInsets.all(24),
+                child: Center(
+                  child: Text(
+                    _filterKeyword.isEmpty ? '暂无分组' : '没有匹配的分组',
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                ),
+              );
+            }
+            if (!_hasMoreGroups) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Center(
+                  child: Text(
+                    '已加载全部分组',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              );
+            }
+            return const SizedBox(height: 8);
+          }
+          final group = _groups[groupIndex];
+          return _SearchGroupTile(
+            group: group,
+            selected: _draftGroupNames.contains(group.name),
+            onChanged: (value) => _toggleGroup(group.name, value == true),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildSourcePane(BuildContext context) {
+    final theme = Theme.of(context);
+    if (_sourceErrorText != null && _sources.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(
+            _sourceErrorText!,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium,
+          ),
+        ),
+      );
+    }
+    return _SearchPanelFrame(
+      child: ListView.builder(
+        controller: _sourceScrollController,
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        itemCount: _sources.length + 1,
+        itemBuilder: _buildSourceListItem,
+      ),
+    );
+  }
+
+  Widget _buildSourceListItem(BuildContext context, int index) {
+    final theme = Theme.of(context);
+    final sourceIndex = index;
+    if (sourceIndex >= _sources.length) {
+      if (_isLoadingInitialSources || _isLoadingMoreSources) {
+        return const Padding(
+          padding: EdgeInsets.symmetric(vertical: 18),
+          child: Center(
+            child: SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        );
+      }
+      if (_sources.isEmpty) {
+        return Padding(
+          padding: const EdgeInsets.all(24),
+          child: Center(
+            child: Text(
+              _filterKeyword.isEmpty ? '暂无书源' : '没有匹配的书源',
+              style: theme.textTheme.bodyMedium,
+            ),
+          ),
+        );
+      }
+      if (!_hasMoreSources) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Center(
+            child: Text(
+              '已加载全部书源',
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        );
+      }
+      return const SizedBox(height: 8);
+    }
+
+    final source = _sources[sourceIndex];
+    return _SearchSourceTile(
+      source: source,
+      selected: _draftSourceId == source.id,
+      onChanged: (value) => _selectSource(value == true ? source.id : null),
     );
   }
 }
@@ -501,6 +737,17 @@ String searchSourceHealthLabel(String? status) {
   };
 }
 
+class _SearchPanelFrame extends StatelessWidget {
+  const _SearchPanelFrame({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(color: Colors.transparent, child: child);
+  }
+}
+
 class _SearchSourceCountPill extends StatelessWidget {
   const _SearchSourceCountPill({required this.label, required this.loading});
 
@@ -545,64 +792,64 @@ class _SearchSourceCountPill extends StatelessWidget {
   }
 }
 
-class _SearchSourceSelectionSummary extends StatelessWidget {
-  const _SearchSourceSelectionSummary({
-    required this.allSourcesSelected,
-    required this.selectedCount,
-    required this.total,
-    required this.onSelectAll,
-  });
-
-  final bool allSourcesSelected;
-  final int selectedCount;
-  final int total;
-  final VoidCallback? onSelectAll;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    return Row(
-      children: <Widget>[
-        Expanded(
-          child: Text(
-            allSourcesSelected ? '当前搜索全部可用书源' : '已选 $selectedCount / $total',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ),
-        TextButton.icon(
-          onPressed: onSelectAll,
-          icon: const Icon(Icons.done_all_rounded, size: 18),
-          label: const Text('全部书源'),
-        ),
-      ],
-    );
-  }
-}
-
-class _SearchSourceAllTile extends StatelessWidget {
-  const _SearchSourceAllTile({
-    required this.total,
+class _SearchGroupTile extends StatelessWidget {
+  const _SearchGroupTile({
+    required this.group,
     required this.selected,
     required this.onChanged,
   });
 
-  final int total;
+  final ServerSearchSourceGroupSummary group;
   final bool selected;
   final ValueChanged<bool?> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    return CheckboxListTile(
-      value: selected,
-      title: Text(total > 0 ? '全部可用书源 ($total)' : '全部可用书源'),
-      subtitle: const Text('不指定时默认搜索全部可用书源'),
-      controlAffinity: ListTileControlAffinity.leading,
-      onChanged: onChanged,
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return _SearchScopeRowShell(
+      selected: selected,
+      onTap: () => onChanged(!selected),
+      leading: Checkbox(
+        value: selected,
+        onChanged: onChanged,
+        visualDensity: VisualDensity.compact,
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              group.displayName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurface,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerLow.withValues(alpha: 0.72),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+              child: Text(
+                group.countLabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -610,13 +857,11 @@ class _SearchSourceAllTile extends StatelessWidget {
 class _SearchSourceTile extends StatelessWidget {
   const _SearchSourceTile({
     required this.source,
-    required this.allSourcesSelected,
     required this.selected,
     required this.onChanged,
   });
 
   final ServerSearchSourceSummary source;
-  final bool allSourcesSelected;
   final bool selected;
   final ValueChanged<bool?> onChanged;
 
@@ -624,84 +869,101 @@ class _SearchSourceTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final group = (source.group ?? '').trim();
+    return _SearchScopeRowShell(
+      selected: selected,
+      onTap: () => onChanged(!selected),
+      leading: Icon(
+        selected
+            ? Icons.radio_button_checked_rounded
+            : Icons.radio_button_unchecked_rounded,
+        size: 24,
+        color: selected ? colorScheme.primary : null,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            source.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: colorScheme.onSurface,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            searchSourceMetaLabel(source),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SearchScopeRowShell extends StatelessWidget {
+  const _SearchScopeRowShell({
+    required this.selected,
+    required this.onTap,
+    required this.leading,
+    required this.child,
+  });
+
+  final bool selected;
+  final VoidCallback onTap;
+  final Widget leading;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () => onChanged(!selected),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color:
-                  selected
-                      ? colorScheme.primaryContainer.withValues(alpha: 0.34)
-                      : colorScheme.surfaceContainerLowest.withValues(
-                        alpha: 0.38,
-                      ),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color:
-                    selected
-                        ? colorScheme.primary.withValues(alpha: 0.34)
-                        : colorScheme.outlineVariant.withValues(alpha: 0.28),
-              ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-              child: Row(
-                children: <Widget>[
-                  Checkbox(
-                    value: !allSourcesSelected && selected,
-                    onChanged: onChanged,
-                  ),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: <Widget>[
-                        Row(
-                          children: <Widget>[
-                            Expanded(
-                              child: Text(
-                                source.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            SearchSourceScopeChip(source: source),
-                            const SizedBox(width: 6),
-                            SearchSourceStatusChip(status: source.healthStatus),
-                          ],
-                        ),
-                        if (group.isNotEmpty) ...<Widget>[
-                          const SizedBox(height: 4),
-                          Text(
-                            '分组：$group',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOutCubic,
+          margin: const EdgeInsets.symmetric(vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+          decoration: BoxDecoration(
+            color:
+                selected
+                    ? colorScheme.primaryContainer.withValues(alpha: 0.32)
+                    : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              SizedBox(width: 42, child: Center(child: leading)),
+              const SizedBox(width: 8),
+              Expanded(child: child),
+            ],
           ),
         ),
       ),
     );
   }
+}
+
+String searchSourceMetaLabel(ServerSearchSourceSummary source) {
+  final parts = <String>[
+    searchSourceScopeLabel(source),
+    searchSourceHealthLabel(source.healthStatus).ifEmpty('未检测'),
+    if ((source.group ?? '').trim().isNotEmpty) (source.group ?? '').trim(),
+  ];
+  return parts.join(' · ');
+}
+
+extension _SearchSourceStringFallback on String {
+  String ifEmpty(String fallback) => isEmpty ? fallback : this;
 }
 
 class _SearchSourcePickerActions extends StatelessWidget {

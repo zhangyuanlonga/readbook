@@ -56,7 +56,12 @@ class SearchPage extends ConsumerStatefulWidget {
   ConsumerState<SearchPage> createState() => _SearchPageState();
 }
 
-enum _SearchMoreAction { serverSources, togglePrecise, clearSourceFilter }
+enum _SearchMoreAction {
+  togglePrecise,
+  manageSources,
+  serverSources,
+  clearSourceFilter,
+}
 
 typedef _DeferredProgressUiUpdate = DeferredSearchProgressUiUpdate;
 
@@ -187,7 +192,6 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   static const Duration _progressUiThrottleWindow = Duration(
     milliseconds: 1500,
   );
-  static const Duration _sourceCountLoadTimeout = Duration(seconds: 8);
   static const Set<PointerDeviceKind> _dragDevices = <PointerDeviceKind>{
     PointerDeviceKind.touch,
     PointerDeviceKind.mouse,
@@ -207,6 +211,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       SearchRenderStateController(pageSize: _searchResultPageSize);
   SearchCancellationToken? _activeSearchToken;
   final ScrollController _pageScrollController = ScrollController();
+  Set<String> _selectedServerGroupNames = <String>{};
   Timer? _progressUiTimer;
   Timer? _scrollUiResumeTimer;
   Timer? _scrollUiForceFlushTimer;
@@ -218,13 +223,6 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   bool get _isSearching => _pageState.isSearching;
   set _isSearching(bool value) {
     _pageStateNotifier.update((state) => state.copyWith(isSearching: value));
-  }
-
-  bool get _isLoadingServerSourceCount => _pageState.isLoadingServerSourceCount;
-  set _isLoadingServerSourceCount(bool value) {
-    _pageStateNotifier.update(
-      (state) => state.copyWith(isLoadingServerSourceCount: value),
-    );
   }
 
   int get _searchSessionId => _pageState.searchSessionId;
@@ -256,13 +254,6 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     );
   }
 
-  int get _availableServerSourceCount => _pageState.availableServerSourceCount;
-  set _availableServerSourceCount(int value) {
-    _pageStateNotifier.update(
-      (state) => state.copyWith(availableServerSourceCount: value),
-    );
-  }
-
   Set<String> get _selectedServerSourceIds =>
       _pageState.selectedServerSourceIds;
   set _selectedServerSourceIds(Set<String> value) {
@@ -270,6 +261,25 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       (state) => state.copyWith(selectedServerSourceIds: value),
     );
   }
+
+  String? get _selectedServerSourceId {
+    for (final id in _selectedServerSourceIds) {
+      final normalized = id.trim();
+      if (normalized.isNotEmpty) {
+        return normalized;
+      }
+    }
+    return null;
+  }
+
+  bool get _hasServerSourceFilter =>
+      _selectedServerSourceIds.isNotEmpty ||
+      _selectedServerGroupNames.isNotEmpty;
+
+  SearchSourceSelection get _serverSourceSelection => SearchSourceSelection(
+    groupNames: Set<String>.of(_selectedServerGroupNames),
+    sourceId: _selectedServerSourceId,
+  );
 
   bool get _isAppendingResults => _pageState.isAppendingResults;
   set _isAppendingResults(bool value) {
@@ -361,16 +371,13 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   }
 
   String get _serverSourceMenuLabel {
-    if (_isLoadingServerSourceCount && _availableServerSourceCount == 0) {
-      return '搜索范围加载中';
+    if (!_hasServerSourceFilter) {
+      return '搜索范围：全部书源';
     }
-    if (_availableServerSourceCount == 0) {
-      return '无可用搜索范围';
+    if (_selectedServerSourceId != null) {
+      return '搜索范围：指定书源';
     }
-    if (_selectedServerSourceIds.isEmpty) {
-      return '搜索范围：全部 $_availableServerSourceCount 个';
-    }
-    return '搜索范围：已选 ${_selectedServerSourceIds.length} 个';
+    return '搜索范围：已选 ${_selectedServerGroupNames.length} 个分组';
   }
 
   @override
@@ -597,8 +604,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                                               _isPreciseBookMatch &&
                                               report.books.isNotEmpty,
                                           canSwitchAllSources:
-                                              _selectedServerSourceIds
-                                                  .isNotEmpty,
+                                              _hasServerSourceFilter,
                                           onDisablePreciseMatch:
                                               _disablePreciseMatchFallback,
                                           onSwitchAllSources:
@@ -765,7 +771,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     if (!_hasOnlineSearchAccess) {
       return _onlineSearchAccessMessage;
     }
-    if (_selectedServerSourceIds.isNotEmpty) {
+    if (_hasServerSourceFilter) {
       return _serverSourceMenuLabel;
     }
     return _aggregateByTitleAuthorEnabled ? '聚合同名同作者结果' : null;
@@ -804,12 +810,12 @@ class _SearchPageState extends ConsumerState<SearchPage> {
             _isPreciseBookMatch
                 ? Icons.check_circle_rounded
                 : Icons.check_circle_outline_rounded,
-        label: '精准匹配',
+        label: '精准搜索',
         priority: 8,
         enabled: !_isSearching,
         onPressed: () => _onPreciseMatchChanged(!_isPreciseBookMatch),
       ),
-      if (_selectedServerSourceIds.isNotEmpty)
+      if (_hasServerSourceFilter)
         AdaptiveOverflowToolbarItem(
           icon: Icons.filter_alt_off_outlined,
           label: '清空书源筛选',
@@ -917,15 +923,35 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                 iconSize: 20,
                 onSelected: (action) {
                   switch (action) {
-                    case _SearchMoreAction.serverSources:
-                      unawaited(_showActiveSourceFilterSheet());
                     case _SearchMoreAction.togglePrecise:
                       _onPreciseMatchChanged(!_isPreciseBookMatch);
+                    case _SearchMoreAction.manageSources:
+                      unawaited(context.push('/mine/book-sources'));
+                    case _SearchMoreAction.serverSources:
+                      unawaited(_showActiveSourceFilterSheet());
                     case _SearchMoreAction.clearSourceFilter:
                       _clearActiveSourceFilter();
                   }
                 },
                 actions: [
+                  AppMenuAction(
+                    value: _SearchMoreAction.togglePrecise,
+                    label: '精准搜索',
+                    child: _SearchMoreMenuItemContent(
+                      icon: Icons.check_circle_outline_rounded,
+                      checked: _isPreciseBookMatch,
+                      title: '精准搜索',
+                    ),
+                  ),
+                  const AppMenuAction(
+                    value: _SearchMoreAction.manageSources,
+                    label: '书源管理',
+                    child: _SearchMoreMenuItemContent(
+                      icon: Icons.source_outlined,
+                      title: '书源管理',
+                      subtitle: '进入我的书源',
+                    ),
+                  ),
                   AppMenuAction(
                     value: _SearchMoreAction.serverSources,
                     label: '搜索范围',
@@ -935,16 +961,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                       subtitle: _serverSourceMenuLabel,
                     ),
                   ),
-                  AppMenuAction(
-                    value: _SearchMoreAction.togglePrecise,
-                    label: '精准匹配',
-                    child: _SearchMoreMenuItemContent(
-                      icon: Icons.check_circle_outline_rounded,
-                      checked: _isPreciseBookMatch,
-                      title: '精准匹配',
-                    ),
-                  ),
-                  if (_selectedServerSourceIds.isNotEmpty)
+                  if (_hasServerSourceFilter)
                     const AppMenuAction(
                       value: _SearchMoreAction.clearSourceFilter,
                       label: '清空搜索范围',
@@ -969,9 +986,9 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     setState(() {
       _searchContentMode = mode;
       _selectedServerSourceIds = <String>{};
+      _selectedServerGroupNames = <String>{};
     });
     _clearSearchOutput();
-    unawaited(_refreshServerSourceCount());
   }
 
   void _onPreciseMatchChanged(bool value) {
@@ -1001,6 +1018,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   void _clearServerSourceFilter() {
     setState(() {
       _selectedServerSourceIds = <String>{};
+      _selectedServerGroupNames = <String>{};
     });
     _clearSearchOutput();
   }
@@ -1038,7 +1056,6 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       _onlineSearchAccessMessage = null;
     });
     unawaited(_loadSearchSystemSettings());
-    unawaited(_refreshServerSourceCount());
     return true;
   }
 
@@ -1091,51 +1108,9 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     await _showServerSourceFilterSheet();
   }
 
-  Future<void> _refreshServerSourceCount() async {
-    if (!mounted || !_hasOnlineSearchAccess) return;
-
-    final requestedMode = _searchContentMode;
-    setState(() {
-      _isLoadingServerSourceCount = true;
-    });
-
-    try {
-      final sourcePage = await _serverOnlineSearchService
-          .loadSourcePage(contentMode: requestedMode, page: 1, pageSize: 1)
-          .timeout(_sourceCountLoadTimeout);
-      if (!mounted ||
-          requestedMode != _searchContentMode ||
-          !_hasOnlineSearchAccess) {
-        return;
-      }
-
-      setState(() {
-        _availableServerSourceCount = sourcePage.total;
-      });
-    } catch (error) {
-      if (!mounted ||
-          requestedMode != _searchContentMode ||
-          !_hasOnlineSearchAccess) {
-        return;
-      }
-      debugPrint('Failed to load server source count: $error');
-      setState(() {
-        _availableServerSourceCount = 0;
-      });
-    } finally {
-      if (mounted &&
-          requestedMode == _searchContentMode &&
-          _hasOnlineSearchAccess) {
-        setState(() {
-          _isLoadingServerSourceCount = false;
-        });
-      }
-    }
-  }
-
   Future<void> _showServerSourceFilterSheet() async {
     final requestedMode = _searchContentMode;
-    final selected = await showAdaptiveActionSurface<Set<String>>(
+    final selected = await showAdaptiveActionSurface<SearchSourceSelection>(
       context: context,
       maxWidth: 680,
       maxHeightFactor: 0.86,
@@ -1143,8 +1118,9 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       builder:
           (context) => SearchSourceFilterSheet(
             loadSourcePage: _serverOnlineSearchService.loadSourcePage,
+            loadSourceGroups: _serverOnlineSearchService.loadSourceGroupPage,
             contentMode: requestedMode,
-            initialSelectedIds: _selectedServerSourceIds,
+            initialSelection: _serverSourceSelection,
           ),
     );
 
@@ -1153,7 +1129,12 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     }
 
     setState(() {
-      _selectedServerSourceIds = selected;
+      _selectedServerGroupNames = Set<String>.of(selected.groupNames);
+      final selectedSourceId = selected.sourceId?.trim();
+      _selectedServerSourceIds =
+          selectedSourceId == null || selectedSourceId.isEmpty
+              ? <String>{}
+              : <String>{selectedSourceId};
     });
     _clearSearchOutput();
   }
@@ -1404,11 +1385,12 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   }
 
   Future<void> _switchToAllSourcesFallback() async {
-    if (_selectedServerSourceIds.isEmpty || _isSearching) {
+    if (!_hasServerSourceFilter || _isSearching) {
       return;
     }
     setState(() {
       _selectedServerSourceIds = <String>{};
+      _selectedServerGroupNames = <String>{};
     });
     await _runSearch();
   }
@@ -1638,10 +1620,15 @@ class _SearchPageState extends ConsumerState<SearchPage> {
           _selectedServerSourceIds.isEmpty
               ? null
               : _selectedServerSourceIds.toList(growable: false);
+      final selectedServerGroupNames =
+          _selectedServerGroupNames.isEmpty
+              ? null
+              : _selectedServerGroupNames.toList(growable: false);
       final report = await _serverOnlineSearchService.search(
         keyword: keyword,
         contentMode: _searchContentMode,
         sourceIds: selectedServerSourceIds,
+        groupNames: selectedServerGroupNames,
         preciseMatch: _isPreciseBookMatch,
         aggregateByTitleAuthor: _aggregateByTitleAuthorEnabled,
         cancellationToken: token,
