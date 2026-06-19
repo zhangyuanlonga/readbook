@@ -147,7 +147,7 @@ extension on _AppearancePageState {
 
   String? _pageSubtitle(AppearanceSection section) {
     return switch (section) {
-      AppearanceSection.appearance => '明暗模式、基础配色、高级主题与导航外观',
+      AppearanceSection.appearance => '明暗模式、高级主题与导航外观',
       AppearanceSection.tabBar => '底栏图标和导航展示',
       AppearanceSection.cover => '书架与主题封面素材',
       AppearanceSection.background => '应用背景素材管理',
@@ -177,8 +177,6 @@ extension on _AppearancePageState {
       sections.add(
         _buildThemeModeSection(context, selectedThemeMode: selectedThemeMode),
       );
-      sections.add(SizedBox(height: sectionGap));
-      sections.add(_buildBaseColorSchemeSection(context));
       sections.add(SizedBox(height: sectionGap));
       sections.add(_buildAdvancedThemeSummarySection(context));
       if (!isDesktopAppearanceOnly) {
@@ -460,129 +458,6 @@ extension on _AppearancePageState {
     );
   }
 
-  Widget _buildBaseColorSchemeSection(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final selectedBaseColorSchemeId = ref.watch(appBaseColorSchemeProvider);
-    final themeSource = ref.watch(appThemeSourceProvider);
-    final sourceStatus = switch (themeSource.kind) {
-      AppThemeSourceKind.baseColorScheme => '当前生效',
-      AppThemeSourceKind.official => '已被官方主题覆盖',
-      AppThemeSourceKind.customAdvancedTheme => '已被高级主题覆盖',
-    };
-    return _buildSectionCard(
-      context,
-      icon: Icons.palette_outlined,
-      title: '基础配色',
-      subtitle: '未启用高级主题时生效，$sourceStatus。',
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(
-          children: [
-            for (
-              var index = 0;
-              index < appBaseColorSchemeOptions.length;
-              index++
-            ) ...[
-              Builder(
-                builder: (context) {
-                  final option = appBaseColorSchemeOptions[index];
-                  final selected = option.id == selectedBaseColorSchemeId;
-                  return InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: () {
-                      if (selected) return;
-                      unawaited(
-                        ref
-                            .read(appBaseColorSchemeProvider.notifier)
-                            .setBaseColorScheme(option.id),
-                      );
-                    },
-                    child: Tooltip(
-                      message: option.label,
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 150),
-                        width: 46,
-                        height: 46,
-                        padding: const EdgeInsets.all(7),
-                        decoration: BoxDecoration(
-                          color:
-                              selected
-                                  ? colorScheme.secondaryContainer.withValues(
-                                    alpha: 0.76,
-                                  )
-                                  : colorScheme.surfaceContainerLow,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color:
-                                selected
-                                    ? colorScheme.primary.withValues(
-                                      alpha: 0.58,
-                                    )
-                                    : colorScheme.outlineVariant.withValues(
-                                      alpha: 0.45,
-                                    ),
-                            width: selected ? 1.3 : 1,
-                          ),
-                        ),
-                        child: Center(
-                          child: Container(
-                            width: 30,
-                            height: 30,
-                            decoration: BoxDecoration(
-                              color: option.swatch,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: colorScheme.outlineVariant.withValues(
-                                  alpha: 0.4,
-                                ),
-                                width: 0.8,
-                              ),
-                              boxShadow:
-                                  selected
-                                      ? [
-                                        BoxShadow(
-                                          color: option.swatch.withValues(
-                                            alpha: 0.26,
-                                          ),
-                                          blurRadius: 6,
-                                          offset: const Offset(0, 2),
-                                        ),
-                                      ]
-                                      : null,
-                            ),
-                            child:
-                                selected
-                                    ? Icon(
-                                      Icons.check_rounded,
-                                      size: 16,
-                                      color:
-                                          ThemeData.estimateBrightnessForColor(
-                                                    option.swatch,
-                                                  ) ==
-                                                  Brightness.dark
-                                              ? Colors.white
-                                              : Colors.black.withValues(
-                                                alpha: 0.72,
-                                              ),
-                                    )
-                                    : null,
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-              if (index < appBaseColorSchemeOptions.length - 1)
-                const SizedBox(width: 10),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
   String _activeThemeSourceLabel(
     AsyncValue<AppAdvancedTheme?> activeAdvancedTheme,
     String? activeThemeId,
@@ -607,7 +482,7 @@ extension on _AppearancePageState {
       context,
       icon: Icons.auto_awesome_outlined,
       title: '高级主题',
-      subtitle: '官方主题可直接使用；启用后会覆盖基础配色。',
+      subtitle: '官方主题可直接使用；自定义主题支持深度编辑。',
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
         onTap: () => context.push('/appearance/advanced-themes'),

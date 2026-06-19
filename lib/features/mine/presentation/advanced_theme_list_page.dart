@@ -1680,28 +1680,6 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     await _applyTheme(theme);
   }
 
-  Future<void> _disableActiveTheme() async {
-    if (_isSaving) {
-      return;
-    }
-    setState(() {
-      _isSaving = true;
-    });
-    try {
-      await ref.read(activeAdvancedThemeIdProvider.notifier).disable();
-      if (!mounted) {
-        return;
-      }
-      _showMessage('已停用高级主题');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
-      }
-    }
-  }
-
   void _showMessage(String message) {
     AppFeedback.showSnackBar(
       context,
@@ -2369,8 +2347,6 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                   unawaited(_handleDeleteThemeById(theme.id));
               }
             },
-            onApplyPressed: () => unawaited(_applyThemeById(theme.id)),
-            onDisablePressed: _disableActiveTheme,
           ),
     );
   }

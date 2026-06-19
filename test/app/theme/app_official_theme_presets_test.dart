@@ -37,4 +37,18 @@ void main() {
       expect(preset.darkConfig.colors.configuredColorCount, greaterThan(8));
     }
   });
+
+  test('mono blue and ink green official presets are visually distinct', () {
+    final monoBlue = appOfficialThemePresetById(
+      AppOfficialThemePresetId.monoBlue,
+    );
+    final inkGreen = appOfficialThemePresetById(
+      AppOfficialThemePresetId.inkGreen,
+    );
+
+    expect(monoBlue.lightConfig.colors.primaryColorValue, 0xFF1F5F99);
+    expect(monoBlue.lightConfig.colors.surfaceColorValue, 0xFFF1F7FF);
+    expect(inkGreen.lightConfig.colors.primaryColorValue, 0xFF2F7652);
+    expect(inkGreen.lightConfig.colors.surfaceColorValue, 0xFFF0F8F3);
+  });
 }

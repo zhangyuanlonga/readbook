@@ -89,4 +89,37 @@ void main() {
     expect(darkScheme.surface, const Color(0xFF161A20));
     expect(darkScheme.primaryContainer, const Color(0xFF2B323C));
   });
+
+  test('mono blue and ink green use distinct tinted surfaces', () {
+    final luminaLight = buildAppBaseLightColorScheme(
+      AppBaseColorSchemeId.luminaNeutral,
+    );
+    final monoBlueLight = buildAppBaseLightColorScheme(
+      AppBaseColorSchemeId.monoBlue,
+    );
+    final inkGreenLight = buildAppBaseLightColorScheme(
+      AppBaseColorSchemeId.inkGreen,
+    );
+    final monoBlueDark = buildAppBaseDarkColorScheme(
+      AppBaseColorSchemeId.monoBlue,
+    );
+    final inkGreenDark = buildAppBaseDarkColorScheme(
+      AppBaseColorSchemeId.inkGreen,
+    );
+
+    expect(monoBlueLight.primary, const Color(0xFF1F5F99));
+    expect(monoBlueLight.surfaceContainerLow, const Color(0xFFF1F7FF));
+    expect(
+      monoBlueLight.surfaceContainerLow,
+      isNot(luminaLight.surfaceContainerLow),
+    );
+    expect(inkGreenLight.primary, const Color(0xFF2F7652));
+    expect(inkGreenLight.surfaceContainerLow, const Color(0xFFF0F8F3));
+    expect(
+      inkGreenLight.surfaceContainerLow,
+      isNot(luminaLight.surfaceContainerLow),
+    );
+    expect(monoBlueDark.surface, const Color(0xFF101722));
+    expect(inkGreenDark.surface, const Color(0xFF101913));
+  });
 }

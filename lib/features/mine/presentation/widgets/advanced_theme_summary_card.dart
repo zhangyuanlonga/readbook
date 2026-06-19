@@ -17,8 +17,6 @@ class AdvancedThemeSummaryCard extends StatelessWidget {
     this.onLongPress,
     required this.onSelectionChanged,
     required this.onActionSelected,
-    required this.onApplyPressed,
-    required this.onDisablePressed,
     this.compact = false,
   });
 
@@ -32,8 +30,6 @@ class AdvancedThemeSummaryCard extends StatelessWidget {
   final VoidCallback? onLongPress;
   final ValueChanged<bool?> onSelectionChanged;
   final ValueChanged<AdvancedThemeAction> onActionSelected;
-  final VoidCallback onApplyPressed;
-  final VoidCallback onDisablePressed;
   final bool compact;
 
   @override
@@ -90,7 +86,12 @@ class AdvancedThemeSummaryCard extends StatelessWidget {
                     isActive: isActive,
                   ),
                 ),
-                if (!isSelectionMode)
+                if (!isSelectionMode) ...[
+                  if (isActive) ...[
+                    const SizedBox(width: 12),
+                    const _ActiveThemeStatusIcon(),
+                  ],
+                  const SizedBox(width: 8),
                   AppMenuButton<AdvancedThemeAction>(
                     enabled: !isSaving,
                     onSelected: onActionSelected,
@@ -118,24 +119,10 @@ class AdvancedThemeSummaryCard extends StatelessWidget {
                       ),
                     ],
                   ),
+                ],
               ],
             ),
             if (!compact) ...[const SizedBox(height: 10), previewStrip],
-            if (!isSelectionMode && !compact) ...[
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed:
-                      isSaving
-                          ? null
-                          : isActive
-                          ? onDisablePressed
-                          : onApplyPressed,
-                  child: Text(isActive ? '停用主题' : '应用主题'),
-                ),
-              ),
-            ],
           ],
         ),
       ),
@@ -183,6 +170,23 @@ class _AdvancedThemeSummaryTitle extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _ActiveThemeStatusIcon extends StatelessWidget {
+  const _ActiveThemeStatusIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: '当前生效',
+      child: Icon(
+        Icons.verified_outlined,
+        size: 20,
+        color: colorScheme.primary.withValues(alpha: 0.78),
+      ),
     );
   }
 }

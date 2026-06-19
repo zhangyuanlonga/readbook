@@ -15,7 +15,6 @@ import '../../../app/shell_navigation_provider.dart';
 import '../../../app/theme/app_interface_typography_provider.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/theme/app_official_theme_presets.dart';
-import '../../../app/theme/app_theme_palette.dart';
 import '../../../app/theme/app_theme_provider.dart';
 import '../../../app/theme/app_theme_source_provider.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';

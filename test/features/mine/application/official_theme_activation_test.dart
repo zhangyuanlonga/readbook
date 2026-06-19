@@ -60,6 +60,6 @@ void main() {
 
     expect(await service.loadActiveThemeId(), 'official:ink-green');
     final snapshot = await service.loadActiveThemeAppearanceSnapshot();
-    expect(snapshot?.lightConfig?.colors.primaryColorValue, 0xFF4D705E);
+    expect(snapshot?.lightConfig?.colors.primaryColorValue, 0xFF2F7652);
   });
 }
