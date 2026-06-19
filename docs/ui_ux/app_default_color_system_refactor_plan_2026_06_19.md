@@ -237,6 +237,25 @@ round: 圆润，20dp+，谨慎使用
 
 ## 5. 官方主题预设建议
 
+### 5.0 下载稿 `DESIGN.md` 的采纳口径
+
+下载稿 `Lumina Library System` 可作为 Lumina 的视觉参考，但不直接作为 App 默认主题规范照搬。
+
+采纳:
+
+- 现代、克制、以内容和书籍封面为中心的阅读/书库工具气质。
+- 8px spacing rhythm、16px 卡片内边距、24px 页面容器边距等密度建议。
+- 书籍封面 3:4、封面圆角小于外层卡片、卡片轻阴影和层级化白/灰表面。
+- 主操作使用炭黑或深灰，而不是高饱和蓝。
+- Manrope 可作为界面字体参考，但不影响阅读器正文字体体系。
+
+修正:
+
+- 下载稿 frontmatter 使用 `#FDF8F8` 粉白表面，但正文描述又使用 `#F3F4F6` 冷灰背景；默认 App 采用冷灰/净白方向，避免粉、黄、脏灰成为全局底色。
+- 下载稿正文提到 muted violet accent，但 token 中没有明确 violet；本方案不采用 violet 作为默认强调色，进度和选中态优先使用冷灰蓝/低饱和绿灰。
+- `primaryContainer` 不使用深炭黑底配灰字，避免小组件选中态对比不足；默认改为浅灰容器 + 炭黑文字。
+- “Buttons & Chips 全 pill”只作为按钮/筛选控件倾向，不扩散到卡片、输入框、导航和弹层。
+
 ### 5.1 Lumina
 
 建议作为默认。
@@ -246,18 +265,42 @@ round: 圆润，20dp+，谨慎使用
 浅色配置: Lumina Neutral
 
 ```text
-pageBackground: #FFFFFF
+background: #F6F7F9
 surface: #FFFFFF
-surfaceRaised: #F6F7F9
-card: #FFFFFF
-cardBorder: #EDF0F4
-textPrimary: #1C1B1B
-textSecondary: #606773
+surfaceDim: #EEF1F4
+surfaceBright: #FFFFFF
+surfaceContainerLowest: #FFFFFF
+surfaceContainerLow: #F8FAFC
+surfaceContainer: #F2F5F8
+surfaceContainerHigh: #EBEFF4
+surfaceContainerHighest: #E2E7EE
+onSurface: #1C1B1B
+onSurfaceVariant: #606773
 primary: #1C1B1B
-primaryContainer: #F3F6F8
+onPrimary: #FFFFFF
+primaryContainer: #F1F3F5
+onPrimaryContainer: #1C1B1B
 secondary: #68717E
+onSecondary: #FFFFFF
+secondaryContainer: #E6EBF2
+onSecondaryContainer: #2D3540
+tertiary: #5F6F7A
+onTertiary: #FFFFFF
+tertiaryContainer: #E6EDF0
+onTertiaryContainer: #243139
 outline: #D5DAE2
+outlineVariant: #E7EBF0
+error: #BA1A1A
+onError: #FFFFFF
+errorContainer: #FFDAD6
+onErrorContainer: #93000A
 ```
+
+视觉来源:
+
+- 参考下载稿的 Modern Minimalist、内容优先、轻阴影和书库信息密度。
+- 舍弃下载稿里的粉白 `#FDF8F8` 作为全局底色，改用冷灰页面背景和净白卡片。
+- 舍弃下载稿里的 muted violet 描述，默认强调只保留冷灰蓝/绿灰倾向。
 
 行为:
 
@@ -268,14 +311,44 @@ outline: #D5DAE2
 
 深色配置: Dark Ink
 
+```text
+background: #111418
+surface: #161A20
+surfaceDim: #0F1216
+surfaceBright: #242A33
+surfaceContainerLowest: #0B0D10
+surfaceContainerLow: #151A20
+surfaceContainer: #1B2129
+surfaceContainerHigh: #232B35
+surfaceContainerHighest: #2C3540
+onSurface: #F4F0EF
+onSurfaceVariant: #C4CAD3
+primary: #F4F0EF
+onPrimary: #111418
+primaryContainer: #2B323C
+onPrimaryContainer: #F4F0EF
+secondary: #C0C7D6
+onSecondary: #1E2630
+secondaryContainer: #303846
+onSecondaryContainer: #E6EBF2
+tertiary: #ADC9C0
+onTertiary: #19342D
+tertiaryContainer: #28443C
+onTertiaryContainer: #D5EFE6
+outline: #4D5662
+outlineVariant: #333B46
+error: #FFB4AB
+onError: #690005
+errorContainer: #93000A
+onErrorContainer: #FFDAD6
+```
+
 原则:
 
-- 深灰黑背景。
-- 略浅一点的卡片。
-- 柔和边框。
-- 白灰文字层级。
-- 低饱和蓝灰/绿灰做少量强调。
-- 避免纯黑大面积 + 高饱和蓝。
+- 深灰黑背景，不使用纯黑大面积铺底。
+- 略浅一点的卡片和浮层，靠层级而不是亮蓝制造区分。
+- 柔和边框和白灰文字层级。
+- 低饱和蓝灰/绿灰只用于少量状态、进度和辅助强调。
 
 形态:
 
@@ -321,7 +394,16 @@ outline: #D5DAE2
 
 ## 6. 数据模型建议
 
-这块按长期规划处理，不做旧主题色数据兼容。旧版本只存了一个 seed color，本身无法表达新的基础外观和基础配色语义；如果读取不到新 id，直接回落到默认官方主题 `lumina` 和默认基础配色 `lumina-neutral`。
+这块按长期规划处理，但不建议完全丢弃旧主题色数据。旧版本只存了一个 seed color，确实无法表达新的基础外观和完整语义色；不过可以做一次性近似映射，避免用户已选的蓝/绿/暖色在升级后静默丢失。
+
+兼容策略:
+
+- 读取不到新 id: 回落到默认官方主题 `official:lumina` 和默认基础配色 `lumina-neutral`。
+- 旧 seed 是蓝色系: 映射到 `mono-blue`。
+- 旧 seed 是绿色系: 映射到 `ink-green`。
+- 旧 seed 是 `Selune` / 暖金系: 映射到 `selune-warm`。
+- 旧 seed 是纯白或无法识别: 映射到 `lumina-neutral`。
+- 映射只用于初始化新 key；后续主路径不再依赖 `appSeedColorPreferenceKey`。
 
 ### 6.1 官方主题预设模型
 
@@ -368,6 +450,7 @@ AppOfficialThemePreset
 - 新 key 为空或无法识别: 使用 `official:lumina`。
 - 官方主题可以在高级主题入口中展示和启用。
 - 官方主题不可直接编辑；复制为自定义高级主题后进入会员能力。
+- 官方主题不应混入自定义高级主题列表的持久化数组；建议由内置 registry 提供，active id 支持 `official:*` 前缀。
 
 ### 6.2 新基础配色模型
 
@@ -407,8 +490,8 @@ app.baseColorSchemeId
 
 - 没有新 key: 使用 `lumina-neutral`。
 - 新 key 为空或无法识别: 使用 `lumina-neutral`。
-- 旧 `appSeedColorPreferenceKey` 可以不再读取。
-- 如需清理旧数据，可由偏好修复服务后续删除。
+- 旧 `appSeedColorPreferenceKey` 只在首次初始化新 key 时读取并映射。
+- 如需清理旧数据，可由偏好修复服务在新 key 写入成功后删除。
 
 ### 6.3 基础配色数据结构
 
@@ -467,14 +550,15 @@ AppBaseShapeScheme -> AppAdvancedThemeComponentStyle
 - 启用官方主题预设时，它会覆盖基础配色。
 - 未启用官方主题或高级主题时，应用外观里的基础配色生效。
 - 明暗模式只决定使用 lightConfig 或 darkConfig，不改变主题来源。
+- UI 上必须明确提示: 如果当前启用了主题预设或高级主题，基础配色暂不参与当前外观渲染。
 
 ---
 
 ## 7. Flutter 落地路径
 
-### Phase 1: 基础配色模型
+### Phase 1: 主题来源模型
 
-目标: 从单色 seed 模型切换到基础配色模型，默认使用 Lumina Neutral。
+目标: 一次性建立“官方主题预设 + 基础配色”的主题来源模型，避免先做基础配色后又被官方默认主题覆盖造成用户困惑。
 
 涉及:
 
@@ -483,22 +567,29 @@ AppBaseShapeScheme -> AppAdvancedThemeComponentStyle
 - `lib/app/preferences/app_preferences_service.dart`
 - `lib/app/theme/app_theme.dart`
 - `lib/app/theme/app_component_theme_tokens.dart`
+- `lib/features/mine/application/advanced_theme_provider.dart`
+- `lib/features/mine/application/advanced_theme_service.dart`
 
 建议:
 
+- 新增 `AppThemeSource` 或等价模型，表达 `customAdvancedThemeId`、`officialPresetId`、`baseColorSchemeId`。
+- active id 支持 `custom:*` / `official:*` 或通过明确字段区分，避免官方预设被误当作用户自定义主题。
+- 新用户默认 `official:lumina`，同时写入默认 `baseColorSchemeId = lumina-neutral`。
 - 新增 `AppBaseColorSchemeId` 和 `AppBaseColorSchemeOption`。
 - 新增 `appBaseColorSchemeProvider`。
-- 默认 id 为 `lumina-neutral`。
-- 不再以旧 seed color 作为默认外观模型。
-- 读取不到新 id 时直接回落 `lumina-neutral`。
+- 默认基础配色 id 为 `lumina-neutral`。
+- 不再以旧 seed color 作为默认外观主模型。
+- 读取不到新 id 时回落 `lumina-neutral`；首次迁移时按旧 seed 做近似映射。
 - 先保留旧 `appSeedColorProvider` 文件也可以，但不再作为主路径。
-- 保持高级主题和官方主题覆盖逻辑不变。
+- 自定义高级主题继续通过 active appearance snapshot 覆盖官方主题和基础配色。
 
 验收:
 
+- 新用户默认启用 `official:lumina`，而不是只使用 `lumina-neutral` base color。
 - Flutter 组件样板页不再出现大面积蓝。
 - 当前书架页面仍接近白底、轻搜索框。
 - 搜索、阅读记录、设置列表没有明显颜色跳出。
+- 旧 seed 蓝/绿/暖色至少能映射到对应基础配色或官方主题倾向。
 
 ### Phase 2: 应用外观入口调整
 
@@ -515,6 +606,7 @@ AppBaseShapeScheme -> AppAdvancedThemeComponentStyle
 - 说明文案强调“影响默认外观的强调色和组件配色”。
 - 明暗模式继续保留在应用外观。
 - 高级主题入口说明“官方主题和高级主题启用后会覆盖基础配色”。
+- 当当前外观来源是 `official:*` 或自定义高级主题时，基础配色入口展示“当前被主题预设覆盖”，允许用户修改备用基础配色，但不暗示立即生效。
 
 验收:
 
@@ -537,6 +629,7 @@ AppBaseShapeScheme -> AppAdvancedThemeComponentStyle
 - 所有用户可进入高级主题入口并启用官方主题。
 - 非会员不能创建、复制编辑、导入导出自定义高级主题。
 - 官方主题预设启用后覆盖基础配色。
+- Lumina 的 light/dark token 以本文 5.1 为准，不直接照搬下载稿 `DESIGN.md` 的粉白 surface 和未落地 violet accent。
 
 验收:
 
@@ -641,11 +734,13 @@ AppBaseShapeScheme -> AppAdvancedThemeComponentStyle
 
 ```text
 docs/ui_ux/lumina_reading_ui_optimization_plan_2026_06_18.md
+外部下载稿 DESIGN.md
 ```
 
 定位调整:
 
 - 保留为 Lumina 视觉参考和阅读 UI 优化方案。
+- 下载稿 `DESIGN.md` 保留为外部视觉参考，不直接作为 Flutter token 源。
 - 不再单独承担“默认外观体系”和“主题色入口重构”的完整设计。
 - 本文档负责默认外观、官方主题预设、基础配色和高级主题边界。
 
@@ -656,6 +751,7 @@ Lumina = 官方默认主题预设，建议作为新用户默认。
 Lumina Neutral = Lumina 的浅色配置。
 Dark Ink = Lumina 的深色配置。
 复制 Lumina 后编辑 = 会员高级主题能力。
+下载稿 DESIGN.md = Lumina 的视觉方向参考，不是最终 ColorScheme。
 ```
 
 ---
@@ -673,6 +769,7 @@ Dark Ink = Lumina 的深色配置。
 - [ ] 非会员不能复制编辑、创建自定义主题、导入导出或细调组件样式。
 - [ ] 切换官方主题后，颜色、圆角、按钮、输入框、卡片和弹层风格一致变化。
 - [ ] 旧 seed color 数据不存在或无法识别时，会回落到 `official:lumina` 和 `lumina-neutral`。
+- [ ] 旧 seed 蓝/绿/暖色能初始化映射到 `mono-blue` / `ink-green` / `selune-warm`。
 - [ ] light/dark 都通过基础可读性检查。
 - [ ] 小屏、平板、桌面没有控件挤压或文字溢出。
 
@@ -683,9 +780,9 @@ Dark Ink = Lumina 的深色配置。
 建议按两条线并行推进:
 
 1. 基于当前 Flutter 组件样板页，对比当前主题和 Lumina 组件样板。
-2. 确认官方主题 `lumina` 的 light/dark 配置: Lumina Neutral + Dark Ink。
-3. 新增基础配色 id/provider/persistence，替代旧 seed color 主路径。
-4. 在高级主题体系中新增官方主题预设，先让所有用户可进入并使用官方主题。
+2. 以本文 5.1 的 Lumina Neutral + Dark Ink 作为官方主题 `lumina` 的第一版 token。
+3. 新增主题来源模型、基础配色 id/provider/persistence，并做旧 seed 一次性映射。
+4. 在高级主题体系中新增官方主题预设 registry，先让所有用户可进入并使用官方主题。
 5. 再收敛组件 token、圆角 preset 和业务页面硬编码圆角。
 
 默认外观和官方主题预设要一起考虑: 默认外观负责第一印象，官方主题预设负责承接整套 UI 风格；会员高级主题负责深度编辑能力。
