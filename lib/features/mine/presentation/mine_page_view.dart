@@ -10,7 +10,8 @@ extension on _MinePageState {
       platform: platform,
     );
     final horizontal = metrics.pagePadding;
-    final seedColor = ref.watch(appSeedColorProvider);
+    final baseColorSchemeId = ref.watch(appBaseColorSchemeProvider);
+    final themeSource = ref.watch(appThemeSourceProvider);
     final themeMode = ref.watch(appThemeModeProvider);
     final activeBottomNavIconGallery = ref.watch(
       effectiveBottomNavIconGalleryProvider,
@@ -45,7 +46,8 @@ extension on _MinePageState {
     final appearanceActions = _buildAppearanceActions(
       context,
       visibilityState: visibilityState,
-      seedColor: seedColor,
+      baseColorSchemeId: baseColorSchemeId,
+      themeSource: themeSource,
       themeMode: themeMode,
       navigationPreference: navigationPreference,
       activeAdvancedTheme: activeAdvancedTheme,
@@ -493,7 +495,8 @@ extension on _MinePageState {
   List<_MineActionItem> _buildAppearanceActions(
     BuildContext context, {
     required MinePageVisibilityState visibilityState,
-    required Color seedColor,
+    required AppBaseColorSchemeId baseColorSchemeId,
+    required AppThemeSource themeSource,
     required ThemeMode themeMode,
     required AppNavigationStylePreference navigationPreference,
     required AsyncValue<AppAdvancedTheme?> activeAdvancedTheme,
@@ -508,8 +511,8 @@ extension on _MinePageState {
           icon: Icons.palette_outlined,
           label: '应用外观',
           subtitle:
-              '${_themeModeLabel(themeMode)} · ${appThemeSeedLabel(seedColor)} · ${appNavigationStylePreferenceLabel(navigationPreference)}',
-          colorDot: seedColor,
+              '${_themeModeLabel(themeMode)} · ${_themeSourceSummaryLabel(themeSource, activeAdvancedTheme)} · ${baseColorSchemeId.label} · ${appNavigationStylePreferenceLabel(navigationPreference)}',
+          colorDot: baseColorSchemeId.swatch,
           onTap: _pushMineRouteAction('/appearance?section=appearance'),
         ),
       );
@@ -518,18 +521,16 @@ extension on _MinePageState {
       actions.add(
         _MineActionItem(
           icon: Icons.auto_awesome_outlined,
-          label: '高级主题',
+          label: '主题预设与高级主题',
           subtitle: activeAdvancedTheme.when(
             data: (theme) {
-              final base = theme == null ? '未启用' : '当前：${theme.name}';
-              return _hasThemeCustom
-                  ? base
-                  : '$base · ${MembershipAccessPresentation.upgradeTitle}';
+              final source = _themeSourceDetailLabel(themeSource, theme);
+              return _hasThemeCustom ? source : '$source · 自定义编辑需会员';
             },
             loading: () => _hasThemeCustom ? '读取中' : '校验中',
             error: (_, _) => _hasThemeCustom ? '未启用' : '校验中',
           ),
-          tagText: MembershipAccessPresentation.vipTag,
+          tagText: _hasThemeCustom ? null : '官方免费',
           onTap: _handleAdvancedThemeTap,
         ),
       );
@@ -1594,6 +1595,35 @@ extension on _MinePageState {
       ThemeMode.light => '日间',
       ThemeMode.dark => '夜间',
       ThemeMode.system => '跟随系统',
+    };
+  }
+
+  String _themeSourceSummaryLabel(
+    AppThemeSource source,
+    AsyncValue<AppAdvancedTheme?> activeAdvancedTheme,
+  ) {
+    return switch (source.kind) {
+      AppThemeSourceKind.baseColorScheme => '基础配色生效',
+      AppThemeSourceKind.official =>
+        '${appOfficialThemePresetById(source.officialPresetId!).id.label} 官方',
+      AppThemeSourceKind.customAdvancedTheme => activeAdvancedTheme.when(
+        data: (theme) => theme == null ? '自定义主题' : theme.name,
+        loading: () => '自定义主题',
+        error: (_, _) => '自定义主题',
+      ),
+    };
+  }
+
+  String _themeSourceDetailLabel(
+    AppThemeSource source,
+    AppAdvancedTheme? activeTheme,
+  ) {
+    return switch (source.kind) {
+      AppThemeSourceKind.baseColorScheme => '未启用主题预设，基础配色生效',
+      AppThemeSourceKind.official =>
+        '当前：${appOfficialThemePresetById(source.officialPresetId!).id.label}（官方）',
+      AppThemeSourceKind.customAdvancedTheme =>
+        activeTheme == null ? '当前：自定义主题' : '当前：${activeTheme.name}',
     };
   }
 

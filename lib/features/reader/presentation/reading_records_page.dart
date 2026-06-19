@@ -11,6 +11,7 @@ import '../../../app/navigation/app_navigation_style_provider.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/theme/app_component_theme_tokens.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
@@ -395,19 +396,22 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
     final currentPeriodRange = _currentPeriodRange;
     final colorScheme = Theme.of(context).colorScheme;
     final metrics = AppAdaptiveMetrics.of(context);
+    final componentTokens =
+        Theme.of(context).extension<AppComponentThemeTokens>();
+    final cardRadius = componentTokens?.card.radius ?? 16;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
           decoration: BoxDecoration(
             color: colorScheme.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(cardRadius),
             border: Border.all(
               color: colorScheme.outlineVariant.withValues(alpha: 0.28),
             ),
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(cardRadius),
             child: Row(
               children: [
                 for (

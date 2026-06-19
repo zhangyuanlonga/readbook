@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../app/layout/app_adaptive.dart';
 import '../../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../../app/theme/app_component_theme_tokens.dart';
 import '../../../../app/widgets/adaptive_card.dart';
 import '../../../../app/widgets/resolved_book_cover.dart';
 import '../../../../domain/entities/book.dart';
@@ -44,6 +45,9 @@ class SearchBookCard extends ConsumerWidget {
     );
     final showHitCount = sourceHitCount > 1;
     final metrics = AppAdaptiveMetrics.of(context);
+    final componentTokens = theme.extension<AppComponentThemeTokens>();
+    final cardRadius = componentTokens?.card.radius ?? metrics.cardRadius;
+    final coverRadius = cardRadius * 0.74;
     final coverWidth = metrics.isCompactDensity ? 64.0 : 72.0;
     final coverHeight = metrics.isCompactDensity ? 92.0 : 104.0;
     final introMaxLines = 1;
@@ -90,7 +94,7 @@ class SearchBookCard extends ConsumerWidget {
                   detailUrl: book.detailUrl,
                   width: coverWidth,
                   height: coverHeight,
-                  radius: metrics.cardRadius * 0.66,
+                  radius: coverRadius,
                 ),
                 SizedBox(width: metrics.contentGap),
                 Expanded(

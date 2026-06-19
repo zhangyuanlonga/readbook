@@ -7,7 +7,7 @@ import 'package:shuxiang_reading_next/app/theme/app_theme_palette.dart';
 import 'package:shuxiang_reading_next/domain/entities/app_advanced_theme.dart';
 
 void main() {
-  test('AppTheme input decoration is transparent by default', () {
+  test('AppTheme input decoration uses stable filled surface', () {
     final theme = AppTheme.build(
       ColorScheme.fromSeed(
         seedColor: Colors.blue,
@@ -15,8 +15,11 @@ void main() {
       ),
     );
 
-    expect(theme.inputDecorationTheme.filled, isFalse);
-    expect(theme.inputDecorationTheme.fillColor, Colors.transparent);
+    expect(theme.inputDecorationTheme.filled, isTrue);
+    expect(
+      theme.inputDecorationTheme.fillColor,
+      theme.colorScheme.surfaceContainerLow.withValues(alpha: 0.92),
+    );
     expect(theme.inputDecorationTheme.enabledBorder, isNotNull);
     expect(theme.inputDecorationTheme.focusedBorder, isNotNull);
   });

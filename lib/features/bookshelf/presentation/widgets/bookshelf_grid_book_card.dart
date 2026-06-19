@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/theme/app_component_theme_tokens.dart';
+
 class BookshelfGridBookCardShell extends StatelessWidget {
   const BookshelfGridBookCardShell({
     super.key,
@@ -30,6 +32,9 @@ class BookshelfGridBookCardShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final componentTokens =
+        Theme.of(context).extension<AppComponentThemeTokens>();
+    final cardRadius = componentTokens?.card.radius ?? 14;
     return AnimatedScale(
       scale: isPressed ? 0.985 : 1,
       duration: pressDuration,
@@ -37,7 +42,7 @@ class BookshelfGridBookCardShell extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(cardRadius),
           onTapDown: selectionMode ? null : (_) => onTapDown(),
           onTapCancel: onTapCancel,
           onTapUp: (_) => onTapUp(),

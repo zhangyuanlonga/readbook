@@ -39,6 +39,9 @@ class AppTheme {
       effectiveColorScheme,
       modeConfig: advancedModeConfig,
     );
+    final selectionColor = effectiveColorScheme.secondary;
+    final selectionContainerColor = effectiveColorScheme.secondaryContainer;
+    final onSelectionContainerColor = effectiveColorScheme.onSecondaryContainer;
     final buttonShape =
         componentTokens.button.shapeStyle == AppButtonShapeStyle.stadium
             ? const StadiumBorder()
@@ -176,6 +179,12 @@ class AppTheme {
       ),
       segmentedButtonTheme: SegmentedButtonThemeData(
         style: SegmentedButton.styleFrom(
+          backgroundColor: effectiveColorScheme.surfaceContainerLow,
+          foregroundColor: effectiveColorScheme.onSurfaceVariant,
+          selectedBackgroundColor: selectionContainerColor.withValues(
+            alpha: 0.86,
+          ),
+          selectedForegroundColor: onSelectionContainerColor,
           side: BorderSide(
             color: effectiveColorScheme.outlineVariant,
             width: componentTokens.selection.segmentBorderWidth,
@@ -193,6 +202,17 @@ class AppTheme {
         ),
       ),
       chipTheme: ChipThemeData(
+        backgroundColor: effectiveColorScheme.surfaceContainerLow,
+        selectedColor: selectionContainerColor.withValues(alpha: 0.86),
+        checkmarkColor: onSelectionContainerColor,
+        labelStyle: TextStyle(
+          color: effectiveColorScheme.onSurfaceVariant,
+          fontWeight: FontWeight.w600,
+        ),
+        secondaryLabelStyle: TextStyle(
+          color: onSelectionContainerColor,
+          fontWeight: FontWeight.w700,
+        ),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(
             componentTokens.selection.chipRadius,
@@ -204,13 +224,69 @@ class AppTheme {
         ),
       ),
       switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.disabled)) {
+            return effectiveColorScheme.onSurface.withValues(alpha: 0.34);
+          }
+          if (states.contains(WidgetState.selected)) {
+            return onSelectionContainerColor;
+          }
+          return effectiveColorScheme.outline;
+        }),
+        trackColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.disabled)) {
+            return effectiveColorScheme.surfaceContainerHighest.withValues(
+              alpha: 0.46,
+            );
+          }
+          if (states.contains(WidgetState.selected)) {
+            return selectionContainerColor;
+          }
+          return effectiveColorScheme.surfaceContainerHighest;
+        }),
+        trackOutlineColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return selectionColor.withValues(alpha: 0.34);
+          }
+          return effectiveColorScheme.outlineVariant;
+        }),
         trackOutlineWidth: WidgetStateProperty.all(
           componentTokens.selection.switchTrackOutlineWidth,
         ),
       ),
+      checkboxTheme: CheckboxThemeData(
+        fillColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.disabled)) {
+            return effectiveColorScheme.surfaceContainerHighest;
+          }
+          if (states.contains(WidgetState.selected)) {
+            return selectionColor;
+          }
+          return Colors.transparent;
+        }),
+        checkColor: WidgetStateProperty.all(effectiveColorScheme.onSecondary),
+        side: BorderSide(
+          color: effectiveColorScheme.outline,
+          width: componentTokens.selection.chipBorderWidth,
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+      ),
+      sliderTheme: SliderThemeData(
+        activeTrackColor: selectionColor,
+        inactiveTrackColor: effectiveColorScheme.surfaceContainerHighest,
+        thumbColor: selectionColor,
+        overlayColor: selectionColor.withValues(alpha: 0.14),
+        valueIndicatorColor: effectiveColorScheme.inverseSurface,
+        valueIndicatorTextStyle: TextStyle(
+          color: effectiveColorScheme.onInverseSurface,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
       inputDecorationTheme: InputDecorationTheme(
-        filled: false,
-        fillColor: Colors.transparent,
+        filled: true,
+        fillColor: effectiveColorScheme.surfaceContainerLow.withValues(
+          alpha: 0.92,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(componentTokens.input.radius),
           borderSide: resolveAppBorderSide(

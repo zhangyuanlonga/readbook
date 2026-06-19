@@ -16,9 +16,10 @@ import '../../../app/navigation/app_navigation_style_provider.dart';
 import '../../../app/platform/app_platform_capabilities.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/theme/app_border_tokens.dart';
+import '../../../app/theme/app_official_theme_presets.dart';
 import '../../../app/theme/app_theme_palette.dart';
 import '../../../app/theme/app_theme_provider.dart';
-import '../../../app/theme/app_theme_seed_provider.dart';
+import '../../../app/theme/app_theme_source_provider.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/foundation/app_feedback.dart';
@@ -60,7 +61,6 @@ class _MinePageState extends ConsumerState<MinePage> {
   String? _membershipPlanType;
   bool _hasMembership = false;
   bool _hasThemeCustom = false;
-  bool _isRemoteAccessResolved = false;
   bool _isLoggingOut = false;
   MinePageLayoutMode _layoutMode = MinePageLayoutMode.list;
   bool _didRestoreLayoutMode = false;
@@ -191,7 +191,7 @@ class _MinePageState extends ConsumerState<MinePage> {
     _username = session.displayIdentity ?? session.loginIdentity;
   }
 
-  void _resetAccountScopedState({bool remoteAccessResolved = true}) {
+  void _resetAccountScopedState() {
     _userId = null;
     _username = null;
     _localAvatarPath = null;
@@ -199,7 +199,6 @@ class _MinePageState extends ConsumerState<MinePage> {
     _membershipPlanType = null;
     _hasMembership = false;
     _hasThemeCustom = false;
-    _isRemoteAccessResolved = remoteAccessResolved;
   }
 
   Future<void> _restoreLayoutMode() async {
@@ -258,9 +257,7 @@ class _MinePageState extends ConsumerState<MinePage> {
     }
     setState(() {
       if (snapshot.session == null) {
-        _resetAccountScopedState(
-          remoteAccessResolved: snapshot.isRemoteAccessResolved,
-        );
+        _resetAccountScopedState();
       } else {
         _userId = snapshot.session?.userId;
         _username =
@@ -268,7 +265,6 @@ class _MinePageState extends ConsumerState<MinePage> {
             snapshot.session?.loginIdentity;
         _hasMembership = snapshot.hasMembership;
         _hasThemeCustom = snapshot.hasThemeCustom;
-        _isRemoteAccessResolved = snapshot.isRemoteAccessResolved;
         _localAvatarPath = snapshot.localAvatarPath;
         _vipExpireAt = snapshot.vipExpireAt;
         _membershipPlanType = snapshot.membershipPlanType;
@@ -547,74 +543,12 @@ class _MinePageState extends ConsumerState<MinePage> {
   }
 
   Future<void> _handleAdvancedThemeTap() async {
-    if (_hasThemeCustom) {
-      await _pushMineRoute('/appearance/advanced-themes');
-      return;
-    }
-    if (!_isRemoteAccessResolved || _userId != null) {
-      await _refreshMine();
-      if (!mounted) {
-        return;
-      }
-      if (_hasThemeCustom) {
-        await _pushMineRoute('/appearance/advanced-themes');
-        return;
-      }
-    }
-    await _showMembershipPrompt(
-      MembershipAccessPresentation.unavailableMessage(
-        MembershipFeatureGate.advancedTheme,
-        isLoggedIn: _userId != null,
-      ),
-    );
+    await _pushMineRoute('/appearance/advanced-themes');
   }
 
   Future<void> _openMembershipCenter() async {
     await _pushMineRoute('/membership');
     await _refreshMine();
-  }
-
-  Future<void> _showMembershipPrompt(String message) async {
-    final goMembership = await showAdaptiveActionSurface<bool>(
-      context: context,
-      maxWidth: 420,
-      builder: (dialogContext) {
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              MembershipAccessPresentation.upgradeTitle,
-              style: Theme.of(
-                dialogContext,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 12),
-            Text(message, style: Theme.of(dialogContext).textTheme.bodyMedium),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(false),
-                  child: const Text('稍后再说'),
-                ),
-                const SizedBox(width: 8),
-                FilledButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(true),
-                  child: const Text(
-                    MembershipAccessPresentation.membershipButtonLabel,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        );
-      },
-    );
-    if (goMembership == true && mounted) {
-      await _openMembershipCenter();
-    }
   }
 
   void _handleAuthEvent(AuthEvent event) {
@@ -626,7 +560,7 @@ class _MinePageState extends ConsumerState<MinePage> {
           // 先清空旧账号的状态，避免显示旧账号的会员信息
           // 重要：必须清空，否则会员A退出后登录普通账号B，会显示A的会员状态
           setState(() {
-            _resetAccountScopedState(remoteAccessResolved: false);
+            _resetAccountScopedState();
           });
         }
         // 触发远程刷新，加载新账号的会员信息

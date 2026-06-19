@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/theme/app_component_theme_tokens.dart';
+
 class BookshelfListBookCardShell extends StatelessWidget {
   const BookshelfListBookCardShell({
     super.key,
@@ -32,6 +34,9 @@ class BookshelfListBookCardShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final componentTokens =
+        Theme.of(context).extension<AppComponentThemeTokens>();
+    final cardRadius = componentTokens?.card.radius ?? 14;
     return AnimatedScale(
       scale: isPressed ? 0.988 : 1,
       duration: pressDuration,
@@ -41,7 +46,7 @@ class BookshelfListBookCardShell extends StatelessWidget {
         color: cardColor,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(cardRadius),
           side: BorderSide(color: borderColor),
         ),
         clipBehavior: Clip.antiAlias,
@@ -55,7 +60,7 @@ class BookshelfListBookCardShell extends StatelessWidget {
                   : () {
                     onTap();
                   },
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(cardRadius),
           child: child,
         ),
       ),

@@ -5,7 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shuxiang_reading_next/app/theme/app_theme_palette.dart';
 import 'package:shuxiang_reading_next/app/theme/app_theme_provider.dart';
-import 'package:shuxiang_reading_next/app/theme/app_theme_seed_provider.dart';
+import 'package:shuxiang_reading_next/app/theme/app_theme_source_provider.dart';
 import 'package:shuxiang_reading_next/features/mine/presentation/appearance_page.dart';
 
 import '../../../test_utils/adaptive_test_harness.dart';
@@ -18,7 +18,7 @@ void main() {
   });
 
   testWidgets(
-    'desktop appearance page keeps only mode color and advanced theme',
+    'desktop appearance page keeps only mode base color and theme presets',
     (tester) async {
       await registerAdaptiveViewportTearDown(tester);
       tester.view.devicePixelRatio = 1;
@@ -38,8 +38,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.text('模式'), findsOneWidget);
-      expect(find.text('颜色'), findsOneWidget);
-      expect(find.text('高级主题'), findsOneWidget);
+      expect(find.text('基础配色'), findsOneWidget);
+      expect(find.text('主题预设与高级主题'), findsOneWidget);
 
       expect(find.text('导航样式'), findsNothing);
       expect(find.text('底部菜单'), findsNothing);
@@ -69,54 +69,57 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.text('模式'), findsOneWidget);
-    expect(find.text('颜色'), findsOneWidget);
-    expect(find.text('高级主题'), findsOneWidget);
+    expect(find.text('基础配色'), findsOneWidget);
+    expect(find.text('主题预设与高级主题'), findsOneWidget);
     expect(find.text('导航样式'), findsOneWidget);
+    await tester.drag(find.byType(ListView), const Offset(0, -520));
+    await tester.pump();
     expect(find.text('底部菜单'), findsOneWidget);
   });
 
-  testWidgets('desktop appearance mode and color controls update providers', (
-    tester,
-  ) async {
-    await registerAdaptiveViewportTearDown(tester);
-    tester.view.devicePixelRatio = 1;
-    await tester.binding.setSurfaceSize(const Size(1280, 800));
+  testWidgets(
+    'desktop appearance mode and base color controls update providers',
+    (tester) async {
+      await registerAdaptiveViewportTearDown(tester);
+      tester.view.devicePixelRatio = 1;
+      await tester.binding.setSurfaceSize(const Size(1280, 800));
 
-    final container = ProviderContainer();
-    addTearDown(container.dispose);
-    final router = _buildAppearanceRouter(
-      theme: ThemeData(platform: TargetPlatform.macOS),
-    );
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final router = _buildAppearanceRouter(
+        theme: ThemeData(platform: TargetPlatform.macOS),
+      );
 
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: MaterialApp.router(
-          theme: ThemeData(platform: TargetPlatform.macOS),
-          routerConfig: router,
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp.router(
+            theme: ThemeData(platform: TargetPlatform.macOS),
+            routerConfig: router,
+          ),
         ),
-      ),
-    );
-    await tester.pump(const Duration(milliseconds: 300));
+      );
+      await tester.pump(const Duration(milliseconds: 300));
 
-    expect(container.read(appThemeModeProvider), ThemeMode.system);
-    await tester.tap(find.text('夜间'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 200));
-    expect(container.read(appThemeModeProvider), ThemeMode.dark);
+      expect(container.read(appThemeModeProvider), ThemeMode.system);
+      await tester.tap(find.text('夜间'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(container.read(appThemeModeProvider), ThemeMode.dark);
 
-    expect(
-      container.read(appSeedColorProvider).toARGB32(),
-      const Color(0xFFFFFFFF).toARGB32(),
-    );
-    await tester.tap(find.byTooltip(appThemeSeaBlueOption.label));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 200));
-    expect(
-      container.read(appSeedColorProvider).toARGB32(),
-      appThemeSeaBlueOption.color.toARGB32(),
-    );
-  });
+      expect(
+        container.read(appBaseColorSchemeProvider),
+        AppBaseColorSchemeId.luminaNeutral,
+      );
+      await tester.tap(find.byTooltip(AppBaseColorSchemeId.monoBlue.label));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(
+        container.read(appBaseColorSchemeProvider),
+        AppBaseColorSchemeId.monoBlue,
+      );
+    },
+  );
 }
 
 GoRouter _buildAppearanceRouter({required ThemeData theme}) {

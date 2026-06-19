@@ -15,7 +15,6 @@ extension on _AppearancePageState {
     final metrics = AppAdaptiveMetrics.of(context);
     final horizontal = metrics.pagePadding;
     final selectedThemeMode = ref.watch(appThemeModeProvider);
-    final selectedSeedColor = ref.watch(appSeedColorProvider);
     final selectedNavigationStyle = ref.watch(
       appNavigationStylePreferenceProvider,
     );
@@ -65,7 +64,6 @@ extension on _AppearancePageState {
               context,
               navigationState,
               selectedThemeMode: selectedThemeMode,
-              selectedSeedColor: selectedSeedColor,
               selectedNavigationStyle: selectedNavigationStyle,
               standardNavigationAppearance: standardNavigationAppearance,
               cupertinoDockAppearance: cupertinoDockAppearance,
@@ -149,7 +147,7 @@ extension on _AppearancePageState {
 
   String? _pageSubtitle(AppearanceSection section) {
     return switch (section) {
-      AppearanceSection.appearance => '主题、颜色、字体与导航外观',
+      AppearanceSection.appearance => '明暗模式、基础配色、主题预设与导航外观',
       AppearanceSection.tabBar => '底栏图标和导航展示',
       AppearanceSection.cover => '书架与主题封面素材',
       AppearanceSection.background => '应用背景素材管理',
@@ -160,7 +158,6 @@ extension on _AppearancePageState {
     BuildContext context,
     AppShellNavigationState navigationState, {
     required ThemeMode selectedThemeMode,
-    required Color selectedSeedColor,
     required AppNavigationStylePreference selectedNavigationStyle,
     required AppStandardNavigationBarAppearance standardNavigationAppearance,
     required AppCupertinoDockAppearance cupertinoDockAppearance,
@@ -181,9 +178,7 @@ extension on _AppearancePageState {
         _buildThemeModeSection(context, selectedThemeMode: selectedThemeMode),
       );
       sections.add(SizedBox(height: sectionGap));
-      sections.add(
-        _buildThemeColorSection(context, selectedSeedColor: selectedSeedColor),
-      );
+      sections.add(_buildBaseColorSchemeSection(context));
       sections.add(SizedBox(height: sectionGap));
       sections.add(_buildAdvancedThemeSummarySection(context));
       sections.add(SizedBox(height: sectionGap));
@@ -356,7 +351,7 @@ extension on _AppearancePageState {
       context,
       icon: Icons.light_mode_outlined,
       title: '模式',
-      subtitle: '日间、夜间或跟随系统。',
+      subtitle: '切换当前外观来源的浅色、深色或系统配置。',
       child: Row(
         children: _AppearancePageState._themeModeOptions
             .map((option) {
@@ -467,16 +462,20 @@ extension on _AppearancePageState {
     );
   }
 
-  Widget _buildThemeColorSection(
-    BuildContext context, {
-    required Color selectedSeedColor,
-  }) {
+  Widget _buildBaseColorSchemeSection(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final selectedBaseColorSchemeId = ref.watch(appBaseColorSchemeProvider);
+    final themeSource = ref.watch(appThemeSourceProvider);
+    final sourceStatus = switch (themeSource.kind) {
+      AppThemeSourceKind.baseColorScheme => '当前生效',
+      AppThemeSourceKind.official => '当前被官方主题覆盖',
+      AppThemeSourceKind.customAdvancedTheme => '当前被自定义高级主题覆盖',
+    };
     return _buildSectionCard(
       context,
       icon: Icons.palette_outlined,
-      title: '颜色',
-      subtitle: '应用主色与强调色。',
+      title: '基础配色',
+      subtitle: '影响未启用主题预设时的主色、强调色和中性色倾向。$sourceStatus。',
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(vertical: 2),
@@ -484,77 +483,117 @@ extension on _AppearancePageState {
           children: [
             for (
               var index = 0;
-              index < appThemeSeedOptions.length;
+              index < appBaseColorSchemeOptions.length;
               index++
             ) ...[
               Builder(
                 builder: (context) {
-                  final option = appThemeSeedOptions[index];
-                  final selected =
-                      option.color.toARGB32() == selectedSeedColor.toARGB32();
-                  return GestureDetector(
+                  final option = appBaseColorSchemeOptions[index];
+                  final selected = option.id == selectedBaseColorSchemeId;
+                  return InkWell(
+                    borderRadius: BorderRadius.circular(12),
                     onTap: () {
                       if (selected) return;
                       unawaited(
                         ref
-                            .read(appSeedColorProvider.notifier)
-                            .setSeedColor(option.color),
+                            .read(appBaseColorSchemeProvider.notifier)
+                            .setBaseColorScheme(option.id),
                       );
                     },
                     child: Tooltip(
                       message: option.label,
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 150),
-                        width: 30,
-                        height: 30,
+                        width: 78,
+                        padding: const EdgeInsets.fromLTRB(8, 8, 8, 7),
                         decoration: BoxDecoration(
-                          color: option.color,
-                          shape: BoxShape.circle,
-                          border:
+                          color:
                               selected
-                                  ? Border.all(
-                                    color: colorScheme.primary,
-                                    width: 2.5,
-                                    strokeAlign: BorderSide.strokeAlignOutside,
+                                  ? colorScheme.secondaryContainer.withValues(
+                                    alpha: 0.76,
                                   )
-                                  : Border.all(
-                                    color: colorScheme.outlineVariant
-                                        .withValues(alpha: 0.4),
-                                    width: 0.5,
-                                  ),
-                          boxShadow:
-                              selected
-                                  ? [
-                                    BoxShadow(
-                                      color: option.color.withValues(
-                                        alpha: 0.4,
-                                      ),
-                                      blurRadius: 6,
-                                      offset: const Offset(0, 2),
+                                  : colorScheme.surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color:
+                                selected
+                                    ? colorScheme.primary.withValues(
+                                      alpha: 0.58,
+                                    )
+                                    : colorScheme.outlineVariant.withValues(
+                                      alpha: 0.45,
                                     ),
-                                  ]
-                                  : null,
+                            width: selected ? 1.3 : 1,
+                          ),
                         ),
-                        child:
-                            selected
-                                ? Icon(
-                                  Icons.check_rounded,
-                                  size: 16,
-                                  color:
-                                      ThemeData.estimateBrightnessForColor(
-                                                option.color,
-                                              ) ==
-                                              Brightness.dark
-                                          ? Colors.white
-                                          : Colors.black.withValues(alpha: 0.7),
-                                )
-                                : null,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 30,
+                              height: 30,
+                              decoration: BoxDecoration(
+                                color: option.swatch,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: colorScheme.outlineVariant.withValues(
+                                    alpha: 0.4,
+                                  ),
+                                  width: 0.8,
+                                ),
+                                boxShadow:
+                                    selected
+                                        ? [
+                                          BoxShadow(
+                                            color: option.swatch.withValues(
+                                              alpha: 0.26,
+                                            ),
+                                            blurRadius: 6,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ]
+                                        : null,
+                              ),
+                              child:
+                                  selected
+                                      ? Icon(
+                                        Icons.check_rounded,
+                                        size: 16,
+                                        color:
+                                            ThemeData.estimateBrightnessForColor(
+                                                      option.swatch,
+                                                    ) ==
+                                                    Brightness.dark
+                                                ? Colors.white
+                                                : Colors.black.withValues(
+                                                  alpha: 0.72,
+                                                ),
+                                      )
+                                      : null,
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              option.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(
+                                context,
+                              ).textTheme.labelSmall?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color:
+                                    selected
+                                        ? colorScheme.onSecondaryContainer
+                                        : colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   );
                 },
               ),
-              if (index < appThemeSeedOptions.length - 1)
+              if (index < appBaseColorSchemeOptions.length - 1)
                 const SizedBox(width: 10),
             ],
           ],
@@ -563,14 +602,31 @@ extension on _AppearancePageState {
     );
   }
 
+  String _activeThemeSourceLabel(
+    AsyncValue<AppAdvancedTheme?> activeAdvancedTheme,
+    String? activeThemeId,
+  ) {
+    final officialPresetId = appOfficialThemePresetIdFromThemeId(activeThemeId);
+    if (officialPresetId != null) {
+      return '当前：${appOfficialThemePresetById(officialPresetId).id.label}（官方）';
+    }
+    return activeAdvancedTheme.when(
+      data:
+          (theme) => theme == null ? '未启用主题预设，基础配色生效' : '当前：${theme.name}（自定义）',
+      loading: () => '读取中',
+      error: (_, _) => '未启用主题预设，基础配色生效',
+    );
+  }
+
   Widget _buildAdvancedThemeSummarySection(BuildContext context) {
     final activeAdvancedTheme = ref.watch(activeAdvancedThemeProvider);
+    final activeThemeId = ref.watch(activeAdvancedThemeIdProvider);
     final colorScheme = Theme.of(context).colorScheme;
     return _buildSectionCard(
       context,
       icon: Icons.auto_awesome_outlined,
-      title: '高级主题',
-      subtitle: '高级主题会覆盖应用基础主题',
+      title: '主题预设与高级主题',
+      subtitle: '官方主题可直接使用；启用后会覆盖基础配色。',
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
         onTap: () => context.push('/appearance/advanced-themes'),
@@ -589,12 +645,9 @@ extension on _AppearancePageState {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      activeAdvancedTheme.when(
-                        data:
-                            (theme) =>
-                                theme == null ? '未启用' : '当前：${theme.name}',
-                        loading: () => '读取中',
-                        error: (_, _) => '未启用',
+                      _activeThemeSourceLabel(
+                        activeAdvancedTheme,
+                        activeThemeId,
                       ),
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w600,
@@ -608,21 +661,22 @@ extension on _AppearancePageState {
                   ),
                 ],
               ),
-              activeAdvancedTheme.when(
-                data:
-                    (theme) =>
-                        theme == null
-                            ? const SizedBox.shrink()
-                            : Padding(
-                              padding: const EdgeInsets.only(top: 10),
-                              child: _buildAdvancedThemeSemanticSummary(
-                                context,
-                                theme,
+              if (!isOfficialThemeId(activeThemeId))
+                activeAdvancedTheme.when(
+                  data:
+                      (theme) =>
+                          theme == null
+                              ? const SizedBox.shrink()
+                              : Padding(
+                                padding: const EdgeInsets.only(top: 10),
+                                child: _buildAdvancedThemeSemanticSummary(
+                                  context,
+                                  theme,
+                                ),
                               ),
-                            ),
-                loading: () => const SizedBox.shrink(),
-                error: (_, _) => const SizedBox.shrink(),
-              ),
+                  loading: () => const SizedBox.shrink(),
+                  error: (_, _) => const SizedBox.shrink(),
+                ),
             ],
           ),
         ),
@@ -643,7 +697,7 @@ extension on _AppearancePageState {
             context,
             icon: Icons.dashboard_customize_outlined,
             label: '当前主题组件样板',
-            description: '跟随当前主题色、高级主题和暗色模式。',
+            description: '跟随当前主题来源、基础配色和暗色模式。',
             route: '/appearance/component-demo',
           ),
           Divider(
@@ -748,11 +802,11 @@ extension on _AppearancePageState {
     AppAdvancedTheme theme,
     AppAdvancedThemeMode mode,
   ) {
-    final seedColor = ref.read(appSeedColorProvider);
+    final themeSource = ref.read(appThemeSourceProvider);
     final colorScheme =
         mode == AppAdvancedThemeMode.light
-            ? buildAppLightColorScheme(seedColor)
-            : buildAppDarkColorScheme(seedColor);
+            ? themeSource.lightScheme
+            : themeSource.darkScheme;
     final config = theme.configFor(mode);
     final palette = resolveAdvancedThemePaletteFromModeConfig(
       colorScheme,

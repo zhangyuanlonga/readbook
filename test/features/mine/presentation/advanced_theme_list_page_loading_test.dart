@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shuxiang_reading_next/app/composition/app_providers.dart'
     as app_providers;
+import 'package:shuxiang_reading_next/app/theme/app_official_theme_presets.dart';
 import 'package:shuxiang_reading_next/core/auth/auth_session.dart';
 import 'package:shuxiang_reading_next/core/membership/membership_access_resolver.dart';
 import 'package:shuxiang_reading_next/core/membership/membership_access_service.dart';
@@ -66,16 +67,21 @@ void main() {
     );
     addTearDown(router.dispose);
 
+    final container = ProviderContainer(
+      overrides: <Override>[
+        advancedThemeServiceProvider.overrideWithValue(
+          _ThrowingAdvancedThemeService(),
+        ),
+        app_providers.appMembershipAccessServiceProvider.overrideWithValue(
+          _InactiveMembershipAccessService(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
     await tester.pumpWidget(
-      ProviderScope(
-        overrides: <Override>[
-          advancedThemeServiceProvider.overrideWithValue(
-            _ThrowingAdvancedThemeService(),
-          ),
-          app_providers.appMembershipAccessServiceProvider.overrideWithValue(
-            _InactiveMembershipAccessService(),
-          ),
-        ],
+      UncontrolledProviderScope(
+        container: container,
         child: MaterialApp.router(routerConfig: router),
       ),
     );
@@ -89,6 +95,10 @@ void main() {
     expect(find.text('Lumina'), findsOneWidget);
     expect(find.text('我的高级主题'), findsOneWidget);
     expect(find.text('开通会员', skipOffstage: false), findsOneWidget);
+    expect(
+      container.read(activeAdvancedThemeIdProvider),
+      appDefaultOfficialThemeId,
+    );
 
     await tester.tap(find.text('复制后编辑').first);
     await tester.pumpAndSettle();

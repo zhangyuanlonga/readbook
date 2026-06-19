@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../layout/app_adaptive.dart';
+import '../theme/app_component_theme_tokens.dart';
 
 class AdaptiveCard extends StatelessWidget {
   const AdaptiveCard({
@@ -24,7 +25,11 @@ class AdaptiveCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final metrics = AppAdaptiveMetrics.of(context);
     final colorScheme = Theme.of(context).colorScheme;
-    final radius = BorderRadius.circular(metrics.cardRadius);
+    final componentTokens =
+        Theme.of(context).extension<AppComponentThemeTokens>();
+    final radius = BorderRadius.circular(
+      componentTokens?.card.radius ?? metrics.cardRadius,
+    );
     final content = Container(
       margin: margin,
       padding: padding ?? EdgeInsets.all(metrics.cardPadding),
