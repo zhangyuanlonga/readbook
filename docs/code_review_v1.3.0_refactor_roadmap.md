@@ -484,7 +484,7 @@
 | 1 | `private_book_sources_page.dart` 私有书源单项操作 | 将详情加载、删除、提交共享、检测和 provider 刷新迁入 `PrivateBookSourceActionController`，页面仅保留弹窗/Snackbar 编排 | 100% | 已完成：service 调用和刷新边界从页面移出，补 application 单测 |
 | 2 | `private_book_source_group_manager_sheet.dart` 分组管理操作 | 将创建/重命名/删除分组和分组刷新迁出 sheet | 100% | 已完成：service 调用、选中分组回写和刷新边界从 sheet 移出 |
 | 3 | `private_book_source_form.dart` 新增/编辑/导入保存 | 将 create/update 与导入 payload 编排迁入 form controller/use-case | 100% | 已完成：保存 create/update 和保存后刷新边界从 form/page 移出；平台导入读取仍留在 UI |
-| 4 | `bookshelf_page.dart` 书籍操作 | 将打开/删除/批量操作等页面动作迁入 action controller，先避开阅读跳转核心链路 | 0% | 待开始 |
+| 4 | `bookshelf_page.dart` 书籍操作 | 将打开/删除/批量操作等页面动作迁入 action controller，先避开阅读跳转核心链路 | 50% | 进行中：单本/批量删除执行统计和反馈文案已迁入 controller；打开阅读/详情仍在页面 |
 | 5 | `search_page.dart` 搜索执行边界 | 将搜索执行状态和进度 report 写入 controller，保留 UI 渲染状态独立 | 0% | 待开始 |
 | 6 | `reader_page.dart` 非核心辅助动作 | 仅迁移非翻页/非章节进度提交的辅助动作；核心阅读链路暂不作为第一批 | 0% | 待开始 |
 
@@ -514,6 +514,15 @@
 - 完成度：序列 3 = 100%；迁移阶段整体 = 50%（3/6）。
 - 验证：`flutter analyze lib/features/mine/application/private_book_source_action_controller.dart lib/features/mine/presentation/private_book_sources_page.dart lib/features/mine/presentation/widgets/private_book_source_form.dart test/features/mine/application/private_book_source_action_controller_test.dart`
 - 验证：`flutter test test/features/mine/application/private_book_source_action_controller_test.dart test/features/mine/presentation/private_book_source_filter_presenter_test.dart test/features/mine/application/book_source_import_payload_test.dart`
+
+### 2026-06-19 迁移序列 4 第一刀记录
+
+- 扩展 `BookshelfBookActionController.removeBooks`：统一单本/批量删除的执行循环、成功/失败统计和反馈文案。
+- `bookshelf_page.dart` 的单本删除和 `bookshelf_page_selection.dart` 的批量删除不再各自维护删除循环与文案拼接；页面仍负责确认弹窗、乐观移除、失败后 reload 和 mounted 判断。
+- 本轮不迁移打开阅读/详情路径，避免把 Reader 打开、进度匹配和路由参数放入第一批风险面。
+- 完成度：序列 4 = 50%；迁移阶段整体 = 58%（3.5/6）。
+- 验证：`flutter analyze lib/features/bookshelf/presentation/bookshelf_book_action_controller.dart lib/features/bookshelf/presentation/bookshelf_page.dart lib/features/bookshelf/presentation/bookshelf_page_selection.dart test/features/bookshelf/presentation/bookshelf_book_action_controller_test.dart`
+- 验证：`flutter test test/features/bookshelf/presentation/bookshelf_book_action_controller_test.dart test/features/bookshelf/presentation/bookshelf_page_smoke_test.dart`
 
 ---
 
@@ -600,6 +609,6 @@ Phase 4 拆分已 100%，当前优先按“迁移阶段”继续做低风险 act
 - [x] 迁移序列 1：私有书源单项操作 controller 边界。
 - [x] 迁移序列 2：私有书源分组管理 sheet service/provider 边界。
 - [x] 迁移序列 3：私有书源新增/编辑/导入保存 form controller 边界。
-- [ ] 迁移序列 4：Bookshelf 书籍操作 action controller 边界。
+- [ ] 迁移序列 4：Bookshelf 书籍操作 action controller 边界（50%，删除/批量删除已迁）。
 
 继续迁移时仍按一个序列一个提交推进；Reader 核心阅读链路保持低优先级，避免把已稳定的翻页和进度提交放进第一批风险面。

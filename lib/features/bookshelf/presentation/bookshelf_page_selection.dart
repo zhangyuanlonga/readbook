@@ -154,18 +154,13 @@ extension on _BookshelfPageState {
       _setSelectionAction(_BookshelfBatchAction.delete);
     });
 
-    var removedCount = 0;
-    var failureCount = 0;
-    for (final book in selected) {
-      try {
-        await _removeBook(book, reload: false, showFeedback: false);
-        removedCount += 1;
-      } catch (_) {
-        failureCount += 1;
-      }
-    }
+    final result = await _bookActionController.removeBooks(
+      selected,
+      removeBook:
+          (book) => _removeBook(book, reload: false, showFeedback: false),
+    );
 
-    if (failureCount > 0) {
+    if (result.hasFailures) {
       await _loadBookshelf(force: true);
     }
 
@@ -177,11 +172,7 @@ extension on _BookshelfPageState {
       _clearSelectionState();
     });
 
-    if (failureCount > 0) {
-      _showMessage('已删除 $removedCount 本书，失败 $failureCount 本。');
-      return;
-    }
-    _showMessage('已删除 $removedCount 本书。');
+    _showMessage(result.batchDeleteMessage);
   }
 
   Future<void> _editSelectedBooksCover() async {

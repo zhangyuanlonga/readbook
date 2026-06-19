@@ -2312,18 +2312,21 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       clearSelection: true,
       exitSelectionMode: _isSelectionMode,
     );
-    try {
-      await _removeBook(book, reload: false, showFeedback: false);
-    } catch (_) {
+    final result = await _bookActionController.removeBooks(
+      <BookshelfBook>[book],
+      removeBook:
+          (book) => _removeBook(book, reload: false, showFeedback: false),
+    );
+    if (result.hasFailures) {
       await _loadBookshelf(force: true);
       if (!mounted) {
         return;
       }
-      _showMessage('删除失败，请稍后重试。');
+      _showMessage(result.singleDeleteMessage);
       return;
     }
     if (mounted) {
-      _showMessage('已从书架删除。');
+      _showMessage(result.singleDeleteMessage);
     }
   }
 
