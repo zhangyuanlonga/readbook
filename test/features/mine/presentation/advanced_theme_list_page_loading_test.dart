@@ -46,7 +46,10 @@ void main() {
     await tester.pump(const Duration(milliseconds: 120));
 
     expect(find.byType(CircularProgressIndicator), findsNothing);
-    expect(find.text('官方主题'), findsOneWidget);
+    expect(find.text('主题 4'), findsOneWidget);
+    expect(find.text('官方主题'), findsNothing);
+    expect(find.text('我的高级主题'), findsNothing);
+    expect(find.text('Lumina'), findsOneWidget);
     expect(find.text('还没有高级主题', skipOffstage: false), findsOneWidget);
   });
 
@@ -91,9 +94,10 @@ void main() {
     await tester.pump(const Duration(milliseconds: 120));
 
     expect(find.byType(CircularProgressIndicator), findsNothing);
-    expect(find.text('官方主题'), findsOneWidget);
+    expect(find.text('主题 4'), findsOneWidget);
+    expect(find.text('官方主题'), findsNothing);
+    expect(find.text('我的高级主题'), findsNothing);
     expect(find.text('Lumina'), findsOneWidget);
-    expect(find.text('我的高级主题'), findsOneWidget);
     expect(find.text('开通会员', skipOffstage: false), findsOneWidget);
     expect(
       container.read(activeAdvancedThemeIdProvider),

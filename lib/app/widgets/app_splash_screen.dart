@@ -85,6 +85,7 @@ class AppSplashBrandMark extends StatelessWidget {
                 color: const Color(0xFF1A1A1A),
                 height: 0.98,
                 letterSpacing: 0,
+                decoration: TextDecoration.none,
               ),
             ),
 
@@ -98,6 +99,7 @@ class AppSplashBrandMark extends StatelessWidget {
                 fontSize: isTablet ? 13.0 : 11.0,
                 color: const Color(0xFF666666).withValues(alpha: 0.68),
                 letterSpacing: 1.35,
+                decoration: TextDecoration.none,
               ),
             ),
           ],

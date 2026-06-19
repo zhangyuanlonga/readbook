@@ -83,6 +83,22 @@ typedef _AdvancedThemeBatchImportProgressCallback =
 typedef _AdvancedThemeBatchFileImportRunner =
     AdvancedThemeBatchFileImportRunner;
 
+class _AdvancedThemeListEntry {
+  const _AdvancedThemeListEntry.official(this.officialPreset, this.order)
+    : customTheme = null;
+
+  const _AdvancedThemeListEntry.custom(this.customTheme, this.order)
+    : officialPreset = null;
+
+  final AppOfficialThemePreset? officialPreset;
+  final AdvancedThemeSummary? customTheme;
+  final int order;
+
+  bool get isOfficial => officialPreset != null;
+
+  String get themeId => officialPreset?.id.themeId ?? customTheme!.id;
+}
+
 /// 高级主题列表页拆分索引：
 /// actions / delete decision 在 `advanced_theme_list_actions.dart`；
 /// 查询、排序、筛选和选择裁剪在 `AdvancedThemeListQueryController`；
@@ -365,6 +381,55 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       searchQuery: _searchQuery,
       selectedCategory: _selectedCategory,
     );
+  }
+
+  List<_AdvancedThemeListEntry> get _visibleThemeEntries {
+    final entries = <_AdvancedThemeListEntry>[
+      for (var index = 0; index < appOfficialThemePresets.length; index += 1)
+        if (_officialPresetMatchesFilters(appOfficialThemePresets[index]))
+          _AdvancedThemeListEntry.official(
+            appOfficialThemePresets[index],
+            index,
+          ),
+    ];
+    final customOrderStart = appOfficialThemePresets.length;
+    final visibleThemes = _visibleThemes;
+    for (var index = 0; index < visibleThemes.length; index += 1) {
+      entries.add(
+        _AdvancedThemeListEntry.custom(
+          visibleThemes[index],
+          customOrderStart + index,
+        ),
+      );
+    }
+    final activeThemeId = ref.read(activeAdvancedThemeIdProvider);
+    entries.sort((a, b) {
+      final aIsActive = a.themeId == activeThemeId;
+      final bIsActive = b.themeId == activeThemeId;
+      if (aIsActive != bIsActive) {
+        return aIsActive ? -1 : 1;
+      }
+      return a.order.compareTo(b.order);
+    });
+    return entries;
+  }
+
+  bool _officialPresetMatchesFilters(AppOfficialThemePreset preset) {
+    final categoryFilter = _selectedCategory?.trim() ?? '';
+    if (categoryFilter.isNotEmpty) {
+      return false;
+    }
+    final keyword = _searchQuery.trim().toLowerCase();
+    if (keyword.isEmpty) {
+      return true;
+    }
+    final haystacks = <String>[
+      preset.id.label,
+      preset.id.id,
+      preset.description,
+      '官方主题',
+    ].map((item) => item.toLowerCase());
+    return haystacks.any((item) => item.contains(keyword));
   }
 
   List<AdvancedThemeSummary> get _selectedVisibleThemes {
@@ -1938,6 +2003,10 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     required double topInset,
   }) {
     final visibleThemes = _visibleThemes;
+    final visibleEntries = _visibleThemeEntries;
+    final isFiltering =
+        _searchQuery.trim().isNotEmpty ||
+        (_selectedCategory?.trim().isNotEmpty ?? false);
     final showInlineToolbar = !AppAdaptiveMetrics.of(context).isMediumUpWindow;
     return CustomScrollView(
       slivers: [
@@ -1959,46 +2028,14 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                   context,
                   activeThemeAsync: activeThemeAsync,
                   activeThemeId: activeThemeId,
-                  visibleThemeCount: visibleThemes.length,
+                  visibleThemeCount: visibleEntries.length,
                 ),
                 const SizedBox(height: 12),
               ],
             ),
           ),
         ),
-        SliverPadding(
-          padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 14),
-          sliver: SliverToBoxAdapter(
-            child: _buildOfficialThemeSection(
-              context,
-              activeThemeId: activeThemeId,
-            ),
-          ),
-        ),
-        SliverPadding(
-          padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 10),
-          sliver: SliverToBoxAdapter(
-            child: _buildThemeSectionHeader(
-              context,
-              title: '我的高级主题',
-              description:
-                  _canUseAdvancedThemes
-                      ? '自定义编辑、导入导出和组件细调。'
-                      : '自定义编辑、导入导出和组件细调需要会员。',
-            ),
-          ),
-        ),
-        if (!_canUseAdvancedThemes)
-          SliverPadding(
-            padding: EdgeInsets.fromLTRB(
-              horizontal,
-              0,
-              horizontal,
-              16 + bottomSafe,
-            ),
-            sliver: SliverToBoxAdapter(child: _buildCustomThemeLockedState()),
-          )
-        else if (visibleThemes.isEmpty)
+        if (visibleEntries.isEmpty)
           SliverPadding(
             padding: EdgeInsets.fromLTRB(
               horizontal,
@@ -2010,120 +2047,62 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
           )
         else
           SliverPadding(
+            padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 14),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate((context, index) {
+                final entry = visibleEntries[index];
+                return Padding(
+                  padding: EdgeInsets.only(
+                    bottom: index == visibleEntries.length - 1 ? 0 : 10,
+                  ),
+                  child: _buildThemeEntryCard(
+                    context,
+                    entry: entry,
+                    activeThemeId: activeThemeId,
+                  ),
+                );
+              }, childCount: visibleEntries.length),
+            ),
+          ),
+        if (!_canUseAdvancedThemes)
+          SliverPadding(
             padding: EdgeInsets.fromLTRB(
               horizontal,
-              0,
+              visibleEntries.isEmpty ? 0 : 2,
               horizontal,
               16 + bottomSafe,
             ),
-            sliver: SliverList(
-              delegate: SliverChildBuilderDelegate((context, index) {
-                final theme = visibleThemes[index];
-                return Padding(
-                  padding: EdgeInsets.only(
-                    bottom: index == visibleThemes.length - 1 ? 0 : 10,
-                  ),
-                  child: _buildThemeCard(
-                    context,
-                    theme,
-                    isActive: activeThemeId == theme.id,
-                  ),
-                );
-              }, childCount: visibleThemes.length),
+            sliver: SliverToBoxAdapter(child: _buildCustomThemeLockedState()),
+          )
+        else if (visibleThemes.isEmpty && !isFiltering)
+          SliverPadding(
+            padding: EdgeInsets.fromLTRB(
+              horizontal,
+              visibleEntries.isEmpty ? 0 : 2,
+              horizontal,
+              16 + bottomSafe,
             ),
+            sliver: SliverToBoxAdapter(child: _buildEmptyState(context)),
           ),
       ],
     );
   }
 
-  Widget _buildOfficialThemeSection(
+  Widget _buildThemeEntryCard(
     BuildContext context, {
+    required _AdvancedThemeListEntry entry,
     required String? activeThemeId,
   }) {
-    final presets = appOfficialThemePresets;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildThemeSectionHeader(
-          context,
-          title: '官方主题',
-          description: '免费可用，启用后覆盖基础配色。',
-        ),
-        const SizedBox(height: 10),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final useGrid = constraints.maxWidth >= 680;
-            if (!useGrid) {
-              return Column(
-                children: [
-                  for (var index = 0; index < presets.length; index += 1)
-                    Padding(
-                      padding: EdgeInsets.only(
-                        bottom: index == presets.length - 1 ? 0 : 10,
-                      ),
-                      child: _buildOfficialThemeCard(
-                        context,
-                        presets[index],
-                        isActive: activeThemeId == presets[index].id.themeId,
-                      ),
-                    ),
-                ],
-              );
-            }
-            final cardWidth = (constraints.maxWidth - 10) / 2;
-            return Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                for (final preset in presets)
-                  SizedBox(
-                    width: cardWidth,
-                    child: _buildOfficialThemeCard(
-                      context,
-                      preset,
-                      isActive: activeThemeId == preset.id.themeId,
-                    ),
-                  ),
-              ],
-            );
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildThemeSectionHeader(
-    BuildContext context, {
-    required String title,
-    required String description,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                description,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                  height: 1.35,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
+    final preset = entry.officialPreset;
+    if (preset != null) {
+      return _buildOfficialThemeCard(
+        context,
+        preset,
+        isActive: activeThemeId == preset.id.themeId,
+      );
+    }
+    final theme = entry.customTheme!;
+    return _buildThemeCard(context, theme, isActive: activeThemeId == theme.id);
   }
 
   Widget _buildOfficialThemeCard(
@@ -2132,6 +2111,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     required bool isActive,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
+    final summary = _officialThemeSummary(preset);
     return InkWell(
       key: ValueKey('official-theme-${preset.id.id}'),
       borderRadius: BorderRadius.circular(18),
@@ -2197,25 +2177,33 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
               ],
             ),
             const SizedBox(height: 12),
-            _buildOfficialThemeSwatches(preset.previewSwatches),
+            _buildDualModePreviewStrip(context, summary),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildOfficialThemeSwatches(List<Color> swatches) {
-    return SizedBox(
-      height: 42,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(14),
-        child: Row(
-          children: [
-            for (final swatch in swatches)
-              Expanded(child: ColoredBox(color: swatch)),
-          ],
-        ),
+  AdvancedThemeSummary _officialThemeSummary(AppOfficialThemePreset preset) {
+    return AdvancedThemeSummary(
+      id: preset.id.themeId,
+      name: preset.id.label,
+      category: '官方主题',
+      updatedAt: DateTime.fromMillisecondsSinceEpoch(
+        preset.id.index,
+        isUtc: true,
       ),
+      lightMode: AdvancedThemeModeSummary.fromConfig(
+        preset.lightConfig,
+      ).copyWith(clearWallpaperPath: true),
+      darkMode: AdvancedThemeModeSummary.fromConfig(
+        preset.darkConfig,
+      ).copyWith(clearWallpaperPath: true),
+      hasCoverGalleryBinding: false,
+      hasLaunchImageGallery: false,
+      hasBottomNavGallery: false,
+      hasAppInterfaceFont: false,
+      hasReaderFont: false,
     );
   }
 
@@ -2297,7 +2285,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     final countLabel =
         _searchQuery.trim().isEmpty &&
                 (_selectedCategory?.trim().isEmpty ?? true)
-            ? '自定义主题 $visibleThemeCount'
+            ? '主题 $visibleThemeCount'
             : '筛选结果 $visibleThemeCount';
     final activeLabel =
         activeThemeName == null ? '当前启用: 未启用' : '当前启用: $activeThemeName';
