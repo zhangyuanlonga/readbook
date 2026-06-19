@@ -479,6 +479,18 @@
 
 状态口径：`完成度` 只统计本迁移阶段的 action/controller/provider 边界迁移，不再计入 Phase 4 文件拆分；Phase 4 顺序 1-6 已全部 100%。
 
+### 迁移任务勾选清单
+
+- [x] 序列 1：`private_book_sources_page.dart` 私有书源单项操作迁移，完成度 100%。
+- [x] 序列 2：`private_book_source_group_manager_sheet.dart` 分组管理操作迁移，完成度 100%。
+- [x] 序列 3：`private_book_source_form.dart` 新增/编辑保存迁移，完成度 100%。
+- [x] 序列 4-A：`bookshelf_page.dart` 单本/批量删除 action controller 迁移，完成度 50% 中的已完成部分。
+- [ ] 序列 4-B：`bookshelf_page.dart` 打开阅读/详情 action controller 迁移，序列 4 剩余 50%。
+- [ ] 序列 5：`search_page.dart` 搜索执行边界迁移，完成度 0%。
+- [ ] 序列 6：`reader_page.dart` 非核心辅助动作迁移，完成度 0%。
+
+当前迁移阶段整体完成度：58%（序列 1-3 已完成，序列 4 完成一半，序列 5-6 未开始）。
+
 | 顺序 | 范围 | 迁移目标 | 完成度 | 当前状态 |
 |---:|---|---|---:|---|
 | 1 | `private_book_sources_page.dart` 私有书源单项操作 | 将详情加载、删除、提交共享、检测和 provider 刷新迁入 `PrivateBookSourceActionController`，页面仅保留弹窗/Snackbar 编排 | 100% | 已完成：service 调用和刷新边界从页面移出，补 application 单测 |
