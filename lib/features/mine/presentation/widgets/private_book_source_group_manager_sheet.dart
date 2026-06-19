@@ -309,9 +309,10 @@ class PrivateBookSourceGroupManagerSheetState
       _saving = true;
     });
     try {
-      await ref.read(privateBookSourceServiceProvider).createGroup(name);
+      await ref
+          .read(privateBookSourceActionControllerProvider)
+          .createGroup(name);
       _nameController.clear();
-      _markChanged();
       _showMessage('分组已新增');
     } catch (error) {
       _showMessage(_privateBookSourceMessageOf(error));
@@ -339,18 +340,9 @@ class PrivateBookSourceGroupManagerSheetState
       return;
     }
     try {
-      final updated = await ref
-          .read(privateBookSourceServiceProvider)
-          .updateGroup(group.id, name);
-      if (!mounted) {
-        return;
-      }
-      ref.read(selectedPrivateBookSourceGroupProvider.notifier).state =
-          updated.id;
-      _markChanged();
       await ref
-          .refresh(privateBookSourceGroupsProvider.future)
-          .then<void>((_) {});
+          .read(privateBookSourceActionControllerProvider)
+          .renameGroup(group, name);
       if (!mounted) {
         return;
       }
@@ -377,23 +369,13 @@ class PrivateBookSourceGroupManagerSheetState
       return;
     }
     try {
-      await ref.read(privateBookSourceServiceProvider).deleteGroup(group.id);
-      if (ref.read(selectedPrivateBookSourceGroupProvider) == group.id) {
-        ref.read(selectedPrivateBookSourceGroupProvider.notifier).state = null;
-      }
-      _markChanged();
       await ref
-          .refresh(privateBookSourceGroupsProvider.future)
-          .then<void>((_) {});
+          .read(privateBookSourceActionControllerProvider)
+          .deleteGroup(group);
       _showMessage('分组已删除');
     } catch (error) {
       _showMessage(_privateBookSourceMessageOf(error));
     }
-  }
-
-  void _markChanged() {
-    ref.invalidate(privateBookSourceGroupsProvider);
-    ref.invalidate(privateBookSourcesProvider);
   }
 
   void _showMessage(String message) {

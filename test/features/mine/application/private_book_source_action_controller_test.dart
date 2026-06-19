@@ -85,12 +85,77 @@ void main() {
 
     expect(refreshCount, 1);
   });
+
+  test('create group delegates and refreshes group boundary', () async {
+    var sourceRefreshCount = 0;
+    var groupRefreshCount = 0;
+    final service = _FakePrivateBookSourceService();
+    final controller = PrivateBookSourceActionController(
+      service: service,
+      refresh: () => sourceRefreshCount += 1,
+      refreshGroups: () => groupRefreshCount += 1,
+    );
+
+    final group = await controller.createGroup('常用');
+
+    expect(service.createdGroupNames, <String>['常用']);
+    expect(group.name, '常用');
+    expect(sourceRefreshCount, 0);
+    expect(groupRefreshCount, 1);
+  });
+
+  test(
+    'rename group selects updated group and refreshes group boundary',
+    () async {
+      var selectedGroupId = '';
+      var groupRefreshCount = 0;
+      final service = _FakePrivateBookSourceService();
+      final controller = PrivateBookSourceActionController(
+        service: service,
+        refresh: () {},
+        refreshGroups: () => groupRefreshCount += 1,
+        selectGroup: (groupId) => selectedGroupId = groupId,
+      );
+
+      final group = await controller.renameGroup(_group(id: 'group_1'), '备用');
+
+      expect(service.updatedGroups, <String, String>{'group_1': '备用'});
+      expect(group.id, 'group_1');
+      expect(group.name, '备用');
+      expect(selectedGroupId, 'group_1');
+      expect(groupRefreshCount, 1);
+    },
+  );
+
+  test(
+    'delete group clears selected group through injected boundary',
+    () async {
+      var clearedGroupId = '';
+      var groupRefreshCount = 0;
+      final service = _FakePrivateBookSourceService();
+      final controller = PrivateBookSourceActionController(
+        service: service,
+        refresh: () {},
+        refreshGroups: () => groupRefreshCount += 1,
+        clearSelectedGroupIf: (groupId) => clearedGroupId = groupId,
+      );
+
+      await controller.deleteGroup(_group(id: 'group_2'));
+
+      expect(service.deletedGroupIds, <String>['group_2']);
+      expect(clearedGroupId, 'group_2');
+      expect(groupRefreshCount, 1);
+    },
+  );
 }
 
 class _FakePrivateBookSourceService extends PrivateBookSourceService {
   String? loadedId;
   final List<String> deletedIds = <String>[];
   final Map<String, String> submitted = <String, String>{};
+  final List<String> createdGroupNames = <String>[];
+  final Map<String, String> updatedGroups = <String, String>{};
+  final List<String> deletedGroupIds = <String>[];
   String? testedId;
   String? testedKeyword;
   int? testedTimeoutMs;
@@ -130,6 +195,23 @@ class _FakePrivateBookSourceService extends PrivateBookSourceService {
       raw: const <String, dynamic>{},
     );
   }
+
+  @override
+  Future<PrivateBookSourceGroup> createGroup(String name) async {
+    createdGroupNames.add(name);
+    return _group(id: 'group_${createdGroupNames.length}', name: name);
+  }
+
+  @override
+  Future<PrivateBookSourceGroup> updateGroup(String id, String name) async {
+    updatedGroups[id] = name;
+    return _group(id: id, name: name);
+  }
+
+  @override
+  Future<void> deleteGroup(String id) async {
+    deletedGroupIds.add(id);
+  }
 }
 
 PrivateBookSourceItem _source({
@@ -157,5 +239,16 @@ PrivateBookSourceItem _source({
     lastTestMessage: '',
     createdAt: null,
     updatedAt: null,
+  );
+}
+
+PrivateBookSourceGroup _group({required String id, String name = '分组'}) {
+  return PrivateBookSourceGroup(
+    id: id,
+    code: id,
+    name: name,
+    scopeType: 'private',
+    ownerUserId: 'owner',
+    enabled: true,
   );
 }

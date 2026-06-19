@@ -31,20 +31,34 @@ final sourceQuotaProvider = FutureProvider<SourceQuotaSnapshot>((ref) async {
   return ref.watch(privateBookSourceServiceProvider).quota();
 });
 
-final privateBookSourceActionControllerProvider =
-    Provider<PrivateBookSourceActionController>((ref) {
-      return PrivateBookSourceActionController(
-        service: ref.watch(privateBookSourceServiceProvider),
-        refresh: () {
-          final selectedGroupId = ref.read(
-            selectedPrivateBookSourceGroupProvider,
-          );
-          ref.invalidate(privateBookSourcesProvider);
-          ref.invalidate(privateBookSourcesProvider(selectedGroupId));
-          ref.invalidate(privateBookSourcesProvider(null));
-          ref.invalidate(privateBookSourceGroupsProvider);
-          ref.invalidate(sourceQuotaProvider);
-          ref.invalidate(sourceAccessScopeProvider);
-        },
-      );
-    });
+final privateBookSourceActionControllerProvider = Provider<
+  PrivateBookSourceActionController
+>((ref) {
+  return PrivateBookSourceActionController(
+    service: ref.watch(privateBookSourceServiceProvider),
+    refresh: () {
+      final selectedGroupId = ref.read(selectedPrivateBookSourceGroupProvider);
+      ref.invalidate(privateBookSourcesProvider);
+      ref.invalidate(privateBookSourcesProvider(selectedGroupId));
+      ref.invalidate(privateBookSourcesProvider(null));
+      ref.invalidate(privateBookSourceGroupsProvider);
+      ref.invalidate(sourceQuotaProvider);
+      ref.invalidate(sourceAccessScopeProvider);
+    },
+    refreshGroups: () {
+      final selectedGroupId = ref.read(selectedPrivateBookSourceGroupProvider);
+      ref.invalidate(privateBookSourceGroupsProvider);
+      ref.invalidate(privateBookSourcesProvider);
+      ref.invalidate(privateBookSourcesProvider(selectedGroupId));
+      ref.invalidate(privateBookSourcesProvider(null));
+    },
+    selectGroup: (groupId) {
+      ref.read(selectedPrivateBookSourceGroupProvider.notifier).state = groupId;
+    },
+    clearSelectedGroupIf: (groupId) {
+      if (ref.read(selectedPrivateBookSourceGroupProvider) == groupId) {
+        ref.read(selectedPrivateBookSourceGroupProvider.notifier).state = null;
+      }
+    },
+  );
+});
