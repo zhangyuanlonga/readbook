@@ -29,6 +29,7 @@ import '../../book/application/book_display_state.dart';
 import '../../book/application/book_presentation_query_service.dart';
 import '../../book/presentation/book_detail_route.dart';
 import '../../mine/application/advanced_theme_provider.dart';
+import '../application/search_execution_controller.dart';
 import '../application/search_page_state.dart';
 import '../application/search_service.dart';
 import '../application/search_history_service.dart';
@@ -185,6 +186,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   final TextEditingController _keywordController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   late final ServerOnlineSearchService _serverOnlineSearchService;
+  late final SearchExecutionController _searchExecutionController;
   late final BookPresentationQueryService _bookPresentationQueryService;
   late final SearchHistoryService _historyService;
   late final SearchSystemSettingsService _searchSystemSettingsService;
@@ -383,6 +385,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   void initState() {
     super.initState();
     _serverOnlineSearchService = ref.read(serverOnlineSearchServiceProvider);
+    _searchExecutionController = ref.read(searchExecutionControllerProvider);
     _bookPresentationQueryService = ref.read(
       searchBookPresentationQueryServiceProvider,
     );
@@ -1641,24 +1644,28 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     });
 
     try {
-      final report = await _serverOnlineSearchService.search(
-        keyword: keyword,
-        contentMode: _searchContentMode,
-        sourceIds: selectedServerSourceIds,
-        groupNames: selectedServerGroupNames,
-        preciseMatch: _isPreciseBookMatch,
-        aggregateByTitleAuthor: _aggregateByTitleAuthorEnabled,
-        cancellationToken: token,
-        onProgress: (progress) {
-          if (!mounted || token.isCancelled || sessionId != _searchSessionId) {
-            return;
-          }
-          _updateProgressReportThrottled(
-            report: progress,
-            token: token,
-            sessionId: sessionId,
-          );
-        },
+      final report = await _searchExecutionController.run(
+        SearchExecutionRequest(
+          keyword: keyword,
+          contentMode: _searchContentMode,
+          sourceIds: selectedServerSourceIds,
+          groupNames: selectedServerGroupNames,
+          preciseMatch: _isPreciseBookMatch,
+          aggregateByTitleAuthor: _aggregateByTitleAuthorEnabled,
+          cancellationToken: token,
+          onProgress: (progress) {
+            if (!mounted ||
+                token.isCancelled ||
+                sessionId != _searchSessionId) {
+              return;
+            }
+            _updateProgressReportThrottled(
+              report: progress,
+              token: token,
+              sessionId: sessionId,
+            );
+          },
+        ),
       );
 
       if (!mounted || token.isCancelled || sessionId != _searchSessionId) {

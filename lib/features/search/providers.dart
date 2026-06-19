@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/composition/app_providers.dart' as app_providers;
 import '../../core/membership/membership_access_service.dart';
 import '../book/application/book_presentation_query_service.dart';
+import 'application/search_execution_controller.dart';
 import 'application/search_history_service.dart';
 import 'application/search_failure_export_service.dart';
 import 'application/server_book_gateway_service.dart';
@@ -16,6 +17,14 @@ final serverOnlineSearchServiceProvider = Provider<ServerOnlineSearchService>((
     searchHitCacheService: ref.watch(
       app_providers.appSearchHitCacheServiceProvider,
     ),
+  );
+});
+
+final searchExecutionControllerProvider = Provider<SearchExecutionController>((
+  ref,
+) {
+  return SearchExecutionController.fromService(
+    ref.watch(serverOnlineSearchServiceProvider),
   );
 });
 
