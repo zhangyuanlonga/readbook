@@ -8,6 +8,8 @@ import '../../../app/theme/app_component_theme_tokens.dart';
 import '../../../app/widgets/adaptive_card.dart';
 import '../../../app/widgets/adaptive_setting_tile.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/app_empty_state_card.dart';
+import '../../../app/widgets/app_status_state_card.dart';
 import '../../../app/widgets/foundation/foundation.dart';
 import '../application/advanced_theme_provider.dart';
 import 'widgets/mine_route_top_bar.dart';
@@ -395,6 +397,52 @@ class _ComponentDemoPageState extends ConsumerState<ComponentDemoPage> {
                       ),
                     ],
                   ),
+                ),
+                SizedBox(height: metrics.sectionGap),
+                _ResponsiveDemoGrid(
+                  children: const [
+                    _DemoSectionCard(
+                      title: '加载骨架',
+                      icon: Icons.hourglass_top_rounded,
+                      child: AppSkeletonList(
+                        itemCount: 3,
+                        itemHeight: 64,
+                        showTrailing: true,
+                      ),
+                    ),
+                    _DemoSectionCard(
+                      title: '空状态',
+                      icon: Icons.inbox_outlined,
+                      child: AppEmptyStateCard(
+                        icon: Icons.auto_stories_outlined,
+                        title: '暂无书籍',
+                        description: '导入本地文件后，书籍会出现在这里。',
+                        compact: true,
+                      ),
+                    ),
+                    _DemoSectionCard(
+                      title: '警告状态',
+                      icon: Icons.warning_amber_rounded,
+                      child: AppStatusStateCard(
+                        icon: Icons.cloud_off_outlined,
+                        title: '同步暂不可用',
+                        message: '网络恢复后会自动继续同步阅读进度。',
+                        tone: AppStatusStateTone.warning,
+                        compact: true,
+                      ),
+                    ),
+                    _DemoSectionCard(
+                      title: '错误状态',
+                      icon: Icons.error_outline_rounded,
+                      child: AppStatusStateCard(
+                        icon: Icons.report_gmailerrorred_rounded,
+                        title: '导入失败',
+                        message: '文件格式无法识别，请重新选择或查看错误中心。',
+                        tone: AppStatusStateTone.error,
+                        compact: true,
+                      ),
+                    ),
+                  ],
                 ),
                 SizedBox(height: metrics.sectionGap),
                 AdaptiveSettingSection(

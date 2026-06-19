@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shuxiang_reading_next/app/composition/app_providers.dart';
+import 'package:shuxiang_reading_next/app/theme/app_official_theme_presets.dart';
 import 'package:shuxiang_reading_next/core/auth/auth_event_bus.dart';
 import 'package:shuxiang_reading_next/core/auth/auth_session.dart';
 import 'package:shuxiang_reading_next/core/auth/auth_session_store.dart';
@@ -247,10 +248,87 @@ void main() {
         );
 
         expect(access.hasThemeCustom, isFalse);
-        expect(await advancedThemeService.loadActiveThemeId(), isNull);
-        expect(container.read(activeAdvancedThemeIdProvider), isNull);
+        expect(
+          await advancedThemeService.loadActiveThemeId(),
+          appDefaultOfficialThemeId,
+        );
+        expect(
+          container.read(activeAdvancedThemeIdProvider),
+          appDefaultOfficialThemeId,
+        );
       },
     );
+
+    test('membership revocation keeps official theme active', () async {
+      final pathProviderDocsDir = await Directory.systemTemp.createTemp(
+        'app_providers_official_theme_docs_',
+      );
+      final pathProviderSupportDir = await Directory.systemTemp.createTemp(
+        'app_providers_official_theme_support_',
+      );
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(pathProviderChannel, (call) async {
+            if (call.method == 'getApplicationDocumentsDirectory') {
+              return pathProviderDocsDir.path;
+            }
+            if (call.method == 'getApplicationSupportDirectory') {
+              return pathProviderSupportDir.path;
+            }
+            return null;
+          });
+      addTearDown(() async {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(pathProviderChannel, null);
+        if (pathProviderDocsDir.existsSync()) {
+          await pathProviderDocsDir.delete(recursive: true);
+        }
+        if (pathProviderSupportDir.existsSync()) {
+          await pathProviderSupportDir.delete(recursive: true);
+        }
+      });
+      final prefs = await SharedPreferences.getInstance();
+      final sessionStore = AuthSessionStore(
+        preferences: prefs,
+        secretStore: FakeAuthSessionSecretStore(),
+      );
+      await sessionStore.saveSession(
+        const AuthSession(
+          accessToken: 'access_expired',
+          userId: 'expired_member',
+          membershipActive: false,
+          vipLevel: 'normal',
+          vipStatus: 'expired',
+        ),
+      );
+      final membershipAccessService = MembershipAccessService(
+        sessionStore: sessionStore,
+        membershipService: _FailingMembershipService(),
+        userProfileService: _FailingUserProfileService(),
+      );
+      final advancedThemeService = await _createAdvancedThemeService(prefs);
+      await advancedThemeService.saveActiveThemeId(
+        AppOfficialThemePresetId.inkGreen.themeId,
+      );
+      final container = ProviderContainer(
+        overrides: <Override>[
+          appMembershipAccessServiceProvider.overrideWithValue(
+            membershipAccessService,
+          ),
+          advancedThemeServiceProvider.overrideWithValue(advancedThemeService),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final access = await container.read(
+        appMembershipAccessSnapshotProvider.future,
+      );
+
+      expect(access.hasThemeCustom, isFalse);
+      expect(
+        await advancedThemeService.loadActiveThemeId(),
+        AppOfficialThemePresetId.inkGreen.themeId,
+      );
+    });
 
     test('membership snapshot refreshes after account events', () async {
       final prefs = await SharedPreferences.getInstance();

@@ -510,9 +510,14 @@ extension on _MinePageState {
         _MineActionItem(
           icon: Icons.palette_outlined,
           label: '应用外观',
-          subtitle:
-              '${_themeModeLabel(themeMode)} · ${_themeSourceSummaryLabel(themeSource, activeAdvancedTheme)} · ${baseColorSchemeId.label} · ${appNavigationStylePreferenceLabel(navigationPreference)}',
-          colorDot: baseColorSchemeId.swatch,
+          subtitle: [
+            _themeModeLabel(themeMode),
+            _themeSourceSummaryLabel(themeSource, activeAdvancedTheme),
+            if (themeSource.kind == AppThemeSourceKind.baseColorScheme)
+              baseColorSchemeId.label,
+            appNavigationStylePreferenceLabel(navigationPreference),
+          ].join(' · '),
+          colorDot: themeSource.baseColorSchemeId.swatch,
           onTap: _pushMineRouteAction('/appearance?section=appearance'),
         ),
       );

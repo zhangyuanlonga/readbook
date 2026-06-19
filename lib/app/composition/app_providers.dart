@@ -41,6 +41,7 @@ import '../lifecycle/app_lifecycle_coordinator.dart';
 import '../platform/app_platform_capabilities.dart';
 import '../startup/app_announcement_coordinator.dart';
 import '../startup/app_startup_coordinator.dart';
+import '../theme/app_official_theme_presets.dart';
 
 final appDatabaseProvider = Provider<AppDatabase>((ref) {
   return AppDatabase.instance;
@@ -165,6 +166,9 @@ Future<void> _clearActiveAdvancedThemeWhenAccessRevoked(
   final activeThemeId =
       await ref.read(advancedThemeServiceProvider).loadActiveThemeId();
   if (activeThemeId == null || activeThemeId.trim().isEmpty) {
+    return;
+  }
+  if (isOfficialThemeId(activeThemeId)) {
     return;
   }
   await ref.read(activeAdvancedThemeIdProvider.notifier).disable();

@@ -127,6 +127,7 @@ class _AboutPageState extends ConsumerState<AboutPage> {
                           context,
                           visibilityState: visibilityState,
                         ),
+                        _buildComponentDemoEntryCard(context),
                         _buildWebsiteCard(context),
                         _buildSectionCard(
                           context,
@@ -476,6 +477,70 @@ class _AboutPageState extends ConsumerState<AboutPage> {
                   color: colorScheme.outlineVariant.withValues(alpha: 0.45),
                 ),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildComponentDemoEntryCard(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.dashboard_customize_outlined,
+                  size: 19,
+                  color: colorScheme.primary,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  '组件样板',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '用于快速检查已有基础组件、主题 token、高频状态和动效在当前外观下的表现。',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                height: 1.35,
+              ),
+            ),
+            const SizedBox(height: 6),
+            ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 2),
+              dense: true,
+              leading: Icon(
+                Icons.widgets_outlined,
+                size: 20,
+                color: colorScheme.onSurfaceVariant,
+              ),
+              title: Text(
+                '当前主题组件样板',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              subtitle: Text(
+                '默认外观已使用 Lumina；切换其他主题后，这里会跟随当前主题展示真实效果。',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+              trailing: const Icon(Icons.chevron_right_rounded, size: 20),
+              onTap: () => context.push('/appearance/component-demo'),
+            ),
           ],
         ),
       ),

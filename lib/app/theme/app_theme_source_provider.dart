@@ -19,10 +19,7 @@ final appThemeSourceProvider = Provider<AppThemeSource>((ref) {
   if (normalized != null && normalized.isNotEmpty) {
     final officialPreset = appOfficialThemePresetIdFromThemeId(normalized);
     if (officialPreset != null) {
-      return AppThemeSource.official(
-        officialPresetId: officialPreset,
-        baseColorSchemeId: baseColorSchemeId,
-      );
+      return AppThemeSource.official(officialPresetId: officialPreset);
     }
     return AppThemeSource.custom(
       customAdvancedThemeId: normalized,
@@ -42,12 +39,11 @@ class AppThemeSource {
 
   factory AppThemeSource.official({
     required AppOfficialThemePresetId officialPresetId,
-    required AppBaseColorSchemeId baseColorSchemeId,
   }) {
     return AppThemeSource._(
       kind: AppThemeSourceKind.official,
       officialPresetId: officialPresetId,
-      baseColorSchemeId: baseColorSchemeId,
+      baseColorSchemeId: officialPresetId.defaultBaseColorSchemeId,
     );
   }
 

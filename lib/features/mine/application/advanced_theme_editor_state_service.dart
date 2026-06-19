@@ -64,18 +64,38 @@ class AdvancedThemeEditorStateService {
   final ReaderFontRegistryService _fontRegistryService;
 
   AppAdvancedTheme createDraft(Color seedColor) {
-    final now = DateTime.now().toUtc();
-    return AppAdvancedTheme(
-      id: _service.createThemeId(),
-      name: '未命名主题',
-      createdAt: now,
-      updatedAt: now,
+    return createDraftFromModeConfigs(
       lightConfig: buildDefaultAdvancedThemeModeConfig(
         buildAppLightColorScheme(seedColor),
       ),
       darkConfig: buildDefaultAdvancedThemeModeConfig(
         buildAppDarkColorScheme(seedColor),
       ),
+    );
+  }
+
+  AppAdvancedTheme createDraftFromSchemes({
+    required ColorScheme lightScheme,
+    required ColorScheme darkScheme,
+  }) {
+    return createDraftFromModeConfigs(
+      lightConfig: buildDefaultAdvancedThemeModeConfig(lightScheme),
+      darkConfig: buildDefaultAdvancedThemeModeConfig(darkScheme),
+    );
+  }
+
+  AppAdvancedTheme createDraftFromModeConfigs({
+    required AppAdvancedThemeModeConfig lightConfig,
+    required AppAdvancedThemeModeConfig darkConfig,
+  }) {
+    final now = DateTime.now().toUtc();
+    return AppAdvancedTheme(
+      id: _service.createThemeId(),
+      name: '未命名主题',
+      createdAt: now,
+      updatedAt: now,
+      lightConfig: lightConfig,
+      darkConfig: darkConfig,
     );
   }
 

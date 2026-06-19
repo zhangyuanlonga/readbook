@@ -4,8 +4,10 @@ extension on _AdvancedThemeEditorPageState {
   Future<void> _initializeDraftImpl() async {
     final themeId = widget.themeId?.trim() ?? '';
     if (themeId.isEmpty) {
-      final seedColor = ref.read(appSeedColorProvider);
-      final draft = _stateService.createDraft(seedColor);
+      final draft = _stateService.createDraftFromModeConfigs(
+        lightConfig: _defaultModeConfigForMode(AppAdvancedThemeMode.light),
+        darkConfig: _defaultModeConfigForMode(AppAdvancedThemeMode.dark),
+      );
       if (!mounted) {
         return;
       }

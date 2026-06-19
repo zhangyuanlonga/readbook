@@ -11,8 +11,7 @@ import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
-import '../../../app/theme/app_theme_palette.dart';
-import '../../../app/theme/app_theme_seed_provider.dart';
+import '../../../app/theme/app_theme_source_provider.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/adaptive_fullscreen_preview.dart';
 import '../../../app/widgets/adaptive_overflow_toolbar.dart';
@@ -1408,13 +1407,20 @@ class _AdvancedThemeEditorPageState
   AppAdvancedThemeModeConfig _defaultModeConfigForMode(
     AppAdvancedThemeMode mode,
   ) {
-    final seedColor = ref.read(appSeedColorProvider);
+    final activeSnapshot = ref.read(activeThemeAppearanceSnapshotProvider);
+    final snapshotConfig =
+        mode == AppAdvancedThemeMode.light
+            ? activeSnapshot?.lightConfig
+            : activeSnapshot?.darkConfig;
+    if (snapshotConfig != null) {
+      return snapshotConfig;
+    }
     return switch (mode) {
       AppAdvancedThemeMode.light => buildDefaultAdvancedThemeModeConfig(
-        buildAppLightColorScheme(seedColor),
+        _colorSchemeForMode(mode),
       ),
       AppAdvancedThemeMode.dark => buildDefaultAdvancedThemeModeConfig(
-        buildAppDarkColorScheme(seedColor),
+        _colorSchemeForMode(mode),
       ),
     };
   }
@@ -3258,10 +3264,10 @@ class _AdvancedThemeEditorPageState
   }
 
   ColorScheme _colorSchemeForMode(AppAdvancedThemeMode mode) {
-    final seedColor = ref.read(appSeedColorProvider);
+    final themeSource = ref.read(appThemeSourceProvider);
     return mode == AppAdvancedThemeMode.light
-        ? buildAppLightColorScheme(seedColor)
-        : buildAppDarkColorScheme(seedColor);
+        ? themeSource.lightScheme
+        : themeSource.darkScheme;
   }
 
   ResolvedAdvancedThemePalette _resolvedDefaultPaletteForMode(

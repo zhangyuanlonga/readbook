@@ -19,6 +19,7 @@ import 'package:shuxiang_reading_next/features/auth/presentation/user_profile_pa
 import 'package:shuxiang_reading_next/features/auth/providers.dart';
 import 'package:shuxiang_reading_next/features/error/presentation/error_center_page.dart';
 import 'package:shuxiang_reading_next/features/mine/presentation/about_page.dart';
+import 'package:shuxiang_reading_next/features/mine/presentation/component_demo_page.dart';
 import 'package:shuxiang_reading_next/features/mine/presentation/feedback_page.dart';
 import 'package:shuxiang_reading_next/features/mine/presentation/membership_center_page.dart';
 import 'package:shuxiang_reading_next/features/mine/providers.dart' as mine;
@@ -395,6 +396,38 @@ void main() {
       useProviderScope: true,
       pageName: 'AboutPage',
     );
+  });
+
+  testWidgets('AboutPage opens component demo entry', (tester) async {
+    await registerAdaptiveViewportTearDown(tester);
+    tester.view.devicePixelRatio = 3;
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+
+    final router = GoRouter(
+      initialLocation: '/about',
+      routes: [
+        GoRoute(path: '/about', builder: (context, state) => const AboutPage()),
+        GoRoute(
+          path: '/appearance/component-demo',
+          builder: (context, state) => const ComponentDemoPage(),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(child: MaterialApp.router(routerConfig: router)),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('组件样板'), findsOneWidget);
+    expect(find.text('当前主题组件样板'), findsOneWidget);
+    expect(find.text('Lumina 组件样板'), findsNothing);
+
+    await tester.tap(find.text('当前主题组件样板'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.text('真实 Flutter 控件与当前主题效果'), findsOneWidget);
   });
 
   testWidgets('ErrorCenterPage renders on phone and large screens', (

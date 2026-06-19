@@ -84,17 +84,19 @@ class ActiveAdvancedThemeIdNotifier extends Notifier<String?> {
     _hasExplicitSet = true;
     final normalized = themeId?.trim();
     final nextValue =
-        normalized == null || normalized.isEmpty ? null : normalized;
+        normalized == null || normalized.isEmpty
+            ? appDefaultOfficialThemeId
+            : normalized;
     final service = ref.read(advancedThemeServiceProvider);
     await service.saveActiveThemeId(nextValue);
-    await ref
-        .read(activeThemeAppearanceSnapshotProvider.notifier)
-        .reloadFromStorage();
     _primedActiveThemeId = nextValue;
     _hasPrimedValue = true;
     if (state != nextValue) {
       state = nextValue;
     }
+    await ref
+        .read(activeThemeAppearanceSnapshotProvider.notifier)
+        .reloadForThemeId(nextValue);
   }
 
   Future<void> disable() => setActiveThemeId(null);
@@ -150,6 +152,10 @@ class ActiveThemeAppearanceSnapshotNotifier
   Future<void> _load() async {
     final activeThemeId =
         ref.read(activeAdvancedThemeIdProvider) ?? appDefaultOfficialThemeId;
+    await _loadForThemeId(activeThemeId);
+  }
+
+  Future<void> _loadForThemeId(String activeThemeId) async {
     final snapshot =
         isOfficialThemeId(activeThemeId)
             ? appOfficialThemePresetByThemeId(
@@ -165,6 +171,14 @@ class ActiveThemeAppearanceSnapshotNotifier
   }
 
   Future<void> reloadFromStorage() => _load();
+
+  Future<void> reloadForThemeId(String? themeId) {
+    return _loadForThemeId(
+      themeId?.trim().isNotEmpty == true
+          ? themeId!.trim()
+          : appDefaultOfficialThemeId,
+    );
+  }
 }
 
 class AdvancedThemeRevisionNotifier extends Notifier<int> {
