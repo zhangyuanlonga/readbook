@@ -554,130 +554,294 @@ AppBaseShapeScheme -> AppAdvancedThemeComponentStyle
 
 ---
 
-## 7. Flutter 落地路径
+## 7. 阶段性开发计划
 
-### Phase 1: 主题来源模型
+状态口径:
 
-目标: 一次性建立“官方主题预设 + 基础配色”的主题来源模型，避免先做基础配色后又被官方默认主题覆盖造成用户困惑。
+- `完成度` 只统计本方案的默认外观、基础配色、官方主题预设和高级主题边界落地，不计入其他 UI/UX 优化任务。
+- 每个阶段完成后必须更新本节勾选项、验收结果、验证命令和已知风险。
+- 每个阶段建议独立提交，避免把主题来源、UI 文案、组件 token 和业务页面圆角混在一个大改动里。
 
-涉及:
+### 7.1 总看板
+
+| 阶段 | 名称 | 目标 | 完成度 | 当前状态 |
+|---:|---|---|---:|---|
+| P0 | 现状基线与 token 决策 | 固化当前 seed/高级主题/组件样板基线，确认 Lumina 第一版 token | 0% | 待开始 |
+| P1 | 主题来源模型 | 建立 `official:*`、自定义高级主题、基础配色的统一来源与优先级 | 0% | 待开始 |
+| P2 | 基础配色迁移 | 用基础配色替代旧 seed 主路径，并完成旧 seed 一次性映射 | 0% | 待开始 |
+| P3 | 官方主题预设 registry | 内置 Lumina/Mono Blue/Ink Green/Selune Warm 官方预设并免费启用 | 0% | 待开始 |
+| P4 | 应用外观入口调整 | 重写“主题色/基础配色/主题预设与高级主题”的用户入口 | 0% | 待开始 |
+| P5 | 组件 token 与页面收敛 | 收敛按钮、输入框、选择态、卡片、圆角和硬编码样式 | 0% | 待开始 |
+| P6 | 会员边界与回归验收 | 复核免费/会员能力、导入导出、视觉和跨端回归 | 0% | 待开始 |
+
+### P0: 现状基线与 token 决策
+
+目标: 在动代码前固定当前视觉和主题行为基线，避免后续只凭主观判断改色。
+
+影响范围:
+
+- `docs/ui_ux/app_default_color_system_refactor_plan_2026_06_19.md`
+- `docs/ui_ux/lumina_reading_ui_optimization_plan_2026_06_18.md`
+- `lib/features/mine/presentation/component_demo_page.dart`
+- `lib/app/theme/app_theme_palette.dart`
+- `lib/app/theme/app_theme.dart`
+
+任务:
+
+- [ ] 截取当前主题组件样板页：当前默认主题 light/dark。
+- [ ] 截取 Lumina 组件样板页：light/dark。
+- [ ] 记录当前默认 `appSeedColorProvider`、`buildAppLightColorScheme`、`buildAppDarkColorScheme` 的主题链路。
+- [ ] 确认 Lumina Neutral / Dark Ink 第一版 ColorScheme token 使用本文 5.1，不直接照搬外部 `DESIGN.md`。
+- [ ] 列出旧 seed 选项到新基础配色的映射表。
+- [ ] 列出首批必须跟随 token 的业务页面：书架、搜索、阅读记录、设置、Mine 首页。
+
+验收:
+
+- [ ] 文档内有当前视觉截图或截图路径记录。
+- [ ] Lumina light/dark token 已确认，且包含 Material `ColorScheme` 必需字段。
+- [ ] 旧 seed 映射表覆盖蓝、绿、暖金、纯白和未知色。
+- [ ] 已明确哪些页面进入 P5 收敛，哪些页面延后。
+
+建议验证:
+
+```bash
+flutter analyze lib/features/mine/presentation/component_demo_page.dart lib/app/theme/app_theme_palette.dart lib/app/theme/app_theme.dart
+```
+
+### P1: 主题来源模型
+
+目标: 一次性建立“官方主题预设 + 基础配色 + 自定义高级主题”的来源模型，避免先做基础配色后又被官方默认主题覆盖造成用户困惑。
+
+影响范围:
+
+- `lib/app/preferences/app_preferences_service.dart`
+- `lib/app/theme/app_theme_seed_provider.dart`
+- `lib/app/theme/app_theme_palette.dart`
+- `lib/app/theme/app_theme.dart`
+- `lib/features/mine/application/advanced_theme_provider.dart`
+- `lib/features/mine/application/advanced_theme_service.dart`
+
+任务:
+
+- [ ] 新增 `AppThemeSource` 或等价模型，表达 `customAdvancedThemeId`、`officialPresetId`、`baseColorSchemeId`。
+- [ ] active id 支持 `custom:*` / `official:*` 或通过明确字段区分，避免官方预设被误当作用户自定义主题。
+- [ ] 新用户默认 `official:lumina`，同时写入默认 `baseColorSchemeId = lumina-neutral`。
+- [ ] 保留自定义高级主题 snapshot 覆盖能力，确保自定义高级主题仍最高优先级。
+- [ ] 为主题来源解析补单元测试：无存储、官方主题、自定义主题、未知 id、基础配色 fallback。
+- [ ] 更新启动 prime 流程，确保首帧不会先闪旧 seed 主题再切 Lumina。
+
+验收:
+
+- [ ] 新安装用户默认来源为 `official:lumina`。
+- [ ] 自定义高级主题仍能覆盖官方主题和基础配色。
+- [ ] 未知官方主题 id 回落 `official:lumina`。
+- [ ] 未知基础配色 id 回落 `lumina-neutral`。
+- [ ] 首帧主题来源可从 SharedPreferences prime，不出现明显主题闪烁。
+
+建议验证:
+
+```bash
+flutter analyze lib/app/preferences/app_preferences_service.dart lib/app/theme/app_theme_seed_provider.dart lib/app/theme/app_theme_palette.dart lib/app/theme/app_theme.dart lib/features/mine/application/advanced_theme_provider.dart lib/features/mine/application/advanced_theme_service.dart
+flutter test test/app/theme/app_theme_source_test.dart test/features/mine/application/advanced_theme_provider_test.dart
+```
+
+### P2: 基础配色迁移
+
+目标: 用基础配色模型替代旧 seed 主路径，同时保留旧 seed 的一次性近似映射。
+
+影响范围:
 
 - `lib/app/theme/app_theme_palette.dart`
 - `lib/app/theme/app_theme_seed_provider.dart`
 - `lib/app/preferences/app_preferences_service.dart`
-- `lib/app/theme/app_theme.dart`
-- `lib/app/theme/app_component_theme_tokens.dart`
-- `lib/features/mine/application/advanced_theme_provider.dart`
-- `lib/features/mine/application/advanced_theme_service.dart`
+- `lib/features/mine/presentation/appearance_page_view.dart`
+- `lib/features/mine/presentation/mine_page_view.dart`
 
-建议:
+任务:
 
-- 新增 `AppThemeSource` 或等价模型，表达 `customAdvancedThemeId`、`officialPresetId`、`baseColorSchemeId`。
-- active id 支持 `custom:*` / `official:*` 或通过明确字段区分，避免官方预设被误当作用户自定义主题。
-- 新用户默认 `official:lumina`，同时写入默认 `baseColorSchemeId = lumina-neutral`。
-- 新增 `AppBaseColorSchemeId` 和 `AppBaseColorSchemeOption`。
-- 新增 `appBaseColorSchemeProvider`。
-- 默认基础配色 id 为 `lumina-neutral`。
-- 不再以旧 seed color 作为默认外观主模型。
-- 读取不到新 id 时回落 `lumina-neutral`；首次迁移时按旧 seed 做近似映射。
-- 先保留旧 `appSeedColorProvider` 文件也可以，但不再作为主路径。
-- 自定义高级主题继续通过 active appearance snapshot 覆盖官方主题和基础配色。
+- [ ] 新增 `AppBaseColorSchemeId` 和 `AppBaseColorSchemeOption`。
+- [ ] 新增 `appBaseColorSchemeProvider`，默认 `lumina-neutral`。
+- [ ] 新增持久化 key `app.baseColorSchemeId`。
+- [ ] 实现旧 `appSeedColorPreferenceKey` 到新基础配色的一次性映射：蓝 -> `mono-blue`，绿 -> `ink-green`，Selune/暖金 -> `selune-warm`，纯白/未知 -> `lumina-neutral`。
+- [ ] 将 `App` 默认 ColorScheme 构建从旧 seed 主路径迁到基础配色/主题来源解析结果。
+- [ ] 保留旧 `appSeedColorProvider` 兼容壳或标记为 deprecated，避免一次性删除导致引用爆炸。
+- [ ] 更新 Mine 首页外观摘要，不再显示旧 seed label 作为主外观口径。
 
 验收:
 
-- 新用户默认启用 `official:lumina`，而不是只使用 `lumina-neutral` base color。
-- Flutter 组件样板页不再出现大面积蓝。
-- 当前书架页面仍接近白底、轻搜索框。
-- 搜索、阅读记录、设置列表没有明显颜色跳出。
-- 旧 seed 蓝/绿/暖色至少能映射到对应基础配色或官方主题倾向。
+- [ ] 旧蓝/绿/暖金/纯白 seed 数据升级后能初始化对应基础配色。
+- [ ] 无新 key 时回落 `lumina-neutral`。
+- [ ] 默认组件样板页不再大面积高饱和蓝。
+- [ ] Mine 首页外观摘要显示“主题预设/基础配色”而不是孤立 seed。
+- [ ] 旧 seed 写入不再是默认外观主路径。
 
-### Phase 2: 应用外观入口调整
+建议验证:
 
-目标: 降低用户误解。
+```bash
+flutter analyze lib/app/theme/app_theme_palette.dart lib/app/theme/app_theme_seed_provider.dart lib/app/preferences/app_preferences_service.dart lib/features/mine/presentation/appearance_page_view.dart lib/features/mine/presentation/mine_page_view.dart
+flutter test test/app/theme/app_base_color_scheme_test.dart test/app/preferences/app_theme_preferences_service_test.dart
+```
 
-涉及:
+### P3: 官方主题预设 registry
+
+目标: 内置官方主题预设，所有用户免费启用；自定义、复制编辑、导入导出仍走会员能力。
+
+影响范围:
+
+- `lib/app/theme/app_official_theme_presets.dart` 或等价新增文件
+- `lib/app/theme/app_theme_palette.dart`
+- `lib/features/mine/application/advanced_theme_service.dart`
+- `lib/features/mine/application/advanced_theme_provider.dart`
+- `lib/features/mine/presentation/advanced_theme_list_page.dart`
+
+任务:
+
+- [ ] 新增官方主题 preset registry，至少包含 `lumina`、`mono-blue`、`ink-green`、`selune-warm`。
+- [ ] 为每套官方主题提供 `lightConfig` 和 `darkConfig`。
+- [ ] Lumina 的 light/dark token 以本文 5.1 为准，不使用下载稿的粉白 surface 和未落地 violet accent。
+- [ ] 官方主题不写入用户自定义高级主题数组。
+- [ ] active theme 支持 `official:*`，并能生成 active appearance snapshot。
+- [ ] 高级主题列表页增加“官方主题”区域。
+- [ ] 免费用户可启用官方主题。
+- [ ] 非会员点击“复制后编辑/创建/导入/导出”时走现有会员 gate。
+- [ ] 为官方主题启用、未知 preset fallback、免费启用和会员编辑 gate 补测试。
+
+验收:
+
+- [ ] 新用户默认使用官方主题 `lumina`。
+- [ ] 免费用户能进入主题预设页并启用官方主题。
+- [ ] 官方主题不可直接编辑。
+- [ ] 复制官方主题、创建自定义主题、导入导出仍需要会员。
+- [ ] Blue/Green/Warm 都是完整 UI 主题，不是 seed 染色。
+
+建议验证:
+
+```bash
+flutter analyze lib/app/theme/app_official_theme_presets.dart lib/features/mine/application/advanced_theme_service.dart lib/features/mine/application/advanced_theme_provider.dart lib/features/mine/presentation/advanced_theme_list_page.dart
+flutter test test/app/theme/app_official_theme_presets_test.dart test/features/mine/application/advanced_theme_service_test.dart test/features/mine/presentation/advanced_theme_list_page_test.dart
+```
+
+### P4: 应用外观入口调整
+
+目标: 让用户能理解“明暗模式、基础配色、官方主题预设、高级主题”的关系。
+
+影响范围:
 
 - `lib/features/mine/presentation/appearance_page.dart`
 - `lib/features/mine/presentation/appearance_page_view.dart`
+- `lib/features/mine/presentation/mine_page_view.dart`
+- `lib/features/mine/routes.dart`
 
-建议:
+任务:
 
-- “主题色”改为“基础配色”或“主题色与配色”。
-- 说明文案强调“影响默认外观的强调色和组件配色”。
-- 明暗模式继续保留在应用外观。
-- 高级主题入口说明“官方主题和高级主题启用后会覆盖基础配色”。
-- 当当前外观来源是 `official:*` 或自定义高级主题时，基础配色入口展示“当前被主题预设覆盖”，允许用户修改备用基础配色，但不暗示立即生效。
-
-验收:
-
-- 用户能理解基础配色和高级主题的区别。
-- 入口不暗示免费用户只能换一个 seed 颜色。
-
-### Phase 3: 官方主题预设
-
-涉及:
-
-- 高级主题列表页。
-- 高级主题服务。
-- 官方主题预设数据。
-- 权限判断。
-
-建议:
-
-- 新增四套官方主题预设: `lumina`、`mono-blue`、`ink-green`、`selune-warm`。
-- 每套官方主题都包含 `lightConfig` 和 `darkConfig`。
-- 所有用户可进入高级主题入口并启用官方主题。
-- 非会员不能创建、复制编辑、导入导出自定义高级主题。
-- 官方主题预设启用后覆盖基础配色。
-- Lumina 的 light/dark token 以本文 5.1 为准，不直接照搬下载稿 `DESIGN.md` 的粉白 surface 和未落地 violet accent。
+- [ ] 将“颜色/主题色”入口改为“基础配色”或“主题色与配色”。
+- [ ] 基础配色说明文案改为“影响未启用主题预设时的主色、强调色和中性色倾向”。
+- [ ] 当当前外观来源是 `official:*` 或自定义高级主题时，基础配色入口展示“当前被主题预设覆盖”。
+- [ ] 新增或调整“主题预设与高级主题”入口，展示当前启用来源。
+- [ ] 明暗模式继续保留在应用外观，并说明它切换当前主题来源的 light/dark 配置。
+- [ ] Mine 首页摘要显示明暗模式、主题来源、基础配色或高级主题名称。
+- [ ] 为入口文案和路由 smoke 补测试。
 
 验收:
 
-- 新用户默认使用官方主题 `lumina`。
-- Lumina 的浅色为 Lumina Neutral，深色为 Dark Ink。
-- Blue/Green/Warm 都是完整 UI 主题，不是 seed 染色。
-- 免费用户能使用官方主题，但不能编辑其内部字段。
+- [ ] 用户能看懂基础配色和主题预设的区别。
+- [ ] 页面不暗示免费用户只能换一个 seed 颜色。
+- [ ] 启用官方主题后，基础配色入口不会暗示修改会立即改变当前外观。
+- [ ] 主题预设入口对免费用户可见。
 
-### Phase 4: 组件 token 与圆角收敛
+建议验证:
 
-目标: 让按钮、输入框、选择控件、列表、浮层和业务卡片符合当前主题预设。
+```bash
+flutter analyze lib/features/mine/presentation/appearance_page.dart lib/features/mine/presentation/appearance_page_view.dart lib/features/mine/presentation/mine_page_view.dart lib/features/mine/routes.dart
+flutter test test/features/mine/presentation/appearance_page_test.dart test/features/mine/presentation/mine_page_view_test.dart
+```
 
-涉及:
+### P5: 组件 token 与页面收敛
 
-- `AppTheme.build`
-- `app_component_theme_tokens.dart`
-- `foundation` 组件
-- `AppAdaptiveMetrics.cardRadius`
-- 书架、搜索、设置等业务页面的硬编码圆角
+目标: 让按钮、输入框、选择控件、列表、浮层和业务卡片符合当前主题预设，避免页面硬编码把 Lumina 破坏掉。
 
-建议:
+影响范围:
 
-- FilledButton 不一定总用 `primary`，默认 Lumina 可用炭黑。
-- tonal button 用 `primaryContainer`，但低饱和。
-- input filled/search 背景要稳定。
-- FilterChip/Checkbox/Switch/Slider 的选中态不要全跟高饱和 primary。
-- 业务卡片优先读取 `AppComponentThemeTokens.card.radius`。
-- 封面圆角使用外层卡片圆角的 0.70-0.80 倍。
-- 官方主题预设使用离散 shape preset，不给普通用户暴露连续圆角滑杆。
+- `lib/app/theme/app_theme.dart`
+- `lib/app/theme/app_component_theme_tokens.dart`
+- `lib/app/widgets/*`
+- `lib/features/bookshelf/presentation/*`
+- `lib/features/search/presentation/*`
+- `lib/features/reader/presentation/reading_records_page.dart`
+- `lib/features/mine/presentation/*`
+
+任务:
+
+- [ ] FilledButton 默认 Lumina 使用炭黑或高对比深灰，不强制复用高饱和 `primary`。
+- [ ] tonal button、FilterChip、Checkbox、Switch、Slider 选中态使用低饱和容器色或主题定义的 selection role。
+- [ ] input filled/search 背景稳定为浅灰或 surfaceContainer，不随高饱和色漂移。
+- [ ] 业务卡片优先读取 `AppComponentThemeTokens.card.radius`。
+- [ ] 封面圆角使用外层卡片圆角的 0.70-0.80 倍。
+- [ ] 收敛书架、搜索、阅读记录、设置、Mine 首页中明显脱离 token 的硬编码圆角和颜色。
+- [ ] 官方主题预设使用离散 shape preset，不给普通用户暴露连续圆角滑杆。
+- [ ] 为组件样板页增加 Lumina light/dark 视觉 smoke 或截图记录。
 
 验收:
 
-- 组件样板页通过。
-- light/dark 都不突兀。
-- 小屏没有按钮文字挤压。
-- 切换官方主题后，常用组件圆角和卡片形态一致变化。
-- 页面中不再出现明显脱离主题的硬编码圆角。
+- [ ] 组件样板页 light/dark 都不突兀。
+- [ ] 书架、搜索、阅读记录、设置页保持白底优先和轻层级。
+- [ ] 切换官方主题后，颜色、圆角、按钮、输入框、卡片和弹层风格一致变化。
+- [ ] 小屏没有按钮文字挤压。
+- [ ] 页面中不再出现明显脱离主题的硬编码圆角。
 
-### Phase 5: 高级主题边界复核
+建议验证:
 
-目标: 保证会员功能不被削弱，同时默认免费外观变好。
+```bash
+flutter analyze lib/app/theme/app_theme.dart lib/app/theme/app_component_theme_tokens.dart lib/features/mine/presentation/component_demo_page.dart lib/features/bookshelf/presentation/bookshelf_page.dart lib/features/search/presentation/search_page.dart lib/features/reader/presentation/reading_records_page.dart
+flutter test test/features/mine/presentation/component_demo_page_test.dart test/features/bookshelf/presentation/bookshelf_page_smoke_test.dart test/features/search/presentation/search_page_smoke_test.dart
+```
 
-建议:
+### P6: 会员边界与回归验收
 
-- 自定义高级主题继续覆盖官方主题预设和基础配色。
-- 官方主题预设免费使用。
-- 复制官方主题、创建自定义主题、导入导出、完整语义色编辑、组件样式细调走会员。
-- 高级主题入口所有用户可进入，但会员能力要明确展示权限状态。
+目标: 保证默认免费外观变好，同时会员高级主题能力不被削弱。
+
+影响范围:
+
+- `lib/core/membership/*`
+- `lib/features/mine/presentation/advanced_theme_list_page.dart`
+- `lib/features/mine/presentation/advanced_theme_editor_page.dart`
+- `lib/features/mine/application/advanced_theme_service.dart`
+- `lib/features/mine/application/advanced_theme_provider.dart`
+
+任务:
+
+- [ ] 复核官方主题免费启用，不触发会员 gate。
+- [ ] 复核复制官方主题、创建自定义主题、导入、导出、完整语义色编辑、组件样式细调仍触发会员 gate。
+- [ ] 复核自定义高级主题继续覆盖官方主题预设和基础配色。
+- [ ] 复核导入旧高级主题后 active snapshot 仍能覆盖新主题来源。
+- [ ] 复核登出/会员失效后，已启用官方主题不受影响，自定义编辑能力按权益限制。
+- [ ] 完成 light/dark、小屏、平板、桌面基础视觉回归。
+- [ ] 更新本方案总验收清单完成状态。
+
+验收:
+
+- [ ] 免费用户能使用官方主题。
+- [ ] 非会员不能复制编辑、创建自定义主题、导入导出或细调组件样式。
+- [ ] 自定义高级主题仍最高优先级。
+- [ ] 旧高级主题导入导出不回归。
+- [ ] light/dark 都通过基础可读性检查。
+- [ ] 小屏、平板、桌面没有控件挤压或文字溢出。
+
+建议验证:
+
+```bash
+flutter analyze lib/core/membership lib/features/mine/presentation/advanced_theme_list_page.dart lib/features/mine/presentation/advanced_theme_editor_page.dart lib/features/mine/application/advanced_theme_service.dart lib/features/mine/application/advanced_theme_provider.dart
+flutter test test/features/mine/application/advanced_theme_service_test.dart test/features/mine/presentation/advanced_theme_list_page_test.dart test/features/mine/presentation/advanced_theme_editor_page_test.dart
+```
+
+### 7.2 推荐执行顺序
+
+- [ ] P0 必须先完成，确认截图、token 和旧 seed 映射表。
+- [ ] P1 和 P2 可以连续开发，但提交时建议拆成“主题来源模型”和“基础配色迁移”两个提交。
+- [ ] P3 必须在 P1/P2 后执行，因为官方主题需要主题来源模型承接。
+- [ ] P4 必须在 P3 后执行，避免 UI 入口提前展示还不能启用的官方主题。
+- [ ] P5 可以分页面滚动执行，但每个页面都要有独立验证记录。
+- [ ] P6 作为发布前收口，不在 P1-P5 未完成时提前打勾。
 
 ---
 
@@ -777,12 +941,12 @@ Dark Ink = Lumina 的深色配置。
 
 ## 11. 建议下一步
 
-建议按两条线并行推进:
+从 P0 开始执行，不直接跳到改代码:
 
-1. 基于当前 Flutter 组件样板页，对比当前主题和 Lumina 组件样板。
-2. 以本文 5.1 的 Lumina Neutral + Dark Ink 作为官方主题 `lumina` 的第一版 token。
-3. 新增主题来源模型、基础配色 id/provider/persistence，并做旧 seed 一次性映射。
-4. 在高级主题体系中新增官方主题预设 registry，先让所有用户可进入并使用官方主题。
-5. 再收敛组件 token、圆角 preset 和业务页面硬编码圆角。
+1. 完成 P0：截图当前主题和 Lumina 样板，确认 Lumina Neutral / Dark Ink token，列出旧 seed 映射表。
+2. 完成 P1：建立主题来源模型，让 `official:*`、自定义高级主题和基础配色的优先级先稳定。
+3. 完成 P2：迁移基础配色 id/provider/persistence，并做旧 seed 一次性映射。
+4. 完成 P3：新增官方主题 preset registry，让所有用户可进入并使用官方主题。
+5. 完成 P4-P6：再调整入口文案、收敛组件 token/业务页面圆角，并完成会员边界和视觉回归。
 
 默认外观和官方主题预设要一起考虑: 默认外观负责第一印象，官方主题预设负责承接整套 UI 风格；会员高级主题负责深度编辑能力。
