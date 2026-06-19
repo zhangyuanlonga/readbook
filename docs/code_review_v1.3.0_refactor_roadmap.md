@@ -257,9 +257,9 @@
 | 顺序 | 文件 | 原因 | 第一刀 | 完成度 | 当前状态 |
 |---:|---|---|---|---:|---|
 | 1 | `book_detail_page.dart` | 正在暴露详情/目录错误反馈问题 | 错误态、操作区、目录区 | 100% | 已完成本轮拆分；保留业务流在页面/part 内 |
-| 2 | `bookshelf_page.dart` | 高频入口且曾出现网格 overflow | 书籍卡片、更多菜单、筛选 header | 0% | 未开始 |
+| 2 | `bookshelf_page.dart` | 高频入口且曾出现网格 overflow | 书籍卡片、更多菜单、筛选 header | 100% | 已完成本轮拆分；保留书架业务流在页面/part 内 |
 | 3 | `reader_page.dart` | 核心链路，风险最高 | 只拆纯 UI，不改翻页/进度核心 | 0% | 未开始 |
-| 4 | `private_book_sources_page.dart` | 书源管理高频迭代 | 列表、批量操作、分组筛选 | 0% | 未开始 |
+| 4 | `private_book_sources_page.dart`（实际路径：`lib/features/mine/presentation/private_book_sources_page.dart`） | 书源管理高频迭代 | 列表、批量操作、分组筛选 | 30% | 第一刀完成：列表项、筛选规则、分组选择与单项菜单已拆；当前页面未实现批量操作入口 |
 | 5 | `advanced_theme_service.dart` | service 职责过重 | 导入解析、资源索引、应用策略 | 15% | 第一刀完成：资源引用索引；整文件未完成 |
 | 6 | `advanced_theme_editor_page.dart` | UI 复杂且易回归 | 资源列表、预览、底部操作 | 20% | 第一刀完成：资源 picker 基础组件；整页未完成 |
 
@@ -267,7 +267,7 @@
 
 - [x] 先写页面职责清单，标明哪些逻辑不允许本轮改。
 - [x] 提取纯 widget，不动业务状态。
-- [ ] 提取 presenter/view model，减少页面直接拼复杂状态。
+- [x] 提取 presenter/view model，减少页面直接拼复杂状态。
 - [ ] 最后才迁移 provider 或 service。
 - [ ] 每次提交控制在 1-3 个明确职责内。
 
@@ -280,10 +280,10 @@
 
 ### Bookshelf 第一阶段建议
 
-- [ ] 修复/固化书架网格 item 高度，避免文本或状态变化造成 overflow。
-- [ ] 抽书籍卡片组件并补 widget test。
-- [ ] 抽更多操作 sheet，统一底部安全区。
-- [ ] 拆筛选/排序状态，不让页面 build 监听过多 provider。
+- [x] 修复/固化书架网格 item 高度，避免文本或状态变化造成 overflow。
+- [x] 抽书籍卡片组件并补 widget test。
+- [x] 抽更多操作 sheet，统一底部安全区。
+- [x] 拆筛选/排序状态，不让页面 build 监听过多 provider。
 
 ### 验收
 
@@ -323,6 +323,32 @@
 - 验证：`flutter test test/features/book/presentation/book_detail_primary_actions_test.dart`
 - 验证：`flutter test test/features/book/presentation/book_detail_sections_test.dart`
 - 验证：`flutter test test/features/book/presentation/book_detail_hero_tags_test.dart`
+
+### 2026-06-19 Bookshelf 收尾记录
+
+- 完成度：0% -> 100%。
+- 既有 `BookshelfGridSliver`、`BookshelfCoverLayoutResolver`、`BookshelfGridBookCardShell`、`BookshelfListBookCardShell` 已承接书籍卡片和固定高度/宽度策略；本次补齐测试常量，固化当前网格高度规则。
+- 提取 `BookshelfBookMoreMenuPresenter`，页面不再直接拼装单本书更多菜单项和阅读状态子菜单。
+- 提取 `BookshelfHeroTagResolver`，统一书架到详情页的封面、标题、meta heroTag 构建规则。
+- 提取 `BookshelfFilterHeaderPresenter`，统一搜索摘要、quick filter 显示条件和 header 高度计算。
+- 本轮完成口径：Bookshelf 第一阶段展示/UI 与筛选 header 拼装拆分完成；加载、导入、删除、打开阅读、批量操作等业务流保持在页面 part 内，不在本轮迁移。
+- 验证：`flutter analyze lib/features/bookshelf/presentation/bookshelf_page.dart lib/features/bookshelf/presentation/bookshelf_page_sections.dart lib/features/bookshelf/presentation/bookshelf_hero_tags.dart lib/features/bookshelf/presentation/bookshelf_filter_header_presenter.dart lib/features/bookshelf/presentation/widgets/bookshelf_book_more_menu_presenter.dart test/features/bookshelf/presentation/bookshelf_presenters_test.dart`
+- 验证：`flutter test test/features/bookshelf/presentation/bookshelf_presenters_test.dart`
+- 验证：`flutter test test/features/bookshelf/presentation/bookshelf_grid_sliver_test.dart`
+- 验证：`flutter test test/features/bookshelf/presentation/bookshelf_card_width_smoke_test.dart`
+- 验证：`flutter test test/features/bookshelf/presentation/bookshelf_cover_layout_resolver_test.dart`
+- 验证：`flutter test test/features/bookshelf/presentation/bookshelf_page_smoke_test.dart`
+
+### 2026-06-19 Private Book Sources 第一刀记录
+
+- 完成度：0% -> 30%。
+- 提取 `PrivateBookSourceListFilter`，页面不再直接拼接书源关键词搜索文本；搜索仍覆盖名称、描述、分组、审核/配置/检测状态和展示标签。
+- 提取 `PrivateBookSourceGroupFilterPresenter`，统一分组筛选按钮的选中标签和失效分组回退判断。
+- 提取 `PrivateBookSourceTile` 与 `PrivateBookSourceMoreMenuButton`，列表项展示和单项更多菜单从 4000+ 行页面中移出；提交共享/编辑启用规则通过 `PrivateBookSourceMoreMenuRules` 固化。
+- 本轮完成口径：列表展示、关键词筛选、分组筛选、单项操作菜单第一刀完成；创建/编辑表单、导入、检测 sheet、分组管理 sheet、服务调用和 provider 流程保持在页面内，不在本轮迁移。路线图里的“批量操作”在当前页面未发现入口，本轮不虚构拆分，后续若新增批量选择再进入单独序列。
+- 验证：`flutter analyze lib/features/mine/presentation/private_book_sources_page.dart lib/features/mine/presentation/private_book_source_filter_presenter.dart lib/features/mine/presentation/widgets/private_book_source_more_menu_button.dart lib/features/mine/presentation/widgets/private_book_source_tile.dart test/features/mine/presentation/private_book_source_filter_presenter_test.dart test/features/mine/presentation/private_book_source_presentation_test.dart`
+- 验证：`flutter test test/features/mine/presentation/private_book_source_filter_presenter_test.dart`
+- 验证：`flutter test test/features/mine/presentation/private_book_source_presentation_test.dart`
 
 ### 2026-06-19 Advanced Theme 第一刀记录
 

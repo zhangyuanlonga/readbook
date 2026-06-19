@@ -201,13 +201,13 @@ extension on _BookshelfPageState {
   }
 
   String get _bookshelfSearchSummaryText {
-    if (_isSelectionMode) {
-      return '已选 ${_selectedBookKeys.length} 本';
-    }
-    if (_hasBookshelfSearchKeyword) {
-      return '结果 ${_filteredBooks.length} 本';
-    }
-    return '${_activeFilterLabel()} ${_filteredBooks.length} 本';
+    return _BookshelfPageState._filterHeaderPresenter.searchSummaryText(
+      isSelectionMode: _isSelectionMode,
+      selectedCount: _selectedBookKeys.length,
+      hasSearchKeyword: _hasBookshelfSearchKeyword,
+      filteredCount: _filteredBooks.length,
+      activeFilterLabel: _activeFilterLabel(),
+    );
   }
 
   Widget _buildBookshelfSearchSliver({
@@ -232,16 +232,11 @@ extension on _BookshelfPageState {
   }
 
   double _bookshelfSearchSectionHeight({required bool showSearchBar}) {
-    final quickFilterHeight = _shouldShowBookshelfQuickFilters ? 46.0 : 0.0;
-    final searchHeight =
-        showSearchBar && _shouldShowExpandedBookshelfSearch ? 42.0 : 0.0;
-    final gapHeight =
-        _shouldShowBookshelfQuickFilters &&
-                showSearchBar &&
-                _shouldShowExpandedBookshelfSearch
-            ? 8.0
-            : 0.0;
-    return 12 + quickFilterHeight + gapHeight + searchHeight;
+    return _BookshelfPageState._filterHeaderPresenter.searchSectionHeight(
+      showSearchBar: showSearchBar,
+      shouldShowQuickFilters: _shouldShowBookshelfQuickFilters,
+      shouldShowExpandedSearch: _shouldShowExpandedBookshelfSearch,
+    );
   }
 
   Widget _buildBookshelfSearchSection({
@@ -276,15 +271,14 @@ extension on _BookshelfPageState {
   }
 
   bool get _shouldShowBookshelfQuickFilters {
-    return switch (_bookshelfQuickFilterContent) {
-      _BookshelfSearchQuickFilterContent.none => false,
-      _BookshelfSearchQuickFilterContent.readingStatus => _books.isNotEmpty,
-      _BookshelfSearchQuickFilterContent.tags =>
-        _userTags.isNotEmpty || _books.any((book) => _tagsOfBook(book).isEmpty),
-      _BookshelfSearchQuickFilterContent.categories =>
-        _userCategories.isNotEmpty ||
-            _books.any((book) => (_categoryOfBook(book) ?? '').isEmpty),
-    };
+    return _BookshelfPageState._filterHeaderPresenter.shouldShowQuickFilters(
+      content: _bookshelfQuickFilterContent,
+      books: _books,
+      userTags: _userTags,
+      userCategories: _userCategories,
+      tagsOfBook: _tagsOfBook,
+      categoryOfBook: _categoryOfBook,
+    );
   }
 
   Widget _buildBookshelfQuickFilterBar() {

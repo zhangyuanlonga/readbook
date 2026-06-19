@@ -30,10 +30,12 @@ import '../application/advanced_theme_provider.dart';
 import '../application/book_source_import_payload.dart';
 import '../application/private_book_source_provider.dart';
 import '../application/private_book_source_service.dart';
+import 'private_book_source_filter_presenter.dart';
 import 'private_book_source_presentation.dart';
 import 'widgets/image_resource_collection_widgets.dart';
 import 'widgets/mine_route_top_bar.dart';
 import 'widgets/private_book_source_state_cards.dart';
+import 'widgets/private_book_source_tile.dart';
 
 final _privateBookSourceSearchKeywordProvider =
     StateProvider.autoDispose<String>((ref) {
@@ -59,8 +61,6 @@ final _privateBookSourcesAuthSessionProvider =
       }
       return session;
     });
-
-enum _PrivateSourceAction { detail, test, submit, edit, delete }
 
 enum _PrivateSourceDetailAction { edit, test }
 
@@ -144,7 +144,7 @@ class PrivateBookSourcesPage extends ConsumerWidget {
                   onCreate: () => unawaited(_openCreateForm(context, ref)),
                 );
               }
-              final visibleItems = _filterPrivateSources(
+              final visibleItems = PrivateBookSourceListFilter.filter(
                 result.items,
                 searchKeyword,
               );
@@ -164,7 +164,7 @@ class PrivateBookSourcesPage extends ConsumerWidget {
               return Column(
                 children: <Widget>[
                   for (final item in visibleItems) ...<Widget>[
-                    _PrivateSourceTile(
+                    PrivateBookSourceTile(
                       item: item,
                       onDetail:
                           () =>
@@ -1142,20 +1142,19 @@ class _PrivateSourceGroupMenuButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return groupsAsync.when(
       data: (groups) {
-        if (selectedGroupId != null &&
-            !groups.any((group) => group.id == selectedGroupId)) {
+        if (PrivateBookSourceGroupFilterPresenter.isSelectionStale(
+          groups,
+          selectedGroupId,
+        )) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             onSelected(null);
           });
         }
         final selectedLabel =
-            selectedGroupId == null
-                ? '全部分组'
-                : groups
-                        .where((group) => group.id == selectedGroupId)
-                        .map((group) => group.displayName)
-                        .firstOrNull ??
-                    '全部分组';
+            PrivateBookSourceGroupFilterPresenter.selectedLabel(
+              groups,
+              selectedGroupId,
+            );
         return _GroupMenuPill(
           label: selectedLabel,
           selected: selectedGroupId != null,
@@ -1773,118 +1772,6 @@ class _PrivateSourceGroupManagerSheetState
   }
 }
 
-class _PrivateSourceTile extends StatelessWidget {
-  const _PrivateSourceTile({
-    required this.item,
-    required this.onDetail,
-    required this.onEdit,
-    required this.onDelete,
-    required this.onTest,
-    required this.onSubmit,
-  });
-
-  final PrivateBookSourceItem item;
-  final VoidCallback onDetail;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
-  final VoidCallback onTest;
-  final VoidCallback onSubmit;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final badges = PrivateBookSourcePresentation.badgesFor(item);
-
-    return Material(
-      color: colorScheme.surfaceContainerLow.withValues(alpha: 0.5),
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onDetail,
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: colorScheme.outlineVariant.withValues(alpha: 0.2),
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Row(
-                children: <Widget>[
-                  Expanded(
-                    child: Text(
-                      item.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  _PrivateSourceMoreButton(
-                    item: item,
-                    onDetail: onDetail,
-                    onTest: onTest,
-                    onSubmit: onSubmit,
-                    onEdit: onEdit,
-                    onDelete: onDelete,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: <Widget>[
-                  for (final badge in badges)
-                    _buildChip(
-                      context,
-                      badge.label,
-                      PrivateBookSourcePresentation.toneForeground(
-                        badge.tone,
-                        colorScheme,
-                      ).withValues(alpha: 0.12),
-                      PrivateBookSourcePresentation.toneForeground(
-                        badge.tone,
-                        colorScheme,
-                      ),
-                    ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildChip(
-    BuildContext context,
-    String label,
-    Color backgroundColor,
-    Color foregroundColor,
-  ) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: foregroundColor,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    );
-  }
-}
-
 class _PrivateSourceDetailSheet extends StatelessWidget {
   const _PrivateSourceDetailSheet({required this.item});
 
@@ -2197,81 +2084,6 @@ class _PrivateSourceDetailChip extends StatelessWidget {
           color: color,
           fontWeight: FontWeight.w700,
         ),
-      ),
-    );
-  }
-}
-
-class _PrivateSourceMoreButton extends StatelessWidget {
-  const _PrivateSourceMoreButton({
-    required this.item,
-    required this.onDetail,
-    required this.onTest,
-    required this.onSubmit,
-    required this.onEdit,
-    required this.onDelete,
-  });
-
-  final PrivateBookSourceItem item;
-  final VoidCallback onDetail;
-  final VoidCallback onTest;
-  final VoidCallback onSubmit;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 36,
-      height: 36,
-      child: AppMenuButton<_PrivateSourceAction>(
-        tooltip: '更多',
-        padding: EdgeInsets.zero,
-        icon: Icons.more_vert_rounded,
-        onSelected: (action) {
-          switch (action) {
-            case _PrivateSourceAction.detail:
-              onDetail();
-            case _PrivateSourceAction.test:
-              onTest();
-            case _PrivateSourceAction.submit:
-              onSubmit();
-            case _PrivateSourceAction.edit:
-              onEdit();
-            case _PrivateSourceAction.delete:
-              onDelete();
-          }
-        },
-        actions: [
-          const AppMenuAction(
-            value: _PrivateSourceAction.detail,
-            label: '详情',
-            icon: Icons.info_outline_rounded,
-          ),
-          const AppMenuAction(
-            value: _PrivateSourceAction.test,
-            label: '检测',
-            icon: Icons.science_outlined,
-          ),
-          AppMenuAction(
-            value: _PrivateSourceAction.submit,
-            label: '提交共享',
-            icon: Icons.ios_share_outlined,
-            enabled: item.visibility == 'private',
-          ),
-          AppMenuAction(
-            value: _PrivateSourceAction.edit,
-            label: '编辑',
-            icon: Icons.edit_outlined,
-            enabled: item.visibility != 'shared',
-          ),
-          const AppMenuAction(
-            value: _PrivateSourceAction.delete,
-            label: '删除',
-            icon: Icons.delete_outline,
-            destructive: true,
-          ),
-        ],
       ),
     );
   }
@@ -4074,41 +3886,6 @@ String _formatLogTime(int value) {
   final seconds = (value % 60000) ~/ 1000;
   final millis = value % 1000;
   return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}.${millis.toString().padLeft(3, '0')}';
-}
-
-List<PrivateBookSourceItem> _filterPrivateSources(
-  List<PrivateBookSourceItem> items,
-  String keyword,
-) {
-  final normalized = keyword.trim().toLowerCase();
-  if (normalized.isEmpty) {
-    return items;
-  }
-  return items
-      .where((item) {
-        final text =
-            [
-              item.name,
-              item.description,
-              item.groupName,
-              item.reviewStatus,
-              item.normalizationStatus,
-              item.normalizationError,
-              item.lastTestStatus,
-              item.lastTestMessage,
-              _typeLabel(item.supportedTypes),
-              _groupLabel(item.groupName),
-              _reviewLabel(item.reviewStatus, item.visibility),
-              _normalizationSearchLabel(item.normalizationStatus),
-              _testLabel(item.lastTestStatus),
-            ].join(' ').toLowerCase();
-        return text.contains(normalized);
-      })
-      .toList(growable: false);
-}
-
-String _normalizationSearchLabel(String status) {
-  return PrivateBookSourcePresentation.normalizationSearchLabel(status);
 }
 
 String _messageOf(Object error) {

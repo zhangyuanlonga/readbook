@@ -41,7 +41,7 @@ void main() {
           showProgressBar: false,
           titleMaxLines: 1,
         ),
-        36,
+        44,
       );
       expect(
         resolver.gridCardItemHeightExtra(
@@ -52,7 +52,7 @@ void main() {
           showProgressBar: false,
           titleMaxLines: 2,
         ),
-        128,
+        144,
       );
       expect(
         resolver.gridCardItemHeightExtra(
@@ -63,7 +63,7 @@ void main() {
           showProgressBar: true,
           titleMaxLines: 1,
         ),
-        92,
+        112,
       );
     });
 

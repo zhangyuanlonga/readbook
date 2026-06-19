@@ -66,6 +66,8 @@ import '../../source/application/external_source_import_bridge.dart';
 import '../../source/application/remote_content_task_conflict_service.dart';
 import 'bookshelf_book_action_controller.dart';
 import 'bookshelf_cover_layout_resolver.dart';
+import 'bookshelf_filter_header_presenter.dart';
+import 'bookshelf_hero_tags.dart';
 import 'bookshelf_initial_load_controller.dart';
 import 'bookshelf_latest_info_refresh_controller.dart';
 import 'bookshelf_page_models.dart';
@@ -74,7 +76,7 @@ import 'bookshelf_preference_restore_controller.dart';
 import 'bookshelf_presentation_metadata_loader.dart';
 import 'bookshelf_reading_queue_presentation.dart';
 import 'bookshelf_reader_entry_controller.dart';
-import 'widgets/bookshelf_book_more_menu.dart';
+import 'widgets/bookshelf_book_more_menu_presenter.dart';
 import 'widgets/bookshelf_grid_sliver.dart';
 import 'widgets/bookshelf_grid_book_card.dart';
 import 'widgets/bookshelf_library_sidebar.dart';
@@ -175,6 +177,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         _BookshelfFilter.reading,
         _BookshelfFilter.finished,
       ];
+  static const BookshelfHeroTagResolver _heroTags = BookshelfHeroTagResolver();
+  static const BookshelfFilterHeaderPresenter _filterHeaderPresenter =
+      BookshelfFilterHeaderPresenter();
 
   late final BookshelfService _bookshelfService;
   late final BookshelfSystemSettingsService _bookshelfSystemSettingsService;
@@ -2303,111 +2308,14 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }
 
   Widget _buildBookMoreButton(BookshelfBook book, {required bool compact}) {
-    return BookshelfBookMoreMenu(
-      menuChildren: _buildBookMoreMenuItems(book),
+    return BookshelfBookMoreMenuPresenter(
+      book: book,
       compact: compact,
+      currentReadingStatus: _readingStatusOfBook(book),
+      onAction: (action) => _handleBookMoreAction(book, action),
+      onReadingStatusSelected:
+          (status) => unawaited(_markBookReadingStatus(book, status)),
     );
-  }
-
-  List<Widget> _buildBookMoreMenuItems(BookshelfBook book) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return <Widget>[
-      _buildBookMenuItem(
-        icon: Icons.info_outline_rounded,
-        label: '查看详情',
-        onPressed:
-            () => _handleBookMoreAction(book, _BookshelfBookMoreAction.detail),
-      ),
-      _buildBookMenuItem(
-        icon: Icons.edit_outlined,
-        label: '编辑',
-        onPressed:
-            () => _handleBookMoreAction(book, _BookshelfBookMoreAction.edit),
-      ),
-      const Divider(height: 1),
-      _buildBookMenuItem(
-        icon: Icons.sell_outlined,
-        label: '标签',
-        onPressed:
-            () => _handleBookMoreAction(book, _BookshelfBookMoreAction.tags),
-      ),
-      _buildBookMenuItem(
-        icon: Icons.folder_outlined,
-        label: '分类',
-        onPressed:
-            () =>
-                _handleBookMoreAction(book, _BookshelfBookMoreAction.category),
-      ),
-      _buildReadingQueueMenuItem(book),
-      SubmenuButton(
-        leadingIcon: const Icon(Icons.flag_outlined, size: 18),
-        menuChildren: [
-          for (final status in _BookshelfReadingStatus.values)
-            _buildReadingStatusMenuItem(book, status),
-        ],
-        child: const Text('标记'),
-      ),
-      const Divider(height: 1),
-      _buildBookMenuItem(
-        icon: Icons.checklist_rounded,
-        label: '选择书籍',
-        onPressed:
-            () => _handleBookMoreAction(book, _BookshelfBookMoreAction.select),
-      ),
-      _buildBookMenuItem(
-        icon: Icons.delete_outline_rounded,
-        label: '删除',
-        foregroundColor: colorScheme.error,
-        onPressed:
-            () => _handleBookMoreAction(book, _BookshelfBookMoreAction.delete),
-      ),
-    ];
-  }
-
-  Widget _buildBookMenuItem({
-    required IconData icon,
-    required String label,
-    required VoidCallback onPressed,
-    Color? foregroundColor,
-  }) {
-    return BookshelfBookMenuItem(
-      icon: icon,
-      label: label,
-      onPressed: onPressed,
-      foregroundColor: foregroundColor,
-    );
-  }
-
-  Widget _buildReadingQueueMenuItem(BookshelfBook book) {
-    final presentation = _readingQueuePresentationMapper.resolve(
-      inReadingQueue: book.inReadingQueue,
-    );
-    return _buildBookMenuItem(
-      icon: presentation.menuIcon,
-      label: presentation.menuLabel,
-      onPressed:
-          () => _handleBookMoreAction(
-            book,
-            _BookshelfBookMoreAction.readingQueue,
-          ),
-    );
-  }
-
-  Widget _buildReadingStatusMenuItem(
-    BookshelfBook book,
-    _BookshelfReadingStatus status,
-  ) {
-    final selected = _readingStatusOfBook(book) == status;
-    return MenuItemButton(
-      leadingIcon: Icon(_readingStatusIcon(status), size: 18),
-      trailingIcon: selected ? const Icon(Icons.check_rounded, size: 18) : null,
-      onPressed: () => unawaited(_markBookReadingStatus(book, status)),
-      child: Text(_readingStatusLabel(status)),
-    );
-  }
-
-  IconData _readingStatusIcon(_BookshelfReadingStatus status) {
-    return _readingStatusPresentationMapper.resolve(status).icon;
   }
 
   Future<void> _openOnlineSearchWithReveal(BuildContext sourceContext) async {
@@ -4483,15 +4391,15 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }
 
   String _buildBookCoverHeroTag(BookshelfBook book) {
-    return 'book_cover_${book.sourceId.trim()}_${book.bookId.trim()}_${book.detailUrl.hashCode}';
+    return _heroTags.cover(book);
   }
 
   String _buildBookTitleHeroTag(BookshelfBook book) {
-    return 'book_title_${book.sourceId.trim()}_${book.bookId.trim()}_${book.detailUrl.hashCode}';
+    return _heroTags.title(book);
   }
 
   String _buildBookMetaHeroTag(BookshelfBook book) {
-    return 'book_meta_${book.sourceId.trim()}_${book.bookId.trim()}_${book.detailUrl.hashCode}';
+    return _heroTags.meta(book);
   }
 
   String? _displayBookAuthor(
