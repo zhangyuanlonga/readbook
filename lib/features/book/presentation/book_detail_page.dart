@@ -86,7 +86,7 @@ import 'book_detail_hero_tags.dart';
 import 'book_reading_status_presentation.dart';
 import 'book_detail_switch_source_helper.dart';
 import 'widgets/book_detail_content_sections.dart';
-import 'widgets/book_detail_primary_actions.dart';
+import 'widgets/book_detail_quick_actions_presenter.dart';
 import 'widgets/book_detail_sections.dart';
 part 'book_detail_page_models.dart';
 part 'book_detail_page_metadata.dart';
@@ -988,25 +988,20 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     required _BookDetailAuxiliaryState auxiliaryState,
     required bool hasCatalog,
   }) {
-    return BookDetailQuickActionsCard(
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return BookDetailPrimaryActions(
-            availableWidth: constraints.maxWidth,
-            isInBookshelf: auxiliaryState.isInBookshelf,
-            isShelfStateLoading: auxiliaryState.isShelfStateLoading,
-            isShelfActionLoading: auxiliaryState.isShelfActionLoading,
-            onToggleBookshelf: _toggleBookshelf,
-            onOpenCatalog:
-                hasCatalog && _result != null ? _handleOpenCatalogAction : null,
-            isCatalogEnabled: hasCatalog && !_isCatalogLoading,
-            onSwitchSource: _canSwitchSource ? _handleSwitchSource : null,
-            isSwitchSourceEnabled: _canSwitchSource,
-            onOpenOrganize: _openOrganizeSheet,
-            isOrganizeEnabled: auxiliaryState.isInBookshelf,
-          );
-        },
+    return BookDetailQuickActionsPresenter(
+      state: BookDetailQuickActionsState(
+        isInBookshelf: auxiliaryState.isInBookshelf,
+        isShelfStateLoading: auxiliaryState.isShelfStateLoading,
+        isShelfActionLoading: auxiliaryState.isShelfActionLoading,
+        hasCatalog: hasCatalog,
+        isCatalogLoading: _isCatalogLoading,
+        hasLoadedResult: _result != null,
+        canSwitchSource: _canSwitchSource,
       ),
+      onToggleBookshelf: _toggleBookshelf,
+      onOpenCatalog: _handleOpenCatalogAction,
+      onSwitchSource: _handleSwitchSource,
+      onOpenOrganize: _openOrganizeSheet,
     );
   }
 
@@ -1430,6 +1425,10 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
           shouldShowLocalIndexStatus
               ? _buildLocalIndexStatusCard(localBookMeta)
               : null;
+      final tocWarningCard =
+          presentationState.tocWarningText == null
+              ? null
+              : _buildTocWarningCard(presentationState.tocWarningText!);
 
       sections.add(
         BookDetailOverviewLayout(
@@ -1448,10 +1447,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
           mobileLatestMetaLine: mobileLatestMetaLine,
           desktopLatestMetaLine: desktopLatestMetaLine,
           chapterStatusLine: chapterStatusLine,
-          tocWarningCard:
-              presentationState.tocWarningText == null
-                  ? null
-                  : _buildTocWarningCard(presentationState.tocWarningText!),
+          tocWarningCard: tocWarningCard,
           hasOrganization: hasOrganization,
           hasServerMeta: hasServerMeta,
           hasMobileLatestMeta: hasMobileLatestMeta,
@@ -1468,10 +1464,11 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       ]);
     }
 
-    if (!metrics.isMediumUpWindow && presentationState.tocWarningText != null) {
+    if (presentationState.tocWarningText != null) {
       sections.addAll(<Widget>[
-        SizedBox(height: metrics.sectionGap),
-        _buildTocWarningCard(presentationState.tocWarningText!),
+        BookDetailMobileTocWarningPlacement(
+          warningCard: _buildTocWarningCard(presentationState.tocWarningText!),
+        ),
       ]);
     }
     return [

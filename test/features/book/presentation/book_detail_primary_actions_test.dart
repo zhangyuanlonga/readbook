@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:shuxiang_reading_next/features/book/presentation/widgets/book_detail_primary_actions.dart';
+import 'package:shuxiang_reading_next/features/book/presentation/widgets/book_detail_quick_actions_presenter.dart';
 
 void main() {
   testWidgets('uses compact two-row layout on very narrow width', (
@@ -142,6 +143,53 @@ void main() {
     );
 
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
+  });
+
+  testWidgets('quick actions presenter maps page state to enabled actions', (
+    tester,
+  ) async {
+    var shelfTapped = false;
+    var catalogTapped = false;
+    var sourceTapped = false;
+    var organizeTapped = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 360,
+              child: BookDetailQuickActionsPresenter(
+                state: const BookDetailQuickActionsState(
+                  isInBookshelf: false,
+                  isShelfStateLoading: false,
+                  isShelfActionLoading: false,
+                  hasCatalog: false,
+                  isCatalogLoading: false,
+                  hasLoadedResult: true,
+                  canSwitchSource: false,
+                ),
+                onToggleBookshelf: () => shelfTapped = true,
+                onOpenCatalog: () => catalogTapped = true,
+                onSwitchSource: () => sourceTapped = true,
+                onOpenOrganize: () => organizeTapped = true,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('book_detail_shelf_button')));
+    await tester.tap(find.byKey(const Key('book_detail_catalog_button')));
+    await tester.tap(find.byKey(const Key('book_detail_source_button')));
+    await tester.tap(find.byKey(const Key('book_detail_cache_button')));
+
+    expect(shelfTapped, isTrue);
+    expect(catalogTapped, isFalse);
+    expect(sourceTapped, isFalse);
+    expect(organizeTapped, isFalse);
   });
 }
 

@@ -588,3 +588,24 @@ class BookDetailTocWarningPresenter extends StatelessWidget {
     );
   }
 }
+
+class BookDetailMobileTocWarningPlacement extends StatelessWidget {
+  const BookDetailMobileTocWarningPlacement({
+    super.key,
+    required this.warningCard,
+  });
+
+  final Widget warningCard;
+
+  @override
+  Widget build(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
+    if (metrics.isMediumUpWindow) {
+      return const SizedBox.shrink();
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [SizedBox(height: metrics.sectionGap), warningCard],
+    );
+  }
+}

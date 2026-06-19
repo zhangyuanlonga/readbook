@@ -256,7 +256,7 @@
 
 | 顺序 | 文件 | 原因 | 第一刀 | 完成度 | 当前状态 |
 |---:|---|---|---|---:|---|
-| 1 | `book_detail_page.dart` | 正在暴露详情/目录错误反馈问题 | 错误态、操作区、目录区 | 35% | 第二刀完成；整页未完成 |
+| 1 | `book_detail_page.dart` | 正在暴露详情/目录错误反馈问题 | 错误态、操作区、目录区 | 100% | 已完成本轮拆分；保留业务流在页面/part 内 |
 | 2 | `bookshelf_page.dart` | 高频入口且曾出现网格 overflow | 书籍卡片、更多菜单、筛选 header | 0% | 未开始 |
 | 3 | `reader_page.dart` | 核心链路，风险最高 | 只拆纯 UI，不改翻页/进度核心 | 0% | 未开始 |
 | 4 | `private_book_sources_page.dart` | 书源管理高频迭代 | 列表、批量操作、分组筛选 | 0% | 未开始 |
@@ -275,8 +275,8 @@
 
 - [x] 抽 `BookDetailErrorPresenter`：统一详情/目录/正文前置错误展示。
 - [x] 整理 heroTag 构建逻辑，减少重复。
-- [ ] 抽 `BookDetailPrimaryActions` 已有组件周边逻辑，保留行为不变。
-- [ ] 抽目录区域组件，目录失败时显示诊断入口。
+- [x] 抽 `BookDetailPrimaryActions` 已有组件周边逻辑，保留行为不变。
+- [x] 抽目录区域组件，目录失败时显示诊断入口。
 
 ### Bookshelf 第一阶段建议
 
@@ -312,6 +312,17 @@
 - 验证：`flutter analyze lib/features/book/presentation/book_detail_page.dart lib/features/book/presentation/book_detail_page_actions.dart lib/features/book/presentation/book_detail_hero_tags.dart test/features/book/presentation/book_detail_hero_tags_test.dart test/features/book/presentation/book_detail_sections_test.dart`
 - 验证：`flutter test test/features/book/presentation/book_detail_hero_tags_test.dart`
 - 验证：`flutter test test/features/book/presentation/book_detail_sections_test.dart`
+
+### 2026-06-19 Book Detail 收尾记录
+
+- 完成度：35% -> 100%。
+- 提取 `BookDetailQuickActionsPresenter` 和 `BookDetailQuickActionsState`，页面不再直接拼装主操作按钮启用/禁用状态。
+- 提取 `BookDetailMobileTocWarningPlacement`，统一目录警告在移动端/桌面端的放置策略，诊断入口仍由 `BookDetailTocWarningPresenter` 提供。
+- 本轮完成口径：Book Detail 展示/UI 责任拆分完成；加载、换源、阅读跳转、元数据保存等业务流保持在页面 part 内，不在本轮迁移。
+- 验证：`flutter analyze lib/features/book/presentation/book_detail_page.dart lib/features/book/presentation/widgets/book_detail_content_sections.dart lib/features/book/presentation/widgets/book_detail_quick_actions_presenter.dart test/features/book/presentation/book_detail_primary_actions_test.dart test/features/book/presentation/book_detail_sections_test.dart`
+- 验证：`flutter test test/features/book/presentation/book_detail_primary_actions_test.dart`
+- 验证：`flutter test test/features/book/presentation/book_detail_sections_test.dart`
+- 验证：`flutter test test/features/book/presentation/book_detail_hero_tags_test.dart`
 
 ### 2026-06-19 Advanced Theme 第一刀记录
 

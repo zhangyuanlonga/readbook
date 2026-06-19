@@ -225,6 +225,40 @@ void main() {
     expect(copied, isTrue);
   });
 
+  testWidgets('mobile toc warning placement hides on desktop', (tester) async {
+    const warningText = '目录加载失败，目录暂不可用。';
+
+    await tester.pumpWidget(
+      const AdaptiveTestHarness(
+        width: 390,
+        height: 800,
+        wrapWithMaterialApp: true,
+        child: Scaffold(
+          body: BookDetailMobileTocWarningPlacement(
+            warningCard: Text(warningText),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text(warningText), findsOneWidget);
+
+    await tester.pumpWidget(
+      const AdaptiveTestHarness(
+        width: 1280,
+        height: 800,
+        wrapWithMaterialApp: true,
+        child: Scaffold(
+          body: BookDetailMobileTocWarningPlacement(
+            warningCard: Text(warningText),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text(warningText), findsNothing);
+  });
+
   testWidgets('local index status card shows rebuild for failed index', (
     tester,
   ) async {
