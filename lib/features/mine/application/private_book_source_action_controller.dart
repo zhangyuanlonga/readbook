@@ -28,6 +28,18 @@ class PrivateBookSourceActionController {
     return _service.get(item.id);
   }
 
+  Future<PrivateBookSourceItem> saveSource({
+    required PrivateBookSourceItem? item,
+    required PrivateBookSourceInput input,
+  }) async {
+    final saved =
+        item == null
+            ? await _service.create(input)
+            : await _service.update(item.id, input);
+    await _refresh();
+    return saved;
+  }
+
   Future<void> delete(PrivateBookSourceItem item) async {
     await _service.delete(item.id);
     await _refresh();

@@ -355,7 +355,6 @@ class PrivateBookSourcesPage extends ConsumerWidget {
     if (saved != null) {
       ref.read(_privateBookSourceSearchKeywordProvider.notifier).state = '';
       ref.read(selectedPrivateBookSourceGroupProvider.notifier).state = null;
-      ref.read(privateBookSourceActionControllerProvider).refresh();
     }
   }
 

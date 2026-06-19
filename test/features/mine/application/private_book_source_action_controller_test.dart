@@ -37,6 +37,48 @@ void main() {
     expect(refreshCount, 1);
   });
 
+  test('save source creates new source and refreshes after success', () async {
+    var refreshCount = 0;
+    final service = _FakePrivateBookSourceService();
+    final controller = PrivateBookSourceActionController(
+      service: service,
+      refresh: () => refreshCount += 1,
+    );
+
+    final saved = await controller.saveSource(
+      item: null,
+      input: _input(name: '新书源'),
+    );
+
+    expect(service.createdInputs.map((input) => input.name), <String>['新书源']);
+    expect(service.updatedInputs, isEmpty);
+    expect(saved.id, 'created_1');
+    expect(refreshCount, 1);
+  });
+
+  test(
+    'save source updates existing source and refreshes after success',
+    () async {
+      var refreshCount = 0;
+      final service = _FakePrivateBookSourceService();
+      final controller = PrivateBookSourceActionController(
+        service: service,
+        refresh: () => refreshCount += 1,
+      );
+
+      final saved = await controller.saveSource(
+        item: _source(id: 'source_5'),
+        input: _input(name: '更新书源'),
+      );
+
+      expect(service.createdInputs, isEmpty);
+      expect(service.updatedInputs.keys, <String>['source_5']);
+      expect(service.updatedInputs['source_5']!.name, '更新书源');
+      expect(saved.id, 'source_5');
+      expect(refreshCount, 1);
+    },
+  );
+
   test('submit keeps note and refreshes after success', () async {
     var refreshCount = 0;
     final service = _FakePrivateBookSourceService();
@@ -153,6 +195,9 @@ class _FakePrivateBookSourceService extends PrivateBookSourceService {
   String? loadedId;
   final List<String> deletedIds = <String>[];
   final Map<String, String> submitted = <String, String>{};
+  final List<PrivateBookSourceInput> createdInputs = <PrivateBookSourceInput>[];
+  final Map<String, PrivateBookSourceInput> updatedInputs =
+      <String, PrivateBookSourceInput>{};
   final List<String> createdGroupNames = <String>[];
   final Map<String, String> updatedGroups = <String, String>{};
   final List<String> deletedGroupIds = <String>[];
@@ -175,6 +220,21 @@ class _FakePrivateBookSourceService extends PrivateBookSourceService {
   @override
   Future<void> submit(String id, String note) async {
     submitted[id] = note;
+  }
+
+  @override
+  Future<PrivateBookSourceItem> create(PrivateBookSourceInput input) async {
+    createdInputs.add(input);
+    return _source(id: 'created_${createdInputs.length}', name: input.name);
+  }
+
+  @override
+  Future<PrivateBookSourceItem> update(
+    String id,
+    PrivateBookSourceInput input,
+  ) async {
+    updatedInputs[id] = input;
+    return _source(id: id, name: input.name);
   }
 
   @override
@@ -239,6 +299,16 @@ PrivateBookSourceItem _source({
     lastTestMessage: '',
     createdAt: null,
     updatedAt: null,
+  );
+}
+
+PrivateBookSourceInput _input({required String name}) {
+  return PrivateBookSourceInput(
+    name: name,
+    supportedTypes: const <String>['novel'],
+    sourceCode: '{"name":"$name"}',
+    description: '',
+    groupName: '',
   );
 }
 

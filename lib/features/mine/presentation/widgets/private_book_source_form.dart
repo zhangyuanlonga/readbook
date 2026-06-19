@@ -576,14 +576,9 @@ class PrivateBookSourceFormState extends ConsumerState<PrivateBookSourceForm> {
         description: _descriptionController.text.trim(),
         groupName: _groupController.text.trim(),
       );
-      late final PrivateBookSourceItem saved;
-      if (_isEditing) {
-        saved = await ref
-            .read(privateBookSourceServiceProvider)
-            .update(widget.item!.id, input);
-      } else {
-        saved = await ref.read(privateBookSourceServiceProvider).create(input);
-      }
+      final saved = await ref
+          .read(privateBookSourceActionControllerProvider)
+          .saveSource(item: widget.item, input: input);
       if (!mounted) {
         return;
       }
