@@ -135,6 +135,13 @@ class ActiveThemeAppearanceSnapshotNotifier
     }
     if (!_loadTriggered) {
       _loadTriggered = true;
+      final activeThemeId =
+          ref.read(activeAdvancedThemeIdProvider) ?? appDefaultOfficialThemeId;
+      if (isOfficialThemeId(activeThemeId)) {
+        return appOfficialThemePresetByThemeId(
+          activeThemeId,
+        ).toAppearanceSnapshot();
+      }
       unawaited(_load());
     }
     return null;

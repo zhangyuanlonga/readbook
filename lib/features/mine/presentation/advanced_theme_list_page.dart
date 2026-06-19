@@ -644,7 +644,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     if (_isSaving) {
       return;
     }
-    if (!_guardCustomThemeAction('复制后编辑自定义主题需要会员。')) {
+    if (!_guardCustomThemeAction('复制自定义主题需要会员。')) {
       return;
     }
     setState(() {
@@ -1604,48 +1604,6 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     }
   }
 
-  Future<void> _copyOfficialThemeForEditing(
-    AppOfficialThemePreset preset,
-  ) async {
-    if (_isSaving) {
-      return;
-    }
-    if (!_guardCustomThemeAction('复制官方主题后编辑需要会员。')) {
-      return;
-    }
-    setState(() {
-      _isSaving = true;
-    });
-    AppAdvancedTheme? createdTheme;
-    try {
-      final service = ref.read(advancedThemeServiceProvider);
-      final now = DateTime.now().toUtc();
-      createdTheme = await service.saveTheme(
-        AppAdvancedTheme(
-          id: service.createThemeId(),
-          name: '${preset.id.label} 自定义',
-          createdAt: now,
-          updatedAt: now,
-          lightConfig: preset.lightConfig,
-          darkConfig: preset.darkConfig,
-          category: '官方主题',
-        ),
-      );
-      ref.read(advancedThemeRevisionProvider.notifier).markChanged();
-      await _load();
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
-      }
-    }
-    if (!mounted) {
-      return;
-    }
-    await _openEditor(createdTheme.id);
-  }
-
   Future<void> _applyThemeById(String themeId) async {
     final theme = await _loadThemeDetail(themeId);
     if (theme == null) {
@@ -2177,7 +2135,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     return InkWell(
       key: ValueKey('official-theme-${preset.id.id}'),
       borderRadius: BorderRadius.circular(18),
-      onTap: _isSaving || isActive ? null : () => _applyOfficialTheme(preset),
+      onTap: _isSaving ? null : () => _applyOfficialTheme(preset),
       child: Container(
         padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
         decoration: BoxDecoration(
@@ -2240,31 +2198,6 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
             ),
             const SizedBox(height: 12),
             _buildOfficialThemeSwatches(preset.previewSwatches),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed:
-                        _isSaving
-                            ? null
-                            : () => _copyOfficialThemeForEditing(preset),
-                    icon: const Icon(Icons.copy_rounded, size: 18),
-                    label: const Text('复制后编辑'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: FilledButton(
-                    onPressed:
-                        _isSaving || isActive
-                            ? null
-                            : () => _applyOfficialTheme(preset),
-                    child: Text(isActive ? '当前生效' : '应用官方主题'),
-                  ),
-                ),
-              ],
-            ),
           ],
         ),
       ),
@@ -2292,7 +2225,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 480;
         final message = Text(
-          '官方主题可直接使用；创建、复制后编辑、导入导出自定义主题需要会员。',
+          '官方主题可直接使用；创建、编辑、复制、导入导出自定义主题需要会员。',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             color: colorScheme.onSurfaceVariant,
             height: 1.4,
@@ -2429,9 +2362,12 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
             onTap:
                 _isSelectionMode
                     ? () => _toggleThemeSelection(theme.id)
-                    : _floatingEditEnabled
-                    ? () => _openEditorDialog(theme.id)
-                    : () => _openEditorWithReveal(cardContext, theme.id),
+                    : () => unawaited(_applyThemeById(theme.id)),
+            onLongPress:
+                _isSelectionMode
+                    ? null
+                    : () =>
+                        unawaited(_openEditorWithReveal(cardContext, theme.id)),
             onSelectionChanged: (_) => _toggleThemeSelection(theme.id),
             onActionSelected: (action) {
               switch (action) {

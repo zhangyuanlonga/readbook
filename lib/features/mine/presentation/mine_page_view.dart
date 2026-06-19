@@ -521,7 +521,7 @@ extension on _MinePageState {
       actions.add(
         _MineActionItem(
           icon: Icons.auto_awesome_outlined,
-          label: '主题预设与高级主题',
+          label: '高级主题',
           subtitle: activeAdvancedTheme.when(
             data: (theme) {
               final source = _themeSourceDetailLabel(themeSource, theme);
@@ -1619,7 +1619,7 @@ extension on _MinePageState {
     AppAdvancedTheme? activeTheme,
   ) {
     return switch (source.kind) {
-      AppThemeSourceKind.baseColorScheme => '未启用主题预设，基础配色生效',
+      AppThemeSourceKind.baseColorScheme => '未启用高级主题，基础配色生效',
       AppThemeSourceKind.official =>
         '当前：${appOfficialThemePresetById(source.officialPresetId!).id.label}（官方）',
       AppThemeSourceKind.customAdvancedTheme =>

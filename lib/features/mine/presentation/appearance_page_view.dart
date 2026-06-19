@@ -147,7 +147,7 @@ extension on _AppearancePageState {
 
   String? _pageSubtitle(AppearanceSection section) {
     return switch (section) {
-      AppearanceSection.appearance => '明暗模式、基础配色、主题预设与导航外观',
+      AppearanceSection.appearance => '明暗模式、基础配色、高级主题与导航外观',
       AppearanceSection.tabBar => '底栏图标和导航展示',
       AppearanceSection.cover => '书架与主题封面素材',
       AppearanceSection.background => '应用背景素材管理',
@@ -181,8 +181,6 @@ extension on _AppearancePageState {
       sections.add(_buildBaseColorSchemeSection(context));
       sections.add(SizedBox(height: sectionGap));
       sections.add(_buildAdvancedThemeSummarySection(context));
-      sections.add(SizedBox(height: sectionGap));
-      sections.add(_buildComponentDemoEntrySection(context));
       if (!isDesktopAppearanceOnly) {
         sections.addAll([
           SizedBox(height: sectionGap),
@@ -468,14 +466,14 @@ extension on _AppearancePageState {
     final themeSource = ref.watch(appThemeSourceProvider);
     final sourceStatus = switch (themeSource.kind) {
       AppThemeSourceKind.baseColorScheme => '当前生效',
-      AppThemeSourceKind.official => '当前被官方主题覆盖',
-      AppThemeSourceKind.customAdvancedTheme => '当前被自定义高级主题覆盖',
+      AppThemeSourceKind.official => '已被官方主题覆盖',
+      AppThemeSourceKind.customAdvancedTheme => '已被高级主题覆盖',
     };
     return _buildSectionCard(
       context,
       icon: Icons.palette_outlined,
       title: '基础配色',
-      subtitle: '影响未启用主题预设时的主色、强调色和中性色倾向。$sourceStatus。',
+      subtitle: '未启用高级主题时生效，$sourceStatus。',
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(vertical: 2),
@@ -504,8 +502,9 @@ extension on _AppearancePageState {
                       message: option.label,
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 150),
-                        width: 78,
-                        padding: const EdgeInsets.fromLTRB(8, 8, 8, 7),
+                        width: 46,
+                        height: 46,
+                        padding: const EdgeInsets.all(7),
                         decoration: BoxDecoration(
                           color:
                               selected
@@ -526,67 +525,49 @@ extension on _AppearancePageState {
                             width: selected ? 1.3 : 1,
                           ),
                         ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 30,
-                              height: 30,
-                              decoration: BoxDecoration(
-                                color: option.swatch,
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: colorScheme.outlineVariant.withValues(
-                                    alpha: 0.4,
-                                  ),
-                                  width: 0.8,
+                        child: Center(
+                          child: Container(
+                            width: 30,
+                            height: 30,
+                            decoration: BoxDecoration(
+                              color: option.swatch,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: colorScheme.outlineVariant.withValues(
+                                  alpha: 0.4,
                                 ),
-                                boxShadow:
-                                    selected
-                                        ? [
-                                          BoxShadow(
-                                            color: option.swatch.withValues(
-                                              alpha: 0.26,
-                                            ),
-                                            blurRadius: 6,
-                                            offset: const Offset(0, 2),
-                                          ),
-                                        ]
-                                        : null,
+                                width: 0.8,
                               ),
-                              child:
+                              boxShadow:
                                   selected
-                                      ? Icon(
-                                        Icons.check_rounded,
-                                        size: 16,
-                                        color:
-                                            ThemeData.estimateBrightnessForColor(
-                                                      option.swatch,
-                                                    ) ==
-                                                    Brightness.dark
-                                                ? Colors.white
-                                                : Colors.black.withValues(
-                                                  alpha: 0.72,
-                                                ),
-                                      )
+                                      ? [
+                                        BoxShadow(
+                                          color: option.swatch.withValues(
+                                            alpha: 0.26,
+                                          ),
+                                          blurRadius: 6,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ]
                                       : null,
                             ),
-                            const SizedBox(height: 6),
-                            Text(
-                              option.label,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(
-                                context,
-                              ).textTheme.labelSmall?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color:
-                                    selected
-                                        ? colorScheme.onSecondaryContainer
-                                        : colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
+                            child:
+                                selected
+                                    ? Icon(
+                                      Icons.check_rounded,
+                                      size: 16,
+                                      color:
+                                          ThemeData.estimateBrightnessForColor(
+                                                    option.swatch,
+                                                  ) ==
+                                                  Brightness.dark
+                                              ? Colors.white
+                                              : Colors.black.withValues(
+                                                alpha: 0.72,
+                                              ),
+                                    )
+                                    : null,
+                          ),
                         ),
                       ),
                     ),
@@ -612,9 +593,9 @@ extension on _AppearancePageState {
     }
     return activeAdvancedTheme.when(
       data:
-          (theme) => theme == null ? '未启用主题预设，基础配色生效' : '当前：${theme.name}（自定义）',
+          (theme) => theme == null ? '未启用高级主题，基础配色生效' : '当前：${theme.name}（自定义）',
       loading: () => '读取中',
-      error: (_, _) => '未启用主题预设，基础配色生效',
+      error: (_, _) => '未启用高级主题，基础配色生效',
     );
   }
 
@@ -625,7 +606,7 @@ extension on _AppearancePageState {
     return _buildSectionCard(
       context,
       icon: Icons.auto_awesome_outlined,
-      title: '主题预设与高级主题',
+      title: '高级主题',
       subtitle: '官方主题可直接使用；启用后会覆盖基础配色。',
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
@@ -679,90 +660,6 @@ extension on _AppearancePageState {
                 ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildComponentDemoEntrySection(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return _buildSectionCard(
-      context,
-      icon: Icons.widgets_outlined,
-      title: '组件样板',
-      subtitle: '分别查看当前主题和 Lumina 风格的真实组件效果。',
-      child: Column(
-        children: [
-          _buildComponentDemoEntryTile(
-            context,
-            icon: Icons.dashboard_customize_outlined,
-            label: '当前主题组件样板',
-            description: '跟随当前主题来源、基础配色和暗色模式。',
-            route: '/appearance/component-demo',
-          ),
-          Divider(
-            height: 14,
-            color: colorScheme.outlineVariant.withValues(alpha: 0.52),
-          ),
-          _buildComponentDemoEntryTile(
-            context,
-            icon: Icons.auto_awesome_outlined,
-            label: 'Lumina 组件样板',
-            description: '局部套用 Lumina 白底、炭黑和冷灰风格。',
-            route: '/appearance/lumina-component-demo',
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildComponentDemoEntryTile(
-    BuildContext context, {
-    required IconData icon,
-    required String label,
-    required String description,
-    required String route,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return InkWell(
-      borderRadius: BorderRadius.circular(10),
-      onTap: () => context.push(route),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 8),
-        child: Row(
-          children: [
-            Icon(icon, size: 18, color: colorScheme.onSurfaceVariant),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    description,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      height: 1.3,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 10),
-            Icon(
-              Icons.chevron_right_rounded,
-              size: 18,
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ],
         ),
       ),
     );

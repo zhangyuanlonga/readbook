@@ -39,7 +39,8 @@ void main() {
 
       expect(find.text('模式'), findsOneWidget);
       expect(find.text('基础配色'), findsOneWidget);
-      expect(find.text('主题预设与高级主题'), findsOneWidget);
+      expect(find.text('高级主题'), findsOneWidget);
+      expect(find.text('组件样板'), findsNothing);
 
       expect(find.text('导航样式'), findsNothing);
       expect(find.text('底部菜单'), findsNothing);
@@ -70,7 +71,8 @@ void main() {
 
     expect(find.text('模式'), findsOneWidget);
     expect(find.text('基础配色'), findsOneWidget);
-    expect(find.text('主题预设与高级主题'), findsOneWidget);
+    expect(find.text('高级主题'), findsOneWidget);
+    expect(find.text('组件样板'), findsNothing);
     expect(find.text('导航样式'), findsOneWidget);
     await tester.drag(find.byType(ListView), const Offset(0, -520));
     await tester.pump();

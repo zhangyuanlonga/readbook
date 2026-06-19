@@ -14,6 +14,7 @@ class AdvancedThemeSummaryCard extends StatelessWidget {
     required this.isSaving,
     required this.previewStrip,
     required this.onTap,
+    this.onLongPress,
     required this.onSelectionChanged,
     required this.onActionSelected,
     required this.onApplyPressed,
@@ -28,6 +29,7 @@ class AdvancedThemeSummaryCard extends StatelessWidget {
   final bool isSaving;
   final Widget previewStrip;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
   final ValueChanged<bool?> onSelectionChanged;
   final ValueChanged<AdvancedThemeAction> onActionSelected;
   final VoidCallback onApplyPressed;
@@ -41,6 +43,7 @@ class AdvancedThemeSummaryCard extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(18),
       onTap: isSaving ? null : onTap,
+      onLongPress: isSaving ? null : onLongPress,
       child: Container(
         padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
         decoration: BoxDecoration(

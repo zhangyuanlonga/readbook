@@ -99,17 +99,30 @@ void main() {
       container.read(activeAdvancedThemeIdProvider),
       appDefaultOfficialThemeId,
     );
+    expect(find.text('复制后编辑'), findsNothing);
+    expect(find.text('应用官方主题'), findsNothing);
 
-    await tester.tap(find.text('复制后编辑').first);
-    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('official-theme-mono-blue')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
 
-    expect(find.text('会员中心'), findsOneWidget);
+    expect(
+      container.read(activeAdvancedThemeIdProvider),
+      AppOfficialThemePresetId.monoBlue.themeId,
+    );
   });
 }
 
 class _ThrowingAdvancedThemeService extends AdvancedThemeService {
+  String? _savedActiveThemeId;
+
   @override
-  Future<String?> loadActiveThemeId() async => null;
+  Future<String?> loadActiveThemeId() async => _savedActiveThemeId;
+
+  @override
+  Future<void> saveActiveThemeId(String? themeId) async {
+    _savedActiveThemeId = themeId;
+  }
 
   @override
   Future<AppAdvancedTheme?> loadThemeById(String themeId) async => null;
