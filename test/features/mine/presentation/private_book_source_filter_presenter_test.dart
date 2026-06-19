@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shuxiang_reading_next/features/mine/application/private_book_source_service.dart';
 import 'package:shuxiang_reading_next/features/mine/presentation/private_book_source_filter_presenter.dart';
 import 'package:shuxiang_reading_next/features/mine/presentation/widgets/private_book_source_more_menu_button.dart';
 import 'package:shuxiang_reading_next/features/mine/presentation/widgets/private_book_source_tile.dart';
+import 'package:shuxiang_reading_next/features/mine/presentation/widgets/private_book_source_toolbar.dart';
 
 void main() {
   group('PrivateBookSourceListFilter', () {
@@ -132,6 +134,64 @@ void main() {
     await tester.tap(find.text('测试书源'));
 
     expect(openedDetail, isTrue);
+  });
+
+  testWidgets('PrivateBookSourceToolbar wires search and group label', (
+    tester,
+  ) async {
+    var changedKeyword = '';
+    var cleared = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PrivateBookSourceToolbar(
+            keyword: '漫画',
+            selectedGroupId: 'group_1',
+            groupsAsync: AsyncValue.data(<PrivateBookSourceGroup>[
+              _group(id: 'group_1', name: '常用'),
+            ]),
+            onKeywordChanged: (value) => changedKeyword = value,
+            onKeywordCleared: () => cleared = true,
+            onGroupSelected: (_) {},
+            onRetry: () {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('常用'), findsOneWidget);
+    expect(find.byTooltip('清空搜索'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), '小说');
+    expect(changedKeyword, '小说');
+
+    await tester.tap(find.byTooltip('清空搜索'));
+    expect(cleared, isTrue);
+  });
+
+  testWidgets('PrivateBookSourceGroupPickerSurface shows selection', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PrivateBookSourceGroupPickerSurface(
+            groups: <PrivateBookSourceGroup>[
+              _group(id: 'group_1', name: '常用'),
+              _group(id: 'group_2', name: '备用'),
+            ],
+            selectedGroupId: 'group_2',
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('选择分组'), findsOneWidget);
+    expect(find.text('全部分组'), findsOneWidget);
+    expect(find.text('常用'), findsOneWidget);
+    expect(find.text('备用'), findsOneWidget);
+    expect(find.byIcon(Icons.check_rounded), findsOneWidget);
   });
 }
 

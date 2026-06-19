@@ -259,7 +259,7 @@
 | 1 | `book_detail_page.dart` | 正在暴露详情/目录错误反馈问题 | 错误态、操作区、目录区 | 100% | 已完成本轮拆分；保留业务流在页面/part 内 |
 | 2 | `bookshelf_page.dart` | 高频入口且曾出现网格 overflow | 书籍卡片、更多菜单、筛选 header | 100% | 已完成本轮拆分；保留书架业务流在页面/part 内 |
 | 3 | `reader_page.dart` | 核心链路，风险最高 | 只拆纯 UI，不改翻页/进度核心 | 0% | 未开始 |
-| 4 | `private_book_sources_page.dart`（实际路径：`lib/features/mine/presentation/private_book_sources_page.dart`） | 书源管理高频迭代 | 列表、批量操作、分组筛选 | 30% | 第一刀完成：列表项、筛选规则、分组选择与单项菜单已拆；当前页面未实现批量操作入口 |
+| 4 | `private_book_sources_page.dart`（实际路径：`lib/features/mine/presentation/private_book_sources_page.dart`） | 书源管理高频迭代 | 列表、批量操作、分组筛选 | 40% | 第二刀完成：列表项、筛选规则、toolbar、分组选择 surface 与单项菜单已拆；当前页面未实现批量操作入口 |
 | 5 | `advanced_theme_service.dart` | service 职责过重 | 导入解析、资源索引、应用策略 | 15% | 第一刀完成：资源引用索引；整文件未完成 |
 | 6 | `advanced_theme_editor_page.dart` | UI 复杂且易回归 | 资源列表、预览、底部操作 | 20% | 第一刀完成：资源 picker 基础组件；整页未完成 |
 
@@ -347,6 +347,16 @@
 - 提取 `PrivateBookSourceTile` 与 `PrivateBookSourceMoreMenuButton`，列表项展示和单项更多菜单从 4000+ 行页面中移出；提交共享/编辑启用规则通过 `PrivateBookSourceMoreMenuRules` 固化。
 - 本轮完成口径：列表展示、关键词筛选、分组筛选、单项操作菜单第一刀完成；创建/编辑表单、导入、检测 sheet、分组管理 sheet、服务调用和 provider 流程保持在页面内，不在本轮迁移。路线图里的“批量操作”在当前页面未发现入口，本轮不虚构拆分，后续若新增批量选择再进入单独序列。
 - 验证：`flutter analyze lib/features/mine/presentation/private_book_sources_page.dart lib/features/mine/presentation/private_book_source_filter_presenter.dart lib/features/mine/presentation/widgets/private_book_source_more_menu_button.dart lib/features/mine/presentation/widgets/private_book_source_tile.dart test/features/mine/presentation/private_book_source_filter_presenter_test.dart test/features/mine/presentation/private_book_source_presentation_test.dart`
+- 验证：`flutter test test/features/mine/presentation/private_book_source_filter_presenter_test.dart`
+- 验证：`flutter test test/features/mine/presentation/private_book_source_presentation_test.dart`
+
+### 2026-06-19 Private Book Sources 第二刀记录
+
+- 完成度：30% -> 40%。
+- 提取 `PrivateBookSourceToolbar`，页面只传入搜索关键字、分组选中值和回调，不再直接持有搜索框与分组按钮 UI。
+- 提取 `PrivateBookSourceGroupPickerSurface` 和 `showPrivateBookSourceGroupPicker`，分组选择 surface 从大页面移出，继续复用第一刀的 `PrivateBookSourceGroupFilterPresenter` 规则。
+- 本轮完成口径：分组筛选入口、搜索 toolbar、分组 picker surface 拆分完成；分组管理 sheet 的新增/重命名/删除 service 流程仍留在页面内，后续需要单独拆应用动作边界。
+- 验证：`flutter analyze lib/features/mine/presentation/private_book_sources_page.dart lib/features/mine/presentation/private_book_source_filter_presenter.dart lib/features/mine/presentation/widgets/private_book_source_more_menu_button.dart lib/features/mine/presentation/widgets/private_book_source_tile.dart lib/features/mine/presentation/widgets/private_book_source_toolbar.dart test/features/mine/presentation/private_book_source_filter_presenter_test.dart test/features/mine/presentation/private_book_source_presentation_test.dart`
 - 验证：`flutter test test/features/mine/presentation/private_book_source_filter_presenter_test.dart`
 - 验证：`flutter test test/features/mine/presentation/private_book_source_presentation_test.dart`
 
