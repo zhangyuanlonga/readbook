@@ -20,6 +20,7 @@ class AdaptiveGridSliver extends StatelessWidget {
     this.itemAspectRatio,
     this.childAspectRatio,
     this.contentWidthClamp = const (220, 2400),
+    this.findChildIndexCallback,
   });
 
   final int itemCount;
@@ -34,6 +35,7 @@ class AdaptiveGridSliver extends StatelessWidget {
   final double? itemAspectRatio;
   final double? childAspectRatio;
   final (double, double) contentWidthClamp;
+  final ChildIndexGetter? findChildIndexCallback;
 
   @override
   Widget build(BuildContext context) {
@@ -73,6 +75,7 @@ class AdaptiveGridSliver extends StatelessWidget {
           delegate: SliverChildBuilderDelegate(
             itemBuilder,
             childCount: itemCount,
+            findChildIndexCallback: findChildIndexCallback,
           ),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: crossAxisCount,

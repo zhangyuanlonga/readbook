@@ -558,6 +558,7 @@ class _SearchSourceFilterSheetState extends State<SearchSourceFilterSheet>
           }
           final group = _groups[groupIndex];
           return _SearchGroupTile(
+            key: ValueKey<String>('search_source_group_${group.name.trim()}'),
             group: group,
             selected: _draftGroupNames.contains(group.name),
             onChanged: (value) => _toggleGroup(group.name, value == true),
@@ -637,6 +638,7 @@ class _SearchSourceFilterSheetState extends State<SearchSourceFilterSheet>
 
     final source = _sources[sourceIndex];
     return _SearchSourceTile(
+      key: ValueKey<String>('search_source_${source.id}'),
       source: source,
       selected: _draftSourceIds.contains(source.id),
       onChanged: (value) => _toggleSource(source.id, value == true),
@@ -801,6 +803,7 @@ class _SearchSourceCountPill extends StatelessWidget {
 
 class _SearchGroupTile extends StatelessWidget {
   const _SearchGroupTile({
+    super.key,
     required this.group,
     required this.selected,
     required this.onChanged,
@@ -861,6 +864,7 @@ class _SearchGroupTile extends StatelessWidget {
 
 class _SearchSourceTile extends StatelessWidget {
   const _SearchSourceTile({
+    super.key,
     required this.source,
     required this.selected,
     required this.onChanged,

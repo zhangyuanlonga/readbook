@@ -1334,6 +1334,9 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                         candidate.sourceId;
                     final subtitle = candidate.latestChapter?.trim();
                     return ListTile(
+                      key: ValueKey<String>(
+                        'search_source_candidate_${candidate.sourceId}_${candidate.detailUrl}_${candidate.id}',
+                      ),
                       title: Text(sourceName),
                       subtitle:
                           subtitle == null || subtitle.isEmpty

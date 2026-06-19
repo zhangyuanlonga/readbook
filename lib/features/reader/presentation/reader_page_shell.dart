@@ -241,19 +241,10 @@ extension _ReaderPageShellExtension on _ReaderPageState {
   }
 
   Widget _buildOverlayScrim() {
-    return AnimatedBuilder(
+    return ReaderOverlayScrimLayer(
       animation: _overlayControlsController,
-      builder: (context, _) {
-        final opacity =
-            _overlayControlsFadeProgress *
-            _ReaderPageState._kOverlayScrimMaxAlpha;
-        return ReaderFullScreenHitTestLayer(
-          strategy: ReaderFullScreenHitTestStrategy.interceptWhenVisible,
-          visible: opacity > 0.001,
-          onTap: () => _hideOverlayControls(manual: true),
-          child: ColoredBox(color: Colors.black.withValues(alpha: opacity)),
-        );
-      },
+      maxAlpha: _ReaderPageState._kOverlayScrimMaxAlpha,
+      onTap: () => _hideOverlayControls(manual: true),
     );
   }
 
@@ -271,50 +262,12 @@ extension _ReaderPageShellExtension on _ReaderPageState {
         !_shouldShowBlockingReaderLoading;
     final topInset = _topSafeInset(context);
 
-    return ReaderFullScreenHitTestLayer(
-      strategy: ReaderFullScreenHitTestStrategy.passThrough,
-      child: AnimatedBuilder(
-        animation: _overlayControlsController,
-        builder: (context, _) {
-          final overlayProgress = _overlayControlsShiftProgress;
-          final topOffset =
-              lerpDouble(topInset + 8, topInset + 60, overlayProgress)!;
-          return Padding(
-            padding: EdgeInsets.fromLTRB(20, topOffset, 20, 0),
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: AnimatedSlide(
-                duration: const Duration(milliseconds: 150),
-                curve: Curves.easeOutCubic,
-                offset: showIndicator ? Offset.zero : const Offset(0, -0.35),
-                child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 150),
-                  opacity: showIndicator ? 1 : 0,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxWidth: AppLayout.dialogMaxWidth(
-                        context,
-                        maxWidth: 220,
-                        horizontalMargin: 40,
-                      ),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(999),
-                      child: LinearProgressIndicator(
-                        minHeight: 3,
-                        backgroundColor: colors.divider.withValues(alpha: 0.22),
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          colors.text.withValues(alpha: 0.72),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
+    return ReaderChapterLoadingIndicatorLayer(
+      animation: _overlayControlsController,
+      showIndicator: showIndicator,
+      topInset: topInset,
+      dividerColor: colors.divider,
+      indicatorColor: colors.text,
     );
   }
 

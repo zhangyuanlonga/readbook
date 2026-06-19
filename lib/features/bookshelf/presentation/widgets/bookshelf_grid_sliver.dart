@@ -15,6 +15,7 @@ class BookshelfGridSliver extends StatelessWidget {
     this.mainSpacing = 12,
     this.itemHeightExtra = 42,
     this.coverAspectRatio = 68 / 96,
+    this.findChildIndexCallback,
   });
 
   final int itemCount;
@@ -24,6 +25,7 @@ class BookshelfGridSliver extends StatelessWidget {
   final double mainSpacing;
   final double itemHeightExtra;
   final double coverAspectRatio;
+  final ChildIndexGetter? findChildIndexCallback;
 
   @override
   Widget build(BuildContext context) {
@@ -37,6 +39,7 @@ class BookshelfGridSliver extends StatelessWidget {
       mainSpacing: mainSpacing,
       itemHeightExtra: itemHeightExtra,
       itemAspectRatio: coverAspectRatio,
+      findChildIndexCallback: findChildIndexCallback,
     );
   }
 }

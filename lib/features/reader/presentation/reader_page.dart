@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:math';
-import 'dart:ui' show lerpDouble;
 import 'dart:ui' as ui;
 
 import 'package:battery_plus/battery_plus.dart';
@@ -200,6 +199,7 @@ import 'reader_viewport_builder.dart';
 import 'widgets/background/reader_background_layer.dart';
 import 'widgets/chrome/reader_chrome_widgets.dart';
 import 'widgets/chrome/reader_overlay_bars.dart';
+import 'widgets/chrome/reader_transient_layers.dart';
 import 'widgets/overlay/reader_overlay_layer_model.dart';
 import 'widgets/reader_cached_network_image.dart';
 import 'widgets/viewport/reader_page_scaffold_shell.dart';

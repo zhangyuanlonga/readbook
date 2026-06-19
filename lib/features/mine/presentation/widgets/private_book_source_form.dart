@@ -1191,6 +1191,7 @@ class _PrivateGroupAutocompleteFieldState
                         groupName.toLowerCase() == name.toLowerCase(),
                   );
                   return _PrivateGroupOptionRow(
+                    key: ValueKey<String>('private_group_option_$name'),
                     name: name,
                     exists: exists,
                     onTap: () => onSelected(name),
@@ -1207,6 +1208,7 @@ class _PrivateGroupAutocompleteFieldState
 
 class _PrivateGroupOptionRow extends StatelessWidget {
   const _PrivateGroupOptionRow({
+    super.key,
     required this.name,
     required this.exists,
     required this.onTap,

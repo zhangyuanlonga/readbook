@@ -165,6 +165,7 @@ class PrivateBookSourcesPage extends ConsumerWidget {
                 children: <Widget>[
                   for (final item in visibleItems) ...<Widget>[
                     PrivateBookSourceTile(
+                      key: ValueKey<String>('private_book_source_${item.id}'),
                       item: item,
                       onDetail:
                           () =>

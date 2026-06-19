@@ -46,6 +46,7 @@ class SearchResultsSliver extends StatelessWidget {
     if (useCompactList) {
       return SliverList.builder(
         itemCount: visibleCount,
+        findChildIndexCallback: _findChildIndexByKey,
         itemBuilder: (context, index) {
           return _buildSearchBookCard(index);
         },
@@ -59,10 +60,34 @@ class SearchResultsSliver extends StatelessWidget {
       maxColumns: 3,
       mainSpacing: 0,
       childAspectRatio: 2.55,
+      findChildIndexCallback: _findChildIndexByKey,
       itemBuilder: (context, index) {
         return _buildSearchBookCard(index);
       },
     );
+  }
+
+  int? _findChildIndexByKey(Key key) {
+    final resultKey = _searchResultKeyFromKey(key);
+    if (resultKey == null) {
+      return null;
+    }
+    final limitedCount = visibleCount.clamp(0, books.length).toInt();
+    for (var index = 0; index < limitedCount; index += 1) {
+      if (_searchResultKey(books[index]) == resultKey) {
+        return index;
+      }
+    }
+    return null;
+  }
+
+  String? _searchResultKeyFromKey(Key key) {
+    if (key is! ValueKey<String>) {
+      return null;
+    }
+    const prefix = 'search_result_';
+    final value = key.value;
+    return value.startsWith(prefix) ? value.substring(prefix.length) : null;
   }
 
   Widget _buildSearchBookCard(int listIndex) {
@@ -74,20 +99,27 @@ class SearchResultsSliver extends StatelessWidget {
     );
     final heroTag = buildHeroTag(book, listIndex);
 
-    return SearchBookCard(
-      book: book,
-      presentation:
-          presentationByTargetKey[targetKey] ??
-          const BookDisplayState(displayTitle: ''),
-      sourceName: sourceName,
-      sourceHitCount: report.sourceHitCountOf(book),
-      heroTag: heroTag,
-      normalizedIntro: renderState.normalizedIntros[book.id],
-      normalizedLatestChapter: renderState.normalizedLatestChapters[book.id],
-      onTap:
-          () => unawaited(
-            onBookTap(book: book, listIndex: listIndex, heroTag: heroTag),
-          ),
+    return KeyedSubtree(
+      key: ValueKey<String>('search_result_${_searchResultKey(book)}'),
+      child: SearchBookCard(
+        book: book,
+        presentation:
+            presentationByTargetKey[targetKey] ??
+            const BookDisplayState(displayTitle: ''),
+        sourceName: sourceName,
+        sourceHitCount: report.sourceHitCountOf(book),
+        heroTag: heroTag,
+        normalizedIntro: renderState.normalizedIntros[book.id],
+        normalizedLatestChapter: renderState.normalizedLatestChapters[book.id],
+        onTap:
+            () => unawaited(
+              onBookTap(book: book, listIndex: listIndex, heroTag: heroTag),
+            ),
+      ),
     );
+  }
+
+  String _searchResultKey(Book book) {
+    return '${book.sourceId}::${book.detailUrl}::${book.id}';
   }
 }

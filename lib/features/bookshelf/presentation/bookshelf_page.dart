@@ -30,6 +30,7 @@ import '../../../core/errors/app_exception.dart';
 import '../../../core/logging/app_logger.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../core/session/session_cancellation.dart';
+import '../../../domain/entities/app_advanced_theme.dart';
 import '../../../domain/entities/book_metadata_override.dart';
 import '../../../domain/entities/bookshelf_book.dart';
 import '../../../domain/entities/local_book.dart';
@@ -529,11 +530,40 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     });
   }
 
+  void _applyDesktopBookshelfSearchKeyword(
+    String value, {
+    bool rebuild = false,
+  }) {
+    if (_bookshelfSearchKeyword == value) {
+      return;
+    }
+    void apply() {
+      _bookshelfSearchKeyword = value;
+      _derivedBookshelfFingerprint = null;
+      if (_bookshelfSearchController.text != value) {
+        _bookshelfSearchController.value = TextEditingValue(
+          text: value,
+          selection: TextSelection.collapsed(offset: value.length),
+        );
+      }
+    }
+
+    if (rebuild) {
+      setState(apply);
+      return;
+    }
+    apply();
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    ref.watch(activeAdvancedThemeProvider);
-    final backdrop = _resolvedBackdrop(context);
+    ref.listen<String>(desktopBookshelfSearchKeywordProvider, (_, next) {
+      if (!mounted || !AppAdaptiveMetrics.of(context).isMediumUpWindow) {
+        return;
+      }
+      _applyDesktopBookshelfSearchKeyword(next, rebuild: true);
+    });
     final horizontal = AppSpacing.pageHorizontal(context);
     final platform = Theme.of(context).platform;
     final effectiveNavigationStyle = resolveAppNavigationStyle(
@@ -560,19 +590,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final useDesktopLayout = metrics.isMediumUpWindow;
     final desktopSearchKeyword =
         useDesktopLayout
-            ? ref.watch(desktopBookshelfSearchKeywordProvider)
+            ? ref.read(desktopBookshelfSearchKeywordProvider)
             : _bookshelfSearchKeyword;
-    if (useDesktopLayout && _bookshelfSearchKeyword != desktopSearchKeyword) {
-      _bookshelfSearchKeyword = desktopSearchKeyword;
-      _derivedBookshelfFingerprint = null;
-      if (_bookshelfSearchController.text != desktopSearchKeyword) {
-        _bookshelfSearchController.value = TextEditingValue(
-          text: desktopSearchKeyword,
-          selection: TextSelection.collapsed(
-            offset: desktopSearchKeyword.length,
-          ),
-        );
-      }
+    if (useDesktopLayout) {
+      _applyDesktopBookshelfSearchKeyword(desktopSearchKeyword);
     }
     final showTopSearchAction =
         effectiveNavigationStyle != AppNavigationStyle.cupertinoDock;
@@ -709,8 +730,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                 : null,
         body: Stack(
           children: [
-            DecoratedBox(
-              decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+            _buildBookshelfBackdrop(
               child: AppRefreshIndicator(
                 onRefresh: () => _loadBookshelf(force: true),
                 child: CustomScrollView(
@@ -2396,9 +2416,35 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   }
 
   ResolvedAdvancedThemeBackdrop _resolvedBackdrop(BuildContext context) {
+    return _resolvedBackdropForTheme(
+      context,
+      ref.read(activeAdvancedThemeProvider).valueOrNull,
+    );
+  }
+
+  ResolvedAdvancedThemeBackdrop _resolvedBackdropForTheme(
+    BuildContext context,
+    AppAdvancedTheme? activeTheme,
+  ) {
     return resolveAdvancedThemeBackdrop(
       Theme.of(context).colorScheme,
-      ref.read(activeAdvancedThemeProvider).valueOrNull,
+      activeTheme,
+    );
+  }
+
+  Widget _buildBookshelfBackdrop({required Widget child}) {
+    return Consumer(
+      child: child,
+      builder: (context, ref, child) {
+        final backdrop = _resolvedBackdropForTheme(
+          context,
+          ref.watch(activeAdvancedThemeProvider).valueOrNull,
+        );
+        return DecoratedBox(
+          decoration: buildAdvancedThemeBackdropDecoration(backdrop),
+          child: child,
+        );
+      },
     );
   }
 
@@ -2680,6 +2726,14 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       crossSpacing: _gridCrossSpacing,
       mainSpacing: _gridMainSpacing,
       itemHeightExtra: _gridCardItemHeightExtra,
+      findChildIndexCallback: (key) {
+        final bookKey = _bookKeyFromBookshelfItemKey(key);
+        if (bookKey == null) {
+          return null;
+        }
+        final index = books.indexWhere((book) => _bookKey(book) == bookKey);
+        return index < 0 ? null : index;
+      },
       itemBuilder: (context, index) {
         final book = books[index];
         return _buildModeSwitchAnimatedBookItem(
@@ -2829,11 +2883,12 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     required int totalCount,
     required Widget child,
   }) {
+    final bookKey = _bookKey(book);
     if (totalCount > _kBooksModeSwitchDisableThreshold ||
         index >= _kBooksModeSwitchAnimatedItemLimit) {
       return RepaintBoundary(
         key: ValueKey<String>(
-          'bookshelf_static_${_useGridView ? 'grid' : 'list'}_${book.bookId}',
+          'bookshelf_static_${_useGridView ? 'grid' : 'list'}_$bookKey',
         ),
         child: child,
       );
@@ -2848,7 +2903,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     return RepaintBoundary(
       child: AppFadeSlideTransition(
         key: ValueKey<String>(
-          'bookshelf_mode_${_useGridView ? 'grid' : 'list'}_${book.bookId}',
+          'bookshelf_mode_${_useGridView ? 'grid' : 'list'}_$bookKey',
         ),
         duration: _kBooksModeSwitchItemDuration,
         delay: Duration(milliseconds: delayMilliseconds.clamp(0, 420)),

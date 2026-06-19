@@ -118,7 +118,32 @@ extension on _BookshelfPageState {
           crossAxisSpacing: 12,
           mainAxisExtent: _desktopListCardMainAxisExtent(),
         ),
-        delegate: SliverChildBuilderDelegate((context, index) {
+        delegate: SliverChildBuilderDelegate(
+          (context, index) {
+            final book = books[index];
+            return _buildModeSwitchAnimatedBookItem(
+              book: book,
+              index: index,
+              totalCount: books.length,
+              child: _buildReactiveBookCard(book),
+            );
+          },
+          childCount: books.length,
+          findChildIndexCallback: (key) {
+            final bookKey = _bookKeyFromBookshelfItemKey(key);
+            if (bookKey == null) {
+              return null;
+            }
+            final index = books.indexWhere((book) => _bookKey(book) == bookKey);
+            return index < 0 ? null : index;
+          },
+        ),
+      );
+    }
+
+    return SliverList(
+      delegate: SliverChildBuilderDelegate(
+        (context, index) {
           final book = books[index];
           return _buildModeSwitchAnimatedBookItem(
             book: book,
@@ -126,21 +151,42 @@ extension on _BookshelfPageState {
             totalCount: books.length,
             child: _buildReactiveBookCard(book),
           );
-        }, childCount: books.length),
-      );
-    }
-
-    return SliverList(
-      delegate: SliverChildBuilderDelegate((context, index) {
-        final book = books[index];
-        return _buildModeSwitchAnimatedBookItem(
-          book: book,
-          index: index,
-          totalCount: books.length,
-          child: _buildReactiveBookCard(book),
-        );
-      }, childCount: books.length),
+        },
+        childCount: books.length,
+        findChildIndexCallback: (key) {
+          final bookKey = _bookKeyFromBookshelfItemKey(key);
+          if (bookKey == null) {
+            return null;
+          }
+          final index = books.indexWhere((book) => _bookKey(book) == bookKey);
+          return index < 0 ? null : index;
+        },
+      ),
     );
+  }
+
+  String? _bookKeyFromBookshelfItemKey(Key key) {
+    if (key is! ValueKey<String>) {
+      return null;
+    }
+    final value = key.value;
+    const staticGridPrefix = 'bookshelf_static_grid_';
+    const staticListPrefix = 'bookshelf_static_list_';
+    const modeGridPrefix = 'bookshelf_mode_grid_';
+    const modeListPrefix = 'bookshelf_mode_list_';
+    if (value.startsWith(staticGridPrefix)) {
+      return value.substring(staticGridPrefix.length);
+    }
+    if (value.startsWith(staticListPrefix)) {
+      return value.substring(staticListPrefix.length);
+    }
+    if (value.startsWith(modeGridPrefix)) {
+      return value.substring(modeGridPrefix.length);
+    }
+    if (value.startsWith(modeListPrefix)) {
+      return value.substring(modeListPrefix.length);
+    }
+    return null;
   }
 
   double _desktopListCardMainAxisExtent() {

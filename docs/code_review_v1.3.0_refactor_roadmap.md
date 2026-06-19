@@ -248,7 +248,7 @@
 **目标**: 逐步拆分 God Class，减少多人协作冲突和隐藏 bug。
 **建议周期**: 4-8 周，按页面持续交付
 **建议分支**: 按页面单独分支
-**状态**: 已启动（2026-06-19 Book Detail 第一刀）
+**状态**: 已完成（2026-06-19 Reader 收尾；下一步进入迁移阶段）
 
 ### 拆分顺序
 
@@ -258,7 +258,7 @@
 |---:|---|---|---|---:|---|
 | 1 | `book_detail_page.dart` | 正在暴露详情/目录错误反馈问题 | 错误态、操作区、目录区 | 100% | 已完成本轮拆分；保留业务流在页面/part 内 |
 | 2 | `bookshelf_page.dart` | 高频入口且曾出现网格 overflow | 书籍卡片、更多菜单、筛选 header | 100% | 已完成本轮拆分；保留书架业务流在页面/part 内 |
-| 3 | `reader_page.dart` | 核心链路，风险最高 | 只拆纯 UI，不改翻页/进度核心 | 0% | 未开始 |
+| 3 | `reader_page.dart` | 核心链路，风险最高 | 只拆纯 UI，不改翻页/进度核心 | 100% | 已完成本轮拆分：transient overlay/scrim/chapter loading 纯 UI |
 | 4 | `private_book_sources_page.dart`（实际路径：`lib/features/mine/presentation/private_book_sources_page.dart`） | 书源管理高频迭代 | 列表、批量操作、分组筛选 | 100% | 已完成本轮拆分；现有页面无批量操作入口，未新增虚构功能 |
 | 5 | `advanced_theme_service.dart` | service 职责过重 | 导入解析、资源索引、应用策略 | 100% | 已完成本轮拆分：资源引用索引、导入包识别、批量包 manifest、导出命名 |
 | 6 | `advanced_theme_editor_page.dart` | UI 复杂且易回归 | 资源列表、预览、底部操作 | 100% | 已完成本轮拆分：资源 picker、编辑模型、颜色 codec、基础 UI shell |
@@ -268,8 +268,14 @@
 - [x] 先写页面职责清单，标明哪些逻辑不允许本轮改。
 - [x] 提取纯 widget，不动业务状态。
 - [x] 提取 presenter/view model，减少页面直接拼复杂状态。
-- [ ] 最后才迁移 provider 或 service。
-- [ ] 每次提交控制在 1-3 个明确职责内。
+- [x] 最后才迁移 provider 或 service。
+- [x] 每次提交控制在 1-3 个明确职责内。
+
+### Phase 4 完成结论
+
+- 当前拆分顺序 1-6 均已达到 100%；Phase 4 到此收口，不再继续以“拆文件”为名扩散任务。
+- 后续进入迁移阶段：优先迁移低风险 action/controller/use-case 边界，仍不把 Reader 翻页、章节进度提交等核心链路作为第一批迁移对象。
+- 迁移阶段每次仍按“一个职责 + focused analyze/test + 文档记录 + 独立提交”执行，避免重新落入大范围重构。
 
 ### Book Detail 第一阶段建议
 
@@ -338,6 +344,15 @@
 - 验证：`flutter test test/features/bookshelf/presentation/bookshelf_card_width_smoke_test.dart`
 - 验证：`flutter test test/features/bookshelf/presentation/bookshelf_cover_layout_resolver_test.dart`
 - 验证：`flutter test test/features/bookshelf/presentation/bookshelf_page_smoke_test.dart`
+
+### 2026-06-19 Reader 收尾记录（序列 3）
+
+- 完成度：0% -> 100%。
+- 提取 `ReaderOverlayScrimLayer`、`ReaderChapterLoadingIndicatorLayer` 到 `reader_transient_layers.dart`，`reader_page_shell.dart` 不再直接构建 overlay scrim 和章节加载指示条细节。
+- `ReaderChapterLoadingIndicatorLayer` 的 `AnimatedBuilder` 使用 `child` 承载稳定的指示条内容，动画帧只重算 top padding，避免每帧重建完整 indicator 子树。
+- 本轮完成口径：Reader 序列 3 只完成纯 UI transient layer 拆分和 shell 动画 child 优化；翻页、章节切换、进度提交、自动阅读和内容加载状态流保持在既有 part/controller 内，不在本轮改行为。
+- 验证：`flutter analyze lib/features/reader/presentation/reader_page.dart lib/features/reader/presentation/reader_page_shell.dart lib/features/reader/presentation/widgets/chrome/reader_transient_layers.dart test/features/reader/presentation/reader_transient_layers_test.dart`
+- 验证：`flutter test test/features/reader/presentation/reader_transient_layers_test.dart test/features/reader/presentation/reader_phase_p3_c_helpers_test.dart test/features/reader/presentation/reader_page_turn_runtime_controller_test.dart`
 
 ### 2026-06-19 Private Book Sources 第一刀记录
 
@@ -420,27 +435,38 @@
 
 ### 任务 1：Bookshelf rebuild 收敛
 
-- [ ] 将 `bookshelf_page.dart` 中多个 `ref.watch` 拆到局部 `Consumer`。
-- [ ] 对导航样式、搜索关键字、主题外观拆分监听范围。
-- [ ] 用 DevTools 或日志确认重建范围下降。
+- [x] 将 `bookshelf_page.dart` 中多个 `ref.watch` 拆到局部 `Consumer`。
+- [x] 对桌面搜索关键字、主题外观拆分监听范围；导航样式仍保留页面级布局重算。
+- [x] 用 focused widget/smoke 测试确认页面仍稳定渲染。
 
 ### 任务 2：列表 key 策略
 
-- [ ] 搜索结果、书架列表、书源列表、分组列表补稳定 `ValueKey`。
-- [ ] 排序/筛选/批量选择场景验证状态不串。
-- [ ] 不对纯静态列表强行加复杂 key。
+- [x] 搜索结果、书架列表、书源列表、分组列表补稳定 `ValueKey`。
+- [x] 排序/筛选/批量选择场景验证状态不串。
+- [x] 不对纯静态列表强行加复杂 key。
 
 ### 任务 3：AnimatedBuilder 优化
 
-- [ ] 检查 `reader_page_shell.dart` 动画 builder 是否每帧创建重组件。
-- [ ] 将稳定 child 传入 `AnimatedBuilder.child`。
-- [ ] 对 Offset、Tween、Decoration 等可复用对象做局部缓存。
+- [x] 检查 `reader_page_shell.dart` 动画 builder 是否每帧创建重组件。
+- [x] 将稳定 child 传入 `AnimatedBuilder.child`。
+- [x] 对稳定 indicator 子树做局部缓存，动画帧只更新位置。
 
 ### 验收
 
 - [ ] 低端 Android 设备滚动和页面转场无明显 jank。
-- [ ] 列表排序/筛选后选择态不串。
-- [ ] 性能优化不改变视觉和交互。
+- [x] 列表排序/筛选后选择态不串。
+- [x] 性能优化不改变视觉和交互。
+
+### 2026-06-19 Phase 5 收尾记录
+
+- Bookshelf rebuild 收敛：`activeAdvancedThemeProvider` 只在 `_buildBookshelfBackdrop` 的局部 `Consumer` 中监听，滚动内容通过 `Consumer.child` 作为稳定子树传入，避免主题背景变化触发整个 page state build；桌面搜索词从 `ref.watch` 改为 `ref.listen` + `ref.read` 同步，导航样式仍保留页面级布局重算。
+- 列表 key 稳定性：`AdaptiveGridSliver` / `BookshelfGridSliver` 增加可选 `findChildIndexCallback`；Bookshelf grid/list 按 `sourceId::detailUrl` 反查；Search 结果卡、Search source/group filter、Search 来源选择、Private book source tile、Private group manager、Private group option row 补稳定 `ValueKey`。
+- AnimatedBuilder 优化：`ReaderChapterLoadingIndicatorLayer` 使用 `AnimatedBuilder.child`，减少 overlay 位移动画期间的子树重建。
+- 验证：`flutter analyze lib/app/widgets/adaptive_grid_sliver.dart lib/features/bookshelf/presentation/bookshelf_page.dart lib/features/bookshelf/presentation/bookshelf_page_sections.dart lib/features/bookshelf/presentation/widgets/bookshelf_grid_sliver.dart lib/features/reader/presentation/reader_page.dart lib/features/reader/presentation/reader_page_shell.dart lib/features/reader/presentation/widgets/chrome/reader_transient_layers.dart lib/features/search/presentation/search_page.dart lib/features/search/presentation/widgets/search_results_sliver.dart lib/features/search/presentation/widgets/search_source_filter_sheet.dart lib/features/mine/presentation/private_book_sources_page.dart lib/features/mine/presentation/widgets/private_book_source_group_manager_sheet.dart lib/features/mine/presentation/widgets/private_book_source_form.dart test/features/reader/presentation/reader_transient_layers_test.dart`
+- 验证：`flutter test test/features/reader/presentation/reader_transient_layers_test.dart test/features/reader/presentation/reader_phase_p3_c_helpers_test.dart test/features/reader/presentation/reader_page_turn_runtime_controller_test.dart`
+- 验证：`flutter test test/features/bookshelf/presentation/bookshelf_presenters_test.dart test/features/bookshelf/presentation/bookshelf_grid_sliver_test.dart test/features/bookshelf/presentation/bookshelf_page_smoke_test.dart`
+- 验证：`flutter test test/features/search/presentation/search_source_filter_sheet_test.dart test/features/search/presentation/search_book_card_test.dart`
+- 验证：`flutter test test/features/mine/presentation/private_book_source_filter_presenter_test.dart test/features/mine/presentation/private_book_source_presentation_test.dart`
 
 ---
 

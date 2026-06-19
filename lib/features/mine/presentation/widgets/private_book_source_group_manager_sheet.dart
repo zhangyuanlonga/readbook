@@ -163,6 +163,9 @@ class PrivateBookSourceGroupManagerSheetState
                       final group = groups[index];
                       final isDefault = _isDefaultGroup(group);
                       return Material(
+                        key: ValueKey<String>(
+                          'private_book_source_group_${group.id}',
+                        ),
                         color: Theme.of(context).colorScheme.surfaceContainerLow
                             .withValues(alpha: 0.5),
                         borderRadius: BorderRadius.circular(12),
