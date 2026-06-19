@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/source_access/source_access_provider.dart';
+import 'private_book_source_action_controller.dart';
 import 'private_book_source_service.dart';
 
 final privateBookSourceServiceProvider = Provider<PrivateBookSourceService>((
@@ -28,3 +30,21 @@ final privateBookSourceGroupsProvider =
 final sourceQuotaProvider = FutureProvider<SourceQuotaSnapshot>((ref) async {
   return ref.watch(privateBookSourceServiceProvider).quota();
 });
+
+final privateBookSourceActionControllerProvider =
+    Provider<PrivateBookSourceActionController>((ref) {
+      return PrivateBookSourceActionController(
+        service: ref.watch(privateBookSourceServiceProvider),
+        refresh: () {
+          final selectedGroupId = ref.read(
+            selectedPrivateBookSourceGroupProvider,
+          );
+          ref.invalidate(privateBookSourcesProvider);
+          ref.invalidate(privateBookSourcesProvider(selectedGroupId));
+          ref.invalidate(privateBookSourcesProvider(null));
+          ref.invalidate(privateBookSourceGroupsProvider);
+          ref.invalidate(sourceQuotaProvider);
+          ref.invalidate(sourceAccessScopeProvider);
+        },
+      );
+    });

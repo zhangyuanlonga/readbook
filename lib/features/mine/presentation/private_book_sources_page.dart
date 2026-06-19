@@ -15,7 +15,6 @@ import '../../../app/widgets/foundation/foundation.dart';
 import '../../../core/auth/auth_event_bus.dart';
 import '../../../core/auth/auth_session.dart';
 import '../../../core/network/api_client.dart';
-import '../../../core/source_access/source_access_provider.dart';
 import '../../auth/providers.dart' as auth_providers;
 import '../application/advanced_theme_provider.dart';
 import '../application/private_book_source_provider.dart';
@@ -229,7 +228,9 @@ class PrivateBookSourcesPage extends ConsumerWidget {
               ),
               child: AppRefreshIndicator(
                 semanticsLabel: '刷新私有书源',
-                onRefresh: () async => _refresh(ref),
+                onRefresh: () async {
+                  ref.read(privateBookSourceActionControllerProvider).refresh();
+                },
                 child: ListView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: EdgeInsets.fromLTRB(
@@ -307,18 +308,8 @@ class PrivateBookSourcesPage extends ConsumerWidget {
       return;
     }
     if (changed == true) {
-      _refresh(ref);
+      ref.read(privateBookSourceActionControllerProvider).refresh();
     }
-  }
-
-  static void _refresh(WidgetRef ref) {
-    final selectedGroupId = ref.read(selectedPrivateBookSourceGroupProvider);
-    ref.invalidate(privateBookSourcesProvider);
-    ref.invalidate(privateBookSourcesProvider(selectedGroupId));
-    ref.invalidate(privateBookSourcesProvider(null));
-    ref.invalidate(privateBookSourceGroupsProvider);
-    ref.invalidate(sourceQuotaProvider);
-    ref.invalidate(sourceAccessScopeProvider);
   }
 
   static Future<void> _openCreateForm(
@@ -364,7 +355,7 @@ class PrivateBookSourcesPage extends ConsumerWidget {
     if (saved != null) {
       ref.read(_privateBookSourceSearchKeywordProvider.notifier).state = '';
       ref.read(selectedPrivateBookSourceGroupProvider.notifier).state = null;
-      _refresh(ref);
+      ref.read(privateBookSourceActionControllerProvider).refresh();
     }
   }
 
@@ -409,8 +400,8 @@ class PrivateBookSourcesPage extends ConsumerWidget {
     );
     try {
       final detail = await ref
-          .read(privateBookSourceServiceProvider)
-          .get(item.id);
+          .read(privateBookSourceActionControllerProvider)
+          .loadDetailForEdit(item);
       loading.close();
       return detail;
     } catch (error) {
@@ -453,7 +444,7 @@ class PrivateBookSourcesPage extends ConsumerWidget {
     await _runVoidAction(
       context,
       ref,
-      () => ref.read(privateBookSourceServiceProvider).delete(item.id),
+      () => ref.read(privateBookSourceActionControllerProvider).delete(item),
       '书源已删除',
     );
   }
@@ -480,7 +471,9 @@ class PrivateBookSourcesPage extends ConsumerWidget {
     await _runVoidAction(
       context,
       ref,
-      () => ref.read(privateBookSourceServiceProvider).submit(item.id, note),
+      () => ref
+          .read(privateBookSourceActionControllerProvider)
+          .submit(item, note),
       '已提交共享审核',
     );
   }
@@ -502,9 +495,9 @@ class PrivateBookSourcesPage extends ConsumerWidget {
     }
     try {
       final result = await ref
-          .read(privateBookSourceServiceProvider)
+          .read(privateBookSourceActionControllerProvider)
           .test(
-            item.id,
+            item,
             keyword: config.keyword,
             timeoutMs: config.timeoutMs,
             checkItems: config.checkItems,
@@ -512,7 +505,6 @@ class PrivateBookSourcesPage extends ConsumerWidget {
       if (!context.mounted) {
         return;
       }
-      _refresh(ref);
       final report = result.report;
       if (report != null) {
         await showAdaptiveActionSurface<void>(
@@ -555,7 +547,6 @@ class PrivateBookSourcesPage extends ConsumerWidget {
       if (!context.mounted) {
         return;
       }
-      _refresh(ref);
       AppFeedback.showSnackBar(
         context,
         message: success,
