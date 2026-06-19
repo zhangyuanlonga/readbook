@@ -82,6 +82,7 @@ import '../application/book_detail_metadata_flow_service.dart';
 import '../application/book_metadata_edit_service.dart';
 import '../application/book_metadata_presentation_resolver.dart';
 import '../application/book_reading_status_service.dart';
+import 'book_detail_hero_tags.dart';
 import 'book_reading_status_presentation.dart';
 import 'book_detail_switch_source_helper.dart';
 import 'widgets/book_detail_content_sections.dart';
@@ -229,6 +230,8 @@ class _BookDetailAuxiliaryState {
 enum _EditableCoverAction { gallery, files, focusLink, clear }
 
 class _BookDetailPageState extends ConsumerState<BookDetailPage> {
+  static const BookDetailHeroTagResolver _heroTags =
+      BookDetailHeroTagResolver();
   static const List<_LocalCharsetOption> _kLocalCharsetOptions =
       <_LocalCharsetOption>[
         _LocalCharsetOption(label: '自动', charset: null),
@@ -578,14 +581,6 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     );
   }
 
-  String _buildReaderCoverHeroTag({
-    required String bookId,
-    required String sourceId,
-    required String detailUrl,
-  }) {
-    return 'reader_cover_${sourceId.trim()}_${bookId.trim()}_${detailUrl.hashCode}';
-  }
-
   void _setDetailExitAnimating(bool value) {
     if (!mounted || _isDetailExitAnimating == value) {
       return;
@@ -838,22 +833,24 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     final detail = result.detail;
     final presentation = _resolvePresentedMetadata(result: result);
     final metrics = AppAdaptiveMetrics.of(context);
-    final heroTag =
-        widget.heroTag?.trim().isNotEmpty == true
-            ? widget.heroTag!.trim()
-            : _buildBookCoverHeroTag(
-              bookId: detail.id,
-              sourceId: detail.sourceId,
-              detailUrl: detail.detailUrl,
-            );
-    final titleHeroTag =
-        widget.titleHeroTag?.trim().isNotEmpty == true
-            ? widget.titleHeroTag!.trim()
-            : 'book_title_${detail.sourceId.trim()}_${detail.id.trim()}_${detail.detailUrl.hashCode}';
-    final metaHeroTag =
-        widget.metaHeroTag?.trim().isNotEmpty == true
-            ? widget.metaHeroTag!.trim()
-            : 'book_meta_${detail.sourceId.trim()}_${detail.id.trim()}_${detail.detailUrl.hashCode}';
+    final heroTag = _heroTags.cover(
+      explicitHeroTag: widget.heroTag,
+      bookId: detail.id,
+      sourceId: detail.sourceId,
+      detailUrl: detail.detailUrl,
+    );
+    final titleHeroTag = _heroTags.title(
+      explicitHeroTag: widget.titleHeroTag,
+      bookId: detail.id,
+      sourceId: detail.sourceId,
+      detailUrl: detail.detailUrl,
+    );
+    final metaHeroTag = _heroTags.meta(
+      explicitHeroTag: widget.metaHeroTag,
+      bookId: detail.id,
+      sourceId: detail.sourceId,
+      detailUrl: detail.detailUrl,
+    );
 
     return BookDetailSummaryCard(
       title: presentation.displayTitle,
@@ -884,14 +881,12 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
   Widget _buildDesktopCoverPane(BookDetailLoadResult result) {
     final detail = result.detail;
     final presentation = _resolvePresentedMetadata(result: result);
-    final heroTag =
-        widget.heroTag?.trim().isNotEmpty == true
-            ? widget.heroTag!.trim()
-            : _buildBookCoverHeroTag(
-              bookId: detail.id,
-              sourceId: detail.sourceId,
-              detailUrl: detail.detailUrl,
-            );
+    final heroTag = _heroTags.cover(
+      explicitHeroTag: widget.heroTag,
+      bookId: detail.id,
+      sourceId: detail.sourceId,
+      detailUrl: detail.detailUrl,
+    );
     return Center(
       child: _buildCoverPreview(
         presentation.realCoverUrl,
@@ -912,14 +907,18 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     required _BookDetailAuxiliaryState auxiliaryState,
   }) {
     final presentation = _resolvePresentedMetadata(result: result);
-    final titleHeroTag =
-        widget.titleHeroTag?.trim().isNotEmpty == true
-            ? widget.titleHeroTag!.trim()
-            : 'book_title_${result.detail.sourceId.trim()}_${result.detail.id.trim()}_${result.detail.detailUrl.hashCode}';
-    final metaHeroTag =
-        widget.metaHeroTag?.trim().isNotEmpty == true
-            ? widget.metaHeroTag!.trim()
-            : 'book_meta_${result.detail.sourceId.trim()}_${result.detail.id.trim()}_${result.detail.detailUrl.hashCode}';
+    final titleHeroTag = _heroTags.title(
+      explicitHeroTag: widget.titleHeroTag,
+      bookId: result.detail.id,
+      sourceId: result.detail.sourceId,
+      detailUrl: result.detail.detailUrl,
+    );
+    final metaHeroTag = _heroTags.meta(
+      explicitHeroTag: widget.metaHeroTag,
+      bookId: result.detail.id,
+      sourceId: result.detail.sourceId,
+      detailUrl: result.detail.detailUrl,
+    );
     final authorText = _cleanSummaryMetaValue(presentation.displayAuthor);
     return BookDetailSummaryTextBlock(
       title: presentation.displayTitle,
@@ -1565,14 +1564,12 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
         _editAuthorController.text.trim().isEmpty
             ? presentation.displayAuthor
             : _editAuthorController.text.trim();
-    final heroTag =
-        widget.heroTag?.trim().isNotEmpty == true
-            ? widget.heroTag!.trim()
-            : _buildBookCoverHeroTag(
-              bookId: detail.id,
-              sourceId: detail.sourceId,
-              detailUrl: detail.detailUrl,
-            );
+    final heroTag = _heroTags.cover(
+      explicitHeroTag: widget.heroTag,
+      bookId: detail.id,
+      sourceId: detail.sourceId,
+      detailUrl: detail.detailUrl,
+    );
 
     return Column(
       children: [
@@ -1932,14 +1929,12 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     required VoidCallback refreshSurface,
   }) {
     final detail = result.detail;
-    final heroTag =
-        widget.heroTag?.trim().isNotEmpty == true
-            ? widget.heroTag!.trim()
-            : _buildBookCoverHeroTag(
-              bookId: detail.id,
-              sourceId: detail.sourceId,
-              detailUrl: detail.detailUrl,
-            );
+    final heroTag = _heroTags.cover(
+      explicitHeroTag: widget.heroTag,
+      bookId: detail.id,
+      sourceId: detail.sourceId,
+      detailUrl: detail.detailUrl,
+    );
 
     return AnimatedBuilder(
       animation: Listenable.merge(<Listenable>[
@@ -1964,7 +1959,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
               customCoverPath: _editingCoverPath,
               title: title,
               author: author,
-              heroTag: '${heroTag}_desktop_editor',
+              heroTag: _heroTags.desktopEditorCover(heroTag),
               bookId: detail.id,
               sourceId: detail.sourceId,
               detailUrl: detail.detailUrl,
@@ -2257,7 +2252,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
                 normalizedCover.isEmpty ? null : normalizedCover,
                 title: normalizedTitle.isEmpty ? '加载书籍详情中' : normalizedTitle,
                 author: normalizedAuthor.isEmpty ? null : normalizedAuthor,
-                heroTag: 'book_loading_${widget.bookId}',
+                heroTag: _heroTags.loadingCover(widget.bookId),
                 bookId: widget.bookId,
                 sourceId: widget.sourceId,
                 detailUrl: widget.detailUrl,
@@ -2850,7 +2845,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       sourceId: sourceId,
       detailUrl: detailUrl,
       chapter: chapter,
-      heroTag: _buildReaderCoverHeroTag(
+      heroTag: _heroTags.readerCover(
         bookId: _activeBookId,
         sourceId: sourceId,
         detailUrl: detailUrl,
@@ -3701,18 +3696,12 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
 
   Widget _buildTocWarningCard(String message) {
     final diagnostics = _tocFailureDiagnostics;
-    return BookDetailTocWarningCard(
+    return BookDetailTocWarningPresenter(
       message: message,
-      actions:
+      onCopyDiagnostics:
           diagnostics == null
-              ? const <Widget>[]
-              : <Widget>[
-                OutlinedButton.icon(
-                  onPressed: () => _copyOnlineDetailDiagnostics(diagnostics),
-                  icon: const Icon(Icons.copy_rounded, size: 16),
-                  label: const Text('复制诊断信息'),
-                ),
-              ],
+              ? null
+              : () => _copyOnlineDetailDiagnostics(diagnostics),
     );
   }
 

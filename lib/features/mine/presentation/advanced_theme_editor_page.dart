@@ -10,8 +10,6 @@ import 'package:go_router/go_router.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/motion/app_motion_widgets.dart';
-import '../../../app/navigation/bottom_nav_icon_gallery_tab_mapper.dart';
-import '../../../app/navigation/bottom_nav_icon_resolver.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/theme/app_theme_palette.dart';
 import '../../../app/theme/app_theme_seed_provider.dart';
@@ -20,9 +18,7 @@ import '../../../app/widgets/adaptive_fullscreen_preview.dart';
 import '../../../app/widgets/adaptive_overflow_toolbar.dart';
 import '../../../app/widgets/adaptive_route_top_bar.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
-import '../../../app/widgets/bottom_nav_icon_view.dart';
 import '../../../app/widgets/foundation/app_feedback.dart';
-import '../../../app/widgets/text_cover_placeholder.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
 import '../../../domain/entities/bottom_nav_icon_gallery.dart';
@@ -45,6 +41,7 @@ import 'widgets/advanced_theme_launch_gallery_section.dart';
 import 'widgets/advanced_theme_wallpaper_section.dart';
 import 'widgets/advanced_theme_launch_gallery_selection_card.dart';
 import 'widgets/advanced_theme_preview_panel.dart';
+import 'widgets/advanced_theme_resource_picker_widgets.dart';
 
 part 'advanced_theme_editor_page_flow.dart';
 part 'widgets/advanced_theme_color_section.dart';
@@ -1386,38 +1383,12 @@ class _AdvancedThemeEditorPageState
     required List<Widget> actions,
     String? helperText,
   }) {
-    final textTheme = Theme.of(context).textTheme;
-    final colorScheme = Theme.of(context).colorScheme;
-    return SizedBox(
-      height:
-          MediaQuery.sizeOf(context).height * _resourcePickerSheetHeightFactor,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            if (helperText != null && helperText.trim().isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(
-                helperText,
-                style: textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-            const SizedBox(height: 10),
-            Expanded(child: content),
-            const SizedBox(height: 12),
-            Row(children: actions),
-          ],
-        ),
-      ),
+    return AdvancedThemeResourcePickerSheet(
+      title: title,
+      content: content,
+      actions: actions,
+      heightFactor: _resourcePickerSheetHeightFactor,
+      helperText: helperText,
     );
   }
 
@@ -1497,39 +1468,10 @@ class _AdvancedThemeEditorPageState
     required String title,
     required String description,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(12, 18, 12, 18),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.4),
-        ),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: colorScheme.onSurfaceVariant),
-          const SizedBox(height: 8),
-          Text(
-            title,
-            style: Theme.of(
-              context,
-            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            description,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
+    return AdvancedThemeEmptyResourceState(
+      icon: icon,
+      title: title,
+      description: description,
     );
   }
 
@@ -1540,95 +1482,16 @@ class _AdvancedThemeEditorPageState
     required String Function(String imagePath) titleBuilder,
     required ValueChanged<String> onSelected,
   }) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const spacing = 8.0;
-        final columns = AppLayout.optionGridColumnsForWidth(
-          constraints.maxWidth,
-        ).clamp(3, 5);
-        return GridView.builder(
-          itemCount: imagePaths.length,
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: columns,
-            mainAxisSpacing: spacing,
-            crossAxisSpacing: spacing,
-            childAspectRatio: 1 / 1.28,
+    return AdvancedThemeImageSelectionGrid(
+      imagePaths: imagePaths,
+      selectedPath: selectedPath,
+      titleBuilder: titleBuilder,
+      onSelected: onSelected,
+      imageBuilder: (context, path, fit) => _buildResolvedImage(path, fit: fit),
+      onPreview:
+          (imagePath, title) => unawaited(
+            _showImagePreviewDialog(imagePath: imagePath, title: title),
           ),
-          itemBuilder: (context, index) {
-            final path = imagePaths[index];
-            return _buildSelectableImageTile(
-              context,
-              imagePath: path,
-              title: titleBuilder(path),
-              selected: path == selectedPath,
-              onTap: () => onSelected(path),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildSelectableImageTile(
-    BuildContext context, {
-    required String imagePath,
-    required String title,
-    required bool selected,
-    required VoidCallback onTap,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        onLongPress:
-            () => unawaited(
-              _showImagePreviewDialog(imagePath: imagePath, title: title),
-            ),
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color:
-                        selected
-                            ? colorScheme.primary
-                            : colorScheme.outlineVariant.withValues(
-                              alpha: 0.45,
-                            ),
-                    width: selected ? 2 : 1,
-                  ),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: _buildResolvedImage(imagePath, fit: BoxFit.cover),
-                ),
-              ),
-            ),
-            if (selected)
-              Positioned(
-                top: 8,
-                right: 8,
-                child: Container(
-                  width: 24,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    color: colorScheme.primary,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.check_rounded,
-                    size: 16,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -1643,70 +1506,16 @@ class _AdvancedThemeEditorPageState
     VoidCallback? onTap,
     VoidCallback? onLongPress,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    late final Widget child;
-    if (previewPath == null || previewPath.isEmpty) {
-      if (useAddPlaceholder) {
-        child = Container(
-          width: width,
-          height: height,
-          decoration: BoxDecoration(
-            color: colorScheme.surface,
-            borderRadius: BorderRadius.circular(borderRadius),
-            border: Border.all(
-              color: colorScheme.outlineVariant.withValues(alpha: 0.4),
-            ),
-          ),
-          child: Icon(
-            Icons.add_rounded,
-            size: width >= 40 ? 22 : 18,
-            color: colorScheme.onSurfaceVariant,
-          ),
-        );
-      } else {
-        child = SizedBox(
-          width: width,
-          height: height,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(borderRadius),
-            child: TextCoverPlaceholder(
-              title: title,
-              width: width,
-              height: height,
-              borderRadius: BorderRadius.circular(borderRadius),
-            ),
-          ),
-        );
-      }
-    } else {
-      child = Container(
-        width: width,
-        height: height,
-        decoration: BoxDecoration(
-          color: colorScheme.surface,
-          borderRadius: BorderRadius.circular(borderRadius),
-          border: Border.all(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.4),
-          ),
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(borderRadius),
-          child: _buildResolvedImage(previewPath, fit: BoxFit.cover),
-        ),
-      );
-    }
-
-    if (onTap == null && onLongPress == null) {
-      return child;
-    }
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(borderRadius),
-        onTap: onTap,
-        onLongPress: onLongPress,
-        child: child,
-      ),
+    return AdvancedThemeGalleryPreviewThumb(
+      previewPath: previewPath,
+      title: title,
+      width: width,
+      height: height,
+      borderRadius: borderRadius,
+      useAddPlaceholder: useAddPlaceholder,
+      imageBuilder: (context, path, fit) => _buildResolvedImage(path, fit: fit),
+      onTap: onTap,
+      onLongPress: onLongPress,
     );
   }
 
@@ -1714,95 +1523,7 @@ class _AdvancedThemeEditorPageState
     BuildContext context, {
     required BottomNavIconGallery? gallery,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    if (gallery == null) {
-      return Container(
-        width: 168,
-        height: 62,
-        decoration: BoxDecoration(
-          color: colorScheme.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.4),
-          ),
-        ),
-        alignment: Alignment.center,
-        child: Icon(
-          Icons.add_rounded,
-          size: 24,
-          color: colorScheme.onSurfaceVariant,
-        ),
-      );
-    }
-    return Container(
-      width: 190,
-      padding: const EdgeInsets.all(6),
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.4),
-        ),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _buildBottomNavGalleryPreviewRow(
-            context,
-            gallery: gallery,
-            brightness: Brightness.light,
-          ),
-          const SizedBox(height: 5),
-          _buildBottomNavGalleryPreviewRow(
-            context,
-            gallery: gallery,
-            brightness: Brightness.dark,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBottomNavGalleryPreviewRow(
-    BuildContext context, {
-    required BottomNavIconGallery gallery,
-    required Brightness brightness,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final isDark = brightness == Brightness.dark;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
-      decoration: BoxDecoration(
-        color:
-            isDark
-                ? Colors.black.withValues(alpha: 0.78)
-                : colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (final tab in bottomNavIconGalleryTabs)
-            for (final selected in const <bool>[false, true])
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 2.5),
-                child: BottomNavIconView(
-                  icon: resolveCupertinoBottomNavIcon(
-                    tab: appShellTabForBottomNavIconGalleryTab(tab),
-                    selected: selected,
-                    brightness: brightness,
-                    gallery: gallery,
-                  ),
-                  size: 14,
-                  fallbackColor:
-                      selected
-                          ? colorScheme.primary
-                          : (isDark ? Colors.white70 : colorScheme.outline),
-                ),
-              ),
-        ],
-      ),
-    );
+    return AdvancedThemeBottomNavGalleryPreview(gallery: gallery);
   }
 
   void _setWallpaperOverlayOpacity(double value) {

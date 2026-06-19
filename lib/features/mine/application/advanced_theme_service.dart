@@ -521,6 +521,9 @@ class AdvancedThemeService implements PreferenceRepairService {
     if (removedTheme != null &&
         resolvedDeleteOptions.deleteAnyAssociatedResources) {
       final targetTheme = removedTheme!;
+      final referenceService = AdvancedThemeResourceReferenceService(
+        preferences: await _preferencesFuture,
+      );
       final appearancePaths = <String>{
         ...[
               targetTheme.lightConfig.wallpaperPath,
@@ -539,7 +542,9 @@ class AdvancedThemeService implements PreferenceRepairService {
             .map((item) => item.trim())
             .where((item) => item.isNotEmpty),
       };
-      final coverGalleryIds = _coverGalleryIdsForTheme(targetTheme);
+      final coverGalleryIds = referenceService.coverGalleryIdsForTheme(
+        targetTheme,
+      );
       final launchGalleryId = targetTheme.launchImageGalleryId?.trim();
       final bottomNavGalleryId = targetTheme.bottomNavGalleryId?.trim();
       final fontFamilyKeys = <String>{
@@ -554,21 +559,24 @@ class AdvancedThemeService implements PreferenceRepairService {
 
       if (resolvedDeleteOptions.deleteAppearanceWallpapers) {
         for (final path in appearancePaths) {
-          if (!_isAppearanceBackgroundReferenced(updated, path)) {
+          if (!referenceService.isAppearanceBackgroundReferenced(
+            updated,
+            path,
+          )) {
             await deleteWallpaper(path);
           }
         }
       }
       if (resolvedDeleteOptions.deleteReaderWallpapers) {
         for (final path in readerPaths) {
-          if (!_isReaderBackgroundReferenced(updated, path)) {
+          if (!referenceService.isReaderBackgroundReferenced(updated, path)) {
             await deleteReaderWallpaper(path);
           }
         }
       }
       if (resolvedDeleteOptions.deleteCoverGalleries) {
         for (final galleryId in coverGalleryIds) {
-          if (!_isCoverGalleryReferenced(updated, galleryId)) {
+          if (!referenceService.isCoverGalleryReferenced(updated, galleryId)) {
             await _safeDeleteCoverGallery(galleryId);
           }
         }
@@ -576,22 +584,27 @@ class AdvancedThemeService implements PreferenceRepairService {
       if (resolvedDeleteOptions.deleteLaunchImageGallery &&
           launchGalleryId != null &&
           launchGalleryId.isNotEmpty &&
-          !_isLaunchGalleryReferenced(updated, launchGalleryId)) {
+          !referenceService.isLaunchGalleryReferenced(
+            updated,
+            launchGalleryId,
+          )) {
         await _safeDeleteLaunchGallery(launchGalleryId);
       }
       if (resolvedDeleteOptions.deleteBottomNavGallery &&
           bottomNavGalleryId != null &&
           bottomNavGalleryId.isNotEmpty &&
-          !_isBottomNavGalleryReferenced(updated, bottomNavGalleryId)) {
+          !referenceService.isBottomNavGalleryReferenced(
+            updated,
+            bottomNavGalleryId,
+          )) {
         await _safeDeleteBottomNavGallery(bottomNavGalleryId);
       }
       if (resolvedDeleteOptions.deleteFonts) {
-        final removableFontKeys = await AdvancedThemeResourceReferenceService(
-          preferences: await _preferencesFuture,
-        ).filterRemovableFontFamilyKeys(
-          fontFamilyKeys: fontFamilyKeys,
-          remainingThemes: updated,
-        );
+        final removableFontKeys = await referenceService
+            .filterRemovableFontFamilyKeys(
+              fontFamilyKeys: fontFamilyKeys,
+              remainingThemes: updated,
+            );
         await _safeDeleteImportedFonts(removableFontKeys);
       }
       if (resolvedDeleteOptions.deleteAppearanceWallpapers) {
@@ -3508,111 +3521,6 @@ class AdvancedThemeService implements PreferenceRepairService {
 
   List<int> _archiveFileBytes(ArchiveFile file) {
     return List<int>.from(file.content);
-  }
-
-  Set<String> _coverGalleryIdsForTheme(AppAdvancedTheme theme) {
-    return <String>{
-      ...[
-            theme.coverGalleryId,
-            theme.coverGalleryIdFor(AppAdvancedThemeMode.light),
-            theme.coverGalleryIdFor(AppAdvancedThemeMode.dark),
-          ]
-          .whereType<String>()
-          .map((item) => item.trim())
-          .where((item) => item.isNotEmpty),
-    };
-  }
-
-  bool _isAppearanceBackgroundReferenced(
-    List<AppAdvancedTheme> themes,
-    String targetPath,
-  ) {
-    final normalizedTarget = targetPath.trim();
-    if (normalizedTarget.isEmpty) {
-      return false;
-    }
-    for (final theme in themes) {
-      final paths = <String?>[
-        theme.lightConfig.wallpaperPath,
-        theme.darkConfig.wallpaperPath,
-      ];
-      for (final path in paths) {
-        if ((path?.trim() ?? '') == normalizedTarget) {
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-
-  bool _isReaderBackgroundReferenced(
-    List<AppAdvancedTheme> themes,
-    String targetPath,
-  ) {
-    final normalizedTarget = targetPath.trim();
-    if (normalizedTarget.isEmpty) {
-      return false;
-    }
-    for (final theme in themes) {
-      final paths = <String?>[
-        theme.lightConfig.readerWallpaperPath,
-        theme.darkConfig.readerWallpaperPath,
-      ];
-      for (final path in paths) {
-        if ((path?.trim() ?? '') == normalizedTarget) {
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-
-  bool _isCoverGalleryReferenced(
-    List<AppAdvancedTheme> themes,
-    String galleryId,
-  ) {
-    final normalizedId = galleryId.trim();
-    if (normalizedId.isEmpty) {
-      return false;
-    }
-    for (final theme in themes) {
-      if (_coverGalleryIdsForTheme(theme).contains(normalizedId)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  bool _isLaunchGalleryReferenced(
-    List<AppAdvancedTheme> themes,
-    String galleryId,
-  ) {
-    final normalizedId = galleryId.trim();
-    if (normalizedId.isEmpty) {
-      return false;
-    }
-    for (final theme in themes) {
-      if ((theme.launchImageGalleryId?.trim() ?? '') == normalizedId) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  bool _isBottomNavGalleryReferenced(
-    List<AppAdvancedTheme> themes,
-    String galleryId,
-  ) {
-    final normalizedId = galleryId.trim();
-    if (normalizedId.isEmpty) {
-      return false;
-    }
-    for (final theme in themes) {
-      if ((theme.bottomNavGalleryId?.trim() ?? '') == normalizedId) {
-        return true;
-      }
-    }
-    return false;
   }
 
   Future<void> _cleanupImportedThemeBundleArtifacts({

@@ -196,6 +196,35 @@ void main() {
     expect(copied, isTrue);
   });
 
+  testWidgets('toc warning presenter exposes diagnostics action', (
+    tester,
+  ) async {
+    var copied = false;
+
+    await tester.pumpWidget(
+      AdaptiveTestHarness(
+        width: 390,
+        height: 800,
+        wrapWithMaterialApp: true,
+        child: Scaffold(
+          body: BookDetailTocWarningPresenter(
+            message: '目录加载失败，目录暂不可用。',
+            onCopyDiagnostics: () {
+              copied = true;
+            },
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('目录加载失败，目录暂不可用。'), findsOneWidget);
+    expect(find.text('复制诊断信息'), findsOneWidget);
+
+    await tester.tap(find.text('复制诊断信息'));
+
+    expect(copied, isTrue);
+  });
+
   testWidgets('local index status card shows rebuild for failed index', (
     tester,
   ) async {

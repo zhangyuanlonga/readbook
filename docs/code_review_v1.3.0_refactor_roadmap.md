@@ -252,14 +252,16 @@
 
 ### 拆分顺序
 
-| 顺序 | 文件 | 原因 | 第一刀 |
-|---:|---|---|---|
-| 1 | `book_detail_page.dart` | 正在暴露详情/目录错误反馈问题 | 错误态、操作区、目录区 |
-| 2 | `bookshelf_page.dart` | 高频入口且曾出现网格 overflow | 书籍卡片、更多菜单、筛选 header |
-| 3 | `reader_page.dart` | 核心链路，风险最高 | 只拆纯 UI，不改翻页/进度核心 |
-| 4 | `private_book_sources_page.dart` | 书源管理高频迭代 | 列表、批量操作、分组筛选 |
-| 5 | `advanced_theme_service.dart` | service 职责过重 | 导入解析、资源索引、应用策略 |
-| 6 | `advanced_theme_editor_page.dart` | UI 复杂且易回归 | 资源列表、预览、底部操作 |
+状态口径：`完成度` 按对应页面/文件的整体现有职责拆分估算；`第一刀完成` 只表示已拆出一个低风险职责并通过验证，不等于该序号页面/文件全部完成。
+
+| 顺序 | 文件 | 原因 | 第一刀 | 完成度 | 当前状态 |
+|---:|---|---|---|---:|---|
+| 1 | `book_detail_page.dart` | 正在暴露详情/目录错误反馈问题 | 错误态、操作区、目录区 | 35% | 第二刀完成；整页未完成 |
+| 2 | `bookshelf_page.dart` | 高频入口且曾出现网格 overflow | 书籍卡片、更多菜单、筛选 header | 0% | 未开始 |
+| 3 | `reader_page.dart` | 核心链路，风险最高 | 只拆纯 UI，不改翻页/进度核心 | 0% | 未开始 |
+| 4 | `private_book_sources_page.dart` | 书源管理高频迭代 | 列表、批量操作、分组筛选 | 0% | 未开始 |
+| 5 | `advanced_theme_service.dart` | service 职责过重 | 导入解析、资源索引、应用策略 | 15% | 第一刀完成：资源引用索引；整文件未完成 |
+| 6 | `advanced_theme_editor_page.dart` | UI 复杂且易回归 | 资源列表、预览、底部操作 | 20% | 第一刀完成：资源 picker 基础组件；整页未完成 |
 
 ### 每个页面统一拆分流程
 
@@ -272,9 +274,9 @@
 ### Book Detail 第一阶段建议
 
 - [x] 抽 `BookDetailErrorPresenter`：统一详情/目录/正文前置错误展示。
+- [x] 整理 heroTag 构建逻辑，减少重复。
 - [ ] 抽 `BookDetailPrimaryActions` 已有组件周边逻辑，保留行为不变。
 - [ ] 抽目录区域组件，目录失败时显示诊断入口。
-- [ ] 整理 heroTag 构建逻辑，减少重复。
 
 ### Bookshelf 第一阶段建议
 
@@ -287,7 +289,7 @@
 
 - [ ] 拆分前后 golden 或截图对比不出现明显 UI 回归。
 - [x] 页面主流程 smoke 通过。
-- [ ] 每拆一个页面，至少新增或迁移 2-3 个测试。
+- [x] 每拆一个页面，至少新增或迁移 2-3 个测试。
 
 ### 回滚
 
@@ -297,9 +299,28 @@
 ### 2026-06-19 Book Detail 第一刀记录
 
 - 提取 `BookDetailErrorPresenter` 到 `book_detail_content_sections.dart`，只移动错误态 UI 组合，不改变 `_load`、换源、诊断复制等业务回调。
-- 新增 widget test 覆盖重试、换源、复制诊断三个动作。
+- 提取 `BookDetailTocWarningPresenter`，只移动目录警告诊断入口按钮，不改变目录加载、目录搜索或弹窗行为。
+- 新增 widget test 覆盖错误态重试/换源/复制诊断，以及目录警告复制诊断。
 - 验证：`flutter analyze lib/features/book/presentation/widgets/book_detail_content_sections.dart lib/features/book/presentation/book_detail_page_view.dart test/features/book/presentation/book_detail_sections_test.dart`
 - 验证：`flutter test test/features/book/presentation/book_detail_sections_test.dart`
+
+### 2026-06-19 Book Detail 第二刀记录
+
+- 完成度：25% -> 35%。
+- 提取 `BookDetailHeroTagResolver`，统一封面、标题、meta、阅读器封面、loading 封面和桌面编辑封面的 heroTag 构建规则。
+- 新增 presentation test 覆盖显式 route tag、默认 source/book/detailUrl tag、loading/editor 派生 tag。
+- 验证：`flutter analyze lib/features/book/presentation/book_detail_page.dart lib/features/book/presentation/book_detail_page_actions.dart lib/features/book/presentation/book_detail_hero_tags.dart test/features/book/presentation/book_detail_hero_tags_test.dart test/features/book/presentation/book_detail_sections_test.dart`
+- 验证：`flutter test test/features/book/presentation/book_detail_hero_tags_test.dart`
+- 验证：`flutter test test/features/book/presentation/book_detail_sections_test.dart`
+
+### 2026-06-19 Advanced Theme 第一刀记录
+
+- `AdvancedThemeResourceReferenceService` 承接主题资源引用索引，`AdvancedThemeService.deleteTheme` 只保留删除流程编排和资源清理调用。
+- 提取 `AdvancedThemeResourcePickerSheet`、`AdvancedThemeImageSelectionGrid`、`AdvancedThemeGalleryPreviewThumb`、`AdvancedThemeBottomNavGalleryPreview` 等纯 UI，`advanced_theme_editor_page.dart` 保留状态读取和业务回调。
+- 新增 application test 覆盖资源引用索引，新增 widget test 覆盖资源 picker sheet 和图片选择网格。
+- 验证：`flutter analyze lib/features/mine/application/advanced_theme_service.dart lib/features/mine/application/advanced_theme_resource_reference_service.dart lib/features/mine/presentation/advanced_theme_editor_page.dart lib/features/mine/presentation/widgets/advanced_theme_resource_picker_widgets.dart test/features/mine/application/advanced_theme_resource_reference_service_test.dart test/features/mine/presentation/advanced_theme_editor_sections_test.dart`
+- 验证：`flutter test test/features/mine/application/advanced_theme_resource_reference_service_test.dart`
+- 验证：`flutter test test/features/mine/presentation/advanced_theme_editor_sections_test.dart`
 
 ---
 

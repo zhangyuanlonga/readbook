@@ -560,3 +560,31 @@ class BookDetailTocWarningCard extends StatelessWidget {
     );
   }
 }
+
+class BookDetailTocWarningPresenter extends StatelessWidget {
+  const BookDetailTocWarningPresenter({
+    super.key,
+    required this.message,
+    this.onCopyDiagnostics,
+  });
+
+  final String message;
+  final VoidCallback? onCopyDiagnostics;
+
+  @override
+  Widget build(BuildContext context) {
+    return BookDetailTocWarningCard(
+      message: message,
+      actions:
+          onCopyDiagnostics == null
+              ? const <Widget>[]
+              : <Widget>[
+                OutlinedButton.icon(
+                  onPressed: onCopyDiagnostics,
+                  icon: const Icon(Icons.copy_rounded, size: 16),
+                  label: const Text('复制诊断信息'),
+                ),
+              ],
+    );
+  }
+}

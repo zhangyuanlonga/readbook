@@ -235,6 +235,111 @@ class AdvancedThemeResourceReferenceService {
     return removable;
   }
 
+  Set<String> coverGalleryIdsForTheme(AppAdvancedTheme theme) {
+    return <String>{
+      ...[
+            theme.coverGalleryId,
+            theme.coverGalleryIdFor(AppAdvancedThemeMode.light),
+            theme.coverGalleryIdFor(AppAdvancedThemeMode.dark),
+          ]
+          .whereType<String>()
+          .map((item) => item.trim())
+          .where((item) => item.isNotEmpty),
+    };
+  }
+
+  bool isAppearanceBackgroundReferenced(
+    List<AppAdvancedTheme> themes,
+    String targetPath,
+  ) {
+    final normalizedTarget = targetPath.trim();
+    if (normalizedTarget.isEmpty) {
+      return false;
+    }
+    for (final theme in themes) {
+      final paths = <String?>[
+        theme.lightConfig.wallpaperPath,
+        theme.darkConfig.wallpaperPath,
+      ];
+      for (final path in paths) {
+        if ((path?.trim() ?? '') == normalizedTarget) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  bool isReaderBackgroundReferenced(
+    List<AppAdvancedTheme> themes,
+    String targetPath,
+  ) {
+    final normalizedTarget = targetPath.trim();
+    if (normalizedTarget.isEmpty) {
+      return false;
+    }
+    for (final theme in themes) {
+      final paths = <String?>[
+        theme.lightConfig.readerWallpaperPath,
+        theme.darkConfig.readerWallpaperPath,
+      ];
+      for (final path in paths) {
+        if ((path?.trim() ?? '') == normalizedTarget) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  bool isCoverGalleryReferenced(
+    List<AppAdvancedTheme> themes,
+    String galleryId,
+  ) {
+    final normalizedId = galleryId.trim();
+    if (normalizedId.isEmpty) {
+      return false;
+    }
+    for (final theme in themes) {
+      if (coverGalleryIdsForTheme(theme).contains(normalizedId)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool isLaunchGalleryReferenced(
+    List<AppAdvancedTheme> themes,
+    String galleryId,
+  ) {
+    final normalizedId = galleryId.trim();
+    if (normalizedId.isEmpty) {
+      return false;
+    }
+    for (final theme in themes) {
+      if ((theme.launchImageGalleryId?.trim() ?? '') == normalizedId) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool isBottomNavGalleryReferenced(
+    List<AppAdvancedTheme> themes,
+    String galleryId,
+  ) {
+    final normalizedId = galleryId.trim();
+    if (normalizedId.isEmpty) {
+      return false;
+    }
+    for (final theme in themes) {
+      if ((theme.bottomNavGalleryId?.trim() ?? '') == normalizedId) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   List<String> _wallpaperItems({
     required String? lightPath,
     required String? darkPath,

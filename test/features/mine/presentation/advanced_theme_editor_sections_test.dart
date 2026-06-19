@@ -6,6 +6,7 @@ import 'package:shuxiang_reading_next/features/mine/presentation/widgets/advance
 import 'package:shuxiang_reading_next/features/mine/presentation/widgets/advanced_theme_font_section.dart';
 import 'package:shuxiang_reading_next/features/mine/presentation/widgets/advanced_theme_launch_gallery_section.dart';
 import 'package:shuxiang_reading_next/features/mine/presentation/widgets/advanced_theme_preview_panel.dart';
+import 'package:shuxiang_reading_next/features/mine/presentation/widgets/advanced_theme_resource_picker_widgets.dart';
 import 'package:shuxiang_reading_next/features/mine/presentation/widgets/advanced_theme_wallpaper_section.dart';
 
 void main() {
@@ -185,6 +186,65 @@ void main() {
 
     expect(find.text('编辑内容'), findsOneWidget);
     expect(constrainedBox.constraints.maxWidth, 240);
+  });
+
+  testWidgets('resource picker sheet keeps helper content and actions', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AdvancedThemeResourcePickerSheet(
+            title: '选择资源',
+            helperText: '辅助说明',
+            heightFactor: 0.5,
+            content: const Text('资源列表'),
+            actions: const <Widget>[
+              TextButton(onPressed: null, child: Text('取消')),
+              Spacer(),
+              FilledButton(onPressed: null, child: Text('应用')),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('选择资源'), findsOneWidget);
+    expect(find.text('辅助说明'), findsOneWidget);
+    expect(find.text('资源列表'), findsOneWidget);
+    expect(find.text('取消'), findsOneWidget);
+    expect(find.text('应用'), findsOneWidget);
+  });
+
+  testWidgets('image selection grid reports selected path', (tester) async {
+    String? selectedPath;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 360,
+            height: 420,
+            child: AdvancedThemeImageSelectionGrid(
+              imagePaths: const <String>['/tmp/a.png', '/tmp/b.png'],
+              selectedPath: '/tmp/a.png',
+              titleBuilder: (path) => path,
+              onSelected: (path) => selectedPath = path,
+              imageBuilder:
+                  (_, path, __) => ColoredBox(
+                    key: ValueKey<String>(path),
+                    color: Colors.blue,
+                  ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey<String>('/tmp/b.png')));
+
+    expect(selectedPath, '/tmp/b.png');
+    expect(find.byIcon(Icons.check_rounded), findsOneWidget);
   });
 }
 

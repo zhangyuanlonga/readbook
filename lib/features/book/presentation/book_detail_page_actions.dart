@@ -146,14 +146,6 @@ extension on _BookDetailPageState {
     }
   }
 
-  String _buildBookCoverHeroTag({
-    required String bookId,
-    required String sourceId,
-    required String detailUrl,
-  }) {
-    return 'book_cover_${sourceId.trim()}_${bookId.trim()}_${detailUrl.hashCode}';
-  }
-
   Widget _buildCoverPreview(
     String? coverUrl, {
     String? customCoverPath,
@@ -262,7 +254,7 @@ extension on _BookDetailPageState {
       sourceId: sourceId,
       detailUrl: detailUrl,
       fallbackTitle: result.detail.title,
-      heroTag: _buildReaderCoverHeroTag(
+      heroTag: _BookDetailPageState._heroTags.readerCover(
         bookId: _activeBookId,
         sourceId: sourceId,
         detailUrl: detailUrl,
