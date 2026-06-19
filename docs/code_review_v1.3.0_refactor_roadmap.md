@@ -485,18 +485,18 @@
 - [x] 序列 2：`private_book_source_group_manager_sheet.dart` 分组管理操作迁移，完成度 100%。
 - [x] 序列 3：`private_book_source_form.dart` 新增/编辑保存迁移，完成度 100%。
 - [x] 序列 4-A：`bookshelf_page.dart` 单本/批量删除 action controller 迁移，完成度 50% 中的已完成部分。
-- [ ] 序列 4-B：`bookshelf_page.dart` 打开阅读/详情 action controller 迁移，序列 4 剩余 50%。
+- [x] 序列 4-B：`bookshelf_page.dart` 打开阅读/详情 action controller 迁移，序列 4 剩余 50%。
 - [ ] 序列 5：`search_page.dart` 搜索执行边界迁移，完成度 0%。
 - [ ] 序列 6：`reader_page.dart` 非核心辅助动作迁移，完成度 0%。
 
-当前迁移阶段整体完成度：58%（序列 1-3 已完成，序列 4 完成一半，序列 5-6 未开始）。
+当前迁移阶段整体完成度：67%（序列 1-4 已完成，序列 5-6 未开始）。
 
 | 顺序 | 范围 | 迁移目标 | 完成度 | 当前状态 |
 |---:|---|---|---:|---|
 | 1 | `private_book_sources_page.dart` 私有书源单项操作 | 将详情加载、删除、提交共享、检测和 provider 刷新迁入 `PrivateBookSourceActionController`，页面仅保留弹窗/Snackbar 编排 | 100% | 已完成：service 调用和刷新边界从页面移出，补 application 单测 |
 | 2 | `private_book_source_group_manager_sheet.dart` 分组管理操作 | 将创建/重命名/删除分组和分组刷新迁出 sheet | 100% | 已完成：service 调用、选中分组回写和刷新边界从 sheet 移出 |
 | 3 | `private_book_source_form.dart` 新增/编辑/导入保存 | 将 create/update 与导入 payload 编排迁入 form controller/use-case | 100% | 已完成：保存 create/update 和保存后刷新边界从 form/page 移出；平台导入读取仍留在 UI |
-| 4 | `bookshelf_page.dart` 书籍操作 | 将打开/删除/批量操作等页面动作迁入 action controller，先避开阅读跳转核心链路 | 50% | 进行中：单本/批量删除执行统计和反馈文案已迁入 controller；打开阅读/详情仍在页面 |
+| 4 | `bookshelf_page.dart` 书籍操作 | 将打开/删除/批量操作等页面动作迁入 action controller，先避开阅读跳转核心链路 | 100% | 已完成：删除/批量删除、详情路由、fallback 路由和导入后打开计划边界已迁入 controller |
 | 5 | `search_page.dart` 搜索执行边界 | 将搜索执行状态和进度 report 写入 controller，保留 UI 渲染状态独立 | 0% | 待开始 |
 | 6 | `reader_page.dart` 非核心辅助动作 | 仅迁移非翻页/非章节进度提交的辅助动作；核心阅读链路暂不作为第一批 | 0% | 待开始 |
 
@@ -535,6 +535,15 @@
 - 完成度：序列 4 = 50%；迁移阶段整体 = 58%（3.5/6）。
 - 验证：`flutter analyze lib/features/bookshelf/presentation/bookshelf_book_action_controller.dart lib/features/bookshelf/presentation/bookshelf_page.dart lib/features/bookshelf/presentation/bookshelf_page_selection.dart test/features/bookshelf/presentation/bookshelf_book_action_controller_test.dart`
 - 验证：`flutter test test/features/bookshelf/presentation/bookshelf_book_action_controller_test.dart test/features/bookshelf/presentation/bookshelf_page_smoke_test.dart`
+
+### 2026-06-19 迁移序列 4-B 记录
+
+- 扩展 `BookshelfReaderEntryController`：详情路由、reader fallback route 和导入本地图书后的 open plan 入口统一从页面迁出。
+- `bookshelf_page.dart` / `bookshelf_page_flow.dart` 不再直接拼详情/fallback 路由或直接调用 `BookshelfReaderOpenService.resolve` 处理导入后打开；页面仍负责 push、提示、后台刷新取消和 mounted 判断。
+- 本轮不改变 Reader 打开策略，只迁移 action/controller 边界。
+- 完成度：序列 4 = 100%；迁移阶段整体 = 67%（4/6）。
+- 验证：`flutter analyze lib/features/bookshelf/presentation/bookshelf_reader_entry_controller.dart lib/features/bookshelf/presentation/bookshelf_page.dart lib/features/bookshelf/presentation/bookshelf_page_flow.dart test/features/bookshelf/presentation/bookshelf_reader_entry_controller_test.dart`
+- 验证：`flutter test test/features/bookshelf/presentation/bookshelf_reader_entry_controller_test.dart test/features/bookshelf/presentation/bookshelf_page_smoke_test.dart`
 
 ---
 

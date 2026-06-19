@@ -1382,11 +1382,12 @@ extension on _BookshelfPageState {
           importService: _localBookImportService,
           onReload: () => _loadBookshelf(force: true),
           onOpenReader: (book, localBook) async {
-            final plan = await _readerOpenService.resolve(
-              book: book,
-              openRequestedAtMs: DateTime.now().millisecondsSinceEpoch,
-              localBookHint: localBook,
-            );
+            final plan = await _readerEntryController
+                .resolveImportedLocalOpenPlan(
+                  book: book,
+                  openRequestedAtMs: DateTime.now().millisecondsSinceEpoch,
+                  localBook: localBook,
+                );
             if (!mounted) {
               return;
             }

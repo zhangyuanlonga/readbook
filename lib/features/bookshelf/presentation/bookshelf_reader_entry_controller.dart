@@ -43,11 +43,35 @@ class BookshelfReaderEntryController {
     );
   }
 
+  Future<BookshelfReaderOpenPlan> resolveImportedLocalOpenPlan({
+    required BookshelfBook book,
+    required LocalBook localBook,
+    required int openRequestedAtMs,
+  }) {
+    return _readerOpenService.resolve(
+      book: book,
+      openRequestedAtMs: openRequestedAtMs,
+      localBookHint: localBook,
+    );
+  }
+
   BookshelfReaderOpenPlan fallbackPlan(BookshelfBook book) {
     return BookshelfReaderOpenPlan(
       action: BookshelfReaderOpenAction.openReader,
       kind: BookshelfReaderOpenKind.readerFallback,
       readerRoute: _pageRouteService.resolveReaderFallbackRoute(book),
+    );
+  }
+
+  String resolveDetailRoute(
+    BookshelfBook book, {
+    String? heroTag,
+    bool initialEditMode = false,
+  }) {
+    return _pageRouteService.resolveBookDetailRoute(
+      book,
+      heroTag: heroTag,
+      initialEditMode: initialEditMode,
     );
   }
 

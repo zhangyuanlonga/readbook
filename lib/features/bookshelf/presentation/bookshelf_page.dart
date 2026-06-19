@@ -6144,7 +6144,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       bookId: book.bookId,
       byScene: RemoteContentConflictScene.reader,
     );
-    final route = _pageRouteService.resolveReaderFallbackRoute(book);
+    final route = _readerEntryController.fallbackPlan(book).readerRoute;
+    if (route == null) {
+      return;
+    }
     context.push(route);
   }
 
@@ -6180,7 +6183,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       return;
     }
 
-    final route = _pageRouteService.resolveBookDetailRoute(
+    final route = _readerEntryController.resolveDetailRoute(
       book,
       heroTag: _buildBookCoverHeroTag(book),
       initialEditMode: initialEditMode,
