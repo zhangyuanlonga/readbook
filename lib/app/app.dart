@@ -35,16 +35,15 @@ import 'startup_artwork_store.dart';
 import 'theme/app_advanced_theme_tokens.dart';
 import 'theme/app_theme.dart';
 import 'theme/app_interface_typography_provider.dart';
-import 'theme/app_theme_palette.dart';
 import 'theme/app_theme_provider.dart';
-import 'theme/app_theme_seed_provider.dart';
+import 'theme/app_theme_source_provider.dart';
 
 class App extends ConsumerWidget {
   const App({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final seedColor = ref.watch(appSeedColorProvider);
+    final themeSource = ref.watch(appThemeSourceProvider);
     final themeMode = ref.watch(appThemeModeProvider);
     final interfaceFontSettings = ref.watch(appInterfaceFontSettingsProvider);
     final interfaceTextScale = ref.watch(appInterfaceTextScaleProvider);
@@ -53,8 +52,8 @@ class App extends ConsumerWidget {
       activeThemeAppearanceSnapshotProvider,
     );
 
-    final lightScheme = buildAppLightColorScheme(seedColor);
-    final darkScheme = buildAppDarkColorScheme(seedColor);
+    final lightScheme = themeSource.lightScheme;
+    final darkScheme = themeSource.darkScheme;
     final lightAdvancedPalette = resolveAdvancedThemePaletteFromModeConfig(
       lightScheme,
       activeThemeAppearanceSnapshot?.lightConfig,

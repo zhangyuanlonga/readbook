@@ -10,6 +10,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../../app/navigation/bottom_nav_icon_gallery_service.dart';
 import '../../../app/images/file_image_cache.dart';
+import '../../../app/theme/app_official_theme_presets.dart';
 import '../../../core/preferences/preference_repair_service.dart';
 import '../../../core/storage/managed_asset_store.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
@@ -373,6 +374,16 @@ class AdvancedThemeService implements PreferenceRepairService {
       return;
     }
     await prefs.setString(_activeThemeIdKey, normalized);
+    if (isOfficialThemeId(normalized)) {
+      await saveActiveThemeAppearanceSnapshot(
+        appOfficialThemePresetByThemeId(normalized).toAppearanceSnapshot(),
+      );
+      await LaunchImageGalleryService(
+        preferences: prefs,
+        assetStore: _assetStore,
+      ).syncStartupSnapshotFromCurrentConfig();
+      return;
+    }
     final theme = await loadThemeById(normalized);
     await saveActiveThemeAppearanceSnapshot(
       theme == null ? null : ActiveThemeAppearanceSnapshot.fromTheme(theme),

@@ -16,6 +16,7 @@ import '../../../app/layout/app_spacing.dart';
 import '../../../app/tasks/app_task_manager.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/theme/app_border_tokens.dart';
+import '../../../app/theme/app_official_theme_presets.dart';
 import '../../../app/composition/app_providers.dart' as app_providers;
 import '../../../app/widgets/app_task_status.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
@@ -238,9 +239,11 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       unawaited(_loadAccess(refreshRemote: true));
       return;
     }
+    final currentActiveThemeId = ref.read(activeAdvancedThemeIdProvider);
     final shouldClearActiveTheme =
         result.shouldClearActiveTheme &&
-        (ref.read(activeAdvancedThemeIdProvider)?.trim().isNotEmpty ?? false);
+        (currentActiveThemeId?.trim().isNotEmpty ?? false) &&
+        !isOfficialThemeId(currentActiveThemeId);
     if (shouldClearActiveTheme) {
       await ref.read(activeAdvancedThemeIdProvider.notifier).disable();
       if (!mounted) {
@@ -394,6 +397,9 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     if (_isSaving || _visibleThemes.isEmpty) {
       return;
     }
+    if (!_guardCustomThemeAction('批量管理自定义主题需要会员。')) {
+      return;
+    }
     setState(() {
       _isSelectionMode = true;
       _selectedThemeIds = <String>{};
@@ -453,6 +459,11 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   }
 
   Future<void> _openEditor([String? themeId]) async {
+    if (!_guardCustomThemeAction(
+      themeId == null ? '创建自定义主题需要会员。' : '编辑自定义主题需要会员。',
+    )) {
+      return;
+    }
     final result = await context.push<String>(_editorRoute(themeId));
     await _load();
     if (!mounted || result == null || result.trim().isEmpty) {
@@ -465,6 +476,9 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     BuildContext sourceContext, [
     String? themeId,
   ]) async {
+    if (!_guardCustomThemeAction('编辑自定义主题需要会员。')) {
+      return;
+    }
     final overlay = CircularThemeRevealOverlay.of(sourceContext);
     final center = CircularThemeRevealOverlay.getCenterFromContext(
       sourceContext,
@@ -493,6 +507,9 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   }
 
   Future<void> _openEditorDialog(String themeId) async {
+    if (!_guardCustomThemeAction('编辑自定义主题需要会员。')) {
+      return;
+    }
     await showAdaptiveActionSurface<void>(
       context: context,
       maxWidth: 420,
@@ -627,6 +644,9 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     if (_isSaving) {
       return;
     }
+    if (!_guardCustomThemeAction('复制后编辑自定义主题需要会员。')) {
+      return;
+    }
     setState(() {
       _isSaving = true;
     });
@@ -656,6 +676,9 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   }
 
   Future<void> _exportThemeBundle(String themeId) async {
+    if (!_guardCustomThemeAction('导出自定义主题需要会员。')) {
+      return;
+    }
     final theme = await _loadThemeDetail(themeId);
     if (theme == null || !mounted) {
       if (mounted) {
@@ -1026,6 +1049,9 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     if (_isSaving || !mounted) {
       return;
     }
+    if (!_guardCustomThemeAction('导入自定义主题需要会员。')) {
+      return;
+    }
     final summary =
         await showAdaptiveRawSurface<_AdvancedThemeBatchImportSummary>(
           context: context,
@@ -1086,6 +1112,9 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     if (_isSaving) {
       return;
     }
+    if (!_guardCustomThemeAction('批量导出自定义主题需要会员。')) {
+      return;
+    }
     final targetThemes = _selectedVisibleThemes;
     if (!_batchActionController.hasSelection(targetThemes)) {
       _showMessage('请先选择要导出的主题。');
@@ -1143,6 +1172,9 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
 
   Future<void> _deleteSelectedThemes() async {
     if (_isSaving) {
+      return;
+    }
+    if (!_guardCustomThemeAction('批量删除自定义主题需要会员。')) {
       return;
     }
     final selectedThemes = _selectedVisibleThemes;
@@ -1249,6 +1281,9 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
 
   Future<void> _updateSelectedThemesCategory() async {
     if (_isSaving) {
+      return;
+    }
+    if (!_guardCustomThemeAction('批量分类自定义主题需要会员。')) {
       return;
     }
     final selectedThemes = _selectedVisibleThemes;
@@ -1489,6 +1524,9 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   }
 
   Future<void> _handleDeleteThemeById(String themeId) async {
+    if (!_guardCustomThemeAction('删除自定义主题需要会员。')) {
+      return;
+    }
     final theme = await _loadThemeDetail(themeId);
     if (theme == null) {
       if (mounted) {
@@ -1501,6 +1539,9 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
 
   Future<void> _applyTheme(AppAdvancedTheme theme) async {
     if (_isSaving) {
+      return;
+    }
+    if (!_guardCustomThemeAction('启用自定义主题需要会员。')) {
       return;
     }
     setState(() {
@@ -1521,6 +1562,88 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
         });
       }
     }
+  }
+
+  bool _guardCustomThemeAction(String message) {
+    if (_canUseAdvancedThemes) {
+      return true;
+    }
+    _showMembershipGate(message);
+    return false;
+  }
+
+  void _showMembershipGate(String message) {
+    _showMessage(message);
+    if (mounted) {
+      unawaited(context.push('/membership'));
+    }
+  }
+
+  Future<void> _applyOfficialTheme(AppOfficialThemePreset preset) async {
+    if (_isSaving) {
+      return;
+    }
+    setState(() {
+      _isSaving = true;
+    });
+    try {
+      await ref
+          .read(activeAdvancedThemeIdProvider.notifier)
+          .setActiveThemeId(preset.id.themeId);
+      ref.read(advancedThemeRevisionProvider.notifier).markChanged();
+      if (!mounted) {
+        return;
+      }
+      _showMessage('已应用官方主题「${preset.id.label}」');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _copyOfficialThemeForEditing(
+    AppOfficialThemePreset preset,
+  ) async {
+    if (_isSaving) {
+      return;
+    }
+    if (!_guardCustomThemeAction('复制官方主题后编辑需要会员。')) {
+      return;
+    }
+    setState(() {
+      _isSaving = true;
+    });
+    AppAdvancedTheme? createdTheme;
+    try {
+      final service = ref.read(advancedThemeServiceProvider);
+      final now = DateTime.now().toUtc();
+      createdTheme = await service.saveTheme(
+        AppAdvancedTheme(
+          id: service.createThemeId(),
+          name: '${preset.id.label} 自定义',
+          createdAt: now,
+          updatedAt: now,
+          lightConfig: preset.lightConfig,
+          darkConfig: preset.darkConfig,
+          category: '官方主题',
+        ),
+      );
+      ref.read(advancedThemeRevisionProvider.notifier).markChanged();
+      await _load();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+    if (!mounted) {
+      return;
+    }
+    await _openEditor(createdTheme.id);
   }
 
   Future<void> _applyThemeById(String themeId) async {
@@ -1776,6 +1899,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
         appBar: _buildRouteTopBar(context),
         floatingActionButton:
             !_isSelectionMode &&
+                    _canUseAdvancedThemes &&
                     _floatingEditEnabled &&
                     !_isLoading &&
                     !_isSaving &&
@@ -1808,8 +1932,6 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                 final content =
                     _isAccessLoading || _isLoading
                         ? const Center(child: CircularProgressIndicator())
-                        : !_canUseAdvancedThemes
-                        ? _buildVipLockedState(context, topInset: topInset)
                         : _buildThemeListView(
                           context,
                           activeThemeAsync: activeThemeAsync,
@@ -1840,16 +1962,6 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildVipLockedState(
-    BuildContext context, {
-    required double topInset,
-  }) {
-    return AdvancedThemeVipLockedState(
-      topInset: topInset,
-      onOpenMembership: () => context.push('/membership'),
     );
   }
 
@@ -1888,6 +2000,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                 _buildListStatusRow(
                   context,
                   activeThemeAsync: activeThemeAsync,
+                  activeThemeId: activeThemeId,
                   visibleThemeCount: visibleThemes.length,
                 ),
                 const SizedBox(height: 12),
@@ -1895,7 +2008,39 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
             ),
           ),
         ),
-        if (visibleThemes.isEmpty)
+        SliverPadding(
+          padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 14),
+          sliver: SliverToBoxAdapter(
+            child: _buildOfficialThemeSection(
+              context,
+              activeThemeId: activeThemeId,
+            ),
+          ),
+        ),
+        SliverPadding(
+          padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 10),
+          sliver: SliverToBoxAdapter(
+            child: _buildThemeSectionHeader(
+              context,
+              title: '我的高级主题',
+              description:
+                  _canUseAdvancedThemes
+                      ? '自定义编辑、导入导出和组件细调。'
+                      : '自定义编辑、导入导出和组件细调需要会员。',
+            ),
+          ),
+        ),
+        if (!_canUseAdvancedThemes)
+          SliverPadding(
+            padding: EdgeInsets.fromLTRB(
+              horizontal,
+              0,
+              horizontal,
+              16 + bottomSafe,
+            ),
+            sliver: SliverToBoxAdapter(child: _buildCustomThemeLockedState()),
+          )
+        else if (visibleThemes.isEmpty)
           SliverPadding(
             padding: EdgeInsets.fromLTRB(
               horizontal,
@@ -1933,19 +2078,293 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     );
   }
 
+  Widget _buildOfficialThemeSection(
+    BuildContext context, {
+    required String? activeThemeId,
+  }) {
+    final presets = appOfficialThemePresets;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildThemeSectionHeader(
+          context,
+          title: '官方主题',
+          description: '免费可用，启用后覆盖基础配色。',
+        ),
+        const SizedBox(height: 10),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final useGrid = constraints.maxWidth >= 680;
+            if (!useGrid) {
+              return Column(
+                children: [
+                  for (var index = 0; index < presets.length; index += 1)
+                    Padding(
+                      padding: EdgeInsets.only(
+                        bottom: index == presets.length - 1 ? 0 : 10,
+                      ),
+                      child: _buildOfficialThemeCard(
+                        context,
+                        presets[index],
+                        isActive: activeThemeId == presets[index].id.themeId,
+                      ),
+                    ),
+                ],
+              );
+            }
+            final cardWidth = (constraints.maxWidth - 10) / 2;
+            return Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                for (final preset in presets)
+                  SizedBox(
+                    width: cardWidth,
+                    child: _buildOfficialThemeCard(
+                      context,
+                      preset,
+                      isActive: activeThemeId == preset.id.themeId,
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildThemeSectionHeader(
+    BuildContext context, {
+    required String title,
+    required String description,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                description,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  height: 1.35,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOfficialThemeCard(
+    BuildContext context,
+    AppOfficialThemePreset preset, {
+    required bool isActive,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return InkWell(
+      key: ValueKey('official-theme-${preset.id.id}'),
+      borderRadius: BorderRadius.circular(18),
+      onTap: _isSaving || isActive ? null : () => _applyOfficialTheme(preset),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+        decoration: BoxDecoration(
+          color:
+              isActive
+                  ? colorScheme.primary.withValues(alpha: 0.08)
+                  : colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color:
+                isActive
+                    ? colorScheme.primary.withValues(alpha: 0.55)
+                    : colorScheme.outlineVariant.withValues(alpha: 0.45),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              preset.id.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.titleSmall
+                                  ?.copyWith(fontWeight: FontWeight.w800),
+                            ),
+                          ),
+                          if (isActive) const _OfficialActiveBadge(),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        preset.description,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Icon(
+                  Icons.verified_outlined,
+                  size: 20,
+                  color: colorScheme.primary.withValues(alpha: 0.78),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _buildOfficialThemeSwatches(preset.previewSwatches),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed:
+                        _isSaving
+                            ? null
+                            : () => _copyOfficialThemeForEditing(preset),
+                    icon: const Icon(Icons.copy_rounded, size: 18),
+                    label: const Text('复制后编辑'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton(
+                    onPressed:
+                        _isSaving || isActive
+                            ? null
+                            : () => _applyOfficialTheme(preset),
+                    child: Text(isActive ? '当前生效' : '应用官方主题'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOfficialThemeSwatches(List<Color> swatches) {
+    return SizedBox(
+      height: 42,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: Row(
+          children: [
+            for (final swatch in swatches)
+              Expanded(child: ColoredBox(color: swatch)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCustomThemeLockedState() {
+    final colorScheme = Theme.of(context).colorScheme;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 480;
+        final message = Text(
+          '官方主题可直接使用；创建、复制后编辑、导入导出自定义主题需要会员。',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+            height: 1.4,
+          ),
+        );
+        final button = FilledButton(
+          onPressed: () => context.push('/membership'),
+          child: const Text('开通会员'),
+        );
+        return Container(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerLow.withValues(alpha: 0.94),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+            ),
+          ),
+          child:
+              compact
+                  ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.workspace_premium_outlined,
+                            color: colorScheme.primary,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(child: message),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      button,
+                    ],
+                  )
+                  : Row(
+                    children: [
+                      Icon(
+                        Icons.workspace_premium_outlined,
+                        color: colorScheme.primary,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(child: message),
+                      const SizedBox(width: 12),
+                      button,
+                    ],
+                  ),
+        );
+      },
+    );
+  }
+
   Widget _buildListStatusRow(
     BuildContext context, {
     required AsyncValue<AppAdvancedTheme?> activeThemeAsync,
+    required String? activeThemeId,
     required int visibleThemeCount,
   }) {
-    final activeThemeName = switch (activeThemeAsync) {
-      AsyncData(:final value) when value != null => value.name,
-      _ => null,
-    };
+    final officialPresetId = appOfficialThemePresetIdFromThemeId(activeThemeId);
+    final activeThemeName =
+        officialPresetId == null
+            ? switch (activeThemeAsync) {
+              AsyncData(:final value) when value != null => value.name,
+              _ => null,
+            }
+            : appOfficialThemePresetById(officialPresetId).id.label;
     final countLabel =
         _searchQuery.trim().isEmpty &&
                 (_selectedCategory?.trim().isEmpty ?? true)
-            ? '主题数量 $visibleThemeCount'
+            ? '自定义主题 $visibleThemeCount'
             : '筛选结果 $visibleThemeCount';
     final activeLabel =
         activeThemeName == null ? '当前启用: 未启用' : '当前启用: $activeThemeName';
@@ -2404,6 +2823,32 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       onSurfaceVariant: const Color(0xFF667085),
       primary: const Color(0xFF1677FF),
       outlineVariant: const Color(0xFFE5EAF2),
+    );
+  }
+}
+
+class _OfficialActiveBadge extends StatelessWidget {
+  const _OfficialActiveBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(left: 8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: colorScheme.primary,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          '当前生效',
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: colorScheme.onPrimary,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
     );
   }
 }

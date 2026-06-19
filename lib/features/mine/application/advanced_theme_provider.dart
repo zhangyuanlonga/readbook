@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'active_theme_appearance_snapshot.dart';
+import '../../../app/theme/app_official_theme_presets.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
 import 'advanced_theme_service.dart';
 
@@ -34,6 +35,9 @@ final activeAdvancedThemeProvider = FutureProvider<AppAdvancedTheme?>((
   if (activeId == null || activeId.trim().isEmpty) {
     return null;
   }
+  if (isOfficialThemeId(activeId)) {
+    return null;
+  }
   final service = ref.watch(advancedThemeServiceProvider);
   return service.loadThemeById(activeId);
 });
@@ -46,7 +50,9 @@ class ActiveAdvancedThemeIdNotifier extends Notifier<String?> {
   bool _hasExplicitSet = false;
 
   static void prime(SharedPreferences prefs) {
-    _primedActiveThemeId = AdvancedThemeService.readActiveThemeId(prefs);
+    _primedActiveThemeId =
+        AdvancedThemeService.readActiveThemeId(prefs) ??
+        appDefaultOfficialThemeId;
     _hasPrimedValue = true;
   }
 
@@ -59,12 +65,13 @@ class ActiveAdvancedThemeIdNotifier extends Notifier<String?> {
       _loadTriggered = true;
       _load();
     }
-    return null;
+    return appDefaultOfficialThemeId;
   }
 
   Future<void> _load() async {
     final service = ref.read(advancedThemeServiceProvider);
-    final activeId = await service.loadActiveThemeId();
+    final activeId =
+        await service.loadActiveThemeId() ?? appDefaultOfficialThemeId;
     if (_hasExplicitSet) {
       return;
     }
@@ -101,9 +108,17 @@ class ActiveThemeAppearanceSnapshotNotifier
   bool _loadTriggered = false;
 
   static void prime(SharedPreferences prefs) {
-    _primedSnapshot = AdvancedThemeService.readActiveThemeAppearanceSnapshot(
-      prefs,
-    );
+    final activeThemeId =
+        AdvancedThemeService.readActiveThemeId(prefs) ??
+        appDefaultOfficialThemeId;
+    if (isOfficialThemeId(activeThemeId)) {
+      _primedSnapshot =
+          appOfficialThemePresetByThemeId(activeThemeId).toAppearanceSnapshot();
+    } else {
+      _primedSnapshot = AdvancedThemeService.readActiveThemeAppearanceSnapshot(
+        prefs,
+      );
+    }
     _hasPrimedValue = true;
   }
 
@@ -126,10 +141,16 @@ class ActiveThemeAppearanceSnapshotNotifier
   }
 
   Future<void> _load() async {
+    final activeThemeId =
+        ref.read(activeAdvancedThemeIdProvider) ?? appDefaultOfficialThemeId;
     final snapshot =
-        await ref
-            .read(advancedThemeServiceProvider)
-            .loadActiveThemeAppearanceSnapshot();
+        isOfficialThemeId(activeThemeId)
+            ? appOfficialThemePresetByThemeId(
+              activeThemeId,
+            ).toAppearanceSnapshot()
+            : await ref
+                .read(advancedThemeServiceProvider)
+                .loadActiveThemeAppearanceSnapshot();
     if (snapshot == state) {
       return;
     }

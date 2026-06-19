@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../preferences/app_preferences_service.dart';
+import 'app_theme_palette.dart';
+import 'app_theme_source_provider.dart';
 
 final appSeedColorProvider = NotifierProvider<AppSeedColorNotifier, Color>(
   AppSeedColorNotifier.new,
@@ -61,5 +63,8 @@ class AppSeedColorNotifier extends Notifier<Color> {
     await ref
         .read(appThemePreferencesServiceProvider)
         .saveSeedColorValue(color.toARGB32());
+    await ref
+        .read(appBaseColorSchemeProvider.notifier)
+        .setBaseColorScheme(appBaseColorSchemeIdFromSeed(color));
   }
 }

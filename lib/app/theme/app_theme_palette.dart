@@ -7,6 +7,29 @@ class AppThemeSeedOption {
   final Color color;
 }
 
+enum AppBaseColorSchemeId {
+  luminaNeutral('lumina-neutral', '净白', Color(0xFF1C1B1B)),
+  monoBlue('mono-blue', '黑白蓝', Color(0xFF2F5F8F)),
+  inkGreen('ink-green', '黑白绿', Color(0xFF4D705E)),
+  seluneWarm('selune-warm', '暖灰', Color(0xFFAA8552));
+
+  const AppBaseColorSchemeId(this.id, this.label, this.swatch);
+
+  final String id;
+  final String label;
+  final Color swatch;
+}
+
+class AppBaseColorSchemeOption {
+  const AppBaseColorSchemeOption(this.id);
+
+  final AppBaseColorSchemeId id;
+
+  String get label => id.label;
+
+  Color get swatch => id.swatch;
+}
+
 const AppThemeSeedOption appThemeFlameOrangeOption = AppThemeSeedOption(
   '焰阳橙',
   Color(0xFFE7573B),
@@ -56,9 +79,64 @@ const List<AppThemeSeedOption> appThemeSeedOptions = [
   appThemeSnowWhiteOption,
 ];
 
+const List<AppBaseColorSchemeOption> appBaseColorSchemeOptions = [
+  AppBaseColorSchemeOption(AppBaseColorSchemeId.luminaNeutral),
+  AppBaseColorSchemeOption(AppBaseColorSchemeId.monoBlue),
+  AppBaseColorSchemeOption(AppBaseColorSchemeId.inkGreen),
+  AppBaseColorSchemeOption(AppBaseColorSchemeId.seluneWarm),
+];
+
 const Color _pureWhiteSeed = Color(0xFFFFFFFF);
 const Color _seluneSeed = Color(0xFFC3A46E);
 const Color _neutralSeed = Color(0xFF9E9E9E);
+const Color _luminaLightSurface = Color(0xFFFFFFFF);
+const Color _luminaLightSurfaceDim = Color(0xFFEEF1F4);
+const Color _luminaLightSurfaceBright = Color(0xFFFFFFFF);
+const Color _luminaLightSurfaceContainerLowest = Color(0xFFFFFFFF);
+const Color _luminaLightSurfaceContainerLow = Color(0xFFF8FAFC);
+const Color _luminaLightSurfaceContainer = Color(0xFFF2F5F8);
+const Color _luminaLightSurfaceContainerHigh = Color(0xFFEBEFF4);
+const Color _luminaLightSurfaceContainerHighest = Color(0xFFE2E7EE);
+const Color _luminaLightOnSurface = Color(0xFF1C1B1B);
+const Color _luminaLightOnSurfaceVariant = Color(0xFF606773);
+const Color _luminaLightPrimary = Color(0xFF1C1B1B);
+const Color _luminaLightOnPrimary = Color(0xFFFFFFFF);
+const Color _luminaLightPrimaryContainer = Color(0xFFF1F3F5);
+const Color _luminaLightOnPrimaryContainer = Color(0xFF1C1B1B);
+const Color _luminaLightSecondary = Color(0xFF68717E);
+const Color _luminaLightOnSecondary = Color(0xFFFFFFFF);
+const Color _luminaLightSecondaryContainer = Color(0xFFE6EBF2);
+const Color _luminaLightOnSecondaryContainer = Color(0xFF2D3540);
+const Color _luminaLightTertiary = Color(0xFF5F6F7A);
+const Color _luminaLightOnTertiary = Color(0xFFFFFFFF);
+const Color _luminaLightTertiaryContainer = Color(0xFFE6EDF0);
+const Color _luminaLightOnTertiaryContainer = Color(0xFF243139);
+const Color _luminaLightOutline = Color(0xFFD5DAE2);
+const Color _luminaLightOutlineVariant = Color(0xFFE7EBF0);
+const Color _luminaDarkSurface = Color(0xFF161A20);
+const Color _luminaDarkSurfaceDim = Color(0xFF0F1216);
+const Color _luminaDarkSurfaceBright = Color(0xFF242A33);
+const Color _luminaDarkSurfaceContainerLowest = Color(0xFF0B0D10);
+const Color _luminaDarkSurfaceContainerLow = Color(0xFF151A20);
+const Color _luminaDarkSurfaceContainer = Color(0xFF1B2129);
+const Color _luminaDarkSurfaceContainerHigh = Color(0xFF232B35);
+const Color _luminaDarkSurfaceContainerHighest = Color(0xFF2C3540);
+const Color _luminaDarkOnSurface = Color(0xFFF4F0EF);
+const Color _luminaDarkOnSurfaceVariant = Color(0xFFC4CAD3);
+const Color _luminaDarkPrimary = Color(0xFFF4F0EF);
+const Color _luminaDarkOnPrimary = Color(0xFF111418);
+const Color _luminaDarkPrimaryContainer = Color(0xFF2B323C);
+const Color _luminaDarkOnPrimaryContainer = Color(0xFFF4F0EF);
+const Color _luminaDarkSecondary = Color(0xFFC0C7D6);
+const Color _luminaDarkOnSecondary = Color(0xFF1E2630);
+const Color _luminaDarkSecondaryContainer = Color(0xFF303846);
+const Color _luminaDarkOnSecondaryContainer = Color(0xFFE6EBF2);
+const Color _luminaDarkTertiary = Color(0xFFADC9C0);
+const Color _luminaDarkOnTertiary = Color(0xFF19342D);
+const Color _luminaDarkTertiaryContainer = Color(0xFF28443C);
+const Color _luminaDarkOnTertiaryContainer = Color(0xFFD5EFE6);
+const Color _luminaDarkOutline = Color(0xFF4D5662);
+const Color _luminaDarkOutlineVariant = Color(0xFF333B46);
 const Color _defaultLightPrimary = Color(0xFF1677FF);
 const Color _defaultLightOnPrimary = Color(0xFFFFFFFF);
 const Color _defaultLightPrimaryContainer = Color(0xFFEAF2FF);
@@ -167,6 +245,210 @@ bool isPureWhiteThemeSeed(Color seedColor) {
 
 bool isSeluneThemeSeed(Color seedColor) {
   return seedColor.toARGB32() == _seluneSeed.toARGB32();
+}
+
+AppBaseColorSchemeId appBaseColorSchemeIdFromString(String? raw) {
+  final normalized = raw?.trim();
+  for (final id in AppBaseColorSchemeId.values) {
+    if (id.id == normalized) {
+      return id;
+    }
+  }
+  return AppBaseColorSchemeId.luminaNeutral;
+}
+
+AppBaseColorSchemeId appBaseColorSchemeIdFromSeed(Color seedColor) {
+  final value = seedColor.toARGB32();
+  if (value == appThemeSeaBlueOption.color.toARGB32() ||
+      value == appThemeNightPurpleOption.color.toARGB32()) {
+    return AppBaseColorSchemeId.monoBlue;
+  }
+  if (value == appThemePineGreenOption.color.toARGB32() ||
+      value == appThemeMistTealOption.color.toARGB32()) {
+    return AppBaseColorSchemeId.inkGreen;
+  }
+  if (value == appThemeSeluneOption.color.toARGB32() ||
+      value == appThemeAmberGoldOption.color.toARGB32() ||
+      value == appThemeFlameOrangeOption.color.toARGB32()) {
+    return AppBaseColorSchemeId.seluneWarm;
+  }
+  return AppBaseColorSchemeId.luminaNeutral;
+}
+
+ColorScheme buildAppBaseLightColorScheme(AppBaseColorSchemeId id) {
+  return switch (id) {
+    AppBaseColorSchemeId.luminaNeutral => _buildLuminaLightColorScheme(),
+    AppBaseColorSchemeId.monoBlue => _buildNeutralLightColorScheme(
+      primary: const Color(0xFF2F5F8F),
+      primaryContainer: const Color(0xFFE7EEF7),
+      secondary: const Color(0xFF526171),
+      secondaryContainer: const Color(0xFFE6ECF3),
+      tertiary: const Color(0xFF4C6C82),
+      tertiaryContainer: const Color(0xFFE4EEF5),
+    ),
+    AppBaseColorSchemeId.inkGreen => _buildNeutralLightColorScheme(
+      primary: const Color(0xFF4D705E),
+      primaryContainer: const Color(0xFFE5EFE8),
+      secondary: const Color(0xFF59675E),
+      secondaryContainer: const Color(0xFFE7EEE9),
+      tertiary: const Color(0xFF60756B),
+      tertiaryContainer: const Color(0xFFE6F0EC),
+    ),
+    AppBaseColorSchemeId.seluneWarm => buildAppLightColorScheme(
+      appThemeSeluneOption.color,
+    ),
+  };
+}
+
+ColorScheme buildAppBaseDarkColorScheme(AppBaseColorSchemeId id) {
+  return switch (id) {
+    AppBaseColorSchemeId.luminaNeutral => _buildLuminaDarkColorScheme(),
+    AppBaseColorSchemeId.monoBlue => _buildNeutralDarkColorScheme(
+      primary: const Color(0xFFB7CEE8),
+      primaryContainer: const Color(0xFF26384D),
+      secondary: const Color(0xFFC3CBD6),
+      secondaryContainer: const Color(0xFF303946),
+      tertiary: const Color(0xFFAFCFE3),
+      tertiaryContainer: const Color(0xFF253B4A),
+    ),
+    AppBaseColorSchemeId.inkGreen => _buildNeutralDarkColorScheme(
+      primary: const Color(0xFFB8D4C3),
+      primaryContainer: const Color(0xFF2A4233),
+      secondary: const Color(0xFFC4D0C8),
+      secondaryContainer: const Color(0xFF303C34),
+      tertiary: const Color(0xFFAED7C8),
+      tertiaryContainer: const Color(0xFF25443A),
+    ),
+    AppBaseColorSchemeId.seluneWarm => buildAppDarkColorScheme(
+      appThemeSeluneOption.color,
+    ),
+  };
+}
+
+ColorScheme _buildLuminaLightColorScheme() {
+  final neutral = ColorScheme.fromSeed(
+    seedColor: _neutralSeed,
+    dynamicSchemeVariant: DynamicSchemeVariant.neutral,
+    brightness: Brightness.light,
+  );
+  return neutral.copyWith(
+    primary: _luminaLightPrimary,
+    onPrimary: _luminaLightOnPrimary,
+    primaryContainer: _luminaLightPrimaryContainer,
+    onPrimaryContainer: _luminaLightOnPrimaryContainer,
+    secondary: _luminaLightSecondary,
+    onSecondary: _luminaLightOnSecondary,
+    secondaryContainer: _luminaLightSecondaryContainer,
+    onSecondaryContainer: _luminaLightOnSecondaryContainer,
+    tertiary: _luminaLightTertiary,
+    onTertiary: _luminaLightOnTertiary,
+    tertiaryContainer: _luminaLightTertiaryContainer,
+    onTertiaryContainer: _luminaLightOnTertiaryContainer,
+    surface: _luminaLightSurface,
+    surfaceDim: _luminaLightSurfaceDim,
+    surfaceBright: _luminaLightSurfaceBright,
+    surfaceContainerLowest: _luminaLightSurfaceContainerLowest,
+    surfaceContainerLow: _luminaLightSurfaceContainerLow,
+    surfaceContainer: _luminaLightSurfaceContainer,
+    surfaceContainerHigh: _luminaLightSurfaceContainerHigh,
+    surfaceContainerHighest: _luminaLightSurfaceContainerHighest,
+    onSurface: _luminaLightOnSurface,
+    onSurfaceVariant: _luminaLightOnSurfaceVariant,
+    surfaceTint: Colors.transparent,
+    outline: _luminaLightOutline,
+    outlineVariant: _luminaLightOutlineVariant,
+    inverseSurface: const Color(0xFF313030),
+    onInverseSurface: const Color(0xFFF4F0EF),
+    inversePrimary: const Color(0xFFC8C6C5),
+  );
+}
+
+ColorScheme _buildLuminaDarkColorScheme() {
+  final neutral = ColorScheme.fromSeed(
+    seedColor: _neutralSeed,
+    dynamicSchemeVariant: DynamicSchemeVariant.neutral,
+    brightness: Brightness.dark,
+  );
+  return neutral.copyWith(
+    primary: _luminaDarkPrimary,
+    onPrimary: _luminaDarkOnPrimary,
+    primaryContainer: _luminaDarkPrimaryContainer,
+    onPrimaryContainer: _luminaDarkOnPrimaryContainer,
+    secondary: _luminaDarkSecondary,
+    onSecondary: _luminaDarkOnSecondary,
+    secondaryContainer: _luminaDarkSecondaryContainer,
+    onSecondaryContainer: _luminaDarkOnSecondaryContainer,
+    tertiary: _luminaDarkTertiary,
+    onTertiary: _luminaDarkOnTertiary,
+    tertiaryContainer: _luminaDarkTertiaryContainer,
+    onTertiaryContainer: _luminaDarkOnTertiaryContainer,
+    surface: _luminaDarkSurface,
+    surfaceDim: _luminaDarkSurfaceDim,
+    surfaceBright: _luminaDarkSurfaceBright,
+    surfaceContainerLowest: _luminaDarkSurfaceContainerLowest,
+    surfaceContainerLow: _luminaDarkSurfaceContainerLow,
+    surfaceContainer: _luminaDarkSurfaceContainer,
+    surfaceContainerHigh: _luminaDarkSurfaceContainerHigh,
+    surfaceContainerHighest: _luminaDarkSurfaceContainerHighest,
+    onSurface: _luminaDarkOnSurface,
+    onSurfaceVariant: _luminaDarkOnSurfaceVariant,
+    surfaceTint: Colors.transparent,
+    outline: _luminaDarkOutline,
+    outlineVariant: _luminaDarkOutlineVariant,
+    inverseSurface: const Color(0xFFF5F7FA),
+    onInverseSurface: const Color(0xFF111827),
+    inversePrimary: _luminaLightPrimary,
+  );
+}
+
+ColorScheme _buildNeutralLightColorScheme({
+  required Color primary,
+  required Color primaryContainer,
+  required Color secondary,
+  required Color secondaryContainer,
+  required Color tertiary,
+  required Color tertiaryContainer,
+}) {
+  return _buildLuminaLightColorScheme().copyWith(
+    primary: primary,
+    onPrimary: Colors.white,
+    primaryContainer: primaryContainer,
+    onPrimaryContainer: const Color(0xFF1C1B1B),
+    secondary: secondary,
+    onSecondary: Colors.white,
+    secondaryContainer: secondaryContainer,
+    onSecondaryContainer: const Color(0xFF2D3540),
+    tertiary: tertiary,
+    onTertiary: Colors.white,
+    tertiaryContainer: tertiaryContainer,
+    onTertiaryContainer: const Color(0xFF243139),
+    inversePrimary: primary,
+  );
+}
+
+ColorScheme _buildNeutralDarkColorScheme({
+  required Color primary,
+  required Color primaryContainer,
+  required Color secondary,
+  required Color secondaryContainer,
+  required Color tertiary,
+  required Color tertiaryContainer,
+}) {
+  return _buildLuminaDarkColorScheme().copyWith(
+    primary: primary,
+    onPrimary: const Color(0xFF111418),
+    primaryContainer: primaryContainer,
+    onPrimaryContainer: const Color(0xFFF4F0EF),
+    secondary: secondary,
+    onSecondary: const Color(0xFF1E2630),
+    secondaryContainer: secondaryContainer,
+    onSecondaryContainer: const Color(0xFFE6EBF2),
+    tertiary: tertiary,
+    onTertiary: const Color(0xFF19342D),
+    tertiaryContainer: tertiaryContainer,
+    onTertiaryContainer: const Color(0xFFD5EFE6),
+    inversePrimary: primary,
+  );
 }
 
 ColorScheme buildAppLightColorScheme(Color seedColor) {

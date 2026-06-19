@@ -32,6 +32,7 @@ import 'startup/managed_asset_path_migration_service.dart';
 import 'theme/app_interface_typography_provider.dart';
 import 'theme/app_theme_provider.dart';
 import 'theme/app_theme_seed_provider.dart';
+import 'theme/app_theme_source_provider.dart';
 
 Future<void> bootstrap() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -66,6 +67,7 @@ void primeBootstrappedPreferences(SharedPreferences prefs) {
   AppCupertinoDockAppearanceNotifier.prime(prefs);
   AppThemeModeNotifier.prime(prefs);
   AppSeedColorNotifier.prime(prefs);
+  AppBaseColorSchemeNotifier.prime(prefs);
   ActiveAdvancedThemeIdNotifier.prime(prefs);
   ActiveThemeAppearanceSnapshotNotifier.prime(prefs);
   MinePageSessionPriming.prime(prefs);

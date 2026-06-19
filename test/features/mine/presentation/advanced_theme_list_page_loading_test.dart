@@ -45,7 +45,55 @@ void main() {
     await tester.pump(const Duration(milliseconds: 120));
 
     expect(find.byType(CircularProgressIndicator), findsNothing);
-    expect(find.text('还没有高级主题'), findsOneWidget);
+    expect(find.text('官方主题'), findsOneWidget);
+    expect(find.text('还没有高级主题', skipOffstage: false), findsOneWidget);
+  });
+
+  testWidgets('official themes remain visible without advanced theme access', (
+    tester,
+  ) async {
+    final router = GoRouter(
+      routes: <RouteBase>[
+        GoRoute(
+          path: '/',
+          builder: (context, state) => const AdvancedThemeListPage(),
+        ),
+        GoRoute(
+          path: '/membership',
+          builder: (context, state) => const Scaffold(body: Text('会员中心')),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          advancedThemeServiceProvider.overrideWithValue(
+            _ThrowingAdvancedThemeService(),
+          ),
+          app_providers.appMembershipAccessServiceProvider.overrideWithValue(
+            _InactiveMembershipAccessService(),
+          ),
+        ],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.text('官方主题'), findsOneWidget);
+    expect(find.text('Lumina'), findsOneWidget);
+    expect(find.text('我的高级主题'), findsOneWidget);
+    expect(find.text('开通会员', skipOffstage: false), findsOneWidget);
+
+    await tester.tap(find.text('复制后编辑').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('会员中心'), findsOneWidget);
   });
 }
 
@@ -99,5 +147,31 @@ class _ActiveMembershipAccessService implements MembershipAccessService {
     bool allowProfileFallback = true,
   }) async {
     return true;
+  }
+}
+
+class _InactiveMembershipAccessService implements MembershipAccessService {
+  @override
+  Future<AuthSession?> getCurrentSession() async {
+    return null;
+  }
+
+  @override
+  Future<MembershipAccessSnapshot> fetchCurrentAccess({
+    AuthSession? session,
+    bool allowProfileFallback = true,
+  }) async {
+    return const MembershipAccessSnapshot(
+      hasMembership: false,
+      hasExplicitMembershipState: true,
+    );
+  }
+
+  @override
+  Future<bool> fetchOnlineServiceAccess({
+    AuthSession? session,
+    bool allowProfileFallback = true,
+  }) async {
+    return false;
   }
 }

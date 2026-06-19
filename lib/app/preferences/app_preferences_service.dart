@@ -7,6 +7,7 @@ import 'preference_key.dart';
 
 const String appThemeModePreferenceKey = 'app.themeMode';
 const String appSeedColorPreferenceKey = 'app.seedColor';
+const String appBaseColorSchemePreferenceKey = 'app.baseColorSchemeId';
 const String appInterfaceFontSourcePreferenceKey = 'app.interfaceFont.source';
 const String appInterfaceSystemFontPresetPreferenceKey =
     'app.interfaceFont.systemPreset';
@@ -100,6 +101,16 @@ class AppThemePreferencesService {
   Future<void> saveSeedColorValue(int value) async {
     final prefs = await _preferencesFuture;
     await prefs.setInt(appSeedColorPreferenceKey, value);
+  }
+
+  Future<String?> loadBaseColorSchemeId() async {
+    final prefs = await _preferencesFuture;
+    return prefs.getString(appBaseColorSchemePreferenceKey);
+  }
+
+  Future<void> saveBaseColorSchemeId(String value) async {
+    final prefs = await _preferencesFuture;
+    await prefs.setString(appBaseColorSchemePreferenceKey, value);
   }
 }
 
