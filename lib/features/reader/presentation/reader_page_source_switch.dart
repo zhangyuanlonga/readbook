@@ -121,41 +121,41 @@ extension _ReaderPageSourceSwitchExtension on _ReaderPageState {
     try {
       final session = await _membershipAccessService.getCurrentSession();
       if (session == null) {
-        _showMessage(
-          MembershipAccessPresentation.unavailableMessage(
-            MembershipFeatureGate.switchSource,
-            isLoggedIn: false,
-          ),
+        final decision = _sourceSwitchController.resolveMembershipDecision(
+          hasSession: false,
+          hasAccess: false,
         );
-        if (mounted) {
-          unawaited(context.push('/membership'));
-        }
-        return false;
+        _showSwitchSourceMembershipDecision(decision);
+        return decision.canProceed;
       }
 
       final hasAccess = await _membershipAccessService.fetchOnlineServiceAccess(
         session: session,
       );
-      if (!hasAccess) {
-        _showMessage(
-          MembershipAccessPresentation.unavailableMessage(
-            MembershipFeatureGate.switchSource,
-            isLoggedIn: true,
-          ),
-        );
-        if (mounted) {
-          unawaited(context.push('/membership'));
-        }
-        return false;
-      }
-      return true;
-    } catch (error) {
-      _showMessage(
-        error is AppException
-            ? error.briefMessage
-            : MembershipAccessPresentation.checkFailedMessage,
+      final decision = _sourceSwitchController.resolveMembershipDecision(
+        hasSession: true,
+        hasAccess: hasAccess,
       );
-      return false;
+      _showSwitchSourceMembershipDecision(decision);
+      return decision.canProceed;
+    } catch (error) {
+      final decision = _sourceSwitchController.resolveMembershipCheckFailure(
+        error,
+      );
+      _showSwitchSourceMembershipDecision(decision);
+      return decision.canProceed;
+    }
+  }
+
+  void _showSwitchSourceMembershipDecision(
+    ReaderSwitchSourceMembershipDecision decision,
+  ) {
+    final message = decision.message?.trim() ?? '';
+    if (message.isNotEmpty) {
+      _showMessage(message);
+    }
+    if (decision.shouldOpenMembership && mounted) {
+      unawaited(context.push('/membership'));
     }
   }
 

@@ -473,7 +473,7 @@
 ## 8. 迁移阶段：action/controller/use-case 边界
 
 **目标**: 在 Phase 4 拆分 100% 收口后，迁移低风险业务编排边界，减少页面直接持有 service/provider 编排。
-**状态**: 进行中（2026-06-19 启动迁移序列 1）
+**状态**: 已完成（2026-06-19 迁移序列 1-6 全部收口）
 
 ### 迁移顺序
 
@@ -487,9 +487,9 @@
 - [x] 序列 4-A：`bookshelf_page.dart` 单本/批量删除 action controller 迁移，完成度 50% 中的已完成部分。
 - [x] 序列 4-B：`bookshelf_page.dart` 打开阅读/详情 action controller 迁移，序列 4 剩余 50%。
 - [x] 序列 5：`search_page.dart` 搜索执行边界迁移，完成度 100%。
-- [ ] 序列 6：`reader_page.dart` 非核心辅助动作迁移，完成度 0%。
+- [x] 序列 6：`reader_page.dart` 非核心辅助动作迁移，完成度 100%。
 
-当前迁移阶段整体完成度：83%（序列 1-5 已完成，序列 6 未开始）。
+当前迁移阶段整体完成度：100%（序列 1-6 已全部完成）。
 
 | 顺序 | 范围 | 迁移目标 | 完成度 | 当前状态 |
 |---:|---|---|---:|---|
@@ -498,7 +498,7 @@
 | 3 | `private_book_source_form.dart` 新增/编辑/导入保存 | 将 create/update 与导入 payload 编排迁入 form controller/use-case | 100% | 已完成：保存 create/update 和保存后刷新边界从 form/page 移出；平台导入读取仍留在 UI |
 | 4 | `bookshelf_page.dart` 书籍操作 | 将打开/删除/批量操作等页面动作迁入 action controller，先避开阅读跳转核心链路 | 100% | 已完成：删除/批量删除、详情路由、fallback 路由和导入后打开计划边界已迁入 controller |
 | 5 | `search_page.dart` 搜索执行边界 | 将搜索执行状态和进度 report 写入 controller，保留 UI 渲染状态独立 | 100% | 已完成：搜索执行请求和 progress callback 转发已迁入 `SearchExecutionController`；UI throttle/render state 保持独立 |
-| 6 | `reader_page.dart` 非核心辅助动作 | 仅迁移非翻页/非章节进度提交的辅助动作；核心阅读链路暂不作为第一批 | 0% | 待开始 |
+| 6 | `reader_page.dart` 非核心辅助动作 | 仅迁移非翻页/非章节进度提交的辅助动作；核心阅读链路暂不作为第一批 | 100% | 已完成：换源会员判断的展示文案、放行结果和打开会员页意图已迁入 `ReaderSourceSwitchController`；session/access 获取、toast 与导航仍由页面执行 |
 
 ### 2026-06-19 迁移序列 1 记录
 
@@ -553,6 +553,15 @@
 - 完成度：序列 5 = 100%；迁移阶段整体 = 83%（5/6）。
 - 验证：`flutter analyze lib/features/search/application/search_execution_controller.dart lib/features/search/providers.dart lib/features/search/presentation/search_page.dart test/features/search/application/search_execution_controller_test.dart`
 - 验证：`flutter test test/features/search/application/search_execution_controller_test.dart test/features/search/presentation/search_source_filter_sheet_test.dart`
+
+### 2026-06-19 迁移序列 6 记录
+
+- 扩展 `ReaderSourceSwitchController`：新增 `ReaderSwitchSourceMembershipDecision`，统一换源会员判断后的放行结果、提示文案和打开会员页意图。
+- `reader_page_source_switch.dart` 不再直接拼会员拦截文案或自行判断跳转意图；页面仍负责 session/access 获取、toast、`context.push('/membership')` 和 mounted 判断。
+- 本轮只迁移换源前的非核心辅助动作；未改 Reader 翻页、章节切换、进度提交、正文加载和自动阅读链路。
+- 完成度：序列 6 = 100%；迁移阶段整体 = 100%（6/6）。
+- 验证：`flutter analyze lib/features/reader/presentation/reader_source_switch_controller.dart lib/features/reader/presentation/reader_page_source_switch.dart test/features/reader/presentation/reader_source_switch_controller_test.dart`
+- 验证：`flutter test test/features/reader/presentation/reader_source_switch_controller_test.dart test/features/reader/presentation/reader_phase_p3_c_helpers_test.dart`
 
 ---
 
@@ -632,13 +641,15 @@
 
 ---
 
-## 13. 当前下一步建议
+## 13. 当前迁移收口状态
 
-Phase 4 拆分已 100%，当前优先按“迁移阶段”继续做低风险 action/controller/use-case 边界：
+Phase 4 拆分已 100%，迁移阶段 action/controller/use-case 边界也已 100%：
 
 - [x] 迁移序列 1：私有书源单项操作 controller 边界。
 - [x] 迁移序列 2：私有书源分组管理 sheet service/provider 边界。
 - [x] 迁移序列 3：私有书源新增/编辑/导入保存 form controller 边界。
-- [ ] 迁移序列 4：Bookshelf 书籍操作 action controller 边界（50%，删除/批量删除已迁）。
+- [x] 迁移序列 4：Bookshelf 书籍操作 action controller 边界。
+- [x] 迁移序列 5：Search 搜索执行 controller 边界。
+- [x] 迁移序列 6：Reader 换源会员判断辅助动作 controller 边界。
 
-继续迁移时仍按一个序列一个提交推进；Reader 核心阅读链路保持低优先级，避免把已稳定的翻页和进度提交放进第一批风险面。
+迁移阶段序列 1-6 已全部完成并记录百分比；Reader 核心阅读链路继续保持冻结，不纳入本轮迁移收口。

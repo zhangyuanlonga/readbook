@@ -22,5 +22,38 @@ void main() {
 
       expect(allowed, isTrue);
     });
+
+    test('blocks switch source when membership session is missing', () {
+      final decision = controller.resolveMembershipDecision(
+        hasSession: false,
+        hasAccess: false,
+      );
+
+      expect(decision.canProceed, isFalse);
+      expect(decision.shouldOpenMembership, isTrue);
+      expect(decision.message, contains('请先登录'));
+    });
+
+    test('blocks switch source when membership access is missing', () {
+      final decision = controller.resolveMembershipDecision(
+        hasSession: true,
+        hasAccess: false,
+      );
+
+      expect(decision.canProceed, isFalse);
+      expect(decision.shouldOpenMembership, isTrue);
+      expect(decision.message, contains('开通会员'));
+    });
+
+    test('allows switch source when membership access is available', () {
+      final decision = controller.resolveMembershipDecision(
+        hasSession: true,
+        hasAccess: true,
+      );
+
+      expect(decision.canProceed, isTrue);
+      expect(decision.shouldOpenMembership, isFalse);
+      expect(decision.message, isNull);
+    });
   });
 }
