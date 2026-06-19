@@ -1054,7 +1054,7 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
             text: TextSpan(
               children: [
                 TextSpan(
-                  text: 'Selune',
+                  text: '书享阅读',
                   style: theme.textTheme.headlineSmall?.copyWith(
                     color: colorScheme.onSurface,
                     fontWeight: FontWeight.w900,

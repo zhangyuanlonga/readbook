@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 env:
-  ARTIFACT_NAME: Selune
+  ARTIFACT_NAME: 书享阅读
   RELEASE_REPOSITORY: zyl140640/readbook-releases
   BUILD_PLATFORMS: native
   BUILD_MODE: release

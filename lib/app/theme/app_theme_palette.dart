@@ -36,7 +36,7 @@ const AppThemeSeedOption appThemeAmberGoldOption = AppThemeSeedOption(
   Color(0xFFB7791F),
 );
 const AppThemeSeedOption appThemeSeluneOption = AppThemeSeedOption(
-  'Selune',
+  '暖灰金',
   Color(0xFFC3A46E),
 );
 const AppThemeSeedOption appThemeSnowWhiteOption = AppThemeSeedOption(

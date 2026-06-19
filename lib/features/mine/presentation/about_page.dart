@@ -271,7 +271,7 @@ class _AboutPageState extends ConsumerState<AboutPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Selune',
+                          '书享阅读',
                           style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w800,
                           ),
@@ -290,7 +290,7 @@ class _AboutPageState extends ConsumerState<AboutPage> {
               ),
               const SizedBox(height: 10),
               Text(
-                'Selune 是一款基于 Flutter 构建的跨平台阅读应用，面向日常阅读与个人文档整理场景，支持 TXT、EPUB、PDF、Markdown、HTML 等内容导入，提供书架管理、灵感、阅读记录、排版主题与多端一致的阅读体验。',
+                '书享阅读是一款基于 Flutter 构建的跨平台阅读应用，面向日常阅读与个人文档整理场景，支持 TXT、EPUB、PDF、Markdown、HTML 等内容导入，提供书架管理、灵感、阅读记录、排版主题与多端一致的阅读体验。',
                 style: theme.textTheme.bodySmall?.copyWith(
                   height: 1.4,
                   color: colorScheme.onSurfaceVariant,

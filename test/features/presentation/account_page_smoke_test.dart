@@ -201,7 +201,7 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.text('欢迎回来。请登录您的账户。'), findsWidgets);
-    expect(find.text('Selune'), findsWidgets);
+    expect(find.text('书享阅读'), findsWidgets);
     expect(
       find.byKey(const ValueKey<String>('auth_desktop_brand_panel')),
       findsOneWidget,

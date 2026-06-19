@@ -5,18 +5,18 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "flutter_appread",
+            "name": "书享阅读",
             "request": "launch",
             "type": "dart"
         },
         {
-            "name": "flutter_appread (profile mode)",
+            "name": "书享阅读 (profile mode)",
             "request": "launch",
             "type": "dart",
             "flutterMode": "profile"
         },
         {
-            "name": "flutter_appread (release mode)",
+            "name": "书享阅读 (release mode)",
             "request": "launch",
             "type": "dart",
             "flutterMode": "release"

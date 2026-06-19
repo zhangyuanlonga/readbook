@@ -36,7 +36,7 @@ This directory contains shell scripts for building multi-platform Flutter applic
 
 **Optional:**
 - `APPREAD_APP_NAME` - App identifier (default: `selune`)
-- `ARTIFACT_NAME` - Build output name (default: `Selune`)
+- `ARTIFACT_NAME` - Build output name (default: `书享阅读`)
 - `PDFIUM_DOWNLOAD_BASE_URL` - PDF library download base (default: GitHub mirror)
 
 **Android-specific:**
@@ -93,12 +93,12 @@ Single entry point to build all platforms and consolidate output into one timest
 
 ```
 build/unified_artifacts/<timestamp>-<mode>/
-├── Selune-Android-arm64-v8a-1.3.0-26061101.apk
-├── Selune-Android-1.3.0-26061101.aab
-├── Selune-iOS-1.3.0-26061101.ipa
-├── Selune-macOS-1.3.0-26061101.zip
-├── Selune-Linux-1.3.0-26061101.tar.gz
-├── Selune-Windows-1.3.0-26061101.zip
+├── 书享阅读-Android-arm64-v8a-1.3.0-26061101.apk
+├── 书享阅读-Android-1.3.0-26061101.aab
+├── 书享阅读-iOS-1.3.0-26061101.ipa
+├── 书享阅读-macOS-1.3.0-26061101.zip
+├── 书享阅读-Linux-1.3.0-26061101.tar.gz
+├── 书享阅读-Windows-1.3.0-26061101.zip
 └── manifest.txt    # Lists all built artifacts
 ```
 
@@ -155,7 +155,7 @@ ANDROID_APK_PROFILE=universal ./scripts/build_android_artifacts.sh
 ./scripts/build_ios_ipa_nocodesign.sh
 ```
 
-**Output:** `build/ios/ipa/<timestamp>-<mode>/Selune-iOS-<version>.ipa`
+**Output:** `build/ios/ipa/<timestamp>-<mode>/书享阅读-iOS-<version>.ipa`
 
 **Note:** This builds an IPA without code signing. For App Store distribution, use Xcode or proper signing configuration.
 
@@ -169,7 +169,7 @@ ANDROID_APK_PROFILE=universal ./scripts/build_android_artifacts.sh
 ./scripts/build_macos_artifact.sh
 ```
 
-**Output:** `build/macos/artifacts/<timestamp>-<mode>/Selune-macOS-<version>.zip`
+**Output:** `build/macos/artifacts/<timestamp>-<mode>/书享阅读-macOS-<version>.zip`
 
 **Requirements:** macOS with Xcode 15+
 
@@ -181,7 +181,7 @@ ANDROID_APK_PROFILE=universal ./scripts/build_android_artifacts.sh
 ./scripts/build_linux_artifact.sh
 ```
 
-**Output:** `build/linux/artifacts/<timestamp>-<mode>/Selune-Linux-<version>.tar.gz`
+**Output:** `build/linux/artifacts/<timestamp>-<mode>/书享阅读-Linux-<version>.tar.gz`
 
 **Requirements:**
 - Linux with GTK 3 development libraries
@@ -201,7 +201,7 @@ ANDROID_APK_PROFILE=universal ./scripts/build_android_artifacts.sh
 ./scripts/build_windows_artifact.sh
 ```
 
-**Output:** `build/windows/artifacts/<timestamp>-<mode>/Selune-Windows-<version>.zip`
+**Output:** `build/windows/artifacts/<timestamp>-<mode>/书享阅读-Windows-<version>.zip`
 
 **Requirements:** Windows with Visual Studio 2019+ (C++ development tools)
 

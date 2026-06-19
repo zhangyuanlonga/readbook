@@ -701,7 +701,7 @@ void main() {
       tester.getSize(find.byKey(const ValueKey('desktop_shell_sidebar'))).width,
       184,
     );
-    expect(find.text('Selune'), findsOneWidget);
+    expect(find.text('书享阅读'), findsOneWidget);
     expect(find.text('书架'), findsOneWidget);
   });
 

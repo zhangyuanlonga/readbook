@@ -80,7 +80,7 @@ class App extends ConsumerWidget {
     final fontWeight = appInterfaceFontWeightValue(interfaceFontWeight);
 
     return MaterialApp.router(
-      title: 'Selune',
+      title: '书享阅读',
       theme: AppTheme.build(
         lightScheme,
         advancedPalette: lightAdvancedPalette,

@@ -11,7 +11,7 @@ class DesktopWindowBootstrap {
   /// 真机调试时也能拖到移动壳层与窄桌面断点，避免响应式分支只在测试里可达。
   static const Size minimumSize = Size(520, 620);
   static const Size initialSize = Size(1280, 820);
-  static const String windowTitle = 'Selune';
+  static const String windowTitle = '书享阅读';
 
   static Future<void> configure() async {
     if (kIsWeb || !_isDesktopHost) {

@@ -1340,7 +1340,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Selune',
+            '书享阅读',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: textTheme.headlineMedium?.copyWith(

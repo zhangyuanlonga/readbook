@@ -561,7 +561,7 @@ extension _AuthPageLayoutSections on _AuthPageState {
       crossAxisAlignment: alignment,
       children: [
         Text(
-          'Selune',
+          '书享阅读',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: (compact ? textTheme.headlineSmall : textTheme.headlineMedium)

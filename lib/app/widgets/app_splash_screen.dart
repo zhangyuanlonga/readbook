@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// 应用启动屏 - 纯白背景 + Selune 品牌字体 + 淡入动画
+/// 应用启动屏 - 纯白背景 + 书享阅读品牌字体 + 淡入动画
 class AppSplashScreen extends StatefulWidget {
   const AppSplashScreen({super.key, required this.onComplete});
 
@@ -73,9 +73,9 @@ class AppSplashBrandMark extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // 主标题：Selune
+            // 主标题：书享阅读
             Text(
-              'Selune',
+              '书享阅读',
               style: TextStyle(
                 fontFamily: 'Georgia',
                 fontFamilyFallback: const ['Times New Roman', 'serif'],

@@ -4,7 +4,7 @@
 
 Flutter reading app focused on local book reading and server-based book source gateway. Multi-platform support: Android, iOS, macOS, Linux, Windows, Web.
 
-**Project Name:** Selune (书享阅读)  
+**Project Name:** 书享阅读  
 **Current Version:** 1.3.0+26061101  
 **Flutter SDK:** ^3.7.2  
 **Primary Language:** Dart 3.7+
@@ -197,7 +197,7 @@ ANDROID_TARGET=both ANDROID_APK_PROFILE=universal ./scripts/build_unified_artifa
 - `APPREAD_API_BASE_URL` - Backend API base URL
 - `APPREAD_READER_GATEWAY_BASE_URL` - Book source gateway URL
 - `APPREAD_APP_NAME` - App identifier (default: `selune`)
-- `ARTIFACT_NAME` - Build artifact name (default: `Selune`)
+- `ARTIFACT_NAME` - Build artifact name (default: `书享阅读`)
 
 **Example:**
 ```bash

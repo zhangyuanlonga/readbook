@@ -10,7 +10,7 @@ FLUTTER_CMD="${FLUTTER_CMD:-flutter}"
 BUILD_MODE="${1:-${BUILD_MODE:-release}}" # debug | profile | release
 APP_NAME="${APP_NAME:-}"                  # optional, e.g. YuanRead
 OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_ROOT}/build/macos/artifacts}"
-ARTIFACT_NAME="${ARTIFACT_NAME:-Selune}"
+ARTIFACT_NAME="${ARTIFACT_NAME:-书享阅读}"
 BUILD_NAME="${BUILD_NAME:-}"
 BUILD_NUMBER="${BUILD_NUMBER:-}"
 APPREAD_API_BASE_URL="${APPREAD_API_BASE_URL:-}"
@@ -102,7 +102,7 @@ Environment variables:
   FLUTTER_CMD  Flutter command path (default: flutter)
   APP_NAME     Optional .app name (without .app), e.g. YuanRead
   OUTPUT_DIR   Output artifacts folder (default: build/macos/artifacts)
-  ARTIFACT_NAME Final artifact display name prefix (default: Selune)
+  ARTIFACT_NAME Final artifact display name prefix (default: 书享阅读)
   BUILD_NAME   Override Flutter --build-name
   BUILD_NUMBER Override Flutter --build-number
   APPREAD_API_BASE_URL Optional backend API base URL override

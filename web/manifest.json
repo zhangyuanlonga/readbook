@@ -1,11 +1,11 @@
 {
-    "name": "书享阅读 Next",
-    "short_name": "书享阅读 Next",
+    "name": "书享阅读",
+    "short_name": "书享阅读",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#17171C",
     "theme_color": "#17171C",
-    "description": "书享阅读 Next - 多源小说与漫画阅读器",
+    "description": "书享阅读 - 多源小说与漫画阅读器",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

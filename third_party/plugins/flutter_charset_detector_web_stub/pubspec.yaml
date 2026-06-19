@@ -1,5 +1,5 @@
 name: flutter_charset_detector_web
-description: Web stub for flutter_charset_detector used by Selune web builds.
+description: Web stub for flutter_charset_detector used by 书享阅读 web builds.
 version: 1.2.0
 publish_to: 'none'
 

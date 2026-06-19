@@ -10,7 +10,7 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 FLUTTER_CMD="${FLUTTER_CMD:-flutter}"
 APP_NAME="${APP_NAME:-Runner}"
 OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_ROOT}/build/ios/ipa}"
-ARTIFACT_NAME="${ARTIFACT_NAME:-Selune}"
+ARTIFACT_NAME="${ARTIFACT_NAME:-书享阅读}"
 BUILD_MODE="${BUILD_MODE:-release}"
 BUILD_NAME="${BUILD_NAME:-}"
 BUILD_NUMBER="${BUILD_NUMBER:-}"
@@ -31,7 +31,7 @@ Environment variables:
   FLUTTER_CMD      Flutter command path (default: flutter)
   APP_NAME         Built iOS .app name without .app (default: Runner)
   OUTPUT_DIR       Output artifacts folder (default: build/ios/ipa)
-  ARTIFACT_NAME    Final artifact display name prefix (default: Selune)
+  ARTIFACT_NAME    Final artifact display name prefix (default: 书享阅读)
   BUILD_MODE       release | profile (default: release)
   BUILD_NAME       Override Flutter --build-name
   BUILD_NUMBER     Override Flutter --build-number

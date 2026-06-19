@@ -59,7 +59,7 @@ ANDROID_TARGET=both ANDROID_APK_PROFILE=universal ./scripts/build_unified_artifa
 # 非交互模式手动指定版本
 APPREAD_API_BASE_URL=https://www.sxyd.lltask.top/api \
 APPREAD_READER_GATEWAY_BASE_URL=https://rust.lltask.top/api/ \
-APPREAD_APP_NAME=selune ARTIFACT_NAME=Selune \
+APPREAD_APP_NAME=selune ARTIFACT_NAME=书享阅读 \
 BUILD_NAME=1.1.0 BUILD_NUMBER=26041801 \
 ./scripts/build_unified_artifacts.sh android,ios release
 ```
