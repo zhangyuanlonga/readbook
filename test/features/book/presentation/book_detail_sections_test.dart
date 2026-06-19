@@ -153,6 +153,49 @@ void main() {
     expect(retried, isTrue);
   });
 
+  testWidgets('error presenter exposes retry switch source and diagnostics', (
+    tester,
+  ) async {
+    var retried = false;
+    var switched = false;
+    var copied = false;
+
+    await tester.pumpWidget(
+      AdaptiveTestHarness(
+        width: 390,
+        height: 800,
+        wrapWithMaterialApp: true,
+        child: Scaffold(
+          body: BookDetailErrorPresenter(
+            message: '当前保存的书源已失效或无权访问，请换源或从搜索重新进入。',
+            onRetry: () {
+              retried = true;
+            },
+            onSwitchSource: () {
+              switched = true;
+            },
+            onCopyDiagnostics: () {
+              copied = true;
+            },
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('加载失败'), findsOneWidget);
+    expect(find.text('重试'), findsOneWidget);
+    expect(find.text('换源'), findsOneWidget);
+    expect(find.text('复制诊断信息'), findsOneWidget);
+
+    await tester.tap(find.text('重试'));
+    await tester.tap(find.text('换源'));
+    await tester.tap(find.text('复制诊断信息'));
+
+    expect(retried, isTrue);
+    expect(switched, isTrue);
+    expect(copied, isTrue);
+  });
+
   testWidgets('local index status card shows rebuild for failed index', (
     tester,
   ) async {

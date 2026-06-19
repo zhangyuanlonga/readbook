@@ -4809,8 +4809,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _isShelfActionLoading = true;
     });
 
+    final wasInBookshelf = _isInBookshelf;
     try {
-      final wasInBookshelf = _isInBookshelf;
       if (wasInBookshelf) {
         await _bookshelfService.remove(
           sourceId: sourceId,
@@ -4842,7 +4842,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         _isInBookshelf = !wasInBookshelf;
       });
       _showMessage(wasInBookshelf ? '已从书架移除。' : '已加入书架。');
-    } catch (_) {
+    } catch (error, stackTrace) {
+      _logger.warn(
+        'Reader bookshelf operation failed',
+        context: <String, Object?>{
+          'bookId': _activeBookId,
+          'sourceId': _sourceId,
+          'detailUrl': _detailUrl,
+          'chapterId': _chapterId,
+          'chapterUrl': _chapterUrl,
+          'chapterIndex': _currentIndex,
+          'wasInBookshelf': wasInBookshelf,
+          'error': error.toString(),
+          'stackTrace': stackTrace.toString(),
+        },
+      );
       _showMessage('书架操作失败，请重试。');
     } finally {
       if (mounted) {

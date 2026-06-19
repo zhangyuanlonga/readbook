@@ -30,6 +30,45 @@ class BookDetailFeedbackCard extends StatelessWidget {
   }
 }
 
+class BookDetailErrorPresenter extends StatelessWidget {
+  const BookDetailErrorPresenter({
+    super.key,
+    required this.message,
+    required this.onRetry,
+    this.onSwitchSource,
+    this.onCopyDiagnostics,
+  });
+
+  final String message;
+  final VoidCallback onRetry;
+  final VoidCallback? onSwitchSource;
+  final VoidCallback? onCopyDiagnostics;
+
+  @override
+  Widget build(BuildContext context) {
+    return BookDetailFeedbackCard(
+      title: '加载失败',
+      message: message,
+      tone: RuntimeFeedbackTone.error,
+      actions: <Widget>[
+        FilledButton.tonal(onPressed: onRetry, child: const Text('重试')),
+        if (onSwitchSource != null)
+          FilledButton.icon(
+            onPressed: onSwitchSource,
+            icon: const Icon(Icons.swap_horiz_rounded, size: 16),
+            label: const Text('换源'),
+          ),
+        if (onCopyDiagnostics != null)
+          OutlinedButton.icon(
+            onPressed: onCopyDiagnostics,
+            icon: const Icon(Icons.copy_rounded, size: 16),
+            label: const Text('复制诊断信息'),
+          ),
+      ],
+    );
+  }
+}
+
 class BookDetailOverviewLayout extends StatelessWidget {
   const BookDetailOverviewLayout({
     super.key,

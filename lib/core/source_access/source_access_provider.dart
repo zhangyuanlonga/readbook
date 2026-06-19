@@ -2,13 +2,18 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../features/auth/providers.dart' as auth_providers;
 import '../auth/auth_event_bus.dart';
 import 'source_access_scope.dart';
 import 'source_access_service.dart';
 
 final sourceAccessServiceProvider = Provider<SourceAccessService>((ref) {
   return SourceAccessService();
+});
+
+final sourceAccessTokenReaderProvider = Provider<Future<String?> Function()>((
+  ref,
+) {
+  return () async => null;
 });
 
 final sourceAccessScopeProvider =
@@ -51,14 +56,11 @@ class SourceAccessScopeNotifier extends AsyncNotifier<SourceAccessScope?> {
   }
 
   Future<SourceAccessScope?> _fetchScope() {
-    return ref
-        .read(auth_providers.authSessionStoreProvider)
-        .getAccessToken()
-        .then((token) {
-          if (token == null || token.trim().isEmpty) {
-            return null;
-          }
-          return ref.read(sourceAccessServiceProvider).fetchMyScope();
-        });
+    return ref.read(sourceAccessTokenReaderProvider).call().then((token) {
+      if (token == null || token.trim().isEmpty) {
+        return null;
+      }
+      return ref.read(sourceAccessServiceProvider).fetchMyScope();
+    });
   }
 }

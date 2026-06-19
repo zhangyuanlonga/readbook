@@ -1,3 +1,4 @@
+import '../../../app/cache/app_cache_store_registry.dart';
 import '../../../core/cache/app_cache_governance_service.dart';
 import '../../../core/cache/cache_result.dart';
 import '../../../core/cache/cache_scope.dart';
@@ -65,6 +66,7 @@ class StorageManagementService implements StorageManagementGateway {
            AppCacheGovernanceService(
              paginationCacheStore: ReaderPaginationCacheService(),
              extraStores: <AppCacheStore>[
+               ...buildDefaultFeatureCacheStores(database: database),
                AdvancedThemePreviewCacheStore(),
                LocalBookIndexCacheStore(database: database),
                ReaderPreferenceCacheStore(),

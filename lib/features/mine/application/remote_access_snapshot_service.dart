@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../data/datasources/local/app_database.dart';
+import '../../../core/auth/session_cleanup_participant.dart';
 import '../../../core/membership/membership_access_resolver.dart';
 import '../../../core/membership/membership_entitlement.dart';
 import '../../../core/mobile_features/mobile_feature_module.dart';
@@ -112,7 +113,7 @@ class RemoteAccessSnapshot {
   }
 }
 
-class RemoteAccessSnapshotService {
+class RemoteAccessSnapshotService implements SessionCleanupParticipant {
   RemoteAccessSnapshotService({
     SharedPreferences? preferences,
     AppDatabase? database,
@@ -219,6 +220,9 @@ class RemoteAccessSnapshotService {
     await prefs.remove(_storageKey(normalizedUserId));
     await prefs.remove(_membershipSidecarKey(normalizedUserId));
   }
+
+  @override
+  Future<void> clearForUser(String userId) => clear(userId);
 
   Future<void> saveFromModulesAndEntitlement({
     required String userId,

@@ -44,4 +44,48 @@ void main() {
     expect(text, contains('bookId: book_001'));
     expect(text, contains('"chapterTitle": "第一章"'));
   });
+
+  test('redacts tokens and cookies from copied diagnostics', () {
+    final diagnostics = AppExceptionDiagnostics.fromException(
+      title: '章节正文诊断',
+      scene: 'reader_content',
+      userMessage: '加载失败 token=secret-user-token',
+      timestamp: DateTime.utc(2026, 6, 17, 10, 30),
+      error: const AppException(
+        code: ErrorCode.network,
+        stage: ErrorStage.content,
+        briefMessage: '请求失败 cookie=private-cookie',
+        sourceId: 'src_001',
+        requestUrl:
+            'https://example.test/chapter/1?token=abc&safe=1&cookie=raw',
+        gatewayFailure: GatewayFailure(
+          stage: 'content',
+          category: 'network',
+          code: 'UPSTREAM_ERROR',
+          message: 'authorization: bearer-token',
+          retryable: true,
+          hint: '重试 token=hint-token',
+        ),
+      ),
+      context: const <String, Object?>{
+        'accessToken': 'secret-token',
+        'headers': <String, Object?>{
+          'Cookie': 'private-cookie',
+          'User-Agent': 'reader-test',
+        },
+      },
+    );
+
+    final text = diagnostics.toClipboardText();
+    final json = diagnostics.toJson();
+
+    expect(text, isNot(contains('secret-user-token')));
+    expect(text, isNot(contains('private-cookie')));
+    expect(text, isNot(contains('bearer-token')));
+    expect(text, isNot(contains('token=abc')));
+    expect(text, contains('token=[redacted]'));
+    expect(text, contains('cookie=[redacted]'));
+    expect(text, contains('accessToken: [redacted]'));
+    expect(json.toString(), isNot(contains('secret-token')));
+  });
 }

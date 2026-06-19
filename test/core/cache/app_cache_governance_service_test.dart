@@ -7,6 +7,7 @@ import 'package:shuxiang_reading_next/core/cache/app_cache_governance_service.da
 import 'package:shuxiang_reading_next/core/cache/cache_budget_policy.dart';
 import 'package:shuxiang_reading_next/core/cache/cache_result.dart';
 import 'package:shuxiang_reading_next/core/cache/cache_scope.dart';
+import 'package:shuxiang_reading_next/core/cache/cache_store.dart';
 import 'package:shuxiang_reading_next/core/cache/cover_image_disk_cache.dart';
 import 'package:shuxiang_reading_next/core/storage/managed_asset_store.dart';
 import 'package:shuxiang_reading_next/data/datasources/local/app_database.dart';
@@ -16,6 +17,8 @@ import 'package:shuxiang_reading_next/domain/entities/local_chapter.dart';
 import 'package:shuxiang_reading_next/features/reader/application/local/local_book_index_cache_store.dart';
 import 'package:shuxiang_reading_next/features/reader/application/reader_pagination_cache_service.dart';
 import 'package:shuxiang_reading_next/features/reader/application/reader_pagination_models.dart';
+import 'package:shuxiang_reading_next/features/search/application/search_hit_cache_service.dart';
+import 'package:shuxiang_reading_next/features/source/application/source_health_persistence_service.dart';
 
 void main() {
   group('AppCacheGovernanceService', () {
@@ -83,6 +86,10 @@ void main() {
         database: database,
         paginationCacheStore: paginationCacheService,
         coverImageDiskCache: coverImageDiskCache,
+        extraStores: <AppCacheStore>[
+          SearchHitCacheService(database: database),
+          SourceHealthPersistenceService(database: database),
+        ],
       );
       final snapshot = await service.loadSnapshot();
 

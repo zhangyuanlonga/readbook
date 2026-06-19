@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/source_access/source_access_provider.dart';
+import '../features/auth/providers.dart' as auth_providers;
 import 'app.dart';
 import 'services/hot_update_service.dart';
 import 'widgets/app_splash_screen.dart';
@@ -37,7 +39,17 @@ class _AppWithSplashState extends State<AppWithSplash> {
       );
     }
 
-    return const ProviderScope(child: App());
+    return ProviderScope(
+      overrides: <Override>[
+        sourceAccessTokenReaderProvider.overrideWith((ref) {
+          return () =>
+              ref
+                  .read(auth_providers.authSessionStoreProvider)
+                  .getAccessToken();
+        }),
+      ],
+      child: const App(),
+    );
   }
 
   Future<void> _checkHotUpdate() async {

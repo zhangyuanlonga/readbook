@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../core/preferences/preference_repair_service.dart';
 import '../../../core/storage/managed_asset_store.dart';
 import '../../../domain/entities/reader_visual_overrides.dart';
 
@@ -17,7 +18,7 @@ class ReaderVisualOverridesStorageStats {
   final int version;
 }
 
-class ReaderVisualOverridesService {
+class ReaderVisualOverridesService implements PreferenceRepairService {
   ReaderVisualOverridesService({
     SharedPreferences? preferences,
     ManagedAssetStore? assetStore,
@@ -91,6 +92,7 @@ class ReaderVisualOverridesService {
     );
   }
 
+  @override
   Future<List<String>> repairInvalidStoredData() async {
     final prefs = await _preferencesFuture;
     final raw = prefs.getString(_visualOverridesKey);

@@ -1,17 +1,20 @@
 import 'auth_event_bus.dart';
 import 'auth_session.dart';
 import 'auth_session_store.dart';
-import '../../features/mine/application/remote_access_snapshot_service.dart';
+import 'session_cleanup_participant.dart';
 
 class SessionCleaner {
   SessionCleaner({
     AuthSessionStore? sessionStore,
-    RemoteAccessSnapshotService? remoteAccessSnapshotService,
+    Iterable<SessionCleanupParticipant> cleanupParticipants =
+        const <SessionCleanupParticipant>[],
   }) : _sessionStore = sessionStore ?? AuthSessionStore(),
-       _remoteAccessSnapshotService = remoteAccessSnapshotService ?? RemoteAccessSnapshotService();
+       _cleanupParticipants = List<SessionCleanupParticipant>.unmodifiable(
+         cleanupParticipants,
+       );
 
   final AuthSessionStore _sessionStore;
-  final RemoteAccessSnapshotService _remoteAccessSnapshotService;
+  final List<SessionCleanupParticipant> _cleanupParticipants;
 
   Future<void> clear({
     AuthSession? previousSession,
@@ -23,7 +26,9 @@ class SessionCleaner {
     // 清除会员状态缓存，避免旧账号的会员信息残留
     final userId = resolvedPreviousSession?.userId?.trim();
     if (userId != null && userId.isNotEmpty) {
-      await _remoteAccessSnapshotService.clear(userId);
+      for (final participant in _cleanupParticipants) {
+        await participant.clearForUser(userId);
+      }
     }
 
     await _sessionStore.clear();

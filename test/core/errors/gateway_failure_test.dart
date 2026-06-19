@@ -67,5 +67,20 @@ void main() {
       expect(antiSpiderFailure.isAntiSpider, isTrue);
       expect(antiSpiderFailure.actionHint, contains('反爬'));
     });
+
+    test('explains missing source access changes', () {
+      final failure = GatewayFailure.fromJson(const <String, Object?>{
+        'stage': 'detail',
+        'category': 'notFound',
+        'code': 'SOURCE_NOT_FOUND',
+        'message': 'bookRef.sourceId not found',
+        'retryable': false,
+      });
+
+      expect(failure.toErrorCode(), ErrorCode.unknownSource);
+      expect(failure.isMissingSource, isTrue);
+      expect(failure.actionHint, contains('取消授权'));
+      expect(failure.actionHint, contains('分组'));
+    });
   });
 }

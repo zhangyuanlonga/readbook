@@ -2,6 +2,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../app/app_restart_scope.dart';
 import '../../../app/bootstrap.dart';
+import '../../../app/cache/app_cache_store_registry.dart';
 import '../../../core/auth/auth_session_store.dart';
 import '../../../core/cache/app_cache_governance_service.dart';
 import '../../../core/logging/app_logger.dart';
@@ -38,6 +39,7 @@ class AppResetService {
            cacheGovernanceService ??
            AppCacheGovernanceService(
              paginationCacheStore: ReaderPaginationCacheService(),
+             extraStores: buildDefaultFeatureCacheStores(),
            ),
        _logger = logger ?? AppLogger.instance;
 

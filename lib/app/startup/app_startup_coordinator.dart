@@ -4,6 +4,7 @@ import 'dart:ui' show FrameTiming;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
+import '../cache/app_cache_store_registry.dart';
 import '../../core/cache/app_cache_governance_service.dart';
 import '../../core/app_update/app_update_release.dart';
 import '../../core/app_update/app_update_service.dart';
@@ -43,7 +44,10 @@ class AppStartupCoordinator {
        _deprecatedKeysCleaner =
            deprecatedKeysCleaner ?? DeprecatedKeysCleaner(),
        _cacheGovernanceService =
-           cacheGovernanceService ?? AppCacheGovernanceService(),
+           cacheGovernanceService ??
+           AppCacheGovernanceService(
+             extraStores: buildDefaultFeatureCacheStores(),
+           ),
        _database = database ?? AppDatabase.instance,
        _startupMinDuration = startupMinDuration ?? _defaultStartupMinDuration,
        _startupDeferredTasksDelay =

@@ -225,6 +225,10 @@ extension on _BookDetailPageState {
                 final auxiliaryState = _auxiliaryState;
                 final result = presentationState.result;
                 final errorText = presentationState.errorText;
+                final canSwitchFromMissingSource =
+                    _canSwitchSource &&
+                    presentationState.detailFailureDiagnostics?.code ==
+                        ErrorCode.unknownSource.name;
 
                 final content = LayoutBuilder(
                   builder: (context, _) {
@@ -271,42 +275,24 @@ extension on _BookDetailPageState {
                                   tone: RuntimeFeedbackTone.warning,
                                 )
                               else if (errorText != null && result == null)
-                                BookDetailFeedbackCard(
-                                  title: '加载失败',
+                                BookDetailErrorPresenter(
                                   message: errorText,
-                                  tone: RuntimeFeedbackTone.error,
-                                  actions: [
-                                    FilledButton.tonal(
-                                      onPressed:
-                                          () => _load(forceRefresh: true),
-                                      child: const Text('重试'),
-                                    ),
-                                    if (_isLocalContent)
-                                      OutlinedButton.icon(
-                                        onPressed:
-                                            _copyLocalDiagnosticsFromError,
-                                        icon: const Icon(
-                                          Icons.copy_rounded,
-                                          size: 16,
-                                        ),
-                                        label: const Text('复制诊断信息'),
-                                      )
-                                    else if (presentationState
-                                            .detailFailureDiagnostics !=
-                                        null)
-                                      OutlinedButton.icon(
-                                        onPressed:
-                                            () => _copyOnlineDetailDiagnostics(
-                                              presentationState
-                                                  .detailFailureDiagnostics!,
-                                            ),
-                                        icon: const Icon(
-                                          Icons.copy_rounded,
-                                          size: 16,
-                                        ),
-                                        label: const Text('复制诊断信息'),
-                                      ),
-                                  ],
+                                  onRetry: () => _load(forceRefresh: true),
+                                  onSwitchSource:
+                                      canSwitchFromMissingSource
+                                          ? _handleSwitchSource
+                                          : null,
+                                  onCopyDiagnostics:
+                                      _isLocalContent
+                                          ? _copyLocalDiagnosticsFromError
+                                          : presentationState
+                                                  .detailFailureDiagnostics ==
+                                              null
+                                          ? null
+                                          : () => _copyOnlineDetailDiagnostics(
+                                            presentationState
+                                                .detailFailureDiagnostics!,
+                                          ),
                                 )
                               else if (result != null) ...[
                                 ..._buildLoadedContentSections(

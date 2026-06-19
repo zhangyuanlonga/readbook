@@ -3,12 +3,13 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/storage/managed_asset_store.dart';
+import '../../../core/preferences/preference_repair_service.dart';
 import '../../../data/datasources/local/app_database.dart';
 import '../../../domain/entities/reader_toc_snapshot.dart';
 import '../../../domain/entities/reader_settings.dart';
 import '../../../domain/entities/reading_progress.dart';
 
-class ReaderPreferencesService {
+class ReaderPreferencesService implements PreferenceRepairService {
   ReaderPreferencesService({
     SharedPreferences? preferences,
     ManagedAssetStore? assetStore,
@@ -891,6 +892,7 @@ class ReaderPreferencesService {
     await prefs.setString(_recentBodyTextColorsKey, jsonEncode(normalized));
   }
 
+  @override
   Future<List<String>> repairInvalidStoredData() async {
     final prefs = await _preferencesFuture;
     final removedKeys = <String>[];

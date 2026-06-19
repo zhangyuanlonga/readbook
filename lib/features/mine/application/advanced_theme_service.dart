@@ -10,6 +10,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../../app/navigation/bottom_nav_icon_gallery_service.dart';
 import '../../../app/images/file_image_cache.dart';
+import '../../../core/preferences/preference_repair_service.dart';
 import '../../../core/storage/managed_asset_store.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
 import '../../../domain/entities/bottom_nav_icon_gallery.dart';
@@ -55,7 +56,7 @@ typedef AdvancedThemeBatchExportProgressCallback =
 
 enum _AdvancedThemeImportPackageKind { official, red, rgshare }
 
-class AdvancedThemeService {
+class AdvancedThemeService implements PreferenceRepairService {
   static const String _activeThemeIdKey = 'app.advancedThemes.activeId';
   static const String _activeThemeAppearanceSnapshotKey =
       'app.advancedThemes.activeAppearanceSnapshot';
@@ -115,6 +116,7 @@ class AdvancedThemeService {
     }
   }
 
+  @override
   Future<List<String>> repairInvalidStoredData() async {
     final prefs = await _preferencesFuture;
     final removedKeys = <String>[];

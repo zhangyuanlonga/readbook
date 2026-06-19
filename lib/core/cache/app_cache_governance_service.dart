@@ -1,8 +1,6 @@
 import 'dart:developer' as developer;
 
 import '../../data/datasources/local/app_database.dart';
-import '../../features/search/application/search_hit_cache_service.dart';
-import '../../features/source/application/source_health_persistence_service.dart';
 import '../logging/app_logger.dart';
 import '../network/api_client.dart';
 import 'app_cache_coordinator.dart';
@@ -111,8 +109,6 @@ class AppCacheGovernanceService {
             _ChapterContentGovernanceStore(_database),
             _PaginationLayoutGovernanceStore(_paginationCacheStore),
             ApiClient.defaultCacheStore,
-            SearchHitCacheService(database: _database),
-            SourceHealthPersistenceService(database: _database),
             ...extraStores,
           ],
         );

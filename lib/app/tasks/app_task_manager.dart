@@ -231,3 +231,16 @@ const Object _sentinel = Object();
 final appTaskManagerProvider = ChangeNotifierProvider<AppTaskManager>((ref) {
   return AppTaskManager();
 });
+
+final appTaskSnapshotsProvider = Provider<List<AppTaskSnapshot>>((ref) {
+  return ref.watch(appTaskManagerProvider).tasks;
+});
+
+final activeAppTaskProvider = Provider<AppTaskSnapshot?>((ref) {
+  for (final task in ref.watch(appTaskSnapshotsProvider)) {
+    if (!task.isFinished) {
+      return task;
+    }
+  }
+  return null;
+});

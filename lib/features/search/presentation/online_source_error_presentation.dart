@@ -22,6 +22,9 @@ class OnlineSourceErrorPresentation {
 class OnlineSourceErrorPresentationAdapter {
   const OnlineSourceErrorPresentationAdapter();
 
+  static const String missingSourceMessage =
+      '当前保存的书源已失效或无权访问，请换源或从搜索重新进入。';
+
   OnlineSourceErrorPresentation fromFailure(SourceSearchFailure failure) {
     final gatewayFailure = failure.gatewayFailure;
     final message = _messageFor(
@@ -130,7 +133,7 @@ class OnlineSourceErrorPresentationAdapter {
       ErrorCode.ruleParse => '服务器书源解析规则异常，无法完成搜索。',
       ErrorCode.ruleMatchEmpty => '该书源没有返回有效搜索结果。',
       ErrorCode.decode => '搜索响应解析失败，可能是编码或格式不兼容。',
-      ErrorCode.unknownSource => '书源不存在或已被删除。',
+      ErrorCode.unknownSource => missingSourceMessage,
       ErrorCode.unknown => _nonEmpty(fallback, '搜索失败，请稍后重试。'),
     };
   }
@@ -142,7 +145,7 @@ class OnlineSourceErrorPresentationAdapter {
       ErrorCode.ruleParse => '服务器书源解析规则异常，无法加载详情。',
       ErrorCode.ruleMatchEmpty => '未获取到有效内容，请更换书源或稍后重试。',
       ErrorCode.decode => '响应解析失败，可能是编码或格式不兼容。',
-      ErrorCode.unknownSource => '书源不存在或已被删除。',
+      ErrorCode.unknownSource => missingSourceMessage,
       ErrorCode.unknown => _nonEmpty(fallback, '加载失败，请稍后重试。'),
     };
   }
@@ -154,7 +157,7 @@ class OnlineSourceErrorPresentationAdapter {
       ErrorCode.ruleParse => '服务器书源解析规则异常，无法加载章节。',
       ErrorCode.ruleMatchEmpty => '未获取到章节正文，请更换书源或稍后重试。',
       ErrorCode.decode => '章节响应解析失败，可能是编码或格式不兼容。',
-      ErrorCode.unknownSource => '书源不存在或已被删除。',
+      ErrorCode.unknownSource => missingSourceMessage,
       ErrorCode.unknown => _nonEmpty(fallback, '章节加载失败，请稍后重试。'),
     };
   }
@@ -174,7 +177,7 @@ class OnlineSourceErrorPresentationAdapter {
       ErrorCode.ruleParse => '服务器书源解析规则异常，目录暂不可用。',
       ErrorCode.ruleMatchEmpty => '未获取到目录内容，目录暂为空。',
       ErrorCode.decode => '目录解析失败，目录暂不可用。',
-      ErrorCode.unknownSource => '书源不存在，目录暂不可用。',
+      ErrorCode.unknownSource => '当前保存的书源已失效或无权访问，目录暂不可用。',
       ErrorCode.unknown => _nonEmpty(fallback, '目录加载失败，目录暂不可用。'),
     };
   }
@@ -182,6 +185,9 @@ class OnlineSourceErrorPresentationAdapter {
   String _actionHintFor({required ErrorCode code, required bool retryable}) {
     if (retryable || code == ErrorCode.network) {
       return '可以稍后重试，或切换其他书源。';
+    }
+    if (code == ErrorCode.unknownSource) {
+      return '可能是书源被删除、取消授权，或当前账号不再属于该书源分组；建议换源或重新搜索。';
     }
     return '建议检查书源配置或切换书源。';
   }

@@ -12,13 +12,17 @@ import 'app_with_splash.dart';
 import 'router.dart';
 import 'startup_artwork_store.dart';
 import '../features/mine/application/advanced_theme_provider.dart';
+import '../features/mine/application/advanced_theme_service.dart';
 import '../features/mine/application/mine_page_session_service.dart';
 import '../features/mine/providers.dart';
 import '../core/app_data_migrator.dart';
 import '../core/auth/auth_install_recovery_service.dart';
 import '../features/reader/application/reader_font_registry_service.dart';
+import '../features/reader/application/reader_preferences_service.dart';
+import '../features/reader/application/reader_visual_overrides_service.dart';
 import '../core/logging/app_logger.dart';
 import '../core/logging/source_log_store.dart';
+import '../core/preferences/preference_repair_service.dart';
 import '../core/storage/managed_file_path_resolver.dart';
 import 'navigation/app_navigation_style_provider.dart';
 import 'platform/app_platform_capabilities.dart';
@@ -38,7 +42,14 @@ Future<void> bootstrap() async {
   await AuthInstallRecoveryService(
     preferences: prefs,
   ).clearAuthStateIfFreshInstall();
-  await AppDataMigrator(preferences: prefs).migrateIfNeeded();
+  await AppDataMigrator(
+    preferences: prefs,
+    repairServices: <PreferenceRepairService>[
+      ReaderPreferencesService(preferences: prefs),
+      ReaderVisualOverridesService(preferences: prefs),
+      AdvancedThemeService(preferences: prefs),
+    ],
+  ).migrateIfNeeded();
   await AppDatabaseIntegrityService().ensureHealthy();
   primeBootstrappedPreferences(prefs);
   unawaited(StartupArtworkStore.prime(preferences: prefs));

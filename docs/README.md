@@ -1,6 +1,6 @@
 # 项目文档索引
 
-**最后更新：** 2026-06-13
+**最后更新：** 2026-06-17
 **文档总数：** 102 个（含归档文档）
 
 ---
@@ -131,6 +131,8 @@ docs/
 ### 主目录重点文档
 
 - **README.md** - 本文档，文档索引
+- **code_review_v1.3.0_refactor_roadmap.md** - v1.3.0 代码审查后的阶段改造路线图，区分发版前稳定性、架构边界、状态管理、超大文件拆分和自动化护栏
+- **code_review_v1.3.0_report.md** - v1.3.0 代码审查原始报告
 - **project-open-tasks-triage-2026-06-13.md** - 当前未完成项总梳理，区分发版前必须、近期建议、后置和不建议本轮执行
 - **document_cleanup_checklist.md** - 文档清理清单
 - **project_documentation_full_audit.md** - 项目文档全面审查报告

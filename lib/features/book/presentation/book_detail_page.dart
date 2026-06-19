@@ -673,7 +673,17 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
         bookId: _activeBookId,
         detailUrl: detailUrl,
       );
-    } catch (_) {
+    } catch (error, stackTrace) {
+      _logBookDetailWarning(
+        'Local book snapshot hydration failed',
+        error: error,
+        stackTrace: stackTrace,
+        context: <String, Object?>{
+          'bookId': _activeBookId,
+          'sourceId': sourceId,
+          'detailUrl': detailUrl,
+        },
+      );
       return false;
     }
     if (!mounted || result == null || _result != null) {
@@ -1071,7 +1081,18 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
         existingProgress: _auxiliaryState.readingProgress,
         localBook: localBook,
       );
-    } catch (_) {
+    } catch (error, stackTrace) {
+      _logBookDetailWarning(
+        'Book reading status update failed',
+        error: error,
+        stackTrace: stackTrace,
+        context: <String, Object?>{
+          'bookId': result.detail.id,
+          'sourceId': result.detail.sourceId,
+          'detailUrl': result.detail.detailUrl,
+          'status': status.name,
+        },
+      );
       if (!mounted) {
         return;
       }
@@ -2424,7 +2445,17 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     } on AppException catch (error) {
       _showMessage('查找可切换书源失败：${error.briefMessage}');
       return;
-    } catch (_) {
+    } catch (error, stackTrace) {
+      _logBookDetailWarning(
+        'Switch source scope build failed',
+        error: error,
+        stackTrace: stackTrace,
+        context: <String, Object?>{
+          'bookId': _activeBookId,
+          'sourceId': currentSourceId,
+          'detailUrl': _activeDetailUrl,
+        },
+      );
       _showMessage('查找可切换书源失败，请稍后重试。');
       return;
     }
@@ -2504,7 +2535,18 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       if (mounted) {
         _showMessage('查找可切换书源失败：${error.briefMessage}');
       }
-    } catch (_) {
+    } catch (error, stackTrace) {
+      _logBookDetailWarning(
+        'Switch source candidate apply failed',
+        error: error,
+        stackTrace: stackTrace,
+        context: <String, Object?>{
+          'bookId': _activeBookId,
+          'sourceId': selected.book.sourceId,
+          'detailUrl': selected.book.detailUrl,
+          'sourceName': selected.sourceName,
+        },
+      );
       if (mounted) {
         _showMessage('切换书源失败，请稍后重试。');
       }
@@ -2624,7 +2666,16 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
           sourceId: normalizedPreviousSourceId,
           detailUrl: normalizedPreviousDetailUrl,
         );
-      } catch (_) {
+      } catch (error, stackTrace) {
+        _logBookDetailWarning(
+          'Previous bookshelf state lookup failed during source switch',
+          error: error,
+          stackTrace: stackTrace,
+          context: <String, Object?>{
+            'previousSourceId': normalizedPreviousSourceId,
+            'previousDetailUrl': normalizedPreviousDetailUrl,
+          },
+        );
         shouldReplace = false;
       }
     }
@@ -2652,7 +2703,19 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
         _updateAuxiliaryState(_auxiliaryState.copyWith(isInBookshelf: true));
       }
       return false;
-    } catch (_) {
+    } catch (error, stackTrace) {
+      _logBookDetailWarning(
+        'Bookshelf source replacement failed',
+        error: error,
+        stackTrace: stackTrace,
+        context: <String, Object?>{
+          'bookId': result.detail.id,
+          'sourceId': result.detail.sourceId,
+          'detailUrl': result.detail.detailUrl,
+          'previousSourceId': normalizedPreviousSourceId,
+          'previousDetailUrl': normalizedPreviousDetailUrl,
+        },
+      );
       unawaited(_loadSupplementaryState(result: result));
       return true;
     }
@@ -2710,8 +2773,20 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
             chapterPositionRatio: 0,
           ),
         );
-      } catch (_) {
-        // Keep source switch success even if progress migration fails.
+      } catch (error, stackTrace) {
+        _logBookDetailWarning(
+          'Reading progress migration failed during source switch',
+          error: error,
+          stackTrace: stackTrace,
+          context: <String, Object?>{
+            'previousBookId': previousBookId,
+            'nextBookId': nextBookId,
+            'sourceId': sourceId,
+            'detailUrl': detailUrl,
+            'chapterIndex': chapterIndex,
+            'chapterUrl': normalizedChapterUrl,
+          },
+        );
       }
     }
 
@@ -2725,8 +2800,18 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
         nextBookAuthor: result.detail.author,
         nextCoverUrl: result.detail.coverUrl,
       );
-    } catch (_) {
-      // Keep source switch success even if reading record migration fails.
+    } catch (error, stackTrace) {
+      _logBookDetailWarning(
+        'Reading record migration failed during source switch',
+        error: error,
+        stackTrace: stackTrace,
+        context: <String, Object?>{
+          'previousBookId': previousBookId,
+          'nextBookId': nextBookId,
+          'sourceId': sourceId,
+          'detailUrl': detailUrl,
+        },
+      );
     }
   }
 
@@ -2917,10 +3002,16 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
         ),
       );
       return false;
-    } catch (_) {
+    } catch (error, stackTrace) {
       if (!_isActiveDetailLoadRequest(requestToken)) {
         return false;
       }
+      _logBookDetailWarning(
+        'Book detail load failed',
+        error: error,
+        stackTrace: stackTrace,
+        context: _buildDetailDiagnosticsContext(),
+      );
       if (_result != null) {
         if (!backgroundRefresh) {
           _showMessage('加载失败，请稍后重试。');
@@ -3244,7 +3335,16 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
         sourceId: sourceId,
         detailUrl: detailUrl,
       );
-    } catch (_) {
+    } catch (error, stackTrace) {
+      _logBookDetailWarning(
+        'Bookshelf containment lookup failed',
+        error: error,
+        stackTrace: stackTrace,
+        context: <String, Object?>{
+          'sourceId': sourceId,
+          'detailUrl': detailUrl,
+        },
+      );
       return false;
     }
   }
@@ -3457,6 +3557,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       'sourceName': result?.sourceName,
       'detailUrl': detail?.detailUrl ?? _activeDetailUrl ?? widget.detailUrl,
       'tocUrl': detail?.tocUrl ?? widget.initialBook?.tocUrl,
+      'catalogUrl': detail?.tocUrl ?? widget.initialBook?.tocUrl,
       'catalogLoaded': result?.catalogLoaded,
       'catalogComplete': result?.catalogComplete,
       'chapterCount': result?.chapters.length,
@@ -3464,6 +3565,22 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       'routeSourceId': widget.sourceId,
       'routeDetailUrl': widget.detailUrl,
     };
+  }
+
+  void _logBookDetailWarning(
+    String message, {
+    required Object error,
+    required StackTrace stackTrace,
+    Map<String, Object?> context = const <String, Object?>{},
+  }) {
+    _logger.warn(
+      message,
+      context: <String, Object?>{
+        ...context,
+        'error': error.toString(),
+        'stackTrace': stackTrace.toString(),
+      },
+    );
   }
 
   Future<void> _pickAndApplyCustomCover(
@@ -3509,7 +3626,13 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       _showMessage(error.message);
     } on AppException catch (error) {
       _showMessage(error.briefMessage);
-    } catch (_) {
+    } catch (error, stackTrace) {
+      _logBookDetailWarning(
+        'Custom cover update failed',
+        error: error,
+        stackTrace: stackTrace,
+        context: _buildDetailDiagnosticsContext(result: detailResult),
+      );
       _showMessage('设置自定义封面失败，请重试。');
     }
   }

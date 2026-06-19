@@ -76,13 +76,13 @@ class AppExceptionDiagnostics {
       'title': title,
       'scene': scene,
       'time': timestamp.toIso8601String(),
-      'userMessage': userMessage,
+      'userMessage': _redactSensitiveText(userMessage),
       'error': <String, Object?>{
         'code': code,
         'stage': stage,
-        'briefMessage': briefMessage,
+        'briefMessage': _redactSensitiveText(briefMessage),
         'sourceId': sourceId,
-        'requestUrl': requestUrl,
+        'requestUrl': _redactSensitiveText(requestUrl),
       },
       'gatewayFailure': gatewayFailure,
       'context': context,
@@ -94,13 +94,13 @@ class AppExceptionDiagnostics {
       title,
       'scene: $scene',
       'time: ${timestamp.toIso8601String()}',
-      'userMessage: $userMessage',
+      'userMessage: ${_redactSensitiveText(userMessage)}',
       'code: $code',
       'stage: $stage',
-      'briefMessage: $briefMessage',
+      'briefMessage: ${_redactSensitiveText(briefMessage)}',
     ];
     _appendOptional(lines, 'sourceId', sourceId);
-    _appendOptional(lines, 'requestUrl', requestUrl);
+    _appendOptional(lines, 'requestUrl', _redactSensitiveText(requestUrl));
 
     final gateway = gatewayFailure;
     if (gateway != null && gateway.isNotEmpty) {
@@ -110,7 +110,9 @@ class AppExceptionDiagnostics {
         if (value == null || value.toString().trim().isEmpty) {
           continue;
         }
-        lines.add('  ${entry.key}: $value');
+        lines.add(
+          '  ${entry.key}: ${_formatValue(_sanitizeValue(entry.key, value))}',
+        );
       }
     }
 
@@ -166,8 +168,62 @@ class AppExceptionDiagnostics {
       if (value is Iterable && value.isEmpty) {
         continue;
       }
-      cleaned[entry.key] = value;
+      cleaned[entry.key] = _sanitizeValue(entry.key, value);
     }
     return cleaned;
+  }
+
+  static Object? _sanitizeValue(String key, Object? value) {
+    if (_isSensitiveKey(key)) {
+      return '[redacted]';
+    }
+    if (value is String) {
+      return _redactSensitiveText(value);
+    }
+    if (value is Map) {
+      return _cleanMap(value.cast<String, Object?>());
+    }
+    if (value is Iterable) {
+      return value
+          .map((item) {
+            if (item is String) {
+              return _redactSensitiveText(item);
+            }
+            return item;
+          })
+          .toList(growable: false);
+    }
+    return value;
+  }
+
+  static bool _isSensitiveKey(String key) {
+    final normalized = key.toLowerCase();
+    return normalized.contains('token') ||
+        normalized.contains('cookie') ||
+        normalized.contains('authorization') ||
+        normalized.contains('password') ||
+        normalized.contains('secret') ||
+        normalized.contains('session');
+  }
+
+  static String? _redactSensitiveText(String? value) {
+    final text = value?.trim();
+    if (text == null || text.isEmpty) {
+      return value;
+    }
+    final redactedQuery = text.replaceAllMapped(
+      RegExp(
+        r'([?&](?:token|access_token|refresh_token|cookie|session|auth|authorization|password|secret)=)[^&#\s]+',
+        caseSensitive: false,
+      ),
+      (match) => '${match.group(1)}[redacted]',
+    );
+    return redactedQuery.replaceAllMapped(
+      RegExp(
+        r'\b(token|cookie|authorization|password|secret|session)\s*[:=]\s*[^,\s;]+',
+        caseSensitive: false,
+      ),
+      (match) => '${match.group(1)}=[redacted]',
+    );
   }
 }

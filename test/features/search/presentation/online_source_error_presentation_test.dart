@@ -43,6 +43,29 @@ void main() {
     );
   });
 
+  test('explains stale online source references', () {
+    expect(
+      adapter.forException(
+        const AppException(
+          code: ErrorCode.unknownSource,
+          stage: ErrorStage.detail,
+          briefMessage: 'bookRef.sourceId not found',
+        ),
+      ),
+      OnlineSourceErrorPresentationAdapter.missingSourceMessage,
+    );
+    expect(
+      adapter.tocWarningFor(
+        const AppException(
+          code: ErrorCode.unknownSource,
+          stage: ErrorStage.toc,
+          briefMessage: 'bookRef.sourceId not found',
+        ),
+      ),
+      '当前保存的书源已失效或无权访问，目录暂不可用。',
+    );
+  });
+
   test('maps reader content failures through shared online adapter', () {
     expect(
       adapter.forReaderContentException(

@@ -1,10 +1,8 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../features/mine/application/advanced_theme_service.dart';
-import '../features/reader/application/reader_preferences_service.dart';
-import '../features/reader/application/reader_visual_overrides_service.dart';
 import 'app_data_version.dart';
 import 'logging/app_logger.dart';
+import 'preferences/preference_repair_service.dart';
 
 class AppDataMigrationReport {
   const AppDataMigrationReport({
@@ -24,27 +22,18 @@ class AppDataMigrator {
   AppDataMigrator({
     SharedPreferences? preferences,
     AppDataVersionStore? versionStore,
-    ReaderPreferencesService? readerPreferencesService,
-    ReaderVisualOverridesService? readerVisualOverridesService,
-    AdvancedThemeService? advancedThemeService,
+    List<PreferenceRepairService> repairServices =
+        const <PreferenceRepairService>[],
     AppLogger? logger,
   }) : _versionStore =
            versionStore ?? AppDataVersionStore(preferences: preferences),
-       _readerPreferencesService =
-           readerPreferencesService ??
-           ReaderPreferencesService(preferences: preferences),
-       _readerVisualOverridesService =
-           readerVisualOverridesService ??
-           ReaderVisualOverridesService(preferences: preferences),
-       _advancedThemeService =
-           advancedThemeService ??
-           AdvancedThemeService(preferences: preferences),
+       _repairServices = List<PreferenceRepairService>.unmodifiable(
+         repairServices,
+       ),
        _logger = logger ?? AppLogger.instance;
 
   final AppDataVersionStore _versionStore;
-  final ReaderPreferencesService _readerPreferencesService;
-  final ReaderVisualOverridesService _readerVisualOverridesService;
-  final AdvancedThemeService _advancedThemeService;
+  final List<PreferenceRepairService> _repairServices;
   final AppLogger _logger;
 
   Future<AppDataMigrationReport> migrateIfNeeded() async {
@@ -59,12 +48,20 @@ class AppDataMigrator {
     }
 
     final cleanedKeys = <String>[];
+    var shouldRepairCriticalPreferencePayloads = false;
     for (
       var version = fromVersion + 1;
       version <= currentAppDataVersion;
       version += 1
     ) {
-      cleanedKeys.addAll(await _runMigrationStep(version));
+      if (_isCriticalPreferenceRepairStep(version)) {
+        shouldRepairCriticalPreferencePayloads = true;
+      } else {
+        cleanedKeys.addAll(await _runMigrationStep(version));
+      }
+    }
+    if (shouldRepairCriticalPreferencePayloads) {
+      cleanedKeys.addAll(await _repairCriticalPreferencePayloads());
     }
     await _versionStore.write(currentAppDataVersion);
     _logger.info(
@@ -86,22 +83,30 @@ class AppDataMigrator {
 
   Future<List<String>> _runMigrationStep(int version) async {
     return switch (version) {
-      1 => _repairCriticalPreferencePayloads(),
-      2 => _repairCriticalPreferencePayloads(),
-      3 => _repairCriticalPreferencePayloads(),
       _ => const <String>[],
     };
   }
 
+  bool _isCriticalPreferenceRepairStep(int version) {
+    return version >= 1 && version <= currentAppDataVersion;
+  }
+
   Future<List<String>> _repairCriticalPreferencePayloads() async {
     final cleanedKeys = <String>[];
-    cleanedKeys.addAll(
-      await _readerPreferencesService.repairInvalidStoredData(),
-    );
-    cleanedKeys.addAll(
-      await _readerVisualOverridesService.repairInvalidStoredData(),
-    );
-    cleanedKeys.addAll(await _advancedThemeService.repairInvalidStoredData());
+    for (final service in _repairServices) {
+      try {
+        cleanedKeys.addAll(await service.repairInvalidStoredData());
+      } catch (error, stackTrace) {
+        _logger.warn(
+          'Preference repair service failed',
+          context: <String, Object?>{
+            'serviceType': service.runtimeType.toString(),
+            'error': error.toString(),
+            'stackTrace': stackTrace.toString(),
+          },
+        );
+      }
+    }
     return List<String>.unmodifiable(cleanedKeys.toSet());
   }
 }

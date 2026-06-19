@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 
+import '../../../core/logging/app_logger.dart';
 import 'audio_reading_mode.dart';
 import 'reader_content_session.dart';
 
@@ -90,12 +91,14 @@ const Object _readerAudioControllerSentinel = Object();
 
 class ReaderAudioController extends ChangeNotifier
     implements AudioPlaybackController, ReaderAudioControllerHandle {
-  ReaderAudioController({AudioPlayer? player})
-    : _player = player ?? AudioPlayer() {
+  ReaderAudioController({AudioPlayer? player, AppLogger? logger})
+    : _player = player ?? AudioPlayer(),
+      _logger = logger ?? AppLogger.instance {
     _bindPlayerStreams();
   }
 
   final AudioPlayer _player;
+  final AppLogger _logger;
 
   StreamSubscription<PlayerState>? _playerStateSubscription;
   StreamSubscription<Duration?>? _durationSubscription;
@@ -151,11 +154,24 @@ class ReaderAudioController extends ChangeNotifier
     await _player.stop();
 
     if (audioUrl == null) {
+      _logger.warn(
+        'Reader audio url missing',
+        context: <String, Object?>{
+          'bookId': session.bookId,
+          'sourceId': session.sourceId,
+          'detailUrl': session.detailUrl,
+          'chapterId': session.chapterId,
+          'chapterIndex': session.chapterIndex,
+          'hasAudioUrl': session.audioUrl?.trim().isNotEmpty ?? false,
+          'hasAudioManifestUrl':
+              session.audioManifestUrl?.trim().isNotEmpty ?? false,
+        },
+      );
       _setState(
         _state.copyWith(
           playbackState: const AudioPlaybackState(
             status: AudioPlaybackStatus.error,
-            errorMessage: '当前章节未提供可播放的音频地址。',
+            errorMessage: '当前章节未提供可播放的音频地址，请检查正文解析规则或切换书源。',
           ),
         ),
       );
@@ -191,16 +207,31 @@ class ReaderAudioController extends ChangeNotifier
       if (autoPlay) {
         await _player.play();
       }
-    } catch (error) {
+    } catch (error, stackTrace) {
       if (token != _prepareToken) {
         return;
       }
+      _logger.warn(
+        'Reader audio source load failed',
+        context: <String, Object?>{
+          'bookId': session.bookId,
+          'sourceId': session.sourceId,
+          'detailUrl': session.detailUrl,
+          'chapterId': session.chapterId,
+          'chapterIndex': session.chapterIndex,
+          'isManifest': _isManifest(session, audioUrl),
+          'audioUrl': audioUrl,
+          'audioHeaderKeys': headers.keys.toList(growable: false),
+          'error': error.toString(),
+          'stackTrace': stackTrace.toString(),
+        },
+      );
       _setState(
         _state.copyWith(
           isReady: false,
           playbackState: AudioPlaybackState(
             status: AudioPlaybackStatus.error,
-            errorMessage: '音频加载失败: $error',
+            errorMessage: '音频地址加载失败，请重试或切换书源。错误: $error',
           ),
         ),
       );

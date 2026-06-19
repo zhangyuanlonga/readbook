@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shuxiang_reading_next/app/tasks/app_task_manager.dart';
 import 'package:shuxiang_reading_next/app/widgets/app_task_status.dart';
 
@@ -118,5 +119,86 @@ void main() {
       manager.taskById('import')?.recoveryPolicy,
       AppTaskRecoveryPolicy.resumable,
     );
+  });
+
+  test('exposes task snapshots through provider facades', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final manager = container.read(appTaskManagerProvider);
+
+    expect(container.read(activeAppTaskProvider), isNull);
+
+    manager.startTask(
+      id: 'reader',
+      channel: AppTaskChannel.reader,
+      priority: AppTaskPriority.immediate,
+      status: const AppTaskStatusData(title: '打开阅读', message: '正在打开章节'),
+    );
+
+    expect(container.read(appTaskSnapshotsProvider), hasLength(1));
+    expect(container.read(activeAppTaskProvider)?.id, 'reader');
+  });
+
+  test('provider facades reflect progress, cancellation and failure', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final manager = container.read(appTaskManagerProvider);
+
+    manager.startTask(
+      id: 'import',
+      channel: AppTaskChannel.localBookImport,
+      priority: AppTaskPriority.userInitiated,
+      canCancel: true,
+      status: const AppTaskStatusData(title: '导入图书', message: '准备导入'),
+    );
+
+    manager.updateTask(
+      'import',
+      const AppTaskStatusData(title: '导入图书', message: '正在导入', progress: 0.4),
+    );
+
+    expect(
+      container
+          .read(appTaskSnapshotsProvider)
+          .singleWhere((task) => task.id == 'import')
+          .status
+          .progress,
+      0.4,
+    );
+    expect(container.read(activeAppTaskProvider)?.id, 'import');
+
+    manager.cancelTask('import');
+    expect(
+      container
+          .read(appTaskSnapshotsProvider)
+          .singleWhere((task) => task.id == 'import')
+          .status
+          .result,
+      AppTaskStatusResult.cancelled,
+    );
+    expect(container.read(activeAppTaskProvider), isNull);
+
+    manager.startTask(
+      id: 'scan',
+      channel: AppTaskChannel.resourceScan,
+      priority: AppTaskPriority.background,
+      status: const AppTaskStatusData(title: '扫描资源', message: '正在扫描'),
+    );
+    manager.updateTask(
+      'scan',
+      const AppTaskStatusData(
+        title: '扫描资源',
+        message: '扫描失败',
+        result: AppTaskStatusResult.failure,
+      ),
+      canRetry: true,
+    );
+
+    final failedTask = container
+        .read(appTaskSnapshotsProvider)
+        .singleWhere((task) => task.id == 'scan');
+    expect(failedTask.canRetry, isTrue);
+    expect(failedTask.status.result, AppTaskStatusResult.failure);
+    expect(container.read(activeAppTaskProvider), isNull);
   });
 }

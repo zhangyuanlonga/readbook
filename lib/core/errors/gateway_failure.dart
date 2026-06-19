@@ -145,6 +145,11 @@ class GatewayFailure {
 
   bool get isAntiSpider => _categoryEquals('antiSpider');
 
+  bool get isMissingSource =>
+      code.trim().toUpperCase() == 'SOURCE_NOT_FOUND' ||
+      code.trim().toUpperCase() == 'NOT_FOUND' ||
+      _categoryEquals('notFound');
+
   String get actionHint {
     if (isLoginRequired) {
       return '该书源需要登录或登录态已失效，可先用客户端 WebView 完成登录并提交会话，再重试或切换其他书源。';
@@ -154,6 +159,9 @@ class GatewayFailure {
     }
     if (isAntiSpider) {
       return '疑似触发反爬或限流，可稍后重试、降低并发，或切换其他书源。';
+    }
+    if (isMissingSource) {
+      return '可能是书源被删除、取消授权，或当前账号不再属于该书源分组；建议换源或重新搜索。';
     }
     return retryable ? '可以稍后重试，或切换其他书源。' : '建议检查书源配置或切换书源。';
   }

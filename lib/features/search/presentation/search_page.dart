@@ -23,6 +23,7 @@ import '../../../app/widgets/foundation/foundation.dart';
 
 import '../../../core/errors/app_exception.dart';
 import '../../../core/errors/error_stage.dart';
+import '../../../core/logging/app_logger.dart';
 import '../../../domain/entities/book.dart';
 import '../../book/application/book_display_state.dart';
 import '../../book/application/book_presentation_query_service.dart';
@@ -1048,8 +1049,14 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       setState(() {
         _aggregateByTitleAuthorEnabled = enabled;
       });
-    } catch (_) {
-      // Keep default when settings loading fails.
+    } catch (error, stackTrace) {
+      AppLogger.instance.warn(
+        'Search system settings load failed',
+        context: <String, Object?>{
+          'error': error.toString(),
+          'stackTrace': stackTrace.toString(),
+        },
+      );
     }
   }
 
@@ -1616,6 +1623,14 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     final token = SearchCancellationToken();
     _activeSearchToken = token;
     var pendingFinalUiCompletion = false;
+    final selectedServerSourceIds =
+        _selectedServerSourceIds.isEmpty
+            ? null
+            : _selectedServerSourceIds.toList(growable: false);
+    final selectedServerGroupNames =
+        _selectedServerGroupNames.isEmpty
+            ? null
+            : _selectedServerGroupNames.toList(growable: false);
 
     _clearSearchOutput();
     setState(() {
@@ -1623,14 +1638,6 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     });
 
     try {
-      final selectedServerSourceIds =
-          _selectedServerSourceIds.isEmpty
-              ? null
-              : _selectedServerSourceIds.toList(growable: false);
-      final selectedServerGroupNames =
-          _selectedServerGroupNames.isEmpty
-              ? null
-              : _selectedServerGroupNames.toList(growable: false);
       final report = await _serverOnlineSearchService.search(
         keyword: keyword,
         contentMode: _searchContentMode,
@@ -1672,16 +1679,42 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       if (report.books.isEmpty) {
         _showMessage('搜索完成，但没有命中结果。');
       }
-    } on AppException catch (error) {
+    } on AppException catch (error, stackTrace) {
       if (!mounted || token.isCancelled || sessionId != _searchSessionId) {
         return;
       }
+      AppLogger.instance.warn(
+        'Online search app exception',
+        context: <String, Object?>{
+          'keyword': keyword,
+          'sessionId': sessionId,
+          'selectedSourceIds': selectedServerSourceIds,
+          'selectedGroupNames': selectedServerGroupNames,
+          'stage': error.stage.name,
+          'code': error.code.name,
+          'sourceId': error.sourceId,
+          'requestUrl': error.requestUrl,
+          'error': error.toString(),
+          'stackTrace': stackTrace.toString(),
+        },
+      );
       _showMessage(_onlineSourceErrorAdapter.forException(error));
-    } catch (error) {
+    } catch (error, stackTrace) {
       if (!mounted || token.isCancelled || sessionId != _searchSessionId) {
         return;
       }
-      debugPrint('Search failed: $error');
+      AppLogger.instance.warn(
+        'Online search failed',
+        context: <String, Object?>{
+          'keyword': keyword,
+          'sessionId': sessionId,
+          'selectedSourceIds': selectedServerSourceIds,
+          'selectedGroupNames': selectedServerGroupNames,
+          'aggregateByTitleAuthor': _aggregateByTitleAuthorEnabled,
+          'error': error.toString(),
+          'stackTrace': stackTrace.toString(),
+        },
+      );
       _showMessage(
         _onlineSourceErrorAdapter.genericFailureForStage(ErrorStage.search),
       );
