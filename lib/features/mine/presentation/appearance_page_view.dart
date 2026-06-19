@@ -186,6 +186,8 @@ extension on _AppearancePageState {
       );
       sections.add(SizedBox(height: sectionGap));
       sections.add(_buildAdvancedThemeSummarySection(context));
+      sections.add(SizedBox(height: sectionGap));
+      sections.add(_buildComponentDemoEntrySection(context));
       if (!isDesktopAppearanceOnly) {
         sections.addAll([
           SizedBox(height: sectionGap),
@@ -623,6 +625,90 @@ extension on _AppearancePageState {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildComponentDemoEntrySection(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return _buildSectionCard(
+      context,
+      icon: Icons.widgets_outlined,
+      title: '组件样板',
+      subtitle: '分别查看当前主题和 Lumina 风格的真实组件效果。',
+      child: Column(
+        children: [
+          _buildComponentDemoEntryTile(
+            context,
+            icon: Icons.dashboard_customize_outlined,
+            label: '当前主题组件样板',
+            description: '跟随当前主题色、高级主题和暗色模式。',
+            route: '/appearance/component-demo',
+          ),
+          Divider(
+            height: 14,
+            color: colorScheme.outlineVariant.withValues(alpha: 0.52),
+          ),
+          _buildComponentDemoEntryTile(
+            context,
+            icon: Icons.auto_awesome_outlined,
+            label: 'Lumina 组件样板',
+            description: '局部套用 Lumina 白底、炭黑和冷灰风格。',
+            route: '/appearance/lumina-component-demo',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildComponentDemoEntryTile(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required String description,
+    required String route,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () => context.push(route),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 8),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: colorScheme.onSurfaceVariant),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    description,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      height: 1.3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Icon(
+              Icons.chevron_right_rounded,
+              size: 18,
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ],
         ),
       ),
     );

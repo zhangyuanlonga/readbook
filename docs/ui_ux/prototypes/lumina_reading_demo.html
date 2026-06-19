@@ -1,0 +1,1347 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lumina Reading Demo</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --page: #f8fafc;
+      --surface: #fafbfd;
+      --surface-raised: #f2f5f8;
+      --card: #ffffff;
+      --card-border: #e6eaf0;
+      --text: #1c1b1b;
+      --muted: #5e6572;
+      --outline: #cbd2dc;
+      --primary: #1c1b1b;
+      --primary-soft: #eef3f8;
+      --secondary: #585f6c;
+      --accent: #687385;
+      --notice: #746b87;
+      --shadow: rgba(16, 24, 40, 0.06);
+      --reader: #fbfaf7;
+      --reader-panel: #ffffff;
+      --radius: 14px;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--page);
+    }
+
+    body:not(.dark)[data-palette="cool"] {
+      --page: #f6f9fc;
+      --surface: #fbfdff;
+      --surface-raised: #edf4fa;
+      --card-border: #e1e8f0;
+      --muted: #586474;
+      --outline: #c7d1dc;
+      --primary-soft: #eaf2f8;
+      --accent: #5f7389;
+      --notice: #6f6f93;
+      --shadow: rgba(17, 35, 58, 0.06);
+      --reader: #fbfaf7;
+    }
+
+    body:not(.dark)[data-palette="app"] {
+      --page: #ffffff;
+      --surface: #ffffff;
+      --surface-raised: #f6f7f9;
+      --card-border: #edf0f4;
+      --muted: #606773;
+      --outline: #d5dae2;
+      --primary-soft: #f3f6f8;
+      --accent: #68717e;
+      --notice: #746b87;
+      --shadow: rgba(15, 23, 42, 0.045);
+      --reader: #fbfaf7;
+    }
+
+    body:not(.dark)[data-palette="paper"] {
+      --page: #fbfbf8;
+      --surface: #fdfdfb;
+      --surface-raised: #f5f5f0;
+      --card-border: #e8e8df;
+      --muted: #62665f;
+      --outline: #cfcec4;
+      --primary-soft: #f2f2eb;
+      --accent: #6f766f;
+      --notice: #7d7186;
+      --shadow: rgba(39, 38, 31, 0.055);
+      --reader: #fbfaf4;
+    }
+
+    body.dark {
+      color-scheme: dark;
+      --page: #141414;
+      --surface: #1b1a1a;
+      --surface-raised: #242323;
+      --card: #201f1f;
+      --card-border: #373535;
+      --text: #f4f0ef;
+      --muted: #c8c6c5;
+      --outline: #555252;
+      --primary: #e5e2e1;
+      --primary-soft: #313030;
+      --secondary: #c0c7d6;
+      --accent: #c0c7d6;
+      --notice: #b9aec8;
+      --shadow: rgba(0, 0, 0, 0.34);
+      --reader: #181716;
+      --reader-panel: #201f1f;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      background: var(--page);
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: 84px minmax(320px, 0.78fr) minmax(380px, 1fr);
+      gap: 18px;
+      min-height: 100vh;
+      padding: 18px;
+    }
+
+    .rail {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 10px;
+      border: 1px solid var(--card-border);
+      border-radius: 22px;
+      background: var(--surface);
+      box-shadow: 0 12px 28px var(--shadow);
+    }
+
+    .logo {
+      display: grid;
+      place-items: center;
+      width: 42px;
+      height: 42px;
+      margin-bottom: 8px;
+      border-radius: 15px;
+      background: var(--primary);
+      color: var(--page);
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    .rail-button {
+      display: grid;
+      place-items: center;
+      width: 44px;
+      height: 44px;
+      border: 1px solid transparent;
+      border-radius: 15px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+    }
+
+    .rail-button.active {
+      border-color: color-mix(in srgb, var(--primary), transparent 70%);
+      background: var(--primary-soft);
+      color: var(--primary);
+    }
+
+    .rail-spacer {
+      flex: 1;
+    }
+
+    .toggle {
+      width: 44px;
+      height: 44px;
+      border: 1px solid var(--card-border);
+      border-radius: 15px;
+      background: var(--card);
+      color: var(--primary);
+      cursor: pointer;
+    }
+
+    .panel,
+    .stage {
+      min-width: 0;
+    }
+
+    .panel {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      padding: 18px;
+      border: 1px solid var(--card-border);
+      border-radius: 22px;
+      background: var(--surface);
+      box-shadow: 0 14px 34px var(--shadow);
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .title-group h1,
+    .stage-title h2 {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.15;
+      letter-spacing: 0;
+    }
+
+    .title-group p,
+    .stage-title p {
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .search {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      height: 42px;
+      padding: 0 14px;
+      border: 1px solid var(--card-border);
+      border-radius: 999px;
+      background: var(--card);
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+
+    .tab {
+      height: 34px;
+      padding: 0 13px;
+      border: 1px solid var(--card-border);
+      border-radius: 999px;
+      background: var(--card);
+      color: var(--muted);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .tab.active {
+      border-color: color-mix(in srgb, var(--primary), transparent 68%);
+      background: var(--primary-soft);
+      color: var(--primary);
+      font-weight: 700;
+    }
+
+    .continue-card {
+      display: grid;
+      grid-template-columns: 70px 1fr;
+      gap: 14px;
+      padding: 12px;
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      background: var(--card);
+    }
+
+    .cover {
+      position: relative;
+      overflow: hidden;
+      min-height: 98px;
+      border-radius: 10px;
+      background: linear-gradient(145deg, #374151, #d8c6a5);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+    }
+
+    .cover::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(90deg, rgba(0, 0, 0, 0.18), transparent 20%),
+        linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.18));
+    }
+
+    .cover.c2 { background: linear-gradient(145deg, #1f2937, #7d8ba5); }
+    .cover.c3 { background: linear-gradient(145deg, #4a312f, #dab996); }
+    .cover.c4 { background: linear-gradient(145deg, #243b36, #bfc8b1); }
+    .cover.c5 { background: linear-gradient(145deg, #343044, #d4c5dd); }
+    .cover.c6 { background: linear-gradient(145deg, #263548, #bdcad8); }
+
+    .book-title {
+      margin: 0;
+      color: var(--text);
+      font-size: 15px;
+      line-height: 1.3;
+      font-weight: 750;
+    }
+
+    .book-meta,
+    .book-chapter {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .book-stack {
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+      gap: 7px;
+    }
+
+    .progress {
+      height: 4px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--accent), transparent 82%);
+    }
+
+    .progress > span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--accent);
+    }
+
+    .book-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .book-card {
+      min-width: 0;
+      padding: 10px;
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      background: var(--card);
+    }
+
+    .book-card .cover {
+      aspect-ratio: 0.72;
+      min-height: 0;
+      margin-bottom: 10px;
+    }
+
+    .book-card .book-title {
+      font-size: 13px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .book-card .book-meta {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .stage {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      gap: 14px;
+      padding: 18px;
+      border: 1px solid var(--card-border);
+      border-radius: 22px;
+      background: var(--surface);
+      box-shadow: 0 14px 34px var(--shadow);
+    }
+
+    .stage-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .palette-switch {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: flex-end;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      height: 30px;
+      padding: 0 11px;
+      border: 1px solid var(--card-border);
+      border-radius: 999px;
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .palette-button {
+      height: 30px;
+      padding: 0 10px;
+      border: 1px solid var(--card-border);
+      border-radius: 999px;
+      background: var(--card);
+      color: var(--muted);
+      font-size: 12px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .palette-button.active {
+      border-color: color-mix(in srgb, var(--accent), transparent 56%);
+      background: var(--primary-soft);
+      color: var(--primary);
+      font-weight: 700;
+    }
+
+    .pill.strong {
+      border-color: color-mix(in srgb, var(--accent), transparent 60%);
+      background: color-mix(in srgb, var(--accent), transparent 86%);
+      color: var(--primary);
+      font-weight: 700;
+    }
+
+    .screen {
+      display: none;
+      min-height: 0;
+    }
+
+    .screen.active {
+      display: block;
+    }
+
+    .reader-shell {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      min-height: 640px;
+      overflow: hidden;
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      background: var(--reader);
+    }
+
+    .reader-chrome {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 18px;
+      color: var(--muted);
+      font-size: 12px;
+      background: color-mix(in srgb, var(--reader-panel), transparent 12%);
+      border-bottom: 1px solid color-mix(in srgb, var(--card-border), transparent 24%);
+    }
+
+    .reader-page {
+      max-width: 620px;
+      margin: 0 auto;
+      padding: 44px 44px 36px;
+      color: var(--text);
+      line-height: 1.86;
+      font-family: Georgia, "Times New Roman", "Songti SC", serif;
+    }
+
+    .reader-page h3 {
+      margin: 0 0 24px;
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+
+    .reader-page p {
+      margin: 0 0 18px;
+      color: color-mix(in srgb, var(--text), transparent 5%);
+      font-size: 17px;
+    }
+
+    .reader-footer {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 18px;
+      border-top: 1px solid color-mix(in srgb, var(--card-border), transparent 24%);
+      background: color-mix(in srgb, var(--reader-panel), transparent 12%);
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .reader-footer .progress {
+      flex: 1;
+    }
+
+    .search-layout {
+      display: grid;
+      gap: 12px;
+    }
+
+    .search-input {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      height: 48px;
+      padding: 0 16px;
+      border: 1px solid var(--card-border);
+      border-radius: 999px;
+      background: var(--surface);
+      color: var(--muted);
+    }
+
+    .result-card {
+      display: grid;
+      grid-template-columns: 54px 1fr auto;
+      gap: 12px;
+      align-items: center;
+      padding: 12px;
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      background: var(--card);
+    }
+
+    .result-card .cover {
+      min-height: 74px;
+      border-radius: 9px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent), transparent 84%);
+    }
+
+    .records {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .metric-card,
+    .heatmap-card {
+      padding: 14px;
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      background: var(--card);
+    }
+
+    .metric-card b {
+      display: block;
+      margin-top: 8px;
+      font-size: 28px;
+      letter-spacing: 0;
+    }
+
+    .heatmap {
+      display: grid;
+      grid-template-columns: repeat(14, 1fr);
+      gap: 5px;
+      margin-top: 14px;
+    }
+
+    .heatmap span {
+      aspect-ratio: 1;
+      border-radius: 4px;
+      background: color-mix(in srgb, var(--accent), transparent 88%);
+    }
+
+    .heatmap span:nth-child(3n) {
+      background: color-mix(in srgb, var(--accent), transparent 72%);
+    }
+
+    .heatmap span:nth-child(5n) {
+      background: color-mix(in srgb, var(--accent), transparent 55%);
+    }
+
+    .heatmap span:nth-child(11n) {
+      background: color-mix(in srgb, var(--notice), transparent 44%);
+    }
+
+    .components-layout {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .component-card {
+      min-width: 0;
+      padding: 14px;
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      background: var(--card);
+    }
+
+    .component-card.wide {
+      grid-column: 1 / -1;
+    }
+
+    .component-title {
+      margin: 0 0 12px;
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.25;
+      font-weight: 800;
+    }
+
+    .control-stack {
+      display: grid;
+      gap: 10px;
+    }
+
+    .control-row,
+    .chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .component-search {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 44px;
+      padding: 0 14px;
+      border: 1px solid var(--card-border);
+      border-radius: 999px;
+      background: var(--surface-raised);
+      color: var(--muted);
+    }
+
+    .component-search strong {
+      margin-left: auto;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .demo-button,
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 36px;
+      border: 1px solid var(--card-border);
+      border-radius: 999px;
+      background: var(--card);
+      color: var(--text);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .demo-button {
+      gap: 7px;
+      padding: 0 14px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .demo-button.primary {
+      border-color: var(--primary);
+      background: var(--primary);
+      color: var(--page);
+    }
+
+    .demo-button.secondary {
+      background: var(--primary-soft);
+      color: var(--primary);
+    }
+
+    .demo-button.ghost {
+      background: transparent;
+      color: var(--muted);
+    }
+
+    .demo-button:disabled {
+      cursor: default;
+      opacity: 0.44;
+    }
+
+    .icon-button {
+      width: 38px;
+      min-width: 38px;
+      padding: 0;
+    }
+
+    .select-wrap {
+      position: relative;
+    }
+
+    .select-control {
+      width: 100%;
+      min-height: 42px;
+      appearance: none;
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      background: var(--card);
+      color: var(--text);
+      padding: 0 40px 0 13px;
+      outline: none;
+    }
+
+    .select-wrap::after {
+      content: "⌄";
+      position: absolute;
+      top: 50%;
+      right: 14px;
+      color: var(--muted);
+      transform: translateY(-54%);
+      pointer-events: none;
+    }
+
+    .option-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .option-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 40px;
+      padding: 0 12px;
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      background: var(--card);
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .option-row input {
+      width: 16px;
+      height: 16px;
+      margin: 0;
+      accent-color: var(--accent);
+    }
+
+    .chip {
+      min-height: 32px;
+      padding: 0 11px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .chip.active {
+      border-color: color-mix(in srgb, var(--accent), transparent 58%);
+      background: var(--primary-soft);
+      color: var(--primary);
+    }
+
+    .list-demo {
+      display: grid;
+      gap: 8px;
+    }
+
+    .list-row {
+      display: grid;
+      grid-template-columns: 42px 1fr auto;
+      gap: 12px;
+      align-items: center;
+      min-width: 0;
+      padding: 10px;
+      border: 1px solid var(--card-border);
+      border-radius: 13px;
+      background: var(--card);
+    }
+
+    .list-icon {
+      display: grid;
+      place-items: center;
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      background: var(--primary-soft);
+      color: var(--accent);
+      font-weight: 800;
+    }
+
+    .list-main {
+      min-width: 0;
+    }
+
+    .list-title {
+      margin: 0;
+      overflow: hidden;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 750;
+      line-height: 1.35;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .list-meta {
+      margin-top: 2px;
+      overflow: hidden;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .list-action {
+      color: var(--muted);
+      font-size: 18px;
+    }
+
+    .switch-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 42px;
+      padding: 0 12px;
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      background: var(--card);
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 46px;
+      height: 26px;
+      flex: 0 0 auto;
+    }
+
+    .switch input {
+      width: 0;
+      height: 0;
+      opacity: 0;
+    }
+
+    .switch-track {
+      position: absolute;
+      inset: 0;
+      border: 1px solid var(--card-border);
+      border-radius: 999px;
+      background: var(--surface-raised);
+      cursor: pointer;
+    }
+
+    .switch-track::before {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--card);
+      box-shadow: 0 2px 6px var(--shadow);
+      transition: transform 140ms ease;
+    }
+
+    .switch input:checked + .switch-track {
+      border-color: color-mix(in srgb, var(--accent), transparent 45%);
+      background: var(--accent);
+    }
+
+    .switch input:checked + .switch-track::before {
+      transform: translateX(20px);
+    }
+
+    .slider-row {
+      display: grid;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .slider-row input {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+
+    @media (max-width: 980px) {
+      .app {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .rail {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        flex-direction: row;
+        border-radius: 0 0 20px 20px;
+      }
+
+      .rail-spacer {
+        flex: 1;
+      }
+
+      .book-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .components-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .reader-shell {
+        min-height: 560px;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .app {
+        padding: 0 0 14px;
+        gap: 12px;
+      }
+
+      .panel,
+      .stage {
+        margin: 0 12px;
+        width: calc(100vw - 24px);
+        max-width: calc(100vw - 24px);
+        overflow: hidden;
+        padding: 14px;
+        border-radius: 18px;
+      }
+
+      .topbar,
+      .stage-header {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .search {
+        width: 100%;
+      }
+
+      .records,
+      .components-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .reader-page {
+        padding: 30px 24px 26px;
+      }
+
+      .reader-page p {
+        font-size: 16px;
+      }
+    }
+  </style>
+</head>
+<body data-palette="app">
+  <main class="app">
+    <nav class="rail" aria-label="Demo navigation">
+      <div class="logo">L</div>
+      <button class="rail-button active" data-screen="shelf" title="书架">⌂</button>
+      <button class="rail-button" data-screen="reader" title="阅读">□</button>
+      <button class="rail-button" data-screen="search" title="搜索">⌕</button>
+      <button class="rail-button" data-screen="records" title="记录">▥</button>
+      <button class="rail-button" data-screen="components" title="组件">▦</button>
+      <div class="rail-spacer"></div>
+      <button class="toggle" id="themeToggle" title="切换明暗">◐</button>
+    </nav>
+
+    <section class="panel">
+      <div class="topbar">
+        <div class="title-group">
+          <h1>Lumina</h1>
+          <p>安静、克制、内容优先的阅读外观预设</p>
+        </div>
+        <div class="search">⌕ 搜索书名、作者</div>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" data-screen="shelf">书架</button>
+        <button class="tab" data-screen="reader">阅读器</button>
+        <button class="tab" data-screen="search">搜索</button>
+        <button class="tab" data-screen="records">阅读记录</button>
+        <button class="tab" data-screen="components">组件</button>
+      </div>
+
+      <article class="continue-card">
+        <div class="cover c5"></div>
+        <div class="book-stack">
+          <p class="book-title">长夜余火</p>
+          <div class="book-meta">爱潜水的乌贼 · 最近阅读</div>
+          <div class="book-chapter">第 162 章 旧世界的门</div>
+          <div class="progress"><span style="width: 68%"></span></div>
+        </div>
+      </article>
+
+      <div class="book-grid">
+        <article class="book-card">
+          <div class="cover"></div>
+          <p class="book-title">三体</p>
+          <div class="book-meta">刘慈欣</div>
+        </article>
+        <article class="book-card">
+          <div class="cover c2"></div>
+          <p class="book-title">献给阿尔吉侬的花束</p>
+          <div class="book-meta">丹尼尔·凯斯</div>
+        </article>
+        <article class="book-card">
+          <div class="cover c3"></div>
+          <p class="book-title">庆余年</p>
+          <div class="book-meta">猫腻</div>
+        </article>
+        <article class="book-card">
+          <div class="cover c4"></div>
+          <p class="book-title">活着</p>
+          <div class="book-meta">余华</div>
+        </article>
+        <article class="book-card">
+          <div class="cover c5"></div>
+          <p class="book-title">雪中悍刀行</p>
+          <div class="book-meta">烽火戏诸侯</div>
+        </article>
+        <article class="book-card">
+          <div class="cover c6"></div>
+          <p class="book-title">银河帝国</p>
+          <div class="book-meta">阿西莫夫</div>
+        </article>
+      </div>
+    </section>
+
+    <section class="stage">
+      <header class="stage-header">
+        <div class="stage-title">
+          <h2 id="stageTitle">书架样板</h2>
+          <p id="stageSubtitle">白底优先、白卡片、低干扰进度与选中态。</p>
+        </div>
+        <div class="pill-row">
+          <span class="pill strong">Lumina Light/Dark</span>
+          <span class="pill">高级主题预设</span>
+          <div class="palette-switch" aria-label="浅色背景方案">
+            <button class="palette-button active" data-palette="app">App 白底</button>
+            <button class="palette-button" data-palette="clean">洁净白灰</button>
+            <button class="palette-button" data-palette="cool">冷蓝白灰</button>
+            <button class="palette-button" data-palette="paper">纸感近白</button>
+          </div>
+        </div>
+      </header>
+
+      <section class="screen active" id="screen-shelf">
+        <div class="book-grid">
+          <article class="book-card">
+            <div class="cover"></div>
+            <p class="book-title">人类群星闪耀时</p>
+            <div class="book-meta">茨威格 · 35%</div>
+            <div class="progress"><span style="width: 35%"></span></div>
+          </article>
+          <article class="book-card">
+            <div class="cover c2"></div>
+            <p class="book-title">悉达多</p>
+            <div class="book-meta">黑塞 · 82%</div>
+            <div class="progress"><span style="width: 82%"></span></div>
+          </article>
+          <article class="book-card">
+            <div class="cover c3"></div>
+            <p class="book-title">夜航西飞</p>
+            <div class="book-meta">柏瑞尔 · 12%</div>
+            <div class="progress"><span style="width: 12%"></span></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-reader">
+        <div class="reader-shell">
+          <div class="reader-chrome">
+            <span>长夜余火</span>
+            <span>第 162 章</span>
+          </div>
+          <article class="reader-page">
+            <h3>旧世界的门</h3>
+            <p>窗外的光落在纸页上，像一层很薄的晨雾。那些细碎的尘埃慢慢浮起来，提醒他时间仍旧在安静地流动。</p>
+            <p>他把书签夹回章节之间，听见远处街道传来低低的人声。这个世界并不总是温柔，但在阅读的片刻里，它可以暂时退后一步。</p>
+            <p>面板、目录和注释都藏在边缘，只在需要时出现。文字留在中央，成为真正的主角。</p>
+          </article>
+          <div class="reader-footer">
+            <span>68%</span>
+            <div class="progress"><span style="width: 68%"></span></div>
+            <span>21:42</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-search">
+        <div class="search-layout">
+          <div class="search-input">⌕ 三体</div>
+          <article class="result-card">
+            <div class="cover c6"></div>
+            <div class="book-stack">
+              <p class="book-title">三体全集</p>
+              <div class="book-meta">刘慈欣 · 科幻 · 书源 A</div>
+              <div class="book-chapter">搜索完成，目录可用</div>
+            </div>
+            <span class="status-dot"></span>
+          </article>
+          <article class="result-card">
+            <div class="cover c2"></div>
+            <div class="book-stack">
+              <p class="book-title">黑暗森林</p>
+              <div class="book-meta">刘慈欣 · 书源 B</div>
+              <div class="book-chapter">最近更新：第 33 章</div>
+            </div>
+            <span class="status-dot"></span>
+          </article>
+          <article class="result-card">
+            <div class="cover c3"></div>
+            <div class="book-stack">
+              <p class="book-title">死神永生</p>
+              <div class="book-meta">刘慈欣 · 书源 C</div>
+              <div class="book-chapter">可加入书架</div>
+            </div>
+            <span class="status-dot"></span>
+          </article>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-records">
+        <div class="records">
+          <article class="metric-card">
+            <span class="book-meta">本周阅读</span>
+            <b>7.6h</b>
+            <div class="book-chapter">较上周 +18%</div>
+          </article>
+          <article class="metric-card">
+            <span class="book-meta">连续天数</span>
+            <b>23</b>
+            <div class="book-chapter">保持稳定节奏</div>
+          </article>
+          <article class="heatmap-card" style="grid-column: 1 / -1">
+            <span class="book-meta">最近阅读热力</span>
+            <div class="heatmap" aria-label="reading heatmap">
+              <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-components">
+        <div class="components-layout">
+          <article class="component-card wide">
+            <h3 class="component-title">搜索框</h3>
+            <div class="control-stack">
+              <div class="component-search">
+                <span>⌕</span>
+                <span>搜索书名、作者、标签、分类</span>
+                <strong>全部 1 本</strong>
+              </div>
+              <div class="component-search">
+                <span>⌕</span>
+                <span>斗破苍穹</span>
+                <strong>书源</strong>
+              </div>
+            </div>
+          </article>
+
+          <article class="component-card">
+            <h3 class="component-title">按钮</h3>
+            <div class="control-row">
+              <button class="demo-button primary">开始阅读</button>
+              <button class="demo-button secondary">加入书架</button>
+              <button class="demo-button ghost">取消</button>
+              <button class="demo-button icon-button" title="更多">⋯</button>
+              <button class="demo-button" disabled>不可用</button>
+            </div>
+          </article>
+
+          <article class="component-card">
+            <h3 class="component-title">下拉框</h3>
+            <div class="control-stack">
+              <label class="select-wrap">
+                <select class="select-control">
+                  <option>全部书籍</option>
+                  <option>最近阅读</option>
+                  <option>未读更新</option>
+                </select>
+              </label>
+              <label class="select-wrap">
+                <select class="select-control">
+                  <option>按最近阅读排序</option>
+                  <option>按更新时间排序</option>
+                  <option>按书名排序</option>
+                </select>
+              </label>
+            </div>
+          </article>
+
+          <article class="component-card">
+            <h3 class="component-title">单选</h3>
+            <div class="option-list">
+              <label class="option-row">
+                <input type="radio" name="view-mode" checked>
+                <span>书架网格</span>
+              </label>
+              <label class="option-row">
+                <input type="radio" name="view-mode">
+                <span>紧凑列表</span>
+              </label>
+              <label class="option-row">
+                <input type="radio" name="view-mode">
+                <span>阅读记录</span>
+              </label>
+            </div>
+          </article>
+
+          <article class="component-card">
+            <h3 class="component-title">多选</h3>
+            <div class="option-list">
+              <label class="option-row">
+                <input type="checkbox" checked>
+                <span>显示阅读进度</span>
+              </label>
+              <label class="option-row">
+                <input type="checkbox" checked>
+                <span>显示最新章节</span>
+              </label>
+              <label class="option-row">
+                <input type="checkbox">
+                <span>仅看有更新</span>
+              </label>
+            </div>
+          </article>
+
+          <article class="component-card">
+            <h3 class="component-title">标签</h3>
+            <div class="chip-row">
+              <button class="chip active">全部</button>
+              <button class="chip">玄幻</button>
+              <button class="chip">科幻</button>
+              <button class="chip">已完结</button>
+              <button class="chip">有更新</button>
+            </div>
+          </article>
+
+          <article class="component-card">
+            <h3 class="component-title">开关与滑条</h3>
+            <div class="control-stack">
+              <label class="switch-row">
+                <span>自动同步阅读进度</span>
+                <span class="switch">
+                  <input type="checkbox" checked>
+                  <span class="switch-track"></span>
+                </span>
+              </label>
+              <label class="slider-row">
+                <span>阅读字号 18</span>
+                <input type="range" min="14" max="28" value="18">
+              </label>
+            </div>
+          </article>
+
+          <article class="component-card wide">
+            <h3 class="component-title">列表</h3>
+            <div class="list-demo">
+              <article class="list-row">
+                <div class="list-icon">更</div>
+                <div class="list-main">
+                  <p class="list-title">斗破苍穹</p>
+                  <div class="list-meta">最新: 第七百八十一章 · 2 分钟前</div>
+                </div>
+                <span class="list-action">›</span>
+              </article>
+              <article class="list-row">
+                <div class="list-icon">签</div>
+                <div class="list-main">
+                  <p class="list-title">旧世界的门</p>
+                  <div class="list-meta">书签 · 第 162 章 · 21:42</div>
+                </div>
+                <span class="list-action">›</span>
+              </article>
+              <article class="list-row">
+                <div class="list-icon">源</div>
+                <div class="list-main">
+                  <p class="list-title">书源 A</p>
+                  <div class="list-meta">可用 · 响应 320ms · 目录完整</div>
+                </div>
+                <span class="list-action">›</span>
+              </article>
+            </div>
+          </article>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    const titles = {
+      shelf: ["书架样板", "白底优先、白卡片、低干扰进度与选中态。"],
+      reader: ["阅读器样板", "正文背景和阅读 chrome 保持同一种安静气质。"],
+      search: ["搜索样板", "搜索、结果、状态点都使用低饱和层级。"],
+      records: ["阅读记录样板", "数据卡片和热力图避免高饱和主题色抢焦点。"],
+      components: ["组件样板", "搜索框、按钮、选择控件和列表保持同一套轻层级。"]
+    };
+    const screenIds = new Set(Object.keys(titles));
+    const params = new URLSearchParams(window.location.search);
+
+    function setScreen(id) {
+      const nextScreen = screenIds.has(id) ? id : "shelf";
+      document.querySelectorAll("[data-screen]").forEach((button) => {
+        button.classList.toggle("active", button.dataset.screen === nextScreen);
+      });
+      document.querySelectorAll(".screen").forEach((screen) => {
+        screen.classList.toggle("active", screen.id === `screen-${nextScreen}`);
+      });
+      document.getElementById("stageTitle").textContent = titles[nextScreen][0];
+      document.getElementById("stageSubtitle").textContent = titles[nextScreen][1];
+    }
+
+    document.querySelectorAll("[data-screen]").forEach((button) => {
+      button.addEventListener("click", () => setScreen(button.dataset.screen));
+    });
+
+    const paletteIds = new Set(["app", "clean", "cool", "paper"]);
+
+    function setPalette(id) {
+      const nextPalette = paletteIds.has(id) ? id : "app";
+      document.body.dataset.palette = nextPalette;
+      document.querySelectorAll(".palette-button").forEach((item) => {
+        item.classList.toggle("active", item.dataset.palette === nextPalette);
+      });
+    }
+
+    document.querySelectorAll(".palette-button").forEach((button) => {
+      button.addEventListener("click", () => {
+        setPalette(button.dataset.palette);
+      });
+    });
+
+    setScreen(params.get("screen") || "shelf");
+    setPalette(params.get("palette") || document.body.dataset.palette);
+
+    document.getElementById("themeToggle").addEventListener("click", () => {
+      document.body.classList.toggle("dark");
+    });
+  </script>
+</body>
+</html>

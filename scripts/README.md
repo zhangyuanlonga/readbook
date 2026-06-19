@@ -270,6 +270,29 @@ V2 uses darker gradient background. V3 is currently active and produces the icon
 - Theme system validation
 - Storage layer validation
 
+### Run Phase 6 Guardrail Audit
+
+**Script:** `run_phase6_guardrail_audit.sh`
+
+```bash
+./scripts/run_phase6_guardrail_audit.sh
+```
+
+**Purpose:** Generate the v1.3.0 Phase 6 governance report in non-blocking report mode.
+
+**Checks:**
+- `lib/core/**` must not import/export `lib/features/**`; migration exceptions must be added to the script whitelist with a documented exit condition.
+- Dart files over 2500 lines are reported as warnings; files over 4000 lines require an explicit debt explanation.
+- `catch (_)`, empty catch blocks, and catch blocks that only `return false;` are counted for exception-handling cleanup.
+
+**Strict mode for future CI hardening:**
+
+```bash
+./scripts/run_phase6_guardrail_audit.sh --strict
+```
+
+Do not enable strict mode in release CI until the report-mode baseline has been observed for 1-2 versions.
+
 ---
 
 ## 5. Apple Platform Preparation

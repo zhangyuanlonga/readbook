@@ -1,6 +1,6 @@
 # 多端架构开发约束
 
-更新时间：2026-05-11  
+更新时间：2026-06-19
 用途：作为当前项目后续开发的强约束文档，统一多端架构、目录、依赖、Riverpod、路由、原生桥接、平台能力、UI 适配、测试和代码评审口径，避免“改一个端误伤另一个端”的架构发散。
 
 关联执行文档：
@@ -214,6 +214,28 @@ domain -> pure dart only
 
 - UI 控件 / 生命周期
 - 仓库实现 / 数据库 / 平台桥 / 网络细节
+
+### 4.4 Phase 6 自动化护栏
+
+Phase 6 新增三类审计脚本，默认以报告模式运行，先观察 1-2 个版本，不因为历史债务阻塞当前发版：
+
+```bash
+./scripts/run_phase6_guardrail_audit.sh
+```
+
+单项脚本：
+
+- `dart tool/check_core_feature_import_guard.dart`：禁止 `lib/core/**` import/export `lib/features/**`。如确有迁移期例外，必须把 source/target 写入脚本白名单，并在对应治理文档说明退出条件。
+- `dart tool/check_file_size_audit.dart`：扫描 `lib/**/*.dart`，超过 2500 行输出 warning，超过 4000 行必须登记解释。解释只代表“已知债务”，不代表文件体积合理。
+- `dart tool/check_catch_audit.dart`：统计 `catch (_)`、空 catch、只 `return false;` 的 catch 块，用于异常处理治理基线。
+
+后续若要把任一检查升级为强失败，使用 `--strict`：
+
+```bash
+./scripts/run_phase6_guardrail_audit.sh --strict
+```
+
+升级 strict 前必须先完成一次基线复核，确认不会因为已登记历史债务阻塞日常发布。
 
 ---
 

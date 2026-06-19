@@ -7,6 +7,7 @@ import 'presentation/appearance_page.dart';
 import 'presentation/bookmarks_page.dart';
 import 'presentation/bottom_nav_icon_gallery_editor_page.dart';
 import 'presentation/bottom_nav_icon_gallery_page.dart';
+import 'presentation/component_demo_page.dart';
 import 'presentation/cover_gallery_editor_page.dart';
 import 'presentation/cover_gallery_page.dart';
 import 'presentation/feedback_page.dart';
@@ -51,6 +52,16 @@ final List<RouteBase> mineRoutes = <RouteBase>[
     path: '/appearance/reader-background',
     name: 'reader-background',
     builder: (context, state) => const ReaderBackgroundPage(),
+  ),
+  GoRoute(
+    path: '/appearance/component-demo',
+    name: 'appearance-component-demo',
+    builder: (context, state) => const ComponentDemoPage(),
+  ),
+  GoRoute(
+    path: '/appearance/lumina-component-demo',
+    name: 'appearance-lumina-component-demo',
+    builder: (context, state) => const ComponentDemoPage.lumina(),
   ),
   GoRoute(
     path: '/appearance/launch-image',

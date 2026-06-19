@@ -570,20 +570,33 @@
 **目标**: 防止同类问题反复出现，让 review 从人工提醒变成持续约束。
 **建议周期**: 1 周
 **建议分支**: `codex/review-v130-guardrails`
+**状态**: 已完成（2026-06-19 报告模式接入本地命令）
 
 ### 任务
 
-- [ ] 新增架构检查脚本：禁止 `lib/core/**` import `features/**`，允许白名单。
-- [ ] 新增文件体积监控脚本：超过 2500 行 warning，超过 4000 行 require 说明。
-- [ ] 新增 catch 审计脚本：统计 `catch (_)`、空 catch、只 return false 的 catch。
-- [ ] 将检查接入本地命令或 CI，不先设置为强失败，先观察 1-2 个版本。
-- [ ] 更新 `docs/standards/development_architecture_guardrails.md` 或新增补充章节。
+- [x] 新增架构检查脚本：禁止 `lib/core/**` import `features/**`，允许白名单。
+- [x] 新增文件体积监控脚本：超过 2500 行 warning，超过 4000 行 require 说明。
+- [x] 新增 catch 审计脚本：统计 `catch (_)`、空 catch、只 return false 的 catch。
+- [x] 将检查接入本地命令或 CI，不先设置为强失败，先观察 1-2 个版本。
+- [x] 更新 `docs/standards/development_architecture_guardrails.md` 或新增补充章节。
 
 ### 验收
 
-- [ ] 可以一条命令生成架构/文件体积/catch 审计报告。
-- [ ] 新增违规能被发现。
-- [ ] 不因为历史问题阻塞当前发版，先以 warning 模式运行。
+- [x] 可以一条命令生成架构/文件体积/catch 审计报告。
+- [x] 新增违规能被发现。
+- [x] 不因为历史问题阻塞当前发版，先以 warning 模式运行。
+
+### 2026-06-19 Phase 6 自动化护栏记录
+
+- 新增 `tool/check_core_feature_import_guard.dart`：专查 `lib/core/**` import/export `lib/features/**`，默认报告模式，`--strict` 可作为后续 CI 强失败入口；白名单集中在脚本内并要求对应迁移说明。
+- 新增 `tool/check_file_size_audit.dart`：统计 `lib/**/*.dart` 文件体积，超过 2500 行报告 warning，超过 4000 行要求登记解释；既有超大文件以说明方式保留，不阻断发版。
+- 新增 `tool/check_catch_audit.dart`：统计 `catch (_)`、空 catch、只 `return false;` 的 catch 块，为后续异常治理提供基线。
+- 新增 `tool/run_phase6_guardrail_audit.dart` 与 `scripts/run_phase6_guardrail_audit.sh`：一条命令生成三类报告，默认不强失败；后续观察 1-2 个版本后再决定是否接 CI strict。
+- 本轮报告基线：core -> features 反向依赖 0；超过 2500 行文件 10 个，其中超过 4000 行且已登记解释 3 个；`catch (_)` 275 个、空 catch 67 个、只 `return false;` 的 catch 16 个。
+- 验证：`dart format tool/check_core_feature_import_guard.dart tool/check_file_size_audit.dart tool/check_catch_audit.dart tool/run_phase6_guardrail_audit.dart`
+- 验证：`dart analyze tool/check_core_feature_import_guard.dart tool/check_file_size_audit.dart tool/check_catch_audit.dart tool/run_phase6_guardrail_audit.dart`
+- 验证：`./scripts/run_phase6_guardrail_audit.sh`
+- 验证：临时目录 strict smoke，确认新增 core -> features import 会被 `check_core_feature_import_guard.dart --strict` 抓到并返回非 0。
 
 ---
 
