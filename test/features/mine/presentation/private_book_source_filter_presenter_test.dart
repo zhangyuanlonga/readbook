@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shuxiang_reading_next/features/mine/application/private_book_source_provider.dart';
 import 'package:shuxiang_reading_next/features/mine/application/private_book_source_service.dart';
 import 'package:shuxiang_reading_next/features/mine/presentation/private_book_source_filter_presenter.dart';
+import 'package:shuxiang_reading_next/features/mine/presentation/widgets/private_book_source_action_surfaces.dart';
 import 'package:shuxiang_reading_next/features/mine/presentation/widgets/private_book_source_detail_sheet.dart';
+import 'package:shuxiang_reading_next/features/mine/presentation/widgets/private_book_source_form.dart';
 import 'package:shuxiang_reading_next/features/mine/presentation/widgets/private_book_source_more_menu_button.dart';
+import 'package:shuxiang_reading_next/features/mine/presentation/widgets/private_book_source_test_sheet.dart';
 import 'package:shuxiang_reading_next/features/mine/presentation/widgets/private_book_source_tile.dart';
 import 'package:shuxiang_reading_next/features/mine/presentation/widgets/private_book_source_toolbar.dart';
 
@@ -249,6 +253,101 @@ void main() {
     expect(find.text('共享'), findsWidgets);
     expect(find.text('检测'), findsOneWidget);
     expect(find.text('编辑'), findsNothing);
+  });
+
+  testWidgets('BookSourceImportMethodSheet exposes all import methods', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(body: BookSourceImportMethodSheet())),
+    );
+
+    expect(find.text('选择导入方式'), findsOneWidget);
+    expect(find.text('通过链接导入'), findsOneWidget);
+    expect(find.text('从文件选择'), findsOneWidget);
+    expect(find.text('粘贴 JSON'), findsOneWidget);
+  });
+
+  testWidgets('PrivateBookSourceTestConfigSheet renders default controls', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PrivateBookSourceTestConfigSheet(
+            item: _source(id: 'source_1', name: '测试书源'),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('检测书源'), findsOneWidget);
+    expect(find.text('测试书源'), findsOneWidget);
+    expect(find.text('主链路'), findsOneWidget);
+    expect(find.text('发现'), findsWidgets);
+    expect(find.text('自定义'), findsOneWidget);
+    expect(find.text('开始检测'), findsOneWidget);
+  });
+
+  testWidgets('PrivateBookSourceCheckReportSheet renders logs', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PrivateBookSourceCheckReportSheet(
+            report: SourceCheckReport(
+              summary: const SourceCheckSummary(
+                sourceName: '测试书源',
+                mode: 'main',
+                valid: false,
+                keyword: '剑',
+                elapsedMs: 1320,
+                failureStage: 'search',
+                message: '搜索失败',
+              ),
+              logs: const <SourceCheckLogEntry>[
+                SourceCheckLogEntry(
+                  timeMs: 120,
+                  direction: 'out',
+                  stage: 'search',
+                  level: 'error',
+                  message: '搜索接口失败',
+                  details: <String>['状态码：500'],
+                ),
+              ],
+              copyText: 'log text',
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('检测失败'), findsOneWidget);
+    expect(find.text('搜索失败'), findsOneWidget);
+    expect(find.text('搜索接口失败'), findsOneWidget);
+    expect(find.text('[00:00.120]'), findsOneWidget);
+    expect(find.text('复制日志'), findsOneWidget);
+  });
+
+  testWidgets('PrivateBookSourceForm renders create form shell', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          privateBookSourceGroupsProvider.overrideWith(
+            (ref) async => <PrivateBookSourceGroup>[
+              _group(id: 'group_1', name: '常用'),
+            ],
+          ),
+        ],
+        child: const MaterialApp(home: Scaffold(body: PrivateBookSourceForm())),
+      ),
+    );
+
+    expect(find.text('新增书源'), findsOneWidget);
+    expect(find.text('基础信息'), findsOneWidget);
+    expect(find.text('书源 JSON'), findsOneWidget);
+    expect(find.text('粘贴 JSON'), findsOneWidget);
   });
 }
 

@@ -16,6 +16,9 @@ import '../../../domain/entities/app_advanced_theme.dart';
 import '../../../domain/entities/bottom_nav_icon_gallery.dart';
 import '../../../domain/entities/managed_asset.dart';
 import 'active_theme_appearance_snapshot.dart';
+import 'advanced_theme_batch_bundle_manifest.dart';
+import 'advanced_theme_export_naming.dart';
+import 'advanced_theme_import_package_detector.dart';
 import 'advanced_theme_resource_reference_service.dart';
 import 'cover_gallery_service.dart';
 import 'launch_image_gallery_service.dart';
@@ -54,8 +57,6 @@ typedef AdvancedThemeBatchImportProgressCallback =
 typedef AdvancedThemeBatchExportProgressCallback =
     void Function(String message);
 
-enum _AdvancedThemeImportPackageKind { official, red, rgshare }
-
 class AdvancedThemeService implements PreferenceRepairService {
   static const String _activeThemeIdKey = 'app.advancedThemes.activeId';
   static const String _activeThemeAppearanceSnapshotKey =
@@ -65,8 +66,6 @@ class AdvancedThemeService implements PreferenceRepairService {
   static const int _colorExportVersion = 2;
   static const String _bundleExportType = 'advanced_theme_bundle';
   static const int _bundleExportVersion = 1;
-  static const String _batchBundleType = 'advanced_theme_batch_bundle';
-  static const int _batchBundleVersion = 1;
 
   AdvancedThemeService({
     SharedPreferences? preferences,
@@ -85,6 +84,8 @@ class AdvancedThemeService implements PreferenceRepairService {
   String? _cachedHydratedThemeSummariesRaw;
   List<AdvancedThemeSummary>? _cachedHydratedThemeSummaries;
   final Map<String, String?> _previewWallpaperPathCache = <String, String?>{};
+  final AdvancedThemeImportPackageDetector _importPackageDetector =
+      const AdvancedThemeImportPackageDetector();
 
   static const Uuid _uuid = Uuid();
   static const String _themesKey = 'app.advancedThemes';
@@ -670,14 +671,14 @@ class AdvancedThemeService implements PreferenceRepairService {
   /// 文件名规则集中在服务层，保证桌面保存、移动端分享和后续批量包内嵌文件
   /// 使用同一套非法字符替换策略，避免页面各自拼接导致跨平台文件名差异。
   String themeBundleExportFileName(AppAdvancedTheme theme) {
-    return '${_normalizedExportFileName(theme.name)}.zip';
+    return AdvancedThemeExportNaming.themeBundleExportFileName(theme);
   }
 
   /// 生成批量主题 ZIP 导出的稳定文件名。
   ///
   /// `now` 仅供测试固定时间使用；生产调用默认使用当前时间。
   String themeBatchBundleExportFileName({DateTime? now}) {
-    return 'advanced_themes_batch_${_formattedTimestampForFileName(now ?? DateTime.now())}.zip';
+    return AdvancedThemeExportNaming.themeBatchBundleExportFileName(now: now);
   }
 
   /// 将单个主题包写入指定文件。
@@ -714,7 +715,11 @@ class AdvancedThemeService implements PreferenceRepairService {
     String? mimeType,
     List<int>? bytes,
   }) {
-    if (!_isZipThemeFile(path: path, mimeType: mimeType, bytes: bytes)) {
+    if (!_importPackageDetector.isZipThemeFile(
+      path: path,
+      mimeType: mimeType,
+      bytes: bytes,
+    )) {
       return false;
     }
     try {
@@ -729,20 +734,7 @@ class AdvancedThemeService implements PreferenceRepairService {
       } else {
         archive = ZipDecoder().decodeBytes(bytes, verify: false);
       }
-      final manifestFile = archive.findFile('manifest.json');
-      if (manifestFile == null) {
-        return false;
-      }
-      final decoded = jsonDecode(
-        utf8.decode(_archiveFileBytes(manifestFile), allowMalformed: true),
-      );
-      if (decoded is! Map) {
-        return false;
-      }
-      final manifest = decoded.map(
-        (key, value) => MapEntry(key.toString(), value),
-      );
-      return manifest['type']?.toString().trim() == _batchBundleType;
+      return AdvancedThemeBatchBundleManifest.isBatchBundleArchive(archive);
     } catch (_) {
       return false;
     }
@@ -757,12 +749,12 @@ class AdvancedThemeService implements PreferenceRepairService {
     required String path,
     String? mimeType,
   }) async {
-    final packageKind = await _detectImportPackageKind(
+    final packageKind = await _importPackageDetector.detect(
       path: path,
       mimeType: mimeType,
     );
-    if (packageKind == _AdvancedThemeImportPackageKind.official &&
-        _isZipThemeFile(path: path, mimeType: mimeType)) {
+    if (packageKind == AdvancedThemeImportPackageKind.official &&
+        _importPackageDetector.isZipThemeFile(path: path, mimeType: mimeType)) {
       return importThemeBundleZipFile(path);
     }
     final bytes = await File(path).readAsBytes();
@@ -775,18 +767,22 @@ class AdvancedThemeService implements PreferenceRepairService {
     required List<int> bytes,
     String? mimeType,
   }) async {
-    final packageKind = await _detectImportPackageKind(
+    final packageKind = await _importPackageDetector.detect(
       path: path,
       mimeType: mimeType,
       bytes: bytes,
     );
     return switch (packageKind) {
-      _AdvancedThemeImportPackageKind.red => importRedThemePackageBytes(bytes),
-      _AdvancedThemeImportPackageKind.rgshare => importRgShareThemePackageBytes(
+      AdvancedThemeImportPackageKind.red => importRedThemePackageBytes(bytes),
+      AdvancedThemeImportPackageKind.rgshare => importRgShareThemePackageBytes(
         bytes,
       ),
-      _AdvancedThemeImportPackageKind.official =>
-        _isZipThemeFile(path: path, mimeType: mimeType, bytes: bytes)
+      AdvancedThemeImportPackageKind.official =>
+        _importPackageDetector.isZipThemeFile(
+              path: path,
+              mimeType: mimeType,
+              bytes: bytes,
+            )
             ? importThemeBundleZipBytes(bytes)
             : importThemeColorJson(utf8.decode(bytes, allowMalformed: true)),
     };
@@ -827,7 +823,7 @@ class AdvancedThemeService implements PreferenceRepairService {
     required File outputFile,
     AdvancedThemeBatchExportProgressCallback? onProgress,
   }) async {
-    final manifestThemes = <Map<String, Object?>>[];
+    final manifestThemes = <AdvancedThemeBatchBundleEntry>[];
     final tempDir = await getTemporaryDirectory();
     final workingDirectory = Directory(
       p.join(
@@ -854,7 +850,8 @@ class AdvancedThemeService implements PreferenceRepairService {
         // 批量导出保持严格串行，避免一次构建多个主题 ZIP 导致内存峰值放大。
         index += 1;
         onProgress?.call('正在打包 ${theme.name} ($index/${summaries.length})');
-        final normalizedName = _normalizedExportFileName(theme.name);
+        final normalizedName =
+            AdvancedThemeExportNaming.normalizedExportFileName(theme.name);
         final innerZipName =
             '${index.toString().padLeft(3, '0')}_$normalizedName.zip';
         final tempThemeFile = File(p.join(workingDirectory.path, innerZipName));
@@ -862,11 +859,13 @@ class AdvancedThemeService implements PreferenceRepairService {
         await tempThemeFile.writeAsBytes(bundleBytes, flush: true);
         final bundlePath = 'themes/$innerZipName';
         await encoder.addFile(tempThemeFile, bundlePath);
-        manifestThemes.add(<String, Object?>{
-          'id': theme.id,
-          'name': theme.name,
-          'file': bundlePath,
-        });
+        manifestThemes.add(
+          AdvancedThemeBatchBundleEntry(
+            id: theme.id,
+            name: theme.name,
+            file: bundlePath,
+          ),
+        );
         if (await tempThemeFile.exists()) {
           await tempThemeFile.delete();
         }
@@ -878,16 +877,16 @@ class AdvancedThemeService implements PreferenceRepairService {
       }
 
       onProgress?.call('正在写入批量导出清单...');
-      final manifestBytes = utf8.encode(
-        const JsonEncoder.withIndent('  ').convert(<String, Object?>{
-          'type': _batchBundleType,
-          'version': _batchBundleVersion,
-          'generatedAt': DateTime.now().toIso8601String(),
-          'themes': manifestThemes,
-        }),
+      final manifestBytes = AdvancedThemeBatchBundleManifest.encode(
+        generatedAt: DateTime.now(),
+        themes: manifestThemes,
       );
       encoder.addArchiveFile(
-        ArchiveFile('manifest.json', manifestBytes.length, manifestBytes),
+        ArchiveFile(
+          AdvancedThemeBatchBundleManifest.manifestFileName,
+          manifestBytes.length,
+          manifestBytes,
+        ),
       );
       return outputFile;
     } finally {
@@ -925,34 +924,7 @@ class AdvancedThemeService implements PreferenceRepairService {
     } finally {
       input.close();
     }
-    final manifestFile = archive.findFile('manifest.json');
-    if (manifestFile == null) {
-      throw const FormatException('批量主题包缺少 manifest.json。');
-    }
-    final decoded = jsonDecode(
-      utf8.decode(_archiveFileBytes(manifestFile), allowMalformed: true),
-    );
-    if (decoded is! Map) {
-      throw const FormatException('批量主题包配置无效。');
-    }
-    final manifest = decoded.map(
-      (key, value) => MapEntry(key.toString(), value),
-    );
-    final type = manifest['type']?.toString().trim() ?? '';
-    if (type != _batchBundleType) {
-      throw const FormatException('不支持的批量主题包类型。');
-    }
-    final version = manifest['version'];
-    final normalizedVersion =
-        version is num ? version.toInt() : int.tryParse('$version');
-    if (normalizedVersion != _batchBundleVersion) {
-      throw const FormatException('不支持的批量主题包版本。');
-    }
-
-    final entries = manifest['themes'];
-    if (entries is! List || entries.isEmpty) {
-      throw const FormatException('批量主题包中没有可导入的主题。');
-    }
+    final manifest = AdvancedThemeBatchBundleManifest.parseArchive(archive);
 
     var successCount = 0;
     var failureCount = 0;
@@ -967,18 +939,17 @@ class AdvancedThemeService implements PreferenceRepairService {
     if (!await workingDirectory.exists()) {
       await workingDirectory.create(recursive: true);
     }
-    final importableEntries = entries.whereType<Map>().toList(growable: false);
+    final importableEntries = manifest.themes;
     try {
       for (var index = 0; index < importableEntries.length; index += 1) {
-        final item = importableEntries[index];
-        final entry = item.map((key, value) => MapEntry(key.toString(), value));
-        final bundlePath = entry['file']?.toString().trim() ?? '';
+        final entry = importableEntries[index];
+        final bundlePath = entry.file;
         if (bundlePath.isEmpty) {
           failureCount += 1;
           lastError = '批量主题包条目缺少文件路径。';
           continue;
         }
-        final themeName = entry['name']?.toString().trim() ?? '';
+        final themeName = entry.name;
         onProgress?.call(
           AdvancedThemeImportProgressStage.importing,
           themeName.isEmpty
@@ -1033,113 +1004,6 @@ class AdvancedThemeService implements PreferenceRepairService {
       failureCount: failureCount,
       lastError: lastError,
     );
-  }
-
-  Future<_AdvancedThemeImportPackageKind> _detectImportPackageKind({
-    required String path,
-    String? mimeType,
-    List<int>? bytes,
-  }) async {
-    final normalizedMime = mimeType?.trim().toLowerCase() ?? '';
-    final normalizedExtension = p.extension(path).trim().toLowerCase();
-    if (normalizedExtension == '.rgshare') {
-      return _AdvancedThemeImportPackageKind.rgshare;
-    }
-    if (normalizedMime.contains('octet-stream') &&
-        normalizedExtension == '.red') {
-      return _AdvancedThemeImportPackageKind.red;
-    }
-    if (normalizedExtension == '.red') {
-      return _AdvancedThemeImportPackageKind.red;
-    }
-    final resolvedBytes = bytes ?? await File(path).readAsBytes();
-    final sniffedKind = _detectImportPackageKindFromBytes(resolvedBytes);
-    if (sniffedKind != null) {
-      return sniffedKind;
-    }
-    return _AdvancedThemeImportPackageKind.official;
-  }
-
-  _AdvancedThemeImportPackageKind? _detectImportPackageKindFromBytes(
-    List<int> bytes,
-  ) {
-    if (_hasRedHeader(bytes)) {
-      return _AdvancedThemeImportPackageKind.red;
-    }
-    if (!_looksLikeZip(bytes)) {
-      return null;
-    }
-
-    try {
-      final archive = ZipDecoder().decodeBytes(bytes, verify: false);
-      if (archive.findFile('manifest.json') != null) {
-        return _AdvancedThemeImportPackageKind.official;
-      }
-      final themeFile = archive.findFile('theme.json');
-      if (themeFile == null) {
-        return _AdvancedThemeImportPackageKind.official;
-      }
-      final decoded = jsonDecode(
-        utf8.decode(_archiveFileBytes(themeFile), allowMalformed: true),
-      );
-      if (decoded is! Map) {
-        return _AdvancedThemeImportPackageKind.official;
-      }
-      final payload = decoded.map(
-        (key, value) => MapEntry(key.toString(), value),
-      );
-      if (_looksLikeRgShareTheme(payload)) {
-        return _AdvancedThemeImportPackageKind.rgshare;
-      }
-      if (_looksLikeRedTheme(payload)) {
-        return _AdvancedThemeImportPackageKind.red;
-      }
-    } catch (_) {
-      return null;
-    }
-    return _AdvancedThemeImportPackageKind.official;
-  }
-
-  bool _looksLikeRgShareTheme(Map<String, dynamic> payload) {
-    return payload.containsKey('1') &&
-        payload.containsKey('2') &&
-        payload.containsKey('4');
-  }
-
-  bool _looksLikeRedTheme(Map<String, dynamic> payload) {
-    return payload['light'] is Map && payload['dark'] is Map;
-  }
-
-  bool _hasRedHeader(List<int> bytes) {
-    return bytes.length >= 4 &&
-        bytes[0] == 0x52 &&
-        bytes[1] == 0x45 &&
-        bytes[2] == 0x44;
-  }
-
-  bool _isZipThemeFile({
-    required String path,
-    String? mimeType,
-    List<int>? bytes,
-  }) {
-    final normalizedMime = mimeType?.trim().toLowerCase() ?? '';
-    if (normalizedMime.contains('zip')) {
-      return true;
-    }
-    if (p.extension(path).trim().toLowerCase() == '.zip') {
-      return true;
-    }
-    return bytes != null && _looksLikeZip(bytes);
-  }
-
-  String _normalizedExportFileName(String name) {
-    final normalized = name.trim().replaceAll(RegExp(r'[\\/:*?"<>|]+'), '_');
-    return normalized.isEmpty ? 'advanced_theme' : normalized;
-  }
-
-  String _formattedTimestampForFileName(DateTime value) {
-    String twoDigits(int input) => input.toString().padLeft(2, '0');
-    return '${value.year}${twoDigits(value.month)}${twoDigits(value.day)}_${twoDigits(value.hour)}${twoDigits(value.minute)}${twoDigits(value.second)}';
   }
 
   Future<void> _yieldToEventLoop() {

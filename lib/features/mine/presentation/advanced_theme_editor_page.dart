@@ -34,8 +34,10 @@ import '../application/advanced_theme_editor_validation_service.dart';
 import '../application/advanced_theme_service.dart';
 import '../application/theme_semantic_spec.dart';
 import '../providers.dart';
+import 'advanced_theme_editor_models.dart';
 import 'widgets/advanced_theme_basic_section.dart';
 import 'widgets/advanced_theme_cover_gallery_section.dart';
+import 'widgets/advanced_theme_editor_shell_widgets.dart';
 import 'widgets/advanced_theme_font_section.dart';
 import 'widgets/advanced_theme_launch_gallery_section.dart';
 import 'widgets/advanced_theme_wallpaper_section.dart';
@@ -76,12 +78,12 @@ class _AdvancedThemeEditorPageState
   )..addListener(_handleModeTabChanged);
   late final Map<
     AppAdvancedThemeMode,
-    Map<_ThemeColorSlot, TextEditingController>
+    Map<AdvancedThemeColorSlot, TextEditingController>
   >
   _colorControllersByMode = {
     for (final mode in AppAdvancedThemeMode.values)
       mode: {
-        for (final slot in _ThemeColorSlot.values)
+        for (final slot in AdvancedThemeColorSlot.values)
           slot: TextEditingController(),
       },
   };
@@ -239,8 +241,9 @@ class _AdvancedThemeEditorPageState
   void _syncControllersFromDraft(AppAdvancedTheme theme) {
     _nameController.text = theme.name;
     for (final mode in AppAdvancedThemeMode.values) {
-      for (final slot in _ThemeColorSlot.values) {
-        _colorControllersByMode[mode]![slot]!.text = _formatHex(
+      for (final slot in AdvancedThemeColorSlot.values) {
+        _colorControllersByMode[mode]![slot]!
+            .text = AdvancedThemeColorCodec.formatHex(
           _valueForSlot(theme.configFor(mode).colors, slot),
         );
       }
@@ -304,10 +307,10 @@ class _AdvancedThemeEditorPageState
   }
 
   AppAdvancedThemeColors? _parseColorsForMode(AppAdvancedThemeMode mode) {
-    final values = <_ThemeColorSlot, int?>{};
-    for (final slot in _ThemeColorSlot.values) {
+    final values = <AdvancedThemeColorSlot, int?>{};
+    for (final slot in AdvancedThemeColorSlot.values) {
       final raw = _colorControllersByMode[mode]![slot]!.text.trim();
-      final parsed = _parseHexColor(raw);
+      final parsed = AdvancedThemeColorCodec.parseHexColor(raw);
       if (raw.isNotEmpty && parsed == null) {
         _showMessage(
           '${_modeLabel(mode)} ${slot.label} 颜色格式无效，支持 #RRGGBB 或 #AARRGGBB',
@@ -318,26 +321,28 @@ class _AdvancedThemeEditorPageState
       values[slot] = parsed;
     }
     return AppAdvancedThemeColors(
-      primaryColorValue: values[_ThemeColorSlot.primary],
-      secondaryColorValue: values[_ThemeColorSlot.secondary],
-      noticeAccentColorValue: values[_ThemeColorSlot.noticeAccent],
-      noticeSurfaceColorValue: values[_ThemeColorSlot.noticeSurface],
-      primaryContainerColorValue: values[_ThemeColorSlot.primaryContainer],
-      backgroundColorValue: values[_ThemeColorSlot.background],
-      surfaceColorValue: values[_ThemeColorSlot.surface],
+      primaryColorValue: values[AdvancedThemeColorSlot.primary],
+      secondaryColorValue: values[AdvancedThemeColorSlot.secondary],
+      noticeAccentColorValue: values[AdvancedThemeColorSlot.noticeAccent],
+      noticeSurfaceColorValue: values[AdvancedThemeColorSlot.noticeSurface],
+      primaryContainerColorValue:
+          values[AdvancedThemeColorSlot.primaryContainer],
+      backgroundColorValue: values[AdvancedThemeColorSlot.background],
+      surfaceColorValue: values[AdvancedThemeColorSlot.surface],
       searchFieldBackgroundColorValue:
-          values[_ThemeColorSlot.searchFieldBackground],
-      elevatedSurfaceColorValue: values[_ThemeColorSlot.elevatedSurface],
-      cardColorValue: values[_ThemeColorSlot.card],
-      cardTextColorValue: values[_ThemeColorSlot.cardText],
-      cardBorderColorValue: values[_ThemeColorSlot.cardBorder],
-      iconBackgroundColorValue: values[_ThemeColorSlot.iconBackground],
-      textPrimaryColorValue: values[_ThemeColorSlot.textPrimary],
-      textSecondaryColorValue: values[_ThemeColorSlot.textSecondary],
-      buttonTextColorValue: values[_ThemeColorSlot.buttonText],
-      outlineColorValue: values[_ThemeColorSlot.outline],
-      shadowColorValue: values[_ThemeColorSlot.shadow],
-      wallpaperOverlayColorValue: values[_ThemeColorSlot.wallpaperOverlay],
+          values[AdvancedThemeColorSlot.searchFieldBackground],
+      elevatedSurfaceColorValue: values[AdvancedThemeColorSlot.elevatedSurface],
+      cardColorValue: values[AdvancedThemeColorSlot.card],
+      cardTextColorValue: values[AdvancedThemeColorSlot.cardText],
+      cardBorderColorValue: values[AdvancedThemeColorSlot.cardBorder],
+      iconBackgroundColorValue: values[AdvancedThemeColorSlot.iconBackground],
+      textPrimaryColorValue: values[AdvancedThemeColorSlot.textPrimary],
+      textSecondaryColorValue: values[AdvancedThemeColorSlot.textSecondary],
+      buttonTextColorValue: values[AdvancedThemeColorSlot.buttonText],
+      outlineColorValue: values[AdvancedThemeColorSlot.outline],
+      shadowColorValue: values[AdvancedThemeColorSlot.shadow],
+      wallpaperOverlayColorValue:
+          values[AdvancedThemeColorSlot.wallpaperOverlay],
     );
   }
 
@@ -353,101 +358,104 @@ class _AdvancedThemeEditorPageState
         draft == null ? null : _selectedWallpaperPreviewPath(draft);
     final imagePaths = _existingImagePaths(_backgroundLibraryPaths);
     var selectedFit = currentFit;
-    final result = await showAdaptiveActionSurface<_WallpaperSelectionResult>(
-      context: context,
-      maxWidth: 720,
-      maxHeightFactor: _resourcePickerSheetHeightFactor,
-      padding: EdgeInsets.zero,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            return _buildResourcePickerSheet(
-              context,
-              title: '选择应用背景',
-              helperText: '显示的是背景页素材列表，长按图片可放大预览。',
-              content: Column(
-                children: [
-                  _buildListSectionBody(
-                    context,
-                    child: _buildCompactFitRow(
-                      context,
-                      label: '壁纸图片适配',
-                      fit: selectedFit,
-                      onChanged:
-                          (fit) => setSheetState(() {
-                            selectedFit = fit;
-                          }),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Expanded(
-                    child:
-                        imagePaths.isEmpty
-                            ? _buildEmptyResourceState(
-                              context,
-                              icon: Icons.wallpaper_outlined,
-                              title: '还没有背景素材',
-                              description: '先去背景页添加图片，再回来选择。',
-                            )
-                            : _buildImageSelectionGrid(
-                              context,
-                              imagePaths: imagePaths,
-                              selectedPath: selectedPath,
-                              titleBuilder: (_) => '应用背景',
-                              onSelected: (path) {
-                                setSheetState(() {
-                                  selectedPath = path;
-                                });
-                              },
-                            ),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('取消'),
-                ),
-                const Spacer(),
-                TextButton(
-                  onPressed:
-                      () => unawaited(
-                        _openRouteFromSheet(
+    final result =
+        await showAdaptiveActionSurface<AdvancedThemeWallpaperSelectionResult>(
+          context: context,
+          maxWidth: 720,
+          maxHeightFactor: _resourcePickerSheetHeightFactor,
+          padding: EdgeInsets.zero,
+          builder: (context) {
+            return StatefulBuilder(
+              builder: (context, setSheetState) {
+                return _buildResourcePickerSheet(
+                  context,
+                  title: '选择应用背景',
+                  helperText: '显示的是背景页素材列表，长按图片可放大预览。',
+                  content: Column(
+                    children: [
+                      _buildListSectionBody(
+                        context,
+                        child: _buildCompactFitRow(
                           context,
-                          '/appearance?section=background',
+                          label: '壁纸图片适配',
+                          fit: selectedFit,
+                          onChanged:
+                              (fit) => setSheetState(() {
+                                selectedFit = fit;
+                              }),
                         ),
                       ),
-                  child: const Text('去管理'),
-                ),
-                const SizedBox(width: 8),
-                TextButton(
-                  onPressed:
-                      selectedPath == null
-                          ? null
-                          : () => Navigator.of(
-                            context,
-                          ).pop(const _WallpaperSelectionResult(path: null)),
-                  child: const Text('取消绑定'),
-                ),
-                const SizedBox(width: 8),
-                FilledButton(
-                  onPressed:
-                      selectedPath == null
-                          ? null
-                          : () => Navigator.of(context).pop(
-                            _WallpaperSelectionResult(
-                              path: selectedPath!,
-                              fit: selectedFit,
+                      const SizedBox(height: 10),
+                      Expanded(
+                        child:
+                            imagePaths.isEmpty
+                                ? _buildEmptyResourceState(
+                                  context,
+                                  icon: Icons.wallpaper_outlined,
+                                  title: '还没有背景素材',
+                                  description: '先去背景页添加图片，再回来选择。',
+                                )
+                                : _buildImageSelectionGrid(
+                                  context,
+                                  imagePaths: imagePaths,
+                                  selectedPath: selectedPath,
+                                  titleBuilder: (_) => '应用背景',
+                                  onSelected: (path) {
+                                    setSheetState(() {
+                                      selectedPath = path;
+                                    });
+                                  },
+                                ),
+                      ),
+                    ],
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('取消'),
+                    ),
+                    const Spacer(),
+                    TextButton(
+                      onPressed:
+                          () => unawaited(
+                            _openRouteFromSheet(
+                              context,
+                              '/appearance?section=background',
                             ),
                           ),
-                  child: const Text('应用'),
-                ),
-              ],
+                      child: const Text('去管理'),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed:
+                          selectedPath == null
+                              ? null
+                              : () => Navigator.of(context).pop(
+                                const AdvancedThemeWallpaperSelectionResult(
+                                  path: null,
+                                ),
+                              ),
+                      child: const Text('取消绑定'),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton(
+                      onPressed:
+                          selectedPath == null
+                              ? null
+                              : () => Navigator.of(context).pop(
+                                AdvancedThemeWallpaperSelectionResult(
+                                  path: selectedPath!,
+                                  fit: selectedFit,
+                                ),
+                              ),
+                      child: const Text('应用'),
+                    ),
+                  ],
+                );
+              },
             );
           },
         );
-      },
-    );
     if (result == null || !mounted) {
       return;
     }
@@ -492,101 +500,104 @@ class _AdvancedThemeEditorPageState
         draft == null ? null : _selectedReaderWallpaperPreviewPath(draft);
     final imagePaths = _existingImagePaths(_readerBackgroundLibraryPaths);
     var selectedFit = currentFit;
-    final result = await showAdaptiveActionSurface<_WallpaperSelectionResult>(
-      context: context,
-      maxWidth: 720,
-      maxHeightFactor: _resourcePickerSheetHeightFactor,
-      padding: EdgeInsets.zero,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            return _buildResourcePickerSheet(
-              context,
-              title: '选择阅读器背景',
-              helperText: '显示的是阅读背景页素材列表，长按图片可放大预览。',
-              content: Column(
-                children: [
-                  _buildListSectionBody(
-                    context,
-                    child: _buildCompactFitRow(
-                      context,
-                      label: '阅读器图片适配',
-                      fit: selectedFit,
-                      onChanged:
-                          (fit) => setSheetState(() {
-                            selectedFit = fit;
-                          }),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Expanded(
-                    child:
-                        imagePaths.isEmpty
-                            ? _buildEmptyResourceState(
-                              context,
-                              icon: Icons.chrome_reader_mode_outlined,
-                              title: '还没有阅读背景素材',
-                              description: '先去阅读背景页添加图片，再回来选择。',
-                            )
-                            : _buildImageSelectionGrid(
-                              context,
-                              imagePaths: imagePaths,
-                              selectedPath: selectedPath,
-                              titleBuilder: (_) => '阅读器背景',
-                              onSelected: (path) {
-                                setSheetState(() {
-                                  selectedPath = path;
-                                });
-                              },
-                            ),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed:
-                      () => unawaited(
-                        _openRouteFromSheet(
+    final result =
+        await showAdaptiveActionSurface<AdvancedThemeWallpaperSelectionResult>(
+          context: context,
+          maxWidth: 720,
+          maxHeightFactor: _resourcePickerSheetHeightFactor,
+          padding: EdgeInsets.zero,
+          builder: (context) {
+            return StatefulBuilder(
+              builder: (context, setSheetState) {
+                return _buildResourcePickerSheet(
+                  context,
+                  title: '选择阅读器背景',
+                  helperText: '显示的是阅读背景页素材列表，长按图片可放大预览。',
+                  content: Column(
+                    children: [
+                      _buildListSectionBody(
+                        context,
+                        child: _buildCompactFitRow(
                           context,
-                          '/appearance/reader-background',
+                          label: '阅读器图片适配',
+                          fit: selectedFit,
+                          onChanged:
+                              (fit) => setSheetState(() {
+                                selectedFit = fit;
+                              }),
                         ),
                       ),
-                  child: const Text('去管理'),
-                ),
-                const Spacer(),
-                OutlinedButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('取消'),
-                ),
-                const SizedBox(width: 10),
-                TextButton(
-                  onPressed:
-                      selectedPath == null
-                          ? null
-                          : () => Navigator.of(
-                            context,
-                          ).pop(const _WallpaperSelectionResult(path: null)),
-                  child: const Text('取消绑定'),
-                ),
-                const SizedBox(width: 10),
-                FilledButton(
-                  onPressed:
-                      selectedPath == null
-                          ? null
-                          : () => Navigator.of(context).pop(
-                            _WallpaperSelectionResult(
-                              path: selectedPath!,
-                              fit: selectedFit,
+                      const SizedBox(height: 10),
+                      Expanded(
+                        child:
+                            imagePaths.isEmpty
+                                ? _buildEmptyResourceState(
+                                  context,
+                                  icon: Icons.chrome_reader_mode_outlined,
+                                  title: '还没有阅读背景素材',
+                                  description: '先去阅读背景页添加图片，再回来选择。',
+                                )
+                                : _buildImageSelectionGrid(
+                                  context,
+                                  imagePaths: imagePaths,
+                                  selectedPath: selectedPath,
+                                  titleBuilder: (_) => '阅读器背景',
+                                  onSelected: (path) {
+                                    setSheetState(() {
+                                      selectedPath = path;
+                                    });
+                                  },
+                                ),
+                      ),
+                    ],
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed:
+                          () => unawaited(
+                            _openRouteFromSheet(
+                              context,
+                              '/appearance/reader-background',
                             ),
                           ),
-                  child: const Text('应用'),
-                ),
-              ],
+                      child: const Text('去管理'),
+                    ),
+                    const Spacer(),
+                    OutlinedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('取消'),
+                    ),
+                    const SizedBox(width: 10),
+                    TextButton(
+                      onPressed:
+                          selectedPath == null
+                              ? null
+                              : () => Navigator.of(context).pop(
+                                const AdvancedThemeWallpaperSelectionResult(
+                                  path: null,
+                                ),
+                              ),
+                      child: const Text('取消绑定'),
+                    ),
+                    const SizedBox(width: 10),
+                    FilledButton(
+                      onPressed:
+                          selectedPath == null
+                              ? null
+                              : () => Navigator.of(context).pop(
+                                AdvancedThemeWallpaperSelectionResult(
+                                  path: selectedPath!,
+                                  fit: selectedFit,
+                                ),
+                              ),
+                      child: const Text('应用'),
+                    ),
+                  ],
+                );
+              },
             );
           },
         );
-      },
-    );
 
     if (result == null) {
       return;
@@ -738,7 +749,7 @@ class _AdvancedThemeEditorPageState
 
     String? selectedId = _draft?.coverGalleryIdFor(_selectedMode)?.trim();
     final result = await showAdaptiveActionSurface<
-      _CoverGallerySelectionResult
+      AdvancedThemeCoverGallerySelectionResult
     >(
       context: context,
       maxWidth: 720,
@@ -847,7 +858,7 @@ class _AdvancedThemeEditorPageState
                       selectedId == null
                           ? null
                           : () => Navigator.of(context).pop(
-                            const _CoverGallerySelectionResult(
+                            const AdvancedThemeCoverGallerySelectionResult(
                               applied: true,
                               galleryId: null,
                             ),
@@ -860,7 +871,7 @@ class _AdvancedThemeEditorPageState
                       selectedId == null
                           ? null
                           : () => Navigator.of(context).pop(
-                            _CoverGallerySelectionResult(
+                            AdvancedThemeCoverGallerySelectionResult(
                               applied: true,
                               galleryId: selectedId,
                             ),
@@ -897,125 +908,125 @@ class _AdvancedThemeEditorPageState
     }
 
     String? selectedId = _draft?.launchImageGalleryId?.trim();
-    final result =
-        await showAdaptiveActionSurface<_LaunchImageGallerySelectionResult>(
-          context: context,
-          maxWidth: 720,
-          maxHeightFactor: _resourcePickerSheetHeightFactor,
-          padding: EdgeInsets.zero,
-          builder: (context) {
-            return StatefulBuilder(
-              builder: (context, setSheetState) {
-                return _buildResourcePickerSheet(
-                  context,
-                  title: '选择启动图',
-                  helperText: '显示的是启动图集页的列表图，点选图集即可绑定，长按缩略图可放大。',
-                  content:
-                      _launchImageGalleries.isEmpty
-                          ? _buildEmptyResourceState(
-                            context,
-                            icon: Icons.rocket_launch_outlined,
-                            title: '还没有启动图集',
-                            description: '先去启动图集页准备素材，再回来绑定。',
-                          )
-                          : ListView.separated(
-                            itemCount: _launchImageGalleries.length,
-                            separatorBuilder:
-                                (_, __) => const SizedBox(height: 10),
-                            itemBuilder: (context, index) {
-                              final gallery = _launchImageGalleries[index];
-                              return AdvancedThemeLaunchGallerySelectionCard(
-                                title: gallery.name,
-                                subtitle:
-                                    gallery.imagePaths.isEmpty
-                                        ? '暂无图片'
-                                        : '${gallery.imagePaths.length} 张启动图',
-                                previewPaths: _existingImagePaths(
-                                  gallery.imagePaths,
-                                ),
-                                selected: gallery.id == selectedId,
-                                onTap: () {
-                                  setSheetState(() {
-                                    selectedId = gallery.id;
-                                  });
-                                },
-                                previewThumbBuilder:
-                                    ({
-                                      required previewPath,
-                                      required title,
-                                      required width,
-                                      required height,
-                                      required borderRadius,
-                                      required onTap,
-                                      onLongPress,
-                                    }) => _buildGalleryPreviewThumb(
-                                      context,
-                                      previewPath: previewPath,
-                                      title: title,
-                                      width: width,
-                                      height: height,
-                                      borderRadius: borderRadius,
-                                      onTap: onTap,
-                                      onLongPress: onLongPress,
-                                    ),
-                                onPreviewLongPress:
-                                    (previewPath) => unawaited(
-                                      _showImagePreviewDialog(
-                                        imagePath: previewPath,
-                                        title: gallery.name,
-                                      ),
-                                    ),
-                              );
+    final result = await showAdaptiveActionSurface<
+      AdvancedThemeLaunchImageGallerySelectionResult
+    >(
+      context: context,
+      maxWidth: 720,
+      maxHeightFactor: _resourcePickerSheetHeightFactor,
+      padding: EdgeInsets.zero,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return _buildResourcePickerSheet(
+              context,
+              title: '选择启动图',
+              helperText: '显示的是启动图集页的列表图，点选图集即可绑定，长按缩略图可放大。',
+              content:
+                  _launchImageGalleries.isEmpty
+                      ? _buildEmptyResourceState(
+                        context,
+                        icon: Icons.rocket_launch_outlined,
+                        title: '还没有启动图集',
+                        description: '先去启动图集页准备素材，再回来绑定。',
+                      )
+                      : ListView.separated(
+                        itemCount: _launchImageGalleries.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 10),
+                        itemBuilder: (context, index) {
+                          final gallery = _launchImageGalleries[index];
+                          return AdvancedThemeLaunchGallerySelectionCard(
+                            title: gallery.name,
+                            subtitle:
+                                gallery.imagePaths.isEmpty
+                                    ? '暂无图片'
+                                    : '${gallery.imagePaths.length} 张启动图',
+                            previewPaths: _existingImagePaths(
+                              gallery.imagePaths,
+                            ),
+                            selected: gallery.id == selectedId,
+                            onTap: () {
+                              setSheetState(() {
+                                selectedId = gallery.id;
+                              });
                             },
-                          ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('取消'),
-                    ),
-                    const Spacer(),
-                    TextButton(
-                      onPressed:
-                          () => unawaited(
-                            _openRouteFromSheet(
-                              context,
-                              '/appearance/launch-image',
+                            previewThumbBuilder:
+                                ({
+                                  required previewPath,
+                                  required title,
+                                  required width,
+                                  required height,
+                                  required borderRadius,
+                                  required onTap,
+                                  onLongPress,
+                                }) => _buildGalleryPreviewThumb(
+                                  context,
+                                  previewPath: previewPath,
+                                  title: title,
+                                  width: width,
+                                  height: height,
+                                  borderRadius: borderRadius,
+                                  onTap: onTap,
+                                  onLongPress: onLongPress,
+                                ),
+                            onPreviewLongPress:
+                                (previewPath) => unawaited(
+                                  _showImagePreviewDialog(
+                                    imagePath: previewPath,
+                                    title: gallery.name,
+                                  ),
+                                ),
+                          );
+                        },
+                      ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('取消'),
+                ),
+                const Spacer(),
+                TextButton(
+                  onPressed:
+                      () => unawaited(
+                        _openRouteFromSheet(
+                          context,
+                          '/appearance/launch-image',
+                        ),
+                      ),
+                  child: const Text('去管理'),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed:
+                      selectedId == null
+                          ? null
+                          : () => Navigator.of(context).pop(
+                            const AdvancedThemeLaunchImageGallerySelectionResult(
+                              applied: true,
+                              galleryId: null,
                             ),
                           ),
-                      child: const Text('去管理'),
-                    ),
-                    const SizedBox(width: 8),
-                    TextButton(
-                      onPressed:
-                          selectedId == null
-                              ? null
-                              : () => Navigator.of(context).pop(
-                                const _LaunchImageGallerySelectionResult(
-                                  applied: true,
-                                  galleryId: null,
-                                ),
-                              ),
-                      child: const Text('取消绑定'),
-                    ),
-                    const SizedBox(width: 8),
-                    FilledButton(
-                      onPressed:
-                          selectedId == null
-                              ? null
-                              : () => Navigator.of(context).pop(
-                                _LaunchImageGallerySelectionResult(
-                                  applied: true,
-                                  galleryId: selectedId,
-                                ),
-                              ),
-                      child: const Text('应用'),
-                    ),
-                  ],
-                );
-              },
+                  child: const Text('取消绑定'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed:
+                      selectedId == null
+                          ? null
+                          : () => Navigator.of(context).pop(
+                            AdvancedThemeLaunchImageGallerySelectionResult(
+                              applied: true,
+                              galleryId: selectedId,
+                            ),
+                          ),
+                  child: const Text('应用'),
+                ),
+              ],
             );
           },
         );
+      },
+    );
     if (result == null || !result.applied || !mounted) {
       return;
     }
@@ -1188,7 +1199,9 @@ class _AdvancedThemeEditorPageState
                 ? _draft?.readerFontFamilyKey
                 : _draft?.appInterfaceFontFamilyKey)
             ?.trim();
-    final result = await showAdaptiveActionSurface<_ThemeFontSelectionResult>(
+    final result = await showAdaptiveActionSurface<
+      AdvancedThemeFontSelectionResult
+    >(
       context: context,
       maxWidth: 640,
       maxHeightFactor: _resourcePickerSheetHeightFactor,
@@ -1287,7 +1300,7 @@ class _AdvancedThemeEditorPageState
                       selectedId == null
                           ? null
                           : () => Navigator.of(context).pop(
-                            const _ThemeFontSelectionResult(
+                            const AdvancedThemeFontSelectionResult(
                               applied: true,
                               familyKey: null,
                             ),
@@ -1300,7 +1313,7 @@ class _AdvancedThemeEditorPageState
                       selectedId == null
                           ? null
                           : () => Navigator.of(context).pop(
-                            _ThemeFontSelectionResult(
+                            AdvancedThemeFontSelectionResult(
                               applied: true,
                               familyKey: selectedId,
                             ),
@@ -1412,10 +1425,10 @@ class _AdvancedThemeEditorPageState
   ) {
     final currentConfig = draft.configFor(mode);
 
-    Color resolvedSlotColor(_ThemeColorSlot slot) {
+    Color resolvedSlotColor(AdvancedThemeColorSlot slot) {
       final raw = _colorControllersByMode[mode]![slot]!.text.trim();
-      return _resolvedColor(
-        _parseHexColor(raw),
+      return AdvancedThemeColorCodec.resolvedColor(
+        AdvancedThemeColorCodec.parseHexColor(raw),
         _fallbackColorForSlot(mode, slot),
       );
     }
@@ -1423,41 +1436,51 @@ class _AdvancedThemeEditorPageState
     return currentConfig.copyWith(
       colors: AppAdvancedThemeColors(
         primaryColorValue:
-            resolvedSlotColor(_ThemeColorSlot.primary).toARGB32(),
+            resolvedSlotColor(AdvancedThemeColorSlot.primary).toARGB32(),
         secondaryColorValue:
-            resolvedSlotColor(_ThemeColorSlot.secondary).toARGB32(),
+            resolvedSlotColor(AdvancedThemeColorSlot.secondary).toARGB32(),
         noticeAccentColorValue:
-            resolvedSlotColor(_ThemeColorSlot.noticeAccent).toARGB32(),
+            resolvedSlotColor(AdvancedThemeColorSlot.noticeAccent).toARGB32(),
         noticeSurfaceColorValue:
-            resolvedSlotColor(_ThemeColorSlot.noticeSurface).toARGB32(),
+            resolvedSlotColor(AdvancedThemeColorSlot.noticeSurface).toARGB32(),
         primaryContainerColorValue:
-            resolvedSlotColor(_ThemeColorSlot.primaryContainer).toARGB32(),
+            resolvedSlotColor(
+              AdvancedThemeColorSlot.primaryContainer,
+            ).toARGB32(),
         backgroundColorValue:
-            resolvedSlotColor(_ThemeColorSlot.background).toARGB32(),
+            resolvedSlotColor(AdvancedThemeColorSlot.background).toARGB32(),
         surfaceColorValue:
-            resolvedSlotColor(_ThemeColorSlot.surface).toARGB32(),
+            resolvedSlotColor(AdvancedThemeColorSlot.surface).toARGB32(),
         searchFieldBackgroundColorValue:
-            resolvedSlotColor(_ThemeColorSlot.searchFieldBackground).toARGB32(),
+            resolvedSlotColor(
+              AdvancedThemeColorSlot.searchFieldBackground,
+            ).toARGB32(),
         elevatedSurfaceColorValue:
-            resolvedSlotColor(_ThemeColorSlot.elevatedSurface).toARGB32(),
-        cardColorValue: resolvedSlotColor(_ThemeColorSlot.card).toARGB32(),
+            resolvedSlotColor(
+              AdvancedThemeColorSlot.elevatedSurface,
+            ).toARGB32(),
+        cardColorValue:
+            resolvedSlotColor(AdvancedThemeColorSlot.card).toARGB32(),
         cardTextColorValue:
-            resolvedSlotColor(_ThemeColorSlot.cardText).toARGB32(),
+            resolvedSlotColor(AdvancedThemeColorSlot.cardText).toARGB32(),
         cardBorderColorValue:
-            resolvedSlotColor(_ThemeColorSlot.cardBorder).toARGB32(),
+            resolvedSlotColor(AdvancedThemeColorSlot.cardBorder).toARGB32(),
         iconBackgroundColorValue:
-            resolvedSlotColor(_ThemeColorSlot.iconBackground).toARGB32(),
+            resolvedSlotColor(AdvancedThemeColorSlot.iconBackground).toARGB32(),
         textPrimaryColorValue:
-            resolvedSlotColor(_ThemeColorSlot.textPrimary).toARGB32(),
+            resolvedSlotColor(AdvancedThemeColorSlot.textPrimary).toARGB32(),
         textSecondaryColorValue:
-            resolvedSlotColor(_ThemeColorSlot.textSecondary).toARGB32(),
+            resolvedSlotColor(AdvancedThemeColorSlot.textSecondary).toARGB32(),
         buttonTextColorValue:
-            resolvedSlotColor(_ThemeColorSlot.buttonText).toARGB32(),
+            resolvedSlotColor(AdvancedThemeColorSlot.buttonText).toARGB32(),
         outlineColorValue:
-            resolvedSlotColor(_ThemeColorSlot.outline).toARGB32(),
-        shadowColorValue: resolvedSlotColor(_ThemeColorSlot.shadow).toARGB32(),
+            resolvedSlotColor(AdvancedThemeColorSlot.outline).toARGB32(),
+        shadowColorValue:
+            resolvedSlotColor(AdvancedThemeColorSlot.shadow).toARGB32(),
         wallpaperOverlayColorValue:
-            resolvedSlotColor(_ThemeColorSlot.wallpaperOverlay).toARGB32(),
+            resolvedSlotColor(
+              AdvancedThemeColorSlot.wallpaperOverlay,
+            ).toARGB32(),
       ),
     );
   }
@@ -1677,20 +1700,20 @@ class _AdvancedThemeEditorPageState
     if (_isSaving) {
       return;
     }
-    final controller = _currentControllers[_ThemeColorSlot.shadow]!;
+    final controller = _currentControllers[AdvancedThemeColorSlot.shadow]!;
     final fallback = _fallbackColorForSlot(
       _selectedMode,
-      _ThemeColorSlot.shadow,
+      AdvancedThemeColorSlot.shadow,
     );
-    final currentColor = _resolvedColor(
-      _parseHexColor(controller.text.trim()),
+    final currentColor = AdvancedThemeColorCodec.resolvedColor(
+      AdvancedThemeColorCodec.parseHexColor(controller.text.trim()),
       fallback,
     );
     final normalized = value.clamp(0.0, 1.0).toDouble();
     if ((currentColor.a - normalized).abs() < 0.001) {
       return;
     }
-    controller.text = _formatHex(
+    controller.text = AdvancedThemeColorCodec.formatHex(
       currentColor.withValues(alpha: normalized).toARGB32(),
     );
   }
@@ -1727,9 +1750,11 @@ class _AdvancedThemeEditorPageState
     });
   }
 
-  Future<void> _pickColorForSlot(_ThemeColorSlot slot) async {
+  Future<void> _pickColorForSlot(AdvancedThemeColorSlot slot) async {
     final controller = _currentControllers[slot]!;
-    final current = _parseHexColor(controller.text.trim());
+    final current = AdvancedThemeColorCodec.parseHexColor(
+      controller.text.trim(),
+    );
     final fallback = _fallbackColorForSlot(_selectedMode, slot);
     final selected = await _showColorPickerDialog(
       context,
@@ -1739,7 +1764,7 @@ class _AdvancedThemeEditorPageState
     if (selected == null || !mounted) {
       return;
     }
-    controller.text = _formatHex(selected);
+    controller.text = AdvancedThemeColorCodec.formatHex(selected);
   }
 
   Future<int?> _showColorPickerDialog(
@@ -1749,7 +1774,7 @@ class _AdvancedThemeEditorPageState
   }) async {
     Color draftColor = Color(initialColorValue);
     final hexController = TextEditingController(
-      text: _formatHex(draftColor.toARGB32()),
+      text: AdvancedThemeColorCodec.formatHex(draftColor.toARGB32()),
     );
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
@@ -1820,7 +1845,9 @@ class _AdvancedThemeEditorPageState
                         ),
                       ],
                       onChanged: (value) {
-                        final parsed = _parseHexColor(value);
+                        final parsed = AdvancedThemeColorCodec.parseHexColor(
+                          value,
+                        );
                         if (parsed == null) {
                           return;
                         }
@@ -1875,7 +1902,9 @@ class _AdvancedThemeEditorPageState
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            _formatHex(draftColor.toARGB32()),
+                            AdvancedThemeColorCodec.formatHex(
+                              draftColor.toARGB32(),
+                            ),
                             style: theme.textTheme.bodyMedium?.copyWith(
                               fontWeight: FontWeight.w700,
                               letterSpacing: 0.2,
@@ -2137,7 +2166,7 @@ class _AdvancedThemeEditorPageState
     BuildContext context, {
     required String title,
     required String tooltipMessage,
-    required List<_ThemeColorFieldSpec> fields,
+    required List<AdvancedThemeColorFieldSpec> fields,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2152,11 +2181,13 @@ class _AdvancedThemeEditorPageState
     );
   }
 
-  List<_ThemeColorFieldSpec> _fieldSpecsForGroup(ThemeSemanticGroupSpec group) {
+  List<AdvancedThemeColorFieldSpec> _fieldSpecsForGroup(
+    ThemeSemanticGroupSpec group,
+  ) {
     return group.fields
         .map(
-          (field) => _ThemeColorFieldSpec(
-            slot: _slotForThemeSemanticField(field.id),
+          (field) => AdvancedThemeColorFieldSpec(
+            slot: AdvancedThemeColorSlot.fromSemanticField(field.id),
             label: field.label,
             description: field.description,
             scopeLabels: field.scopeLabels,
@@ -2171,9 +2202,11 @@ class _AdvancedThemeEditorPageState
       return const SizedBox.shrink();
     }
     final currentConfig = draft.configFor(_selectedMode);
-    final shadowColor = _resolvedColor(
-      _parseHexColor(_currentControllers[_ThemeColorSlot.shadow]!.text.trim()),
-      _fallbackColorForSlot(_selectedMode, _ThemeColorSlot.shadow),
+    final shadowColor = AdvancedThemeColorCodec.resolvedColor(
+      AdvancedThemeColorCodec.parseHexColor(
+        _currentControllers[AdvancedThemeColorSlot.shadow]!.text.trim(),
+      ),
+      _fallbackColorForSlot(_selectedMode, AdvancedThemeColorSlot.shadow),
     );
     return _buildListSectionBody(
       context,
@@ -2520,12 +2553,15 @@ class _AdvancedThemeEditorPageState
                   label: '卡片',
                   value: style.cardStyle,
                   choices: const [
-                    _ComponentStyleChoice(AppAdvancedThemeCardStyle.soft, '柔和'),
-                    _ComponentStyleChoice(
+                    AdvancedThemeComponentStyleChoice(
+                      AppAdvancedThemeCardStyle.soft,
+                      '柔和',
+                    ),
+                    AdvancedThemeComponentStyleChoice(
                       AppAdvancedThemeCardStyle.outlined,
                       '描边',
                     ),
-                    _ComponentStyleChoice(
+                    AdvancedThemeComponentStyleChoice(
                       AppAdvancedThemeCardStyle.elevated,
                       '浮起',
                     ),
@@ -2543,15 +2579,15 @@ class _AdvancedThemeEditorPageState
                   label: '按钮',
                   value: style.buttonStyle,
                   choices: const [
-                    _ComponentStyleChoice(
+                    AdvancedThemeComponentStyleChoice(
                       AppAdvancedThemeButtonStyle.stadium,
                       '胶囊',
                     ),
-                    _ComponentStyleChoice(
+                    AdvancedThemeComponentStyleChoice(
                       AppAdvancedThemeButtonStyle.rounded,
                       '圆润',
                     ),
-                    _ComponentStyleChoice(
+                    AdvancedThemeComponentStyleChoice(
                       AppAdvancedThemeButtonStyle.sharp,
                       '利落',
                     ),
@@ -2569,15 +2605,15 @@ class _AdvancedThemeEditorPageState
                   label: '输入框',
                   value: style.inputStyle,
                   choices: const [
-                    _ComponentStyleChoice(
+                    AdvancedThemeComponentStyleChoice(
                       AppAdvancedThemeInputStyle.soft,
                       '柔和',
                     ),
-                    _ComponentStyleChoice(
+                    AdvancedThemeComponentStyleChoice(
                       AppAdvancedThemeInputStyle.outlined,
                       '描边',
                     ),
-                    _ComponentStyleChoice(
+                    AdvancedThemeComponentStyleChoice(
                       AppAdvancedThemeInputStyle.underlined,
                       '下划线',
                     ),
@@ -2595,11 +2631,11 @@ class _AdvancedThemeEditorPageState
                   label: '浮层',
                   value: style.overlayStyle,
                   choices: const [
-                    _ComponentStyleChoice(
+                    AdvancedThemeComponentStyleChoice(
                       AppAdvancedThemeOverlayStyle.comfortable,
                       '舒展',
                     ),
-                    _ComponentStyleChoice(
+                    AdvancedThemeComponentStyleChoice(
                       AppAdvancedThemeOverlayStyle.compact,
                       '紧凑',
                     ),
@@ -2617,15 +2653,15 @@ class _AdvancedThemeEditorPageState
                   label: '导航',
                   value: style.navigationStyle,
                   choices: const [
-                    _ComponentStyleChoice(
+                    AdvancedThemeComponentStyleChoice(
                       AppAdvancedThemeNavigationStyle.soft,
                       '柔和',
                     ),
-                    _ComponentStyleChoice(
+                    AdvancedThemeComponentStyleChoice(
                       AppAdvancedThemeNavigationStyle.floating,
                       '悬浮',
                     ),
-                    _ComponentStyleChoice(
+                    AdvancedThemeComponentStyleChoice(
                       AppAdvancedThemeNavigationStyle.compact,
                       '紧凑',
                     ),
@@ -2644,11 +2680,11 @@ class _AdvancedThemeEditorPageState
                   label: '切换',
                   value: style.switchStyle,
                   choices: const [
-                    _ComponentStyleChoice(
+                    AdvancedThemeComponentStyleChoice(
                       AppAdvancedThemeSwitchStyle.soft,
                       '柔和',
                     ),
-                    _ComponentStyleChoice(
+                    AdvancedThemeComponentStyleChoice(
                       AppAdvancedThemeSwitchStyle.contrast,
                       '高对比',
                     ),
@@ -2905,7 +2941,7 @@ class _AdvancedThemeEditorPageState
     BuildContext context, {
     required String label,
     required T value,
-    required List<_ComponentStyleChoice<T>> choices,
+    required List<AdvancedThemeComponentStyleChoice<T>> choices,
     required ValueChanged<T>? onChanged,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -2992,7 +3028,7 @@ class _AdvancedThemeEditorPageState
 
   List<Widget> _buildColorFieldRows(
     BuildContext context,
-    List<_ThemeColorFieldSpec> fields,
+    List<AdvancedThemeColorFieldSpec> fields,
   ) {
     return [
       for (var index = 0; index < fields.length; index++) ...[
@@ -3002,7 +3038,10 @@ class _AdvancedThemeEditorPageState
     ];
   }
 
-  Widget _buildColorFieldRow(BuildContext context, _ThemeColorFieldSpec field) {
+  Widget _buildColorFieldRow(
+    BuildContext context,
+    AdvancedThemeColorFieldSpec field,
+  ) {
     final slot = field.slot;
     final colorScheme = Theme.of(context).colorScheme;
     final controller = _currentControllers[slot]!;
@@ -3010,8 +3049,13 @@ class _AdvancedThemeEditorPageState
     return ValueListenableBuilder<TextEditingValue>(
       valueListenable: controller,
       builder: (context, _, __) {
-        final parsed = _parseHexColor(controller.text.trim());
-        final previewColor = _resolvedColor(parsed, fallback);
+        final parsed = AdvancedThemeColorCodec.parseHexColor(
+          controller.text.trim(),
+        );
+        final previewColor = AdvancedThemeColorCodec.resolvedColor(
+          parsed,
+          fallback,
+        );
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 7),
           child: Row(
@@ -3061,7 +3105,9 @@ class _AdvancedThemeEditorPageState
                   ],
                   decoration: InputDecoration(
                     isDense: true,
-                    hintText: _formatHex(fallback.toARGB32()),
+                    hintText: AdvancedThemeColorCodec.formatHex(
+                      fallback.toARGB32(),
+                    ),
                     hintStyle: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: colorScheme.onSurfaceVariant,
                     ),
@@ -3129,32 +3175,14 @@ class _AdvancedThemeEditorPageState
     String title, {
     String? tooltipMessage,
   }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 2),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Flexible(
-            child: Text(
-              title,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
-          if (tooltipMessage != null && tooltipMessage.trim().isNotEmpty) ...[
-            const SizedBox(width: 4),
-            _buildInlineTooltipIcon(context, tooltipMessage),
-          ],
-        ],
-      ),
+    return AdvancedThemeSectionLabel(
+      title: title,
+      tooltipMessage: tooltipMessage,
     );
   }
 
   Widget _buildInlineTooltipIcon(BuildContext context, String message) {
-    return _InfoTooltipIcon(message: message);
+    return AdvancedThemeInfoTooltipIcon(message: message);
   }
 
   Widget _buildExpandableSectionHeader(
@@ -3164,46 +3192,11 @@ class _AdvancedThemeEditorPageState
     required bool expanded,
     required VoidCallback onToggle,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: onToggle,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(2, 6, 2, 6),
-        child: Row(
-          children: [
-            Expanded(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Flexible(
-                    child: Text(
-                      title,
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                  if (tooltipMessage != null &&
-                      tooltipMessage.trim().isNotEmpty) ...[
-                    const SizedBox(width: 4),
-                    _buildInlineTooltipIcon(context, tooltipMessage),
-                  ],
-                ],
-              ),
-            ),
-            Icon(
-              expanded
-                  ? Icons.keyboard_arrow_up_rounded
-                  : Icons.keyboard_arrow_down_rounded,
-              size: 18,
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ],
-        ),
-      ),
+    return AdvancedThemeExpandableSectionHeader(
+      title: title,
+      tooltipMessage: tooltipMessage,
+      expanded: expanded,
+      onToggle: onToggle,
     );
   }
 
@@ -3242,65 +3235,19 @@ class _AdvancedThemeEditorPageState
     Color? backgroundColor,
     EdgeInsetsGeometry padding = const EdgeInsets.fromLTRB(10, 8, 10, 8),
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
+    return AdvancedThemePanel(
+      backgroundColor: backgroundColor,
       padding: padding,
-      decoration: BoxDecoration(
-        color: backgroundColor ?? colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.35),
-        ),
-      ),
       child: child,
     );
   }
 
   Widget _buildListSectionBody(BuildContext context, {required Widget child}) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
-      decoration: BoxDecoration(
-        color: colorScheme.surface.withValues(alpha: 0.52),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.28),
-        ),
-      ),
-      child: child,
-    );
+    return AdvancedThemeListSectionBody(child: child);
   }
 
-  Map<_ThemeColorSlot, TextEditingController> get _currentControllers {
+  Map<AdvancedThemeColorSlot, TextEditingController> get _currentControllers {
     return _colorControllersByMode[_selectedMode]!;
-  }
-
-  _ThemeColorSlot _slotForThemeSemanticField(ThemeSemanticFieldId id) {
-    return switch (id) {
-      ThemeSemanticFieldId.accent => _ThemeColorSlot.primary,
-      ThemeSemanticFieldId.pageBackground => _ThemeColorSlot.background,
-      ThemeSemanticFieldId.modalBackground => _ThemeColorSlot.surface,
-      ThemeSemanticFieldId.secondaryBackground =>
-        _ThemeColorSlot.elevatedSurface,
-      ThemeSemanticFieldId.primaryText => _ThemeColorSlot.textPrimary,
-      ThemeSemanticFieldId.secondaryText => _ThemeColorSlot.textSecondary,
-      ThemeSemanticFieldId.border => _ThemeColorSlot.outline,
-      ThemeSemanticFieldId.cardBackground => _ThemeColorSlot.card,
-      ThemeSemanticFieldId.cardText => _ThemeColorSlot.cardText,
-      ThemeSemanticFieldId.cardBorder => _ThemeColorSlot.cardBorder,
-      ThemeSemanticFieldId.iconBackground => _ThemeColorSlot.iconBackground,
-      ThemeSemanticFieldId.emphasisBackground =>
-        _ThemeColorSlot.primaryContainer,
-      ThemeSemanticFieldId.buttonText => _ThemeColorSlot.buttonText,
-      ThemeSemanticFieldId.secondaryAccent => _ThemeColorSlot.secondary,
-      ThemeSemanticFieldId.searchFieldBackground =>
-        _ThemeColorSlot.searchFieldBackground,
-      ThemeSemanticFieldId.noticeAccent => _ThemeColorSlot.noticeAccent,
-      ThemeSemanticFieldId.noticeSurface => _ThemeColorSlot.noticeSurface,
-      ThemeSemanticFieldId.wallpaperOverlay => _ThemeColorSlot.wallpaperOverlay,
-    };
   }
 
   String _modeLabel(AppAdvancedThemeMode mode) {
@@ -3337,233 +3284,64 @@ class _AdvancedThemeEditorPageState
     );
   }
 
-  Color _fallbackColorForSlot(AppAdvancedThemeMode mode, _ThemeColorSlot slot) {
+  Color _fallbackColorForSlot(
+    AppAdvancedThemeMode mode,
+    AdvancedThemeColorSlot slot,
+  ) {
     final palette = _resolvedDefaultPaletteForMode(mode);
     final backdrop = _resolvedDefaultBackdropForMode(mode);
     return switch (slot) {
-      _ThemeColorSlot.primary => palette.primaryColor,
-      _ThemeColorSlot.secondary => palette.secondaryColor,
-      _ThemeColorSlot.noticeAccent => palette.noticeAccentColor,
-      _ThemeColorSlot.noticeSurface => palette.noticeSurfaceColor,
-      _ThemeColorSlot.primaryContainer => palette.primaryContainerColor,
-      _ThemeColorSlot.background => backdrop.backgroundColor,
-      _ThemeColorSlot.surface => palette.surfaceColor,
-      _ThemeColorSlot.searchFieldBackground =>
+      AdvancedThemeColorSlot.primary => palette.primaryColor,
+      AdvancedThemeColorSlot.secondary => palette.secondaryColor,
+      AdvancedThemeColorSlot.noticeAccent => palette.noticeAccentColor,
+      AdvancedThemeColorSlot.noticeSurface => palette.noticeSurfaceColor,
+      AdvancedThemeColorSlot.primaryContainer => palette.primaryContainerColor,
+      AdvancedThemeColorSlot.background => backdrop.backgroundColor,
+      AdvancedThemeColorSlot.surface => palette.surfaceColor,
+      AdvancedThemeColorSlot.searchFieldBackground =>
         palette.searchFieldBackgroundColor,
-      _ThemeColorSlot.elevatedSurface => palette.elevatedSurfaceColor,
-      _ThemeColorSlot.card => palette.cardColor,
-      _ThemeColorSlot.cardText => palette.cardTextColor,
-      _ThemeColorSlot.cardBorder => palette.cardBorderColor,
-      _ThemeColorSlot.iconBackground => palette.iconBackgroundColor,
-      _ThemeColorSlot.textPrimary => palette.textPrimaryColor,
-      _ThemeColorSlot.textSecondary => palette.textSecondaryColor,
-      _ThemeColorSlot.buttonText => palette.buttonTextColor,
-      _ThemeColorSlot.outline => palette.outlineColor,
-      _ThemeColorSlot.shadow => palette.shadowColor,
-      _ThemeColorSlot.wallpaperOverlay => backdrop.wallpaperOverlayColor,
+      AdvancedThemeColorSlot.elevatedSurface => palette.elevatedSurfaceColor,
+      AdvancedThemeColorSlot.card => palette.cardColor,
+      AdvancedThemeColorSlot.cardText => palette.cardTextColor,
+      AdvancedThemeColorSlot.cardBorder => palette.cardBorderColor,
+      AdvancedThemeColorSlot.iconBackground => palette.iconBackgroundColor,
+      AdvancedThemeColorSlot.textPrimary => palette.textPrimaryColor,
+      AdvancedThemeColorSlot.textSecondary => palette.textSecondaryColor,
+      AdvancedThemeColorSlot.buttonText => palette.buttonTextColor,
+      AdvancedThemeColorSlot.outline => palette.outlineColor,
+      AdvancedThemeColorSlot.shadow => palette.shadowColor,
+      AdvancedThemeColorSlot.wallpaperOverlay => backdrop.wallpaperOverlayColor,
     };
   }
 
-  int? _valueForSlot(AppAdvancedThemeColors colors, _ThemeColorSlot slot) {
+  int? _valueForSlot(
+    AppAdvancedThemeColors colors,
+    AdvancedThemeColorSlot slot,
+  ) {
     return switch (slot) {
-      _ThemeColorSlot.primary => colors.primaryColorValue,
-      _ThemeColorSlot.secondary => colors.secondaryColorValue,
-      _ThemeColorSlot.noticeAccent => colors.noticeAccentColorValue,
-      _ThemeColorSlot.noticeSurface => colors.noticeSurfaceColorValue,
-      _ThemeColorSlot.primaryContainer => colors.primaryContainerColorValue,
-      _ThemeColorSlot.background => colors.backgroundColorValue,
-      _ThemeColorSlot.surface => colors.surfaceColorValue,
-      _ThemeColorSlot.searchFieldBackground =>
+      AdvancedThemeColorSlot.primary => colors.primaryColorValue,
+      AdvancedThemeColorSlot.secondary => colors.secondaryColorValue,
+      AdvancedThemeColorSlot.noticeAccent => colors.noticeAccentColorValue,
+      AdvancedThemeColorSlot.noticeSurface => colors.noticeSurfaceColorValue,
+      AdvancedThemeColorSlot.primaryContainer =>
+        colors.primaryContainerColorValue,
+      AdvancedThemeColorSlot.background => colors.backgroundColorValue,
+      AdvancedThemeColorSlot.surface => colors.surfaceColorValue,
+      AdvancedThemeColorSlot.searchFieldBackground =>
         colors.searchFieldBackgroundColorValue,
-      _ThemeColorSlot.elevatedSurface => colors.elevatedSurfaceColorValue,
-      _ThemeColorSlot.card => colors.cardColorValue,
-      _ThemeColorSlot.cardText => colors.cardTextColorValue,
-      _ThemeColorSlot.cardBorder => colors.cardBorderColorValue,
-      _ThemeColorSlot.iconBackground => colors.iconBackgroundColorValue,
-      _ThemeColorSlot.textPrimary => colors.textPrimaryColorValue,
-      _ThemeColorSlot.textSecondary => colors.textSecondaryColorValue,
-      _ThemeColorSlot.buttonText => colors.buttonTextColorValue,
-      _ThemeColorSlot.outline => colors.outlineColorValue,
-      _ThemeColorSlot.shadow => colors.shadowColorValue,
-      _ThemeColorSlot.wallpaperOverlay => colors.wallpaperOverlayColorValue,
+      AdvancedThemeColorSlot.elevatedSurface =>
+        colors.elevatedSurfaceColorValue,
+      AdvancedThemeColorSlot.card => colors.cardColorValue,
+      AdvancedThemeColorSlot.cardText => colors.cardTextColorValue,
+      AdvancedThemeColorSlot.cardBorder => colors.cardBorderColorValue,
+      AdvancedThemeColorSlot.iconBackground => colors.iconBackgroundColorValue,
+      AdvancedThemeColorSlot.textPrimary => colors.textPrimaryColorValue,
+      AdvancedThemeColorSlot.textSecondary => colors.textSecondaryColorValue,
+      AdvancedThemeColorSlot.buttonText => colors.buttonTextColorValue,
+      AdvancedThemeColorSlot.outline => colors.outlineColorValue,
+      AdvancedThemeColorSlot.shadow => colors.shadowColorValue,
+      AdvancedThemeColorSlot.wallpaperOverlay =>
+        colors.wallpaperOverlayColorValue,
     };
-  }
-
-  int? _parseHexColor(String raw) {
-    final normalized = raw.trim().toUpperCase();
-    if (normalized.isEmpty) {
-      return null;
-    }
-    final body =
-        normalized.startsWith('#') ? normalized.substring(1) : normalized;
-    if (body.length == 6) {
-      return int.tryParse('FF$body', radix: 16);
-    }
-    if (body.length == 8) {
-      return int.tryParse(body, radix: 16);
-    }
-    return null;
-  }
-
-  String _formatHex(int? value) {
-    if (value == null) {
-      return '';
-    }
-    final hex = value.toRadixString(16).toUpperCase().padLeft(8, '0');
-    if (hex.startsWith('FF')) {
-      return '#${hex.substring(2)}';
-    }
-    return '#$hex';
-  }
-
-  Color _resolvedColor(int? value, Color fallback) {
-    if (value == null) {
-      return fallback;
-    }
-    return Color(value);
-  }
-}
-
-enum _ThemeColorSlot {
-  primary('强调色', '按钮和链接的颜色'),
-  noticeAccent('提示强调', '重要提示和通知强调色'),
-  noticeSurface('提示底色', '重要提示块和状态标签的背景色'),
-  background('页面背景', '页面底色'),
-  surface('弹窗背景', '菜单、弹窗和底部浮层的底色'),
-  searchFieldBackground('搜索框背景', '搜索框和搜索触发条的填充颜色'),
-  elevatedSurface('次级背景', '分组区域和轻表面的底色'),
-  textPrimary('主要文字', '正文和标题的颜色'),
-  textSecondary('辅助文字', '提示和说明的颜色'),
-  outline('边框', '输入框、分隔线和通用描边颜色'),
-  card('卡片背景', '列表项和弹窗的底色'),
-  cardText('卡片文字', '卡片内主要文字的颜色'),
-  cardBorder('卡片边框', '卡片和面板描边颜色'),
-  iconBackground('图标底色', '我的页小卡片图标圆底背景'),
-  primaryContainer('强调背景', '标签、筛选和选中态背景色'),
-  secondary('辅助强调', '次级徽标和辅助操作的强调色'),
-  buttonText('按钮文字', '主按钮和高亮按钮上的文字'),
-  shadow('阴影', '卡片和浮层的阴影或光晕颜色'),
-  wallpaperOverlay('壁纸遮罩色', '壁纸上层覆盖的颜色');
-
-  const _ThemeColorSlot(this.label, this.description);
-
-  final String label;
-  final String description;
-}
-
-class _CoverGallerySelectionResult {
-  const _CoverGallerySelectionResult({
-    required this.applied,
-    required this.galleryId,
-  });
-
-  final bool applied;
-  final String? galleryId;
-}
-
-class _LaunchImageGallerySelectionResult {
-  const _LaunchImageGallerySelectionResult({
-    required this.applied,
-    required this.galleryId,
-  });
-
-  final bool applied;
-  final String? galleryId;
-}
-
-class _WallpaperSelectionResult {
-  const _WallpaperSelectionResult({
-    required this.path,
-    this.fit = AppAdvancedThemeWallpaperFit.cover,
-  });
-
-  final String? path;
-  final AppAdvancedThemeWallpaperFit fit;
-}
-
-class _ThemeFontSelectionResult {
-  const _ThemeFontSelectionResult({
-    required this.applied,
-    required this.familyKey,
-  });
-
-  final bool applied;
-  final String? familyKey;
-}
-
-class _ComponentStyleChoice<T> {
-  const _ComponentStyleChoice(this.value, this.label);
-
-  final T value;
-  final String label;
-}
-
-class _ThemeColorFieldSpec {
-  const _ThemeColorFieldSpec({
-    required this.slot,
-    required this.label,
-    required this.description,
-    required this.scopeLabels,
-  });
-
-  final _ThemeColorSlot slot;
-  final String label;
-  final String description;
-  final List<String> scopeLabels;
-
-  String get tooltipMessage {
-    final normalizedScopes = scopeLabels
-        .map((item) => item.trim())
-        .where((item) => item.isNotEmpty)
-        .join(' / ');
-    if (normalizedScopes.isEmpty) {
-      return description.trim();
-    }
-    return '${description.trim()}\n影响范围：$normalizedScopes';
-  }
-}
-
-class _InfoTooltipIcon extends StatefulWidget {
-  const _InfoTooltipIcon({required this.message});
-
-  final String message;
-
-  @override
-  State<_InfoTooltipIcon> createState() => _InfoTooltipIconState();
-}
-
-class _InfoTooltipIconState extends State<_InfoTooltipIcon> {
-  final GlobalKey<TooltipState> _tooltipKey = GlobalKey<TooltipState>();
-
-  void _showTooltip() {
-    _tooltipKey.currentState?.ensureTooltipVisible();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => _showTooltip(),
-      child: Tooltip(
-        key: _tooltipKey,
-        message: widget.message,
-        triggerMode: TooltipTriggerMode.tap,
-        waitDuration: Duration.zero,
-        showDuration: const Duration(seconds: 3),
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: _showTooltip,
-          child: Padding(
-            padding: const EdgeInsets.all(2),
-            child: Icon(
-              Icons.help_outline_rounded,
-              size: 14,
-              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.82),
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }

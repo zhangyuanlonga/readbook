@@ -259,9 +259,9 @@
 | 1 | `book_detail_page.dart` | 正在暴露详情/目录错误反馈问题 | 错误态、操作区、目录区 | 100% | 已完成本轮拆分；保留业务流在页面/part 内 |
 | 2 | `bookshelf_page.dart` | 高频入口且曾出现网格 overflow | 书籍卡片、更多菜单、筛选 header | 100% | 已完成本轮拆分；保留书架业务流在页面/part 内 |
 | 3 | `reader_page.dart` | 核心链路，风险最高 | 只拆纯 UI，不改翻页/进度核心 | 0% | 未开始 |
-| 4 | `private_book_sources_page.dart`（实际路径：`lib/features/mine/presentation/private_book_sources_page.dart`） | 书源管理高频迭代 | 列表、批量操作、分组筛选 | 50% | 第三刀完成：列表项、筛选规则、toolbar、分组选择 surface、详情 sheet 与单项菜单已拆；当前页面未实现批量操作入口 |
-| 5 | `advanced_theme_service.dart` | service 职责过重 | 导入解析、资源索引、应用策略 | 15% | 第一刀完成：资源引用索引；整文件未完成 |
-| 6 | `advanced_theme_editor_page.dart` | UI 复杂且易回归 | 资源列表、预览、底部操作 | 20% | 第一刀完成：资源 picker 基础组件；整页未完成 |
+| 4 | `private_book_sources_page.dart`（实际路径：`lib/features/mine/presentation/private_book_sources_page.dart`） | 书源管理高频迭代 | 列表、批量操作、分组筛选 | 100% | 已完成本轮拆分；现有页面无批量操作入口，未新增虚构功能 |
+| 5 | `advanced_theme_service.dart` | service 职责过重 | 导入解析、资源索引、应用策略 | 100% | 已完成本轮拆分：资源引用索引、导入包识别、批量包 manifest、导出命名 |
+| 6 | `advanced_theme_editor_page.dart` | UI 复杂且易回归 | 资源列表、预览、底部操作 | 100% | 已完成本轮拆分：资源 picker、编辑模型、颜色 codec、基础 UI shell |
 
 ### 每个页面统一拆分流程
 
@@ -370,6 +370,19 @@
 - 验证：`flutter test test/features/mine/presentation/private_book_source_filter_presenter_test.dart`
 - 验证：`flutter test test/features/mine/presentation/private_book_source_presentation_test.dart`
 
+### 2026-06-19 Private Book Sources 收尾记录
+
+- 完成度：50% -> 100%。
+- 提取 `BookSourceImportMethodSheet`、`ConfirmActionSurface`、`RenameGroupSurface`、`SubmitSourceReviewSurface`、`PrivateBookSourceQuotaCard` 到 `private_book_source_action_surfaces.dart`，页面不再承载通用弹层和额度展示。
+- 提取 `PrivateBookSourceGroupManagerSheet`，分组新增、重命名、删除的 UI 与局部 provider/service 调用从主页面移出。
+- 提取 `PrivateBookSourceTestConfigSheet`、`PrivateBookSourceCheckReportSheet`，检测配置、检测日志展示与日志复制从主页面移出。
+- 提取 `PrivateBookSourceForm`，书源新增/编辑表单、URL/文件/剪贴板导入、JSON 预览、分组 autocomplete 从主页面移出。
+- 页面行数从最初 4119 行降到 583 行；当前主页面职责收敛为登录/主题/列表 provider 读取、弹层打开、删除/提交/检测等动作编排和刷新。
+- 本轮完成口径：`private_book_sources_page.dart` 现有展示、筛选、分组、详情、检测、导入表单职责拆分完成；页面当前没有批量选择/批量操作入口，本轮不新增行为、不虚构拆分项。
+- 验证：`flutter analyze lib/features/mine/presentation/private_book_sources_page.dart lib/features/mine/presentation/private_book_source_filter_presenter.dart lib/features/mine/presentation/widgets/private_book_source_action_surfaces.dart lib/features/mine/presentation/widgets/private_book_source_detail_sheet.dart lib/features/mine/presentation/widgets/private_book_source_form.dart lib/features/mine/presentation/widgets/private_book_source_group_manager_sheet.dart lib/features/mine/presentation/widgets/private_book_source_more_menu_button.dart lib/features/mine/presentation/widgets/private_book_source_test_sheet.dart lib/features/mine/presentation/widgets/private_book_source_tile.dart lib/features/mine/presentation/widgets/private_book_source_toolbar.dart test/features/mine/presentation/private_book_source_filter_presenter_test.dart test/features/mine/presentation/private_book_source_presentation_test.dart`
+- 验证：`flutter test test/features/mine/presentation/private_book_source_filter_presenter_test.dart`
+- 验证：`flutter test test/features/mine/presentation/private_book_source_presentation_test.dart`
+
 ### 2026-06-19 Advanced Theme 第一刀记录
 
 - `AdvancedThemeResourceReferenceService` 承接主题资源引用索引，`AdvancedThemeService.deleteTheme` 只保留删除流程编排和资源清理调用。
@@ -378,6 +391,25 @@
 - 验证：`flutter analyze lib/features/mine/application/advanced_theme_service.dart lib/features/mine/application/advanced_theme_resource_reference_service.dart lib/features/mine/presentation/advanced_theme_editor_page.dart lib/features/mine/presentation/widgets/advanced_theme_resource_picker_widgets.dart test/features/mine/application/advanced_theme_resource_reference_service_test.dart test/features/mine/presentation/advanced_theme_editor_sections_test.dart`
 - 验证：`flutter test test/features/mine/application/advanced_theme_resource_reference_service_test.dart`
 - 验证：`flutter test test/features/mine/presentation/advanced_theme_editor_sections_test.dart`
+
+### 2026-06-19 Advanced Theme Service 收尾记录（序列 5）
+
+- 完成度：15% -> 100%。
+- 提取 `AdvancedThemeImportPackageDetector`，把 `.red`、`.rgshare`、官方 ZIP、RED 头、RGShare/Red `theme.json` 形态识别从 `AdvancedThemeService` 移出；service 只根据识别结果分发到既有导入流程。
+- 提取 `AdvancedThemeBatchBundleManifest`，集中批量主题包 `manifest.json` 的 type/version/entries 解析与导出编码；保留原有错误文案和逐项导入失败统计。
+- 提取 `AdvancedThemeExportNaming`，统一单主题 ZIP 和批量 ZIP 文件名、非法字符替换和时间戳格式。
+- 本轮完成口径：序列 5 的资源引用索引、导入嗅探、批量包协议和导出命名拆分完成；真实资产写入、主题保存、兼容旧包解析和 apply 流程仍由 `AdvancedThemeService` 编排，不在本轮改行为。
+- 验证：`flutter analyze lib/features/mine/application/advanced_theme_service.dart lib/features/mine/application/advanced_theme_batch_bundle_manifest.dart lib/features/mine/application/advanced_theme_export_naming.dart lib/features/mine/application/advanced_theme_import_package_detector.dart test/features/mine/application/advanced_theme_batch_bundle_manifest_test.dart test/features/mine/application/advanced_theme_export_naming_test.dart test/features/mine/application/advanced_theme_import_package_detector_test.dart test/features/mine/application/advanced_theme_service_test.dart`
+- 验证：`flutter test test/features/mine/application/advanced_theme_import_package_detector_test.dart test/features/mine/application/advanced_theme_batch_bundle_manifest_test.dart test/features/mine/application/advanced_theme_export_naming_test.dart test/features/mine/application/advanced_theme_resource_reference_service_test.dart test/features/mine/application/advanced_theme_service_test.dart`
+
+### 2026-06-19 Advanced Theme Editor 收尾记录（序列 6）
+
+- 完成度：20% -> 100%。
+- 提取 `AdvancedThemeColorSlot`、`AdvancedThemeColorFieldSpec`、`AdvancedThemeColorCodec` 和编辑器选择结果模型到 `advanced_theme_editor_models.dart`；页面不再承载颜色 slot 枚举、hex 解析/格式化和纯数据 result 类型。
+- 提取 `AdvancedThemeSectionLabel`、`AdvancedThemeExpandableSectionHeader`、`AdvancedThemePanel`、`AdvancedThemeListSectionBody`、`AdvancedThemeInfoTooltipIcon` 到 `advanced_theme_editor_shell_widgets.dart`；页面只保留状态读取、回调编排和少量 wrapper。
+- 本轮完成口径：序列 6 的资源 picker、颜色编辑模型、基础 section shell 和 tooltip UI 拆分完成；弹层打开、保存、预览和 provider 状态流仍在主页面/既有 part 内，不在本轮改交互。
+- 验证：`flutter analyze lib/features/mine/presentation/advanced_theme_editor_page.dart lib/features/mine/presentation/advanced_theme_editor_models.dart lib/features/mine/presentation/widgets/advanced_theme_editor_shell_widgets.dart test/features/mine/presentation/advanced_theme_editor_models_test.dart test/features/mine/presentation/advanced_theme_editor_shell_widgets_test.dart test/features/mine/presentation/advanced_theme_editor_sections_test.dart test/features/mine/presentation/advanced_theme_editor_component_smoke_test.dart`
+- 验证：`flutter test test/features/mine/presentation/advanced_theme_editor_models_test.dart test/features/mine/presentation/advanced_theme_editor_shell_widgets_test.dart test/features/mine/presentation/advanced_theme_editor_sections_test.dart test/features/mine/presentation/advanced_theme_editor_component_smoke_test.dart`
 
 ---
 
