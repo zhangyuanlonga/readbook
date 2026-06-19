@@ -259,7 +259,7 @@
 | 1 | `book_detail_page.dart` | 正在暴露详情/目录错误反馈问题 | 错误态、操作区、目录区 | 100% | 已完成本轮拆分；保留业务流在页面/part 内 |
 | 2 | `bookshelf_page.dart` | 高频入口且曾出现网格 overflow | 书籍卡片、更多菜单、筛选 header | 100% | 已完成本轮拆分；保留书架业务流在页面/part 内 |
 | 3 | `reader_page.dart` | 核心链路，风险最高 | 只拆纯 UI，不改翻页/进度核心 | 0% | 未开始 |
-| 4 | `private_book_sources_page.dart`（实际路径：`lib/features/mine/presentation/private_book_sources_page.dart`） | 书源管理高频迭代 | 列表、批量操作、分组筛选 | 40% | 第二刀完成：列表项、筛选规则、toolbar、分组选择 surface 与单项菜单已拆；当前页面未实现批量操作入口 |
+| 4 | `private_book_sources_page.dart`（实际路径：`lib/features/mine/presentation/private_book_sources_page.dart`） | 书源管理高频迭代 | 列表、批量操作、分组筛选 | 50% | 第三刀完成：列表项、筛选规则、toolbar、分组选择 surface、详情 sheet 与单项菜单已拆；当前页面未实现批量操作入口 |
 | 5 | `advanced_theme_service.dart` | service 职责过重 | 导入解析、资源索引、应用策略 | 15% | 第一刀完成：资源引用索引；整文件未完成 |
 | 6 | `advanced_theme_editor_page.dart` | UI 复杂且易回归 | 资源列表、预览、底部操作 | 20% | 第一刀完成：资源 picker 基础组件；整页未完成 |
 
@@ -357,6 +357,16 @@
 - 提取 `PrivateBookSourceGroupPickerSurface` 和 `showPrivateBookSourceGroupPicker`，分组选择 surface 从大页面移出，继续复用第一刀的 `PrivateBookSourceGroupFilterPresenter` 规则。
 - 本轮完成口径：分组筛选入口、搜索 toolbar、分组 picker surface 拆分完成；分组管理 sheet 的新增/重命名/删除 service 流程仍留在页面内，后续需要单独拆应用动作边界。
 - 验证：`flutter analyze lib/features/mine/presentation/private_book_sources_page.dart lib/features/mine/presentation/private_book_source_filter_presenter.dart lib/features/mine/presentation/widgets/private_book_source_more_menu_button.dart lib/features/mine/presentation/widgets/private_book_source_tile.dart lib/features/mine/presentation/widgets/private_book_source_toolbar.dart test/features/mine/presentation/private_book_source_filter_presenter_test.dart test/features/mine/presentation/private_book_source_presentation_test.dart`
+- 验证：`flutter test test/features/mine/presentation/private_book_source_filter_presenter_test.dart`
+- 验证：`flutter test test/features/mine/presentation/private_book_source_presentation_test.dart`
+
+### 2026-06-19 Private Book Sources 第三刀记录
+
+- 完成度：40% -> 50%。
+- 提取 `PrivateBookSourceDetailSheet` 和 `PrivateBookSourceDetailAction`，详情展示与 edit/test 动作返回从大页面移出。
+- 详情 sheet 直接复用 `PrivateBookSourcePresentation` 标签和时间格式化规则，页面删除不再引用的 `_typeLabel`、`_groupLabel`、`_reviewLabel`、`_formatPrivateSourceDate` 代理 helper。
+- 本轮完成口径：单个书源详情展示拆分完成；详情后的编辑、检测、提交、删除等业务动作仍由页面编排，不在本轮迁移。
+- 验证：`flutter analyze lib/features/mine/presentation/private_book_sources_page.dart lib/features/mine/presentation/private_book_source_filter_presenter.dart lib/features/mine/presentation/widgets/private_book_source_detail_sheet.dart lib/features/mine/presentation/widgets/private_book_source_more_menu_button.dart lib/features/mine/presentation/widgets/private_book_source_tile.dart lib/features/mine/presentation/widgets/private_book_source_toolbar.dart test/features/mine/presentation/private_book_source_filter_presenter_test.dart test/features/mine/presentation/private_book_source_presentation_test.dart`
 - 验证：`flutter test test/features/mine/presentation/private_book_source_filter_presenter_test.dart`
 - 验证：`flutter test test/features/mine/presentation/private_book_source_presentation_test.dart`
 

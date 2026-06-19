@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shuxiang_reading_next/features/mine/application/private_book_source_service.dart';
 import 'package:shuxiang_reading_next/features/mine/presentation/private_book_source_filter_presenter.dart';
+import 'package:shuxiang_reading_next/features/mine/presentation/widgets/private_book_source_detail_sheet.dart';
 import 'package:shuxiang_reading_next/features/mine/presentation/widgets/private_book_source_more_menu_button.dart';
 import 'package:shuxiang_reading_next/features/mine/presentation/widgets/private_book_source_tile.dart';
 import 'package:shuxiang_reading_next/features/mine/presentation/widgets/private_book_source_toolbar.dart';
@@ -192,6 +193,62 @@ void main() {
     expect(find.text('常用'), findsOneWidget);
     expect(find.text('备用'), findsOneWidget);
     expect(find.byIcon(Icons.check_rounded), findsOneWidget);
+  });
+
+  testWidgets('PrivateBookSourceDetailSheet renders private source actions', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PrivateBookSourceDetailSheet(
+            item: _source(
+              id: 'source_1',
+              name: '测试书源',
+              description: '备用源',
+              groupName: '分组 A',
+              normalizationStatus: 'failed',
+              normalizationError: '规则缺失',
+              lastTestStatus: 'failed',
+              lastTestMessage: '响应解析失败',
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('测试书源'), findsOneWidget);
+    expect(find.text('分组 A'), findsWidgets);
+    expect(find.text('检测状态'), findsOneWidget);
+    expect(find.text('失败：响应解析失败'), findsOneWidget);
+    expect(find.text('配置异常：规则缺失'), findsOneWidget);
+    expect(find.text('备用源'), findsOneWidget);
+    expect(find.text('检测'), findsOneWidget);
+    expect(find.text('编辑'), findsOneWidget);
+  });
+
+  testWidgets('PrivateBookSourceDetailSheet hides edit for shared source', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PrivateBookSourceDetailSheet(
+            item: _source(
+              id: 'source_shared',
+              name: '共享书源',
+              visibility: 'shared',
+              reviewStatus: 'approved',
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('共享书源'), findsOneWidget);
+    expect(find.text('共享'), findsWidgets);
+    expect(find.text('检测'), findsOneWidget);
+    expect(find.text('编辑'), findsNothing);
   });
 }
 

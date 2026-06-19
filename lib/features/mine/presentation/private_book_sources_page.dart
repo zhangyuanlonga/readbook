@@ -33,6 +33,7 @@ import '../application/private_book_source_service.dart';
 import 'private_book_source_filter_presenter.dart';
 import 'private_book_source_presentation.dart';
 import 'widgets/mine_route_top_bar.dart';
+import 'widgets/private_book_source_detail_sheet.dart';
 import 'widgets/private_book_source_state_cards.dart';
 import 'widgets/private_book_source_tile.dart';
 import 'widgets/private_book_source_toolbar.dart';
@@ -61,8 +62,6 @@ final _privateBookSourcesAuthSessionProvider =
       }
       return session;
     });
-
-enum _PrivateSourceDetailAction { edit, test }
 
 enum _BookSourceImportMethod { url, file, paste }
 
@@ -378,21 +377,22 @@ class PrivateBookSourcesPage extends ConsumerWidget {
     WidgetRef ref, {
     required PrivateBookSourceItem item,
   }) async {
-    final action = await showAdaptiveActionSurface<_PrivateSourceDetailAction>(
-      context: context,
-      maxWidth: 560,
-      maxHeightFactor: 0.86,
-      padding: EdgeInsets.zero,
-      builder: (context) => _PrivateSourceDetailSheet(item: item),
-    );
+    final action =
+        await showAdaptiveActionSurface<PrivateBookSourceDetailAction>(
+          context: context,
+          maxWidth: 560,
+          maxHeightFactor: 0.86,
+          padding: EdgeInsets.zero,
+          builder: (context) => PrivateBookSourceDetailSheet(item: item),
+        );
     if (!context.mounted) {
       return;
     }
     switch (action) {
-      case _PrivateSourceDetailAction.edit:
+      case PrivateBookSourceDetailAction.edit:
         await _openForm(context, ref, item: item);
         return;
-      case _PrivateSourceDetailAction.test:
+      case PrivateBookSourceDetailAction.test:
         await _testSource(context, ref, item);
         return;
       case null:
@@ -1440,323 +1440,6 @@ class _PrivateSourceGroupManagerSheetState
       tone:
           message.contains('失败') ? AppFeedbackTone.error : AppFeedbackTone.info,
       useHaptics: false,
-    );
-  }
-}
-
-class _PrivateSourceDetailSheet extends StatelessWidget {
-  const _PrivateSourceDetailSheet({required this.item});
-
-  final PrivateBookSourceItem item;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final metrics = AppAdaptiveMetrics.of(context);
-    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
-    final normalizationStatus = item.normalizationStatus.trim();
-    final normalizationMessage = item.normalizationError.trim();
-    final testStatus = item.lastTestStatus.trim();
-    final testMessage = item.lastTestMessage.trim();
-
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        metrics.pagePadding,
-        metrics.contentGap,
-        metrics.pagePadding,
-        bottomInset + metrics.sectionGap,
-      ),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.sizeOf(context).height * 0.7,
-        ),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: colorScheme.primary.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    alignment: Alignment.center,
-                    child: Icon(
-                      Icons.menu_book_outlined,
-                      color: colorScheme.primary,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          item.name,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          item.id,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: <Widget>[
-                  _PrivateSourceDetailChip(
-                    label: _typeLabel(item.supportedTypes),
-                    color: colorScheme.primary,
-                  ),
-                  _PrivateSourceDetailChip(
-                    label: _groupLabel(item.groupName),
-                    color: colorScheme.secondary,
-                  ),
-                  _PrivateSourceDetailChip(
-                    label: _reviewLabel(item.reviewStatus, item.visibility),
-                    color:
-                        item.visibility == 'private'
-                            ? colorScheme.primary
-                            : colorScheme.tertiary,
-                  ),
-                  _PrivateSourceDetailChip(
-                    label: item.enabled ? '已启用' : '已停用',
-                    color: item.enabled ? Colors.green : Colors.orange,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              _PrivateSourceDetailSection(
-                title: '基础信息',
-                children: <Widget>[
-                  _PrivateSourceDetailRow(
-                    label: '类型',
-                    value: _typeLabel(item.supportedTypes),
-                  ),
-                  _PrivateSourceDetailRow(
-                    label: '分组',
-                    value: _groupLabel(item.groupName),
-                  ),
-                  _PrivateSourceDetailRow(
-                    label: '状态',
-                    value:
-                        '${item.enabled ? '已启用' : '已停用'} / ${_reviewLabel(item.reviewStatus, item.visibility)}',
-                  ),
-                  _PrivateSourceDetailRow(
-                    label: '创建时间',
-                    value: _formatPrivateSourceDate(item.createdAt),
-                  ),
-                  _PrivateSourceDetailRow(
-                    label: '更新时间',
-                    value: _formatPrivateSourceDate(item.updatedAt),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              _PrivateSourceDetailSection(
-                title: '检测与配置',
-                children: <Widget>[
-                  _PrivateSourceDetailRow(
-                    label: '检测状态',
-                    value:
-                        testMessage.isEmpty
-                            ? _testLabel(testStatus)
-                            : '${_testLabel(testStatus)}：$testMessage',
-                  ),
-                  _PrivateSourceDetailRow(
-                    label: '配置状态',
-                    value:
-                        normalizationMessage.isEmpty
-                            ? _normalizationLabel(normalizationStatus)
-                            : '${_normalizationLabel(normalizationStatus)}：$normalizationMessage',
-                  ),
-                  if (item.reviewNote.trim().isNotEmpty)
-                    _PrivateSourceDetailRow(
-                      label: '审核备注',
-                      value: item.reviewNote.trim(),
-                    ),
-                ],
-              ),
-              if (item.description.trim().isNotEmpty) ...<Widget>[
-                const SizedBox(height: 14),
-                _PrivateSourceDetailSection(
-                  title: '描述',
-                  children: <Widget>[
-                    SelectableText(
-                      item.description.trim(),
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        height: 1.45,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-              const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: <Widget>[
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('关闭'),
-                  ),
-                  const SizedBox(width: 8),
-                  OutlinedButton.icon(
-                    onPressed:
-                        () => Navigator.of(
-                          context,
-                        ).pop(_PrivateSourceDetailAction.test),
-                    icon: const Icon(Icons.science_outlined),
-                    label: const Text('检测'),
-                  ),
-                  if (item.visibility != 'shared') ...<Widget>[
-                    const SizedBox(width: 8),
-                    FilledButton.icon(
-                      onPressed:
-                          () => Navigator.of(
-                            context,
-                          ).pop(_PrivateSourceDetailAction.edit),
-                      icon: const Icon(Icons.edit_outlined),
-                      label: const Text('编辑'),
-                    ),
-                  ],
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  String _normalizationLabel(String status) {
-    return switch (status) {
-      'done' => '正常',
-      'pending' => '待规整',
-      'failed' => '配置异常',
-      _ => status.isEmpty ? '未知' : status,
-    };
-  }
-}
-
-class _PrivateSourceDetailSection extends StatelessWidget {
-  const _PrivateSourceDetailSection({
-    required this.title,
-    required this.children,
-  });
-
-  final String title;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.25),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            title,
-            style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 10),
-          ...children,
-        ],
-      ),
-    );
-  }
-}
-
-class _PrivateSourceDetailRow extends StatelessWidget {
-  const _PrivateSourceDetailRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          SizedBox(
-            width: 76,
-            child: Text(
-              label,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: SelectableText(
-              value.trim().isEmpty ? '-' : value.trim(),
-              style: theme.textTheme.bodyMedium?.copyWith(height: 1.35),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PrivateSourceDetailChip extends StatelessWidget {
-  const _PrivateSourceDetailChip({required this.label, required this.color});
-
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: color,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
     );
   }
 }
@@ -3499,28 +3182,12 @@ List<String> _uniqueGroupNames(List<PrivateBookSourceGroup> groups) {
 
 String _limitText(int value) => value < 0 ? '不限' : '$value';
 
-String _typeLabel(List<String> types) {
-  return PrivateBookSourcePresentation.typeLabel(types);
-}
-
-String _groupLabel(String value) {
-  return PrivateBookSourcePresentation.groupLabel(value);
-}
-
 bool _isDefaultGroup(PrivateBookSourceGroup group) {
   return group.displayName == '未分组';
 }
 
-String _reviewLabel(String value, String visibility) {
-  return PrivateBookSourcePresentation.reviewLabel(value, visibility);
-}
-
 String _testLabel(String value) {
   return PrivateBookSourcePresentation.testLabel(value);
-}
-
-String _formatPrivateSourceDate(DateTime? value) {
-  return PrivateBookSourcePresentation.formatDate(value);
 }
 
 String _checkItemLabel(String value) {
