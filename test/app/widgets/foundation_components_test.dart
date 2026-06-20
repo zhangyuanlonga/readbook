@@ -197,6 +197,141 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('AppSurface, AppPanel and AppSection render tokenized surfaces', (
+    tester,
+  ) async {
+    var tapped = false;
+
+    await tester.pumpWidget(
+      AdaptiveTestHarness(
+        width: 600,
+        height: 960,
+        wrapWithMaterialApp: true,
+        child: Scaffold(
+          body: Column(
+            children: [
+              AppSurface(
+                onTap: () {
+                  tapped = true;
+                },
+                child: const Text('基础表面'),
+              ),
+              const AppPanel(
+                title: '面板标题',
+                subtitle: '面板说明',
+                child: Text('面板内容'),
+              ),
+              const AppSection(
+                title: '分组标题',
+                children: [Text('第一项'), Text('第二项')],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('基础表面'));
+    expect(tapped, isTrue);
+    expect(find.text('面板标题'), findsOneWidget);
+    expect(find.text('第二项'), findsOneWidget);
+    expect(find.byType(AppSurface), findsWidgets);
+  });
+
+  testWidgets('AppProgress widgets expose inline and blocking states', (
+    tester,
+  ) async {
+    var cancelled = false;
+
+    await tester.pumpWidget(
+      AdaptiveTestHarness(
+        width: 390,
+        height: 844,
+        wrapWithMaterialApp: true,
+        child: Scaffold(
+          body: Column(
+            children: [
+              const AppInlineProgress(
+                label: '正在同步',
+                message: '同步阅读数据',
+                value: 0.5,
+              ),
+              const AppBlockingProgressCard(
+                title: '正在导入',
+                message: '处理资源包',
+                value: 0.25,
+              ),
+              AppTaskProgressRow(
+                title: '批处理',
+                onCancel: () {
+                  cancelled = true;
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byIcon(Icons.close_rounded));
+    expect(cancelled, isTrue);
+    expect(find.text('正在同步'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNWidgets(3));
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
+  });
+
+  testWidgets(
+    'AppStateView covers content, empty, error and refreshing states',
+    (tester) async {
+      var retried = false;
+
+      await tester.pumpWidget(
+        AdaptiveTestHarness(
+          width: 390,
+          height: 844,
+          wrapWithMaterialApp: true,
+          child: Scaffold(
+            body: ListView(
+              children: [
+                const AppStateView(
+                  kind: AppViewStateKind.content,
+                  child: Text('正文内容'),
+                ),
+                AppStateView(
+                  kind: AppViewStateKind.empty,
+                  title: '没有结果',
+                  description: '换个关键词试试',
+                  primaryAction: AppStateAction(
+                    label: '重置',
+                    onPressed: () {
+                      retried = true;
+                    },
+                  ),
+                ),
+                const AppStateView(
+                  kind: AppViewStateKind.error,
+                  title: '读取失败',
+                  description: '稍后再试',
+                ),
+                const AppStateView(
+                  kind: AppViewStateKind.refreshing,
+                  title: '正在刷新',
+                  child: Text('旧内容'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('重置'));
+      expect(retried, isTrue);
+      expect(find.text('正文内容'), findsOneWidget);
+      expect(find.text('读取失败'), findsOneWidget);
+      expect(find.text('旧内容'), findsOneWidget);
+    },
+  );
+
   testWidgets('AppFeedback shows snack bar and inline feedback', (
     tester,
   ) async {

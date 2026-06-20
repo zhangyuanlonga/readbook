@@ -117,8 +117,6 @@ class AdvancedThemeEditorStateService {
     final backgroundPaths = await _appBackgroundService.loadBackgroundPaths();
     final readerBackgroundPaths =
         await _readerBackgroundService.loadBackgroundPaths();
-    final activeGallery =
-        await _bottomNavIconGalleryService.loadActiveGallery();
     final galleries = await _bottomNavIconGalleryService.loadGalleries();
     final coverGalleries = await _coverGalleryService.loadGalleries();
     final launchImageGalleries =
@@ -135,7 +133,7 @@ class AdvancedThemeEditorStateService {
         launchImageGalleries,
       ),
       availableFonts: List<ReaderCustomFontEntry>.unmodifiable(fonts),
-      activeBottomNavGalleryName: activeGallery?.name,
+      activeBottomNavGalleryName: null,
     );
   }
 

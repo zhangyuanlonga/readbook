@@ -30,7 +30,7 @@ class BottomNavIconGalleryPage extends ConsumerStatefulWidget {
       _BottomNavIconGalleryPageState();
 }
 
-enum _GalleryAction { activate, edit, rename, duplicate, delete }
+enum _GalleryAction { edit, rename, duplicate, delete }
 
 class _BottomNavIconGalleryPageState
     extends ConsumerState<BottomNavIconGalleryPage> {
@@ -39,7 +39,6 @@ class _BottomNavIconGalleryPageState
 
   List<BottomNavIconGalleryIndexItem> _galleries =
       const <BottomNavIconGalleryIndexItem>[];
-  String? _activeGalleryId;
   String _searchQuery = '';
   bool _isLoading = true;
   bool _isSaving = false;
@@ -53,40 +52,13 @@ class _BottomNavIconGalleryPageState
 
   Future<void> _load() async {
     final galleries = await _service.loadGalleryIndex();
-    final activeGallery = await _service.loadActiveGallery();
     if (!mounted) {
       return;
     }
     setState(() {
       _galleries = galleries;
-      _activeGalleryId = activeGallery?.id;
       _isLoading = false;
     });
-  }
-
-  Future<void> _setActiveGallery(String id) async {
-    if (_isSaving || _activeGalleryId == id) {
-      return;
-    }
-    setState(() {
-      _isSaving = true;
-    });
-    try {
-      await _service.saveActiveGalleryId(id);
-      ref.read(bottomNavIconGalleryRevisionProvider.notifier).markChanged();
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _activeGalleryId = id;
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
-      }
-    }
   }
 
   Future<String?> _showNameDialog({
@@ -299,7 +271,7 @@ class _BottomNavIconGalleryPageState
     return buildMineRouteTopBar(
       context: context,
       title: '底栏图集',
-      subtitle: '移动端底栏图标素材',
+      subtitle: '跟随当前高级主题绑定生效',
       actions: <AdaptiveOverflowToolbarItem>[
         AdaptiveOverflowToolbarItem(
           icon: Icons.add_rounded,
@@ -325,7 +297,6 @@ class _BottomNavIconGalleryPageState
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     final metrics = AppAdaptiveMetrics.of(context);
-    final active = gallery.id == _activeGalleryId;
     final activeAdvancedTheme =
         ref.watch(activeAdvancedThemeProvider).valueOrNull;
     final usedByActiveTheme =
@@ -340,13 +311,13 @@ class _BottomNavIconGalleryPageState
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
           decoration: BoxDecoration(
             color:
-                active
+                usedByActiveTheme
                     ? colorScheme.secondaryContainer.withValues(alpha: 0.32)
                     : colorScheme.surface,
             borderRadius: BorderRadius.circular(metrics.cardRadius + 2),
             border: Border.all(
               color:
-                  active
+                  usedByActiveTheme
                       ? colorScheme.primary.withValues(alpha: 0.3)
                       : colorScheme.outlineVariant.withValues(alpha: 0.48),
             ),
@@ -371,7 +342,7 @@ class _BottomNavIconGalleryPageState
                     const ImageResourceUsageBadge(label: '主题默认'),
                   ],
                   const SizedBox(width: 6),
-                  if (_isSaving && active)
+                  if (_isSaving && usedByActiveTheme)
                     SizedBox(
                       width: 18,
                       height: 18,
@@ -384,9 +355,6 @@ class _BottomNavIconGalleryPageState
                     AppMenuButton<_GalleryAction>(
                       onSelected: (action) {
                         switch (action) {
-                          case _GalleryAction.activate:
-                            _setActiveGallery(gallery.id);
-                            break;
                           case _GalleryAction.edit:
                             _openEditor(gallery.id);
                             break;
@@ -402,18 +370,14 @@ class _BottomNavIconGalleryPageState
                         }
                       },
                       icon:
-                          active
+                          usedByActiveTheme
                               ? Icons.check_circle_rounded
                               : Icons.more_horiz_rounded,
                       iconColor:
-                          active ? colorScheme.primary : colorScheme.outline,
+                          usedByActiveTheme
+                              ? colorScheme.primary
+                              : colorScheme.outline,
                       actions: [
-                        if (!active)
-                          const AppMenuAction(
-                            value: _GalleryAction.activate,
-                            label: '设为默认',
-                            icon: Icons.check_circle_outline_rounded,
-                          ),
                         const AppMenuAction(
                           value: _GalleryAction.edit,
                           label: '编辑图标',
@@ -443,7 +407,7 @@ class _BottomNavIconGalleryPageState
               ),
               const SizedBox(height: 2),
               Text(
-                active ? '当前已启用' : '点击设为默认图集',
+                usedByActiveTheme ? '当前主题正在使用' : '可在高级主题编辑页绑定',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: colorScheme.onSurfaceVariant,
                 ),
@@ -460,7 +424,7 @@ class _BottomNavIconGalleryPageState
                           context,
                           gallery: gallery,
                           tab: tab,
-                          active: active,
+                          active: usedByActiveTheme,
                         ),
                       ),
                       if (tab != bottomNavIconGalleryTabs.last)

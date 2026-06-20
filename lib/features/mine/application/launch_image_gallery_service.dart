@@ -93,8 +93,8 @@ class LaunchImageGalleryService {
         .toList(growable: false);
   }
 
-  static bool readStartupEnabled(SharedPreferences prefs) {
-    return prefs.getBool(_startupEnabledKey) ?? true;
+  static bool readStartupEnabled(SharedPreferences _) {
+    return true;
   }
 
   Future<List<LaunchImageGallery>> loadGalleries() async {
@@ -203,11 +203,9 @@ class LaunchImageGalleryService {
     final normalized = galleryId?.trim();
     if (normalized == null || normalized.isEmpty) {
       await prefs.remove(_activeGalleryIdKey);
-      await syncStartupSnapshotFromCurrentConfig();
       return;
     }
     await prefs.setString(_activeGalleryIdKey, normalized);
-    await syncStartupSnapshotFromCurrentConfig();
   }
 
   Future<bool> loadStartupEnabled() async {
@@ -217,7 +215,7 @@ class LaunchImageGalleryService {
 
   Future<void> saveStartupEnabled(bool enabled) async {
     final prefs = await _preferencesFuture;
-    await prefs.setBool(_startupEnabledKey, enabled);
+    await prefs.remove(_startupEnabledKey);
     await syncStartupSnapshotFromCurrentConfig();
   }
 
@@ -230,17 +228,10 @@ class LaunchImageGalleryService {
   }
 
   Future<String?> loadActiveLaunchImagePath() async {
-    if (!await loadStartupEnabled()) {
-      return null;
-    }
-    final gallery = await loadActiveGallery();
-    return resolveGalleryPreviewPath(gallery);
+    return loadStartupSnapshotPath();
   }
 
   Future<String?> loadLaunchImagePathForGallery(String? galleryId) async {
-    if (!await loadStartupEnabled()) {
-      return null;
-    }
     final normalized = galleryId?.trim() ?? '';
     if (normalized.isEmpty) {
       return null;
@@ -270,9 +261,6 @@ class LaunchImageGalleryService {
   }
 
   Future<String?> loadStartupSnapshotPath() async {
-    if (!await loadStartupEnabled()) {
-      return null;
-    }
     final snapshot = await loadStartupSnapshot();
     final normalized = snapshot.resolvedImagePath?.trim() ?? '';
     return normalized.isEmpty ? null : normalized;
@@ -320,19 +308,20 @@ class LaunchImageGalleryService {
     String? themeId,
     String? galleryId,
   }) async {
-    if (!await loadStartupEnabled()) {
+    final normalizedThemeId = themeId?.trim();
+    final resolvedGalleryId = galleryId?.trim() ?? '';
+    if (resolvedGalleryId.isEmpty) {
       await clearStartupSnapshot();
       return;
     }
-    final normalizedThemeId = themeId?.trim();
-    var resolvedGalleryId = galleryId?.trim() ?? '';
-    if (resolvedGalleryId.isEmpty) {
-      resolvedGalleryId = (await loadActiveGalleryId())?.trim() ?? '';
+    final gallery = await loadGallery(resolvedGalleryId);
+    final previewPath = resolveGalleryPreviewPath(gallery);
+    if (previewPath == null || previewPath.trim().isEmpty) {
+      await clearStartupSnapshot();
+      return;
     }
-    final gallery =
-        resolvedGalleryId.isEmpty ? null : await loadGallery(resolvedGalleryId);
     await saveStartupSnapshot(
-      resolvedImagePath: resolveGalleryPreviewPath(gallery),
+      resolvedImagePath: previewPath,
       galleryId: resolvedGalleryId.isEmpty ? null : resolvedGalleryId,
       themeId:
           normalizedThemeId == null || normalizedThemeId.isEmpty
@@ -343,10 +332,6 @@ class LaunchImageGalleryService {
 
   Future<void> syncStartupSnapshotFromCurrentConfig() async {
     final prefs = await _preferencesFuture;
-    if (!readStartupEnabled(prefs)) {
-      await clearStartupSnapshot();
-      return;
-    }
     final activeThemeId = AdvancedThemeService.readActiveThemeId(prefs);
     final normalizedThemeId = activeThemeId?.trim();
     String? galleryId;
@@ -359,6 +344,10 @@ class LaunchImageGalleryService {
       if (normalizedGalleryId.isNotEmpty) {
         galleryId = normalizedGalleryId;
       }
+    }
+    if (galleryId == null || galleryId.trim().isEmpty) {
+      await clearStartupSnapshot();
+      return;
     }
     await updateStartupSnapshot(
       themeId: normalizedThemeId,
@@ -473,9 +462,9 @@ class LaunchImageGalleryService {
         .toList(growable: false);
     await saveGalleries(updated);
 
-    final activeId = await loadActiveGalleryId();
-    if (activeId == galleryId) {
-      await saveActiveGalleryId(null);
+    final prefs = await _preferencesFuture;
+    if (prefs.getString(_activeGalleryIdKey)?.trim() == galleryId) {
+      await prefs.remove(_activeGalleryIdKey);
     }
 
     final directory = await _galleryDirectory(galleryId);

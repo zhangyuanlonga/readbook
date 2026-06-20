@@ -5,8 +5,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shuxiang_reading_next/core/storage/managed_asset_store.dart';
+import 'package:shuxiang_reading_next/domain/entities/app_advanced_theme.dart';
 import 'package:shuxiang_reading_next/domain/entities/launch_image_gallery.dart';
 import 'package:shuxiang_reading_next/domain/entities/managed_asset.dart';
+import 'package:shuxiang_reading_next/features/mine/application/advanced_theme_service.dart';
 import 'package:shuxiang_reading_next/features/mine/application/launch_image_gallery_service.dart';
 
 void main() {
@@ -178,19 +180,16 @@ void main() {
       },
     );
 
-    test('loads built-in launch gallery by default', () async {
+    test('does not expose startup artwork without theme binding', () async {
       final service = LaunchImageGalleryService(
         assetStore: await _createAssetStore(),
       );
 
       expect(await service.loadActiveGalleryId(), defaultLaunchImageGalleryId);
-      expect(
-        await service.loadActiveLaunchImagePath(),
-        'assets/branding/selune_launch_scene.png',
-      );
+      expect(await service.loadActiveLaunchImagePath(), isNull);
     });
 
-    test('resolves first existing image path from active gallery', () async {
+    test('legacy active gallery does not drive startup artwork', () async {
       final service = LaunchImageGalleryService(
         assetStore: await _createAssetStore(),
       );
@@ -213,7 +212,7 @@ void main() {
       await service.saveGalleries(<LaunchImageGallery>[gallery]);
       await service.saveActiveGalleryId(gallery.id);
 
-      expect(await service.loadActiveLaunchImagePath(), existingFile.path);
+      expect(await service.loadActiveLaunchImagePath(), isNull);
     });
 
     test(
@@ -250,9 +249,16 @@ void main() {
       },
     );
 
-    test('updates startup snapshot when active gallery changes', () async {
+    test('updates startup snapshot from active theme binding', () async {
+      final prefs = await SharedPreferences.getInstance();
+      final assetStore = await _createAssetStore();
       final service = LaunchImageGalleryService(
-        assetStore: await _createAssetStore(),
+        preferences: prefs,
+        assetStore: assetStore,
+      );
+      final themeService = AdvancedThemeService(
+        preferences: prefs,
+        assetStore: assetStore,
       );
       final tempDir = await Directory.systemTemp.createTemp(
         'launch_image_snapshot_test_',
@@ -271,16 +277,35 @@ void main() {
       );
 
       await service.saveGalleries(<LaunchImageGallery>[gallery]);
-      await service.saveActiveGalleryId(gallery.id);
+      await themeService.saveTheme(
+        AppAdvancedTheme(
+          id: 'theme_launch_snapshot',
+          name: '启动图主题',
+          createdAt: DateTime.parse('2026-05-12T00:00:00.000Z'),
+          updatedAt: DateTime.parse('2026-05-12T00:00:00.000Z'),
+          lightConfig: AppAdvancedThemeModeConfig(),
+          darkConfig: AppAdvancedThemeModeConfig(),
+          launchImageGalleryId: gallery.id,
+        ),
+      );
+      await themeService.saveActiveThemeId('theme_launch_snapshot');
 
       final snapshot = await service.loadStartupSnapshot();
       expect(snapshot.galleryId, gallery.id);
       expect(snapshot.resolvedImagePath, existingFile.path);
+      expect(snapshot.themeId, 'theme_launch_snapshot');
     });
 
-    test('clears startup snapshot when startup artwork is disabled', () async {
+    test('legacy startup switch is ignored for theme-bound artwork', () async {
+      final prefs = await SharedPreferences.getInstance();
+      final assetStore = await _createAssetStore();
       final service = LaunchImageGalleryService(
-        assetStore: await _createAssetStore(),
+        preferences: prefs,
+        assetStore: assetStore,
+      );
+      final themeService = AdvancedThemeService(
+        preferences: prefs,
+        assetStore: assetStore,
       );
       final tempDir = await Directory.systemTemp.createTemp(
         'launch_image_snapshot_disable_test_',
@@ -299,8 +324,68 @@ void main() {
       );
 
       await service.saveGalleries(<LaunchImageGallery>[gallery]);
-      await service.saveActiveGalleryId(gallery.id);
+      await themeService.saveTheme(
+        AppAdvancedTheme(
+          id: 'theme_launch_disable_legacy',
+          name: '忽略旧开关主题',
+          createdAt: DateTime.parse('2026-05-12T00:00:00.000Z'),
+          updatedAt: DateTime.parse('2026-05-12T00:00:00.000Z'),
+          lightConfig: AppAdvancedThemeModeConfig(),
+          darkConfig: AppAdvancedThemeModeConfig(),
+          launchImageGalleryId: gallery.id,
+        ),
+      );
+      await themeService.saveActiveThemeId('theme_launch_disable_legacy');
       await service.saveStartupEnabled(false);
+
+      final snapshot = await service.loadStartupSnapshot();
+      expect(snapshot.galleryId, gallery.id);
+      expect(snapshot.resolvedImagePath, existingFile.path);
+    });
+
+    test('clears startup snapshot when bound gallery is deleted', () async {
+      final prefs = await SharedPreferences.getInstance();
+      final assetStore = await _createAssetStore();
+      final service = LaunchImageGalleryService(
+        preferences: prefs,
+        assetStore: assetStore,
+      );
+      final themeService = AdvancedThemeService(
+        preferences: prefs,
+        assetStore: assetStore,
+      );
+      final tempDir = await Directory.systemTemp.createTemp(
+        'launch_image_snapshot_delete_test_',
+      );
+      addTearDown(() => tempDir.delete(recursive: true));
+
+      final existingFile = File('${tempDir.path}/launch_delete.png');
+      await existingFile.writeAsBytes(const <int>[4, 5, 6], flush: true);
+
+      final gallery = LaunchImageGallery(
+        id: 'launch_gallery_delete',
+        name: '删除图集',
+        createdAt: DateTime.parse('2026-05-12T00:00:00.000Z'),
+        updatedAt: DateTime.parse('2026-05-12T00:00:00.000Z'),
+        imagePaths: <String>[existingFile.path],
+      );
+
+      await service.saveGalleries(<LaunchImageGallery>[gallery]);
+      await themeService.saveTheme(
+        AppAdvancedTheme(
+          id: 'theme_launch_delete',
+          name: '删除启动图主题',
+          createdAt: DateTime.parse('2026-05-12T00:00:00.000Z'),
+          updatedAt: DateTime.parse('2026-05-12T00:00:00.000Z'),
+          lightConfig: AppAdvancedThemeModeConfig(),
+          darkConfig: AppAdvancedThemeModeConfig(),
+          launchImageGalleryId: gallery.id,
+        ),
+      );
+      await themeService.saveActiveThemeId('theme_launch_delete');
+      expect((await service.loadStartupSnapshot()).galleryId, gallery.id);
+
+      await service.deleteGallery(gallery.id);
 
       final snapshot = await service.loadStartupSnapshot();
       expect(snapshot.galleryId, isNull);

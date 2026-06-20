@@ -103,6 +103,47 @@ void main() {
     });
 
     test(
+      'manual background override remains stable when advanced theme switches',
+      () {
+        const persisted = ReaderSettings(backgroundImageBase64: 'base_bg');
+        const overrides = ReaderVisualOverrides(
+          hasBackgroundImageOverride: true,
+          backgroundImageBase64: 'manual_reader_bg',
+        );
+        final otherTheme = AppAdvancedTheme(
+          id: 'theme_2',
+          name: 'Other Theme',
+          createdAt: DateTime(2026, 4, 30),
+          updatedAt: DateTime(2026, 4, 30),
+          lightConfig: AppAdvancedThemeModeConfig(
+            readerWallpaperPath: 'other_light_bg',
+          ),
+          darkConfig: AppAdvancedThemeModeConfig(
+            readerWallpaperPath: 'other_dark_bg',
+          ),
+        );
+
+        final first = service.resolve(
+          persistedSettings: persisted,
+          visualOverrides: overrides,
+          activeTheme: theme,
+          appThemeMode: ThemeMode.light,
+          platformBrightness: Brightness.light,
+        );
+        final second = service.resolve(
+          persistedSettings: persisted,
+          visualOverrides: overrides,
+          activeTheme: otherTheme,
+          appThemeMode: ThemeMode.dark,
+          platformBrightness: Brightness.dark,
+        );
+
+        expect(first.backgroundImageBase64, 'manual_reader_bg');
+        expect(second.backgroundImageBase64, 'manual_reader_bg');
+      },
+    );
+
+    test(
       'manual visual overrides still apply after advanced theme is removed',
       () {
         const persisted = ReaderSettings(

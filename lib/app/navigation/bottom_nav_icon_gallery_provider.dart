@@ -24,11 +24,6 @@ final effectiveBottomNavIconGalleryProvider =
     FutureProvider<BottomNavIconGallery?>((ref) async {
       ref.watch(bottomNavIconGalleryRevisionProvider);
       final service = ref.watch(bottomNavIconGalleryServiceProvider);
-      final explicitGalleryId = await service.loadActiveGalleryId();
-      if (explicitGalleryId != null && explicitGalleryId.isNotEmpty) {
-        return service.loadActiveGallery();
-      }
-
       final activeAdvancedTheme = await ref.watch(
         activeAdvancedThemeProvider.future,
       );
@@ -41,7 +36,7 @@ final effectiveBottomNavIconGalleryProvider =
           }
         }
       }
-      return service.loadActiveGallery();
+      return null;
     });
 
 class BottomNavIconGalleryRevisionNotifier extends Notifier<int> {

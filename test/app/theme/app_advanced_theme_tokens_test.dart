@@ -102,6 +102,43 @@ void main() {
     expect(darkBackdrop.wallpaperOverlayOpacity, 0.46);
   });
 
+  test('uses active advanced theme app wallpaper before default backdrop', () {
+    final colorScheme = ColorScheme.fromSeed(
+      seedColor: Colors.blue,
+      brightness: Brightness.light,
+    );
+    final activeTheme = AppAdvancedTheme(
+      id: 'theme_backdrop',
+      name: '背景主题',
+      createdAt: DateTime.parse('2026-05-06T00:00:00.000Z'),
+      updatedAt: DateTime.parse('2026-05-06T00:00:00.000Z'),
+      lightConfig: AppAdvancedThemeModeConfig(
+        wallpaperPath: '/tmp/theme-wallpaper.png',
+        wallpaperOpacity: 0.72,
+        wallpaperBlurSigma: 6,
+        colors: const AppAdvancedThemeColors(
+          backgroundColorValue: 0xFF101820,
+          surfaceColorValue: 0xFF1C2733,
+        ),
+      ),
+      darkConfig: AppAdvancedThemeModeConfig(),
+    );
+
+    final themedBackdrop = resolveAdvancedThemeBackdrop(
+      colorScheme,
+      activeTheme,
+    );
+    final defaultBackdrop = resolveAdvancedThemeBackdrop(colorScheme, null);
+
+    expect(themedBackdrop.wallpaperPath, '/tmp/theme-wallpaper.png');
+    expect(themedBackdrop.wallpaperOpacity, 0.72);
+    expect(themedBackdrop.wallpaperBlurSigma, 6);
+    expect(themedBackdrop.backgroundColor, const Color(0xFF101820));
+    expect(themedBackdrop.surfaceColor, const Color(0xFF1C2733));
+    expect(defaultBackdrop.wallpaperPath, isNull);
+    expect(defaultBackdrop.backgroundColor, colorScheme.surface);
+  });
+
   test('derives shadow color from primary with brightness-aware alpha', () {
     final lightPalette = resolveAdvancedThemePaletteFromModeConfig(
       ColorScheme.fromSeed(

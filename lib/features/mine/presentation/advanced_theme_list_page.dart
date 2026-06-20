@@ -34,6 +34,7 @@ import '../application/advanced_theme_access_controller.dart';
 import '../application/advanced_theme_export_error_formatter.dart';
 import '../application/advanced_theme_list_page_state.dart';
 import '../application/advanced_theme_list_query_controller.dart';
+import '../application/advanced_theme_membership_gate_copy.dart';
 import '../application/advanced_theme_service.dart';
 import '../../source/application/external_import_diagnostics.dart';
 import '../../source/application/external_import_catalog.dart';
@@ -462,7 +463,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     if (_isSaving || _visibleThemes.isEmpty) {
       return;
     }
-    if (!_guardCustomThemeAction('批量管理自定义主题需要会员。')) {
+    if (!_guardCustomThemeAction(AdvancedThemeMembershipGateCopy.batchManage)) {
       return;
     }
     setState(() {
@@ -525,7 +526,9 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
 
   Future<void> _openEditor([String? themeId]) async {
     if (!_guardCustomThemeAction(
-      themeId == null ? '创建自定义主题需要会员。' : '编辑自定义主题需要会员。',
+      themeId == null
+          ? AdvancedThemeMembershipGateCopy.create
+          : AdvancedThemeMembershipGateCopy.edit,
     )) {
       return;
     }
@@ -541,7 +544,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     BuildContext sourceContext, [
     String? themeId,
   ]) async {
-    if (!_guardCustomThemeAction('编辑自定义主题需要会员。')) {
+    if (!_guardCustomThemeAction(AdvancedThemeMembershipGateCopy.edit)) {
       return;
     }
     final overlay = CircularThemeRevealOverlay.of(sourceContext);
@@ -572,7 +575,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   }
 
   Future<void> _openEditorDialog(String themeId) async {
-    if (!_guardCustomThemeAction('编辑自定义主题需要会员。')) {
+    if (!_guardCustomThemeAction(AdvancedThemeMembershipGateCopy.edit)) {
       return;
     }
     await showAdaptiveActionSurface<void>(
@@ -709,7 +712,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     if (_isSaving) {
       return;
     }
-    if (!_guardCustomThemeAction('复制自定义主题需要会员。')) {
+    if (!_guardCustomThemeAction(AdvancedThemeMembershipGateCopy.duplicate)) {
       return;
     }
     setState(() {
@@ -741,7 +744,9 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   }
 
   Future<void> _exportThemeBundle(String themeId) async {
-    if (!_guardCustomThemeAction('导出自定义主题需要会员。')) {
+    if (!_guardCustomThemeAction(
+      AdvancedThemeMembershipGateCopy.exportSingle,
+    )) {
       return;
     }
     final theme = await _loadThemeDetail(themeId);
@@ -894,6 +899,15 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   Future<void> _importFromExternalPayload(
     IncomingExternalImportPayload payload,
   ) async {
+    if (!_canUseAdvancedThemes) {
+      await _loadAccess(refreshRemote: true);
+      if (!mounted) {
+        return;
+      }
+    }
+    if (!_guardCustomThemeAction(AdvancedThemeMembershipGateCopy.importTheme)) {
+      return;
+    }
     final taskId =
         'external-theme-import:${DateTime.now().microsecondsSinceEpoch}';
     final taskManager = ref.read(appTaskManagerProvider);
@@ -1114,7 +1128,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     if (_isSaving || !mounted) {
       return;
     }
-    if (!_guardCustomThemeAction('导入自定义主题需要会员。')) {
+    if (!_guardCustomThemeAction(AdvancedThemeMembershipGateCopy.importTheme)) {
       return;
     }
     final summary =
@@ -1177,7 +1191,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     if (_isSaving) {
       return;
     }
-    if (!_guardCustomThemeAction('批量导出自定义主题需要会员。')) {
+    if (!_guardCustomThemeAction(AdvancedThemeMembershipGateCopy.exportBatch)) {
       return;
     }
     final targetThemes = _selectedVisibleThemes;
@@ -1239,7 +1253,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     if (_isSaving) {
       return;
     }
-    if (!_guardCustomThemeAction('批量删除自定义主题需要会员。')) {
+    if (!_guardCustomThemeAction(AdvancedThemeMembershipGateCopy.deleteBatch)) {
       return;
     }
     final selectedThemes = _selectedVisibleThemes;
@@ -1348,7 +1362,9 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     if (_isSaving) {
       return;
     }
-    if (!_guardCustomThemeAction('批量分类自定义主题需要会员。')) {
+    if (!_guardCustomThemeAction(
+      AdvancedThemeMembershipGateCopy.categorizeBatch,
+    )) {
       return;
     }
     final selectedThemes = _selectedVisibleThemes;
@@ -1589,7 +1605,9 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   }
 
   Future<void> _handleDeleteThemeById(String themeId) async {
-    if (!_guardCustomThemeAction('删除自定义主题需要会员。')) {
+    if (!_guardCustomThemeAction(
+      AdvancedThemeMembershipGateCopy.deleteSingle,
+    )) {
       return;
     }
     final theme = await _loadThemeDetail(themeId);
@@ -1606,7 +1624,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     if (_isSaving) {
       return;
     }
-    if (!_guardCustomThemeAction('启用自定义主题需要会员。')) {
+    if (!_guardCustomThemeAction(AdvancedThemeMembershipGateCopy.applyCustom)) {
       return;
     }
     setState(() {
@@ -2191,7 +2209,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 480;
         final message = Text(
-          '官方主题可直接使用；创建、编辑、复制、导入导出自定义主题需要会员。',
+          AdvancedThemeMembershipGateCopy.officialFreeHelper,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             color: colorScheme.onSurfaceVariant,
             height: 1.4,

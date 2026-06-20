@@ -58,7 +58,7 @@ void main() {
   });
 
   test(
-    'effective gallery prefers explicit active gallery over theme binding',
+    'effective gallery ignores legacy active gallery and uses theme binding',
     () async {
       final prefs = await SharedPreferences.getInstance();
       final assetStore = await _createAssetStore();
@@ -101,8 +101,8 @@ void main() {
         effectiveBottomNavIconGalleryProvider.future,
       );
 
-      expect(gallery?.id, 'gallery_active');
-      expect(gallery?.name, '当前默认图集');
+      expect(gallery?.id, 'gallery_theme');
+      expect(gallery?.name, '主题图集');
     },
   );
 
@@ -154,8 +154,51 @@ void main() {
     },
   );
 
+  test('effective gallery returns null without theme binding', () async {
+    final prefs = await SharedPreferences.getInstance();
+    final assetStore = await _createAssetStore();
+    final themeService = AdvancedThemeService(
+      preferences: prefs,
+      assetStore: assetStore,
+    );
+    final galleryService = BottomNavIconGalleryService(
+      preferences: prefs,
+      assetStore: assetStore,
+    );
+    await galleryService.saveGalleries(<BottomNavIconGallery>[
+      _gallery(id: 'gallery_active', name: '当前默认图集'),
+    ]);
+    await galleryService.saveActiveGalleryId('gallery_active');
+    await themeService.saveTheme(
+      AppAdvancedTheme(
+        id: 'theme_without_override',
+        name: '不覆盖底栏',
+        createdAt: DateTime.parse('2026-05-06T00:00:00.000Z'),
+        updatedAt: DateTime.parse('2026-05-06T00:00:00.000Z'),
+        lightConfig: AppAdvancedThemeModeConfig(),
+        darkConfig: AppAdvancedThemeModeConfig(),
+      ),
+    );
+    await themeService.saveActiveThemeId('theme_without_override');
+    ActiveAdvancedThemeIdNotifier.prime(prefs);
+
+    final container = ProviderContainer(
+      overrides: <Override>[
+        advancedThemeServiceProvider.overrideWithValue(themeService),
+        bottomNavIconGalleryServiceProvider.overrideWithValue(galleryService),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final gallery = await container.read(
+      effectiveBottomNavIconGalleryProvider.future,
+    );
+
+    expect(gallery, isNull);
+  });
+
   test(
-    'effective gallery falls back to active gallery without theme binding',
+    'effective gallery returns null when theme binding is missing',
     () async {
       final prefs = await SharedPreferences.getInstance();
       final assetStore = await _createAssetStore();
@@ -173,15 +216,16 @@ void main() {
       await galleryService.saveActiveGalleryId('gallery_active');
       await themeService.saveTheme(
         AppAdvancedTheme(
-          id: 'theme_without_override',
-          name: '不覆盖底栏',
+          id: 'theme_missing_override',
+          name: '缺失底栏图集',
           createdAt: DateTime.parse('2026-05-06T00:00:00.000Z'),
           updatedAt: DateTime.parse('2026-05-06T00:00:00.000Z'),
           lightConfig: AppAdvancedThemeModeConfig(),
           darkConfig: AppAdvancedThemeModeConfig(),
+          bottomNavGalleryId: 'gallery_missing',
         ),
       );
-      await themeService.saveActiveThemeId('theme_without_override');
+      await themeService.saveActiveThemeId('theme_missing_override');
       ActiveAdvancedThemeIdNotifier.prime(prefs);
 
       final container = ProviderContainer(
@@ -196,8 +240,7 @@ void main() {
         effectiveBottomNavIconGalleryProvider.future,
       );
 
-      expect(gallery?.id, 'gallery_active');
-      expect(gallery?.name, '当前默认图集');
+      expect(gallery, isNull);
     },
   );
 }

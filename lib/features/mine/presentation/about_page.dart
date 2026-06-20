@@ -127,7 +127,7 @@ class _AboutPageState extends ConsumerState<AboutPage> {
                           context,
                           visibilityState: visibilityState,
                         ),
-                        _buildComponentDemoEntryCard(context),
+                        if (kDebugMode) _buildComponentDemoEntryCard(context),
                         _buildWebsiteCard(context),
                         _buildSectionCard(
                           context,

@@ -15,8 +15,8 @@ class StartupArtworkStore {
   static bool get isPriming => _isPriming;
   static int get revision => _revision;
 
-  static void primeStartupEnabledSync(SharedPreferences prefs) {
-    _primedDisabled = !LaunchImageGalleryService.readStartupEnabled(prefs);
+  static void primeStartupEnabledSync(SharedPreferences _) {
+    _primedDisabled = false;
     _revision += 1;
   }
 

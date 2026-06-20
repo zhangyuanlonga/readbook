@@ -137,7 +137,9 @@ void main() {
         darkConfig: AppAdvancedThemeModeConfig(
           readerWallpaperPath: '/tmp/dark_reader.png',
         ),
+        coverGalleryId: 'cover_gallery_demo',
         launchImageGalleryId: 'launch_gallery_demo',
+        bottomNavGalleryId: 'bottom_gallery_demo',
         appInterfaceFontFamilyKey: 'font_ui_demo',
       );
 
@@ -168,8 +170,24 @@ void main() {
       expect(
         preview.sections.any(
           (section) =>
+              section.kind == AdvancedThemeDeleteOptionKind.coverGalleries &&
+              !section.defaultSelected,
+        ),
+        isTrue,
+      );
+      expect(
+        preview.sections.any(
+          (section) =>
               section.kind ==
                   AdvancedThemeDeleteOptionKind.launchImageGallery &&
+              !section.defaultSelected,
+        ),
+        isTrue,
+      );
+      expect(
+        preview.sections.any(
+          (section) =>
+              section.kind == AdvancedThemeDeleteOptionKind.bottomNavGallery &&
               !section.defaultSelected,
         ),
         isTrue,

@@ -123,9 +123,6 @@ class _AdvancedThemeEditorPageState
 
   List<ReaderCustomFontEntry> get _availableFonts => _pageState.availableFonts;
 
-  String? get _activeBottomNavGalleryName =>
-      _pageState.activeBottomNavGalleryName;
-
   bool get _strengthControlsExpanded => _pageState.strengthControlsExpanded;
   set _strengthControlsExpanded(bool value) {
     _pageStateNotifier.update(
@@ -658,7 +655,7 @@ class _AdvancedThemeEditorPageState
     if (_bottomNavGalleries.isEmpty || _isSaving) {
       return;
     }
-    String? selectedId = _draft?.bottomNavGalleryId ?? _activeGalleryId;
+    String? selectedId = _draft?.bottomNavGalleryId;
     final nextId = await showAdaptiveActionSurface<String>(
       context: context,
       maxWidth: 720,
@@ -1039,18 +1036,6 @@ class _AdvancedThemeEditorPageState
               ? draft.copyWith(clearLaunchImageGalleryId: true)
               : draft.copyWith(launchImageGalleryId: result.galleryId);
     });
-  }
-
-  String? get _activeGalleryId {
-    if ((_draft?.bottomNavGalleryId?.trim().isNotEmpty ?? false)) {
-      return _draft!.bottomNavGalleryId;
-    }
-    for (final gallery in _bottomNavGalleries) {
-      if (gallery.name == _activeBottomNavGalleryName) {
-        return gallery.id;
-      }
-    }
-    return null;
   }
 
   String _resolvedBottomNavGalleryName() {

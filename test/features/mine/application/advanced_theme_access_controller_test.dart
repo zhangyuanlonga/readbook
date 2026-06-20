@@ -3,6 +3,7 @@ import 'package:shuxiang_reading_next/core/auth/auth_session.dart';
 import 'package:shuxiang_reading_next/core/membership/membership_access_resolver.dart';
 import 'package:shuxiang_reading_next/core/membership/membership_access_service.dart';
 import 'package:shuxiang_reading_next/features/mine/application/advanced_theme_access_controller.dart';
+import 'package:shuxiang_reading_next/features/mine/application/advanced_theme_membership_gate_copy.dart';
 
 void main() {
   test(
@@ -50,6 +51,37 @@ void main() {
 
     expect(result.canUseAdvancedThemes, isTrue);
     expect(result.shouldClearActiveTheme, isFalse);
+  });
+
+  test('membership gate copy covers every custom theme action', () {
+    expect(
+      AdvancedThemeMembershipGateCopy.guardedActionMessages,
+      containsAll(<String>[
+        AdvancedThemeMembershipGateCopy.batchManage,
+        AdvancedThemeMembershipGateCopy.create,
+        AdvancedThemeMembershipGateCopy.edit,
+        AdvancedThemeMembershipGateCopy.duplicate,
+        AdvancedThemeMembershipGateCopy.exportSingle,
+        AdvancedThemeMembershipGateCopy.importTheme,
+        AdvancedThemeMembershipGateCopy.exportBatch,
+        AdvancedThemeMembershipGateCopy.deleteBatch,
+        AdvancedThemeMembershipGateCopy.categorizeBatch,
+        AdvancedThemeMembershipGateCopy.deleteSingle,
+        AdvancedThemeMembershipGateCopy.applyCustom,
+      ]),
+    );
+    expect(
+      AdvancedThemeMembershipGateCopy.guardedActionMessages.toSet(),
+      hasLength(AdvancedThemeMembershipGateCopy.guardedActionMessages.length),
+    );
+    expect(
+      AdvancedThemeMembershipGateCopy.officialFreeHelper,
+      contains('官方主题可直接使用'),
+    );
+    expect(
+      AdvancedThemeMembershipGateCopy.officialFreeHelper,
+      contains('自定义主题需要会员'),
+    );
   });
 }
 

@@ -17,7 +17,7 @@ import '../application/launch_image_gallery_service.dart';
 import 'widgets/image_resource_collection_widgets.dart';
 import 'widgets/mine_route_top_bar.dart';
 
-enum _LaunchGalleryAction { setDefault, edit, rename, duplicate, delete }
+enum _LaunchGalleryAction { edit, rename, duplicate, delete }
 
 class LaunchImageGalleryPage extends ConsumerStatefulWidget {
   const LaunchImageGalleryPage({super.key});
@@ -37,7 +37,6 @@ class _LaunchImageGalleryPageState
   Map<String, List<String>> _previewPathsByGalleryId =
       const <String, List<String>>{};
   String _searchQuery = '';
-  bool _startupEnabled = true;
   bool _isLoading = true;
   bool _isSaving = false;
 
@@ -72,7 +71,6 @@ class _LaunchImageGalleryPageState
       for (final gallery in sourceGalleries)
         gallery.id: _service.resolveGalleryPreviewPaths(gallery, limit: 3),
     };
-    final startupEnabled = await _service.loadStartupEnabled();
     if (!mounted) {
       return;
     }
@@ -81,32 +79,8 @@ class _LaunchImageGalleryPageState
       _previewPathsByGalleryId = Map<String, List<String>>.unmodifiable(
         previewPathsByGalleryId,
       );
-      _startupEnabled = startupEnabled;
       _isLoading = false;
     });
-  }
-
-  Future<void> _setStartupEnabled(bool enabled) async {
-    if (_isSaving) {
-      return;
-    }
-    setState(() {
-      _startupEnabled = enabled;
-      _isSaving = true;
-    });
-    try {
-      await _service.saveStartupEnabled(enabled);
-      ref.read(launchImageGalleryRevisionProvider.notifier).markChanged();
-      if (mounted) {
-        _showMessage(enabled ? '启动图已开启' : '启动图已关闭');
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
-      }
-    }
   }
 
   Future<void> _createGallery() async {
@@ -135,26 +109,6 @@ class _LaunchImageGalleryPageState
 
   Future<void> _openGalleryEditor(LaunchImageGalleryIndexItem gallery) async {
     await _pushMineRoute('/appearance/launch-image/editor?id=${gallery.id}');
-  }
-
-  Future<void> _setDefaultGallery(LaunchImageGalleryIndexItem gallery) async {
-    if (_isSaving) {
-      return;
-    }
-    setState(() {
-      _isSaving = true;
-    });
-    try {
-      await _service.saveActiveGalleryId(gallery.id);
-      ref.read(launchImageGalleryRevisionProvider.notifier).markChanged();
-      await _load();
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
-      }
-    }
   }
 
   Future<void> _renameGallery(LaunchImageGalleryIndexItem gallery) async {
@@ -245,19 +199,6 @@ class _LaunchImageGalleryPageState
       return;
     }
     await _load();
-  }
-
-  void _showMessage(String message) {
-    if (!mounted) {
-      return;
-    }
-    AppFeedback.showSnackBar(
-      context,
-      message: message,
-      tone:
-          message.contains('失败') ? AppFeedbackTone.error : AppFeedbackTone.info,
-      useHaptics: false,
-    );
   }
 
   Future<String?> _showNameDialog({
@@ -358,7 +299,7 @@ class _LaunchImageGalleryPageState
     return buildMineRouteTopBar(
       context: context,
       title: '启动图集',
-      subtitle: _startupEnabled ? '启动展示已开启' : '启动展示已关闭',
+      subtitle: '跟随当前高级主题绑定生效',
       actions: <AdaptiveOverflowToolbarItem>[
         AdaptiveOverflowToolbarItem(
           icon: Icons.add_rounded,
@@ -394,9 +335,7 @@ class _LaunchImageGalleryPageState
     required double bottomSafe,
   }) {
     final visible = _visibleGalleries;
-    final toolbar = AppFadeSlideTransition(
-      child: _buildSearchAndStartupSwitch(context),
-    );
+    final toolbar = AppFadeSlideTransition(child: _buildSearchField(context));
     if (visible.isEmpty) {
       return ListView(
         key: const ValueKey('launch_gallery_content_empty'),
@@ -471,8 +410,7 @@ class _LaunchImageGalleryPageState
     );
   }
 
-  Widget _buildSearchAndStartupSwitch(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+  Widget _buildSearchField(BuildContext context) {
     return Row(
       children: [
         Expanded(
@@ -491,47 +429,6 @@ class _LaunchImageGalleryPageState
                 _searchQuery = '';
               });
             },
-          ),
-        ),
-        const SizedBox(width: 10),
-        Tooltip(
-          message: _startupEnabled ? '启动时显示启动图' : '启动时不显示启动图',
-          child: Container(
-            height: 40,
-            padding: const EdgeInsets.only(left: 10, right: 8),
-            decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerLowest.withValues(alpha: 0.92),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: colorScheme.outlineVariant.withValues(alpha: 0.28),
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.rocket_launch_outlined,
-                  size: 18,
-                  color:
-                      _startupEnabled
-                          ? colorScheme.primary
-                          : colorScheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: 4),
-                SizedBox(
-                  width: 38,
-                  height: 28,
-                  child: Transform.scale(
-                    scale: 0.78,
-                    child: Switch.adaptive(
-                      value: _startupEnabled,
-                      onChanged: _isSaving ? null : _setStartupEnabled,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                  ),
-                ),
-              ],
-            ),
           ),
         ),
       ],
@@ -580,9 +477,6 @@ class _LaunchImageGalleryPageState
                 AppMenuButton<_LaunchGalleryAction>(
                   onSelected: (action) {
                     switch (action) {
-                      case _LaunchGalleryAction.setDefault:
-                        _setDefaultGallery(gallery);
-                        break;
                       case _LaunchGalleryAction.edit:
                         _openGalleryEditor(gallery);
                         break;
@@ -600,11 +494,6 @@ class _LaunchImageGalleryPageState
                   icon: Icons.more_horiz_rounded,
                   iconColor: colorScheme.onSurfaceVariant,
                   actions: [
-                    const AppMenuAction(
-                      value: _LaunchGalleryAction.setDefault,
-                      label: '设为默认',
-                      icon: Icons.check_circle_outline_rounded,
-                    ),
                     const AppMenuAction(
                       value: _LaunchGalleryAction.edit,
                       label: '编辑图集',

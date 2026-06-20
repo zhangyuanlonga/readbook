@@ -1092,6 +1092,56 @@ void main() {
     expect(await service.loadThemes(), isEmpty);
   });
 
+  test(
+    'keeps shared theme resources when another theme still references them',
+    () async {
+      final service = AdvancedThemeService(
+        assetStore: await _createAssetStore(),
+      );
+      final wallpaperFile = await _createTempFile(
+        prefix: 'theme_shared_wallpaper_',
+        fileName: 'shared_light.png',
+      );
+      final readerWallpaperFile = await _createTempFile(
+        prefix: 'theme_shared_reader_',
+        fileName: 'shared_reader.png',
+      );
+      final createdAt = DateTime.parse('2026-05-06T00:00:00.000Z');
+      final first = AppAdvancedTheme(
+        id: 'theme_shared_a',
+        name: '共享主题 A',
+        createdAt: createdAt,
+        updatedAt: createdAt,
+        lightConfig: AppAdvancedThemeModeConfig(
+          wallpaperPath: wallpaperFile.path,
+          readerWallpaperPath: readerWallpaperFile.path,
+        ),
+        darkConfig: AppAdvancedThemeModeConfig(),
+      );
+      final second = AppAdvancedTheme(
+        id: 'theme_shared_b',
+        name: '共享主题 B',
+        createdAt: createdAt,
+        updatedAt: createdAt,
+        lightConfig: AppAdvancedThemeModeConfig(
+          wallpaperPath: wallpaperFile.path,
+          readerWallpaperPath: readerWallpaperFile.path,
+        ),
+        darkConfig: AppAdvancedThemeModeConfig(),
+      );
+
+      await service.saveTheme(first);
+      await service.saveTheme(second);
+      await service.deleteTheme(first.id);
+
+      expect(await wallpaperFile.exists(), isTrue);
+      expect(await readerWallpaperFile.exists(), isTrue);
+      expect((await service.loadThemes()).map((theme) => theme.id), [
+        second.id,
+      ]);
+    },
+  );
+
   test('imports reader wallpaper into theme-owned collection', () async {
     final assetStore = await _createAssetStore();
     final service = AdvancedThemeService(assetStore: assetStore);
