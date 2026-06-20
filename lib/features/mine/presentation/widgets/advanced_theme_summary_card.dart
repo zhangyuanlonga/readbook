@@ -36,95 +36,88 @@ class AdvancedThemeSummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final showSelectedState = isSelectionMode && isSelected;
-    return InkWell(
+    return AppSurface(
       borderRadius: BorderRadius.circular(18),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      backgroundColor:
+          showSelectedState
+              ? colorScheme.primary.withValues(alpha: 0.12)
+              : isActive
+              ? colorScheme.primary.withValues(alpha: 0.08)
+              : colorScheme.surfaceContainerLow,
+      borderColor:
+          showSelectedState
+              ? colorScheme.primary.withValues(alpha: 0.72)
+              : isActive
+              ? colorScheme.primary.withValues(alpha: 0.55)
+              : colorScheme.outlineVariant.withValues(alpha: 0.45),
       onTap: isSaving ? null : onTap,
       onLongPress: isSaving ? null : onLongPress,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-        decoration: BoxDecoration(
-          color:
-              showSelectedState
-                  ? colorScheme.primary.withValues(alpha: 0.12)
-                  : isActive
-                  ? colorScheme.primary.withValues(alpha: 0.08)
-                  : colorScheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color:
-                showSelectedState
-                    ? colorScheme.primary.withValues(alpha: 0.72)
-                    : isActive
-                    ? colorScheme.primary.withValues(alpha: 0.55)
-                    : colorScheme.outlineVariant.withValues(alpha: 0.45),
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                if (isSelectionMode) ...[
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap:
-                        isSaving ? null : () => onSelectionChanged(!isSelected),
-                    child: Padding(
-                      padding: const EdgeInsets.all(2),
-                      child: AppSelectionIndicator(
-                        selected: isSelected,
-                        enabled: !isSaving,
-                        semanticLabel: isSelected ? '已选择主题' : '未选择主题',
-                      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              if (isSelectionMode) ...[
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap:
+                      isSaving ? null : () => onSelectionChanged(!isSelected),
+                  child: Padding(
+                    padding: const EdgeInsets.all(2),
+                    child: AppSelectionIndicator(
+                      selected: isSelected,
+                      enabled: !isSaving,
+                      semanticLabel: isSelected ? '已选择主题' : '未选择主题',
                     ),
                   ),
-                  const SizedBox(width: 8),
-                ],
-                Expanded(
-                  child: _AdvancedThemeSummaryTitle(
-                    theme: theme,
-                    isActive: isActive,
-                  ),
                 ),
-                if (!isSelectionMode) ...[
-                  if (isActive) ...[
-                    const SizedBox(width: 12),
-                    const _ActiveThemeStatusIcon(),
-                  ],
-                  const SizedBox(width: 8),
-                  AppMenuButton<AdvancedThemeAction>(
-                    enabled: !isSaving,
-                    onSelected: onActionSelected,
-                    actions: const [
-                      AppMenuAction(
-                        value: AdvancedThemeAction.edit,
-                        label: '编辑',
-                        icon: Icons.edit_outlined,
-                      ),
-                      AppMenuAction(
-                        value: AdvancedThemeAction.duplicate,
-                        label: '复制',
-                        icon: Icons.copy_rounded,
-                      ),
-                      AppMenuAction(
-                        value: AdvancedThemeAction.exportZip,
-                        label: '导出 ZIP',
-                        icon: Icons.archive_outlined,
-                      ),
-                      AppMenuAction(
-                        value: AdvancedThemeAction.delete,
-                        label: '删除',
-                        icon: Icons.delete_outline,
-                        destructive: true,
-                      ),
-                    ],
-                  ),
-                ],
+                const SizedBox(width: 8),
               ],
-            ),
-            if (!compact) ...[const SizedBox(height: 10), previewStrip],
-          ],
-        ),
+              Expanded(
+                child: _AdvancedThemeSummaryTitle(
+                  theme: theme,
+                  isActive: isActive,
+                ),
+              ),
+              if (!isSelectionMode) ...[
+                if (isActive) ...[
+                  const SizedBox(width: 12),
+                  const _ActiveThemeStatusIcon(),
+                ],
+                const SizedBox(width: 8),
+                AppMenuButton<AdvancedThemeAction>(
+                  enabled: !isSaving,
+                  onSelected: onActionSelected,
+                  actions: const [
+                    AppMenuAction(
+                      value: AdvancedThemeAction.edit,
+                      label: '编辑',
+                      icon: Icons.edit_outlined,
+                    ),
+                    AppMenuAction(
+                      value: AdvancedThemeAction.duplicate,
+                      label: '复制',
+                      icon: Icons.copy_rounded,
+                    ),
+                    AppMenuAction(
+                      value: AdvancedThemeAction.exportZip,
+                      label: '导出 ZIP',
+                      icon: Icons.archive_outlined,
+                    ),
+                    AppMenuAction(
+                      value: AdvancedThemeAction.delete,
+                      label: '删除',
+                      icon: Icons.delete_outline,
+                      destructive: true,
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+          if (!compact) ...[const SizedBox(height: 10), previewStrip],
+        ],
       ),
     );
   }

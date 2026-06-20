@@ -275,7 +275,14 @@ class _LaunchImageGalleryPageState
                         _isLoading
                             ? const Center(
                               key: ValueKey('launch_gallery_loading'),
-                              child: CircularProgressIndicator(),
+                              child: SizedBox(
+                                width: 280,
+                                child: AppStateView(
+                                  kind: AppViewStateKind.loading,
+                                  title: '正在加载启动图集',
+                                  description: '启动图只会跟随当前高级主题绑定生效。',
+                                ),
+                              ),
                             )
                             : _buildGalleryContent(
                               context,
@@ -445,186 +452,82 @@ class _LaunchImageGalleryPageState
     final usedByActiveTheme =
         activeAdvancedTheme?.launchImageGalleryId?.trim() == gallery.id.trim();
     const previewCount = 3;
-    return InkWell(
-      borderRadius: BorderRadius.circular(18),
+    return ImageResourceGalleryCard(
+      title: gallery.name,
+      subtitle: '${gallery.imageCount} 张启动图',
+      active: usedByActiveTheme,
       onTap: () => _openGalleryEditor(gallery),
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-        decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+      badges: [
+        if (gallery.isBuiltIn) const ImageResourcePill(label: '内置'),
+        if (usedByActiveTheme) const ImageResourceUsageBadge(label: '主题默认'),
+      ],
+      trailing: AppMenuButton<_LaunchGalleryAction>(
+        onSelected: (action) {
+          switch (action) {
+            case _LaunchGalleryAction.edit:
+              _openGalleryEditor(gallery);
+              break;
+            case _LaunchGalleryAction.rename:
+              _renameGallery(gallery);
+              break;
+            case _LaunchGalleryAction.duplicate:
+              _duplicateGallery(gallery);
+              break;
+            case _LaunchGalleryAction.delete:
+              _deleteGallery(gallery);
+              break;
+          }
+        },
+        icon: Icons.more_horiz_rounded,
+        iconColor: colorScheme.onSurfaceVariant,
+        actions: [
+          const AppMenuAction(
+            value: _LaunchGalleryAction.edit,
+            label: '编辑图集',
+            icon: Icons.edit_outlined,
           ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    gallery.name,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                if (usedByActiveTheme) ...[
-                  const ImageResourceUsageBadge(label: '主题默认'),
-                  const SizedBox(width: 6),
-                ],
-                AppMenuButton<_LaunchGalleryAction>(
-                  onSelected: (action) {
-                    switch (action) {
-                      case _LaunchGalleryAction.edit:
-                        _openGalleryEditor(gallery);
-                        break;
-                      case _LaunchGalleryAction.rename:
-                        _renameGallery(gallery);
-                        break;
-                      case _LaunchGalleryAction.duplicate:
-                        _duplicateGallery(gallery);
-                        break;
-                      case _LaunchGalleryAction.delete:
-                        _deleteGallery(gallery);
-                        break;
-                    }
-                  },
-                  icon: Icons.more_horiz_rounded,
-                  iconColor: colorScheme.onSurfaceVariant,
-                  actions: [
-                    const AppMenuAction(
-                      value: _LaunchGalleryAction.edit,
-                      label: '编辑图集',
-                      icon: Icons.edit_outlined,
-                    ),
-                    if (gallery.isEditable) ...[
-                      const AppMenuAction(
-                        value: _LaunchGalleryAction.rename,
-                        label: '重命名',
-                        icon: Icons.drive_file_rename_outline_rounded,
-                      ),
-                      const AppMenuAction(
-                        value: _LaunchGalleryAction.duplicate,
-                        label: '复制图集',
-                        icon: Icons.copy_rounded,
-                      ),
-                      if (gallery.isDeletable)
-                        const AppMenuAction(
-                          value: _LaunchGalleryAction.delete,
-                          label: '删除图集',
-                          icon: Icons.delete_outline,
-                          destructive: true,
-                        ),
-                    ],
-                  ],
-                ),
-              ],
+          if (gallery.isEditable) ...[
+            const AppMenuAction(
+              value: _LaunchGalleryAction.rename,
+              label: '重命名',
+              icon: Icons.drive_file_rename_outline_rounded,
             ),
-            const SizedBox(height: 2),
-            Row(
-              children: [
-                Text(
-                  '${gallery.imageCount} 张启动图',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                if (gallery.isBuiltIn) ...[
-                  const SizedBox(width: 8),
-                  _buildPill(context, label: '内置'),
-                ],
-                const Spacer(),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  size: 18,
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ],
+            const AppMenuAction(
+              value: _LaunchGalleryAction.duplicate,
+              label: '复制图集',
+              icon: Icons.copy_rounded,
             ),
-            const SizedBox(height: 8),
-            AspectRatio(
-              aspectRatio: 3.1,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: List.generate(previewCount, (index) {
-                  final previewPaths =
-                      _previewPathsByGalleryId[gallery.id] ?? const <String>[];
-                  final previewPath =
-                      index < previewPaths.length ? previewPaths[index] : null;
-                  return Expanded(
-                    child: Padding(
-                      padding: EdgeInsets.only(
-                        right: index == previewCount - 1 ? 0 : 6,
-                      ),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: colorScheme.surface,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: colorScheme.outlineVariant.withValues(
-                              alpha: 0.4,
-                            ),
-                          ),
-                        ),
-                        child: _buildPreviewSlot(
-                          context,
-                          path: previewPath,
-                          cacheWidth: 280,
-                        ),
-                      ),
-                    ),
-                  );
-                }),
+            if (gallery.isDeletable)
+              const AppMenuAction(
+                value: _LaunchGalleryAction.delete,
+                label: '删除图集',
+                icon: Icons.delete_outline,
+                destructive: true,
               ),
-            ),
           ],
-        ),
+        ],
       ),
-    );
-  }
-
-  Widget _buildPreviewSlot(
-    BuildContext context, {
-    required String? path,
-    required int cacheWidth,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    if (path == null) {
-      return ColoredBox(
-        color: colorScheme.surfaceContainerLow,
-        child: Center(
-          child: Icon(
-            Icons.image_outlined,
-            size: 24,
-            color: colorScheme.onSurfaceVariant,
-          ),
-        ),
-      );
-    }
-    return LazyFileImage(
-      path: path,
-      fit: BoxFit.cover,
-      cacheWidth: cacheWidth,
-      borderRadius: BorderRadius.circular(10),
-      placeholderIcon: Icons.broken_image_outlined,
-    );
-  }
-
-  Widget _buildPill(BuildContext context, {required String label}) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          fontWeight: FontWeight.w700,
-          color: colorScheme.onSurfaceVariant,
+      preview: AspectRatio(
+        aspectRatio: 3.1,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: List.generate(previewCount, (index) {
+            final previewPaths =
+                _previewPathsByGalleryId[gallery.id] ?? const <String>[];
+            final previewPath =
+                index < previewPaths.length ? previewPaths[index] : null;
+            return Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  right: index == previewCount - 1 ? 0 : 6,
+                ),
+                child: ImageResourcePreviewSlot(
+                  path: previewPath,
+                  cacheWidth: 280,
+                ),
+              ),
+            );
+          }),
         ),
       ),
     );

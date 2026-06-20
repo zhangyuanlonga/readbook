@@ -511,7 +511,7 @@ class _AboutPageState extends ConsumerState<AboutPage> {
             ),
             const SizedBox(height: 6),
             Text(
-              '用于快速检查已有基础组件、主题 token、高频状态和动效在当前外观下的表现。',
+              '用于快速检查已有基础组件、主题 token、高频状态和动效在 Lumina 基线下的表现。',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: colorScheme.onSurfaceVariant,
                 height: 1.35,
@@ -527,13 +527,13 @@ class _AboutPageState extends ConsumerState<AboutPage> {
                 color: colorScheme.onSurfaceVariant,
               ),
               title: Text(
-                '当前主题组件样板',
+                'Lumina 组件样板',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.w600,
                 ),
               ),
               subtitle: Text(
-                '默认外观已使用 Lumina；切换其他主题后，这里会跟随当前主题展示真实效果。',
+                '固定 Lumina 视觉基线，用于内部 QA 和视觉回归。',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: colorScheme.onSurfaceVariant,
                 ),

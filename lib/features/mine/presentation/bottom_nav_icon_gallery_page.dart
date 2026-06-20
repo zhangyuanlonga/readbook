@@ -247,7 +247,14 @@ class _BottomNavIconGalleryPageState
                         _isLoading
                             ? const Center(
                               key: ValueKey('bottom_nav_gallery_loading'),
-                              child: CircularProgressIndicator(),
+                              child: SizedBox(
+                                width: 280,
+                                child: AppStateView(
+                                  kind: AppViewStateKind.loading,
+                                  title: '正在加载底栏图集',
+                                  description: '底栏图标只会跟随当前高级主题绑定生效。',
+                                ),
+                              ),
                             )
                             : _buildGalleryContent(
                               context,
@@ -296,145 +303,96 @@ class _BottomNavIconGalleryPageState
     required BottomNavIconGalleryIndexItem gallery,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
-    final metrics = AppAdaptiveMetrics.of(context);
     final activeAdvancedTheme =
         ref.watch(activeAdvancedThemeProvider).valueOrNull;
     final usedByActiveTheme =
         activeAdvancedTheme?.bottomNavGalleryId?.trim() == gallery.id.trim();
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(metrics.cardRadius + 2),
-        onTap: _isSaving ? null : () => _openEditor(gallery.id),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-          decoration: BoxDecoration(
-            color:
-                usedByActiveTheme
-                    ? colorScheme.secondaryContainer.withValues(alpha: 0.32)
-                    : colorScheme.surface,
-            borderRadius: BorderRadius.circular(metrics.cardRadius + 2),
-            border: Border.all(
-              color:
-                  usedByActiveTheme
-                      ? colorScheme.primary.withValues(alpha: 0.3)
-                      : colorScheme.outlineVariant.withValues(alpha: 0.48),
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      gallery.name,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+    return ImageResourceGalleryCard(
+      title: gallery.name,
+      subtitle: usedByActiveTheme ? '当前主题正在使用' : '可在高级主题编辑页绑定',
+      active: usedByActiveTheme,
+      onTap: _isSaving ? null : () => _openEditor(gallery.id),
+      badges: [
+        ImageResourcePill(label: gallery.isBuiltIn ? '内置' : '自定义'),
+        if (usedByActiveTheme) const ImageResourceUsageBadge(label: '主题默认'),
+      ],
+      trailing:
+          _isSaving && usedByActiveTheme
+              ? AppProgressIndicator(
+                size: 18,
+                strokeWidth: 2,
+                semanticLabel: '正在保存底栏图集',
+              )
+              : AppMenuButton<_GalleryAction>(
+                onSelected: (action) {
+                  switch (action) {
+                    case _GalleryAction.edit:
+                      _openEditor(gallery.id);
+                      break;
+                    case _GalleryAction.rename:
+                      _renameGallery(gallery);
+                      break;
+                    case _GalleryAction.duplicate:
+                      _duplicateGallery(gallery);
+                      break;
+                    case _GalleryAction.delete:
+                      _deleteGallery(gallery);
+                      break;
+                  }
+                },
+                icon:
+                    usedByActiveTheme
+                        ? Icons.check_circle_rounded
+                        : Icons.more_horiz_rounded,
+                iconColor:
+                    usedByActiveTheme
+                        ? colorScheme.primary
+                        : colorScheme.outline,
+                actions: [
+                  const AppMenuAction(
+                    value: _GalleryAction.edit,
+                    label: '编辑图标',
+                    icon: Icons.edit_outlined,
                   ),
-                  if (gallery.isBuiltIn) _buildPill(context, label: '内置'),
-                  if (!gallery.isBuiltIn) _buildPill(context, label: '自定义'),
-                  if (usedByActiveTheme) ...[
-                    const SizedBox(width: 6),
-                    const ImageResourceUsageBadge(label: '主题默认'),
-                  ],
-                  const SizedBox(width: 6),
-                  if (_isSaving && usedByActiveTheme)
-                    SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: colorScheme.primary,
-                      ),
-                    )
-                  else
-                    AppMenuButton<_GalleryAction>(
-                      onSelected: (action) {
-                        switch (action) {
-                          case _GalleryAction.edit:
-                            _openEditor(gallery.id);
-                            break;
-                          case _GalleryAction.rename:
-                            _renameGallery(gallery);
-                            break;
-                          case _GalleryAction.duplicate:
-                            _duplicateGallery(gallery);
-                            break;
-                          case _GalleryAction.delete:
-                            _deleteGallery(gallery);
-                            break;
-                        }
-                      },
-                      icon:
-                          usedByActiveTheme
-                              ? Icons.check_circle_rounded
-                              : Icons.more_horiz_rounded,
-                      iconColor:
-                          usedByActiveTheme
-                              ? colorScheme.primary
-                              : colorScheme.outline,
-                      actions: [
-                        const AppMenuAction(
-                          value: _GalleryAction.edit,
-                          label: '编辑图标',
-                          icon: Icons.edit_outlined,
-                        ),
-                        if (gallery.isEditable)
-                          const AppMenuAction(
-                            value: _GalleryAction.rename,
-                            label: '重命名',
-                            icon: Icons.drive_file_rename_outline_rounded,
-                          ),
-                        const AppMenuAction(
-                          value: _GalleryAction.duplicate,
-                          label: '复制图集',
-                          icon: Icons.copy_rounded,
-                        ),
-                        if (gallery.isDeletable)
-                          const AppMenuAction(
-                            value: _GalleryAction.delete,
-                            label: '删除图集',
-                            icon: Icons.delete_outline,
-                            destructive: true,
-                          ),
-                      ],
+                  if (gallery.isEditable)
+                    const AppMenuAction(
+                      value: _GalleryAction.rename,
+                      label: '重命名',
+                      icon: Icons.drive_file_rename_outline_rounded,
+                    ),
+                  const AppMenuAction(
+                    value: _GalleryAction.duplicate,
+                    label: '复制图集',
+                    icon: Icons.copy_rounded,
+                  ),
+                  if (gallery.isDeletable)
+                    const AppMenuAction(
+                      value: _GalleryAction.delete,
+                      label: '删除图集',
+                      icon: Icons.delete_outline,
+                      destructive: true,
                     ),
                 ],
               ),
-              const SizedBox(height: 2),
-              Text(
-                usedByActiveTheme ? '当前主题正在使用' : '可在高级主题编辑页绑定',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
+      preview: AspectRatio(
+        aspectRatio: 5.2,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final tab in bottomNavIconGalleryTabs) ...[
+              Expanded(
+                child: _buildLightPreviewSlot(
+                  context,
+                  gallery: gallery,
+                  tab: tab,
+                  active: usedByActiveTheme,
                 ),
               ),
-              const SizedBox(height: 8),
-              AspectRatio(
-                aspectRatio: 5.2,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (final tab in bottomNavIconGalleryTabs) ...[
-                      Expanded(
-                        child: _buildLightPreviewSlot(
-                          context,
-                          gallery: gallery,
-                          tab: tab,
-                          active: usedByActiveTheme,
-                        ),
-                      ),
-                      if (tab != bottomNavIconGalleryTabs.last)
-                        const SizedBox(width: 6),
-                    ],
-                  ],
-                ),
-              ),
+              if (tab != bottomNavIconGalleryTabs.last)
+                const SizedBox(width: 6),
             ],
-          ),
+          ],
         ),
       ),
     );
@@ -560,23 +518,21 @@ class _BottomNavIconGalleryPageState
     final iconSet = gallery.previewItems[tab] ?? const BottomNavIconSet();
     final asset = iconSet.lightUnselected ?? iconSet.lightSelected;
     final resolved = _fallbackIconForTab(tab).copyWith(assetRef: asset);
-    return Container(
-      decoration: BoxDecoration(
-        color:
-            active
-                ? colorScheme.primaryContainer.withValues(alpha: 0.34)
-                : colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.4),
+    return AppSurface(
+      padding: EdgeInsets.zero,
+      borderRadius: BorderRadius.circular(10),
+      backgroundColor:
+          active
+              ? colorScheme.primaryContainer.withValues(alpha: 0.34)
+              : colorScheme.surfaceContainerLow,
+      borderColor: colorScheme.outlineVariant.withValues(alpha: 0.4),
+      child: Center(
+        child: BottomNavIconView(
+          icon: resolved,
+          size: 18,
+          fallbackColor:
+              active ? colorScheme.primary : colorScheme.onSurfaceVariant,
         ),
-      ),
-      alignment: Alignment.center,
-      child: BottomNavIconView(
-        icon: resolved,
-        size: 18,
-        fallbackColor:
-            active ? colorScheme.primary : colorScheme.onSurfaceVariant,
       ),
     );
   }
@@ -592,24 +548,6 @@ class _BottomNavIconGalleryPageState
       tab: shellTab,
       selected: false,
       brightness: Brightness.light,
-    );
-  }
-
-  Widget _buildPill(BuildContext context, {required String label}) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          fontWeight: FontWeight.w700,
-          color: colorScheme.onSurfaceVariant,
-        ),
-      ),
     );
   }
 }

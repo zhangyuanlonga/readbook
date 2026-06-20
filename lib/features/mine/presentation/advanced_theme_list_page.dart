@@ -1950,7 +1950,16 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                 );
                 final content =
                     _isAccessLoading || _isLoading
-                        ? const Center(child: CircularProgressIndicator())
+                        ? const Center(
+                          child: SizedBox(
+                            width: 280,
+                            child: AppStateView(
+                              kind: AppViewStateKind.loading,
+                              title: '正在加载主题',
+                              description: '正在读取官方主题和自定义主题。',
+                            ),
+                          ),
+                        )
                         : _buildThemeListView(
                           context,
                           activeThemeAsync: activeThemeAsync,
@@ -2108,74 +2117,67 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     final summary = _officialThemeSummary(preset);
-    return InkWell(
+    return AppSurface(
       key: ValueKey('official-theme-${preset.id.id}'),
       borderRadius: BorderRadius.circular(18),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      backgroundColor:
+          isActive
+              ? colorScheme.primary.withValues(alpha: 0.08)
+              : colorScheme.surfaceContainerLow,
+      borderColor:
+          isActive
+              ? colorScheme.primary.withValues(alpha: 0.55)
+              : colorScheme.outlineVariant.withValues(alpha: 0.45),
       onTap: _isSaving ? null : () => _applyOfficialTheme(preset),
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-        decoration: BoxDecoration(
-          color:
-              isActive
-                  ? colorScheme.primary.withValues(alpha: 0.08)
-                  : colorScheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color:
-                isActive
-                    ? colorScheme.primary.withValues(alpha: 0.55)
-                    : colorScheme.outlineVariant.withValues(alpha: 0.45),
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              preset.id.label,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.titleSmall
-                                  ?.copyWith(fontWeight: FontWeight.w800),
-                            ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            preset.id.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w800),
                           ),
-                          if (isActive) const _OfficialActiveBadge(),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        preset.description,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          height: 1.35,
                         ),
+                        if (isActive) const _OfficialActiveBadge(),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      preset.description,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        height: 1.35,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                Icon(
-                  Icons.verified_outlined,
-                  size: 20,
-                  color: colorScheme.primary.withValues(alpha: 0.78),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _buildDualModePreviewStrip(context, summary),
-          ],
-        ),
+              ),
+              const SizedBox(width: 12),
+              Icon(
+                Icons.verified_outlined,
+                size: 20,
+                color: colorScheme.primary.withValues(alpha: 0.78),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildDualModePreviewStrip(context, summary),
+        ],
       ),
     );
   }
@@ -2219,15 +2221,12 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
           onPressed: () => context.push('/membership'),
           child: const Text('开通会员'),
         );
-        return Container(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-          decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerLow.withValues(alpha: 0.94),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: colorScheme.outlineVariant.withValues(alpha: 0.45),
-            ),
+        return AppSurface(
+          borderRadius: BorderRadius.circular(18),
+          backgroundColor: colorScheme.surfaceContainerLow.withValues(
+            alpha: 0.94,
           ),
+          borderColor: colorScheme.outlineVariant.withValues(alpha: 0.45),
           child:
               compact
                   ? Column(
@@ -3093,15 +3092,9 @@ class _AdvancedThemeBatchImportSheetState
               SizedBox(height: isEmptyState ? 14 : 8),
             ],
             if (_isImporting || summary != null) ...[
-              Container(
+              AppSurface(
+                tone: AppSurfaceTone.muted,
                 padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-                decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerLow,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(
-                    color: colorScheme.outlineVariant.withValues(alpha: 0.45),
-                  ),
-                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -3117,20 +3110,18 @@ class _AdvancedThemeBatchImportSheetState
                           ),
                         ),
                         if (_isImporting)
-                          const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                          AppProgressIndicator(
+                            size: 18,
+                            strokeWidth: 2,
+                            semanticLabel: '导入进度',
                           ),
                       ],
                     ),
                     const SizedBox(height: 12),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(999),
-                      child: LinearProgressIndicator(
-                        minHeight: 8,
-                        value: _progressValue,
-                      ),
+                    AppProgressIndicator(
+                      value: _progressValue,
+                      linear: true,
+                      semanticLabel: '批量导入主题',
                     ),
                     const SizedBox(height: 10),
                     Text(
@@ -3223,15 +3214,9 @@ class _AdvancedThemeBatchImportSheetState
             itemBuilder: (context, index) {
               final item = _items[index];
               final statusColor = _statusColor(context, item.status);
-              return Container(
+              return AppSurface(
+                tone: AppSurfaceTone.muted,
                 padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerLow,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(
-                    color: colorScheme.outlineVariant.withValues(alpha: 0.45),
-                  ),
-                ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [

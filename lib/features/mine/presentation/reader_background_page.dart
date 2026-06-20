@@ -12,7 +12,7 @@ import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/adaptive_fullscreen_preview.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
-import '../../../app/widgets/foundation/app_feedback.dart';
+import '../../../app/widgets/foundation/foundation.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
 import '../application/advanced_theme_provider.dart';
@@ -249,7 +249,14 @@ class _ReaderBackgroundPageState extends ConsumerState<ReaderBackgroundPage> {
     if (_isLoading) {
       return const Center(
         key: ValueKey('reader_background_loading'),
-        child: CircularProgressIndicator(),
+        child: SizedBox(
+          width: 280,
+          child: AppStateView(
+            kind: AppViewStateKind.loading,
+            title: '正在加载阅读背景',
+            description: '阅读背景可在高级主题中绑定，也可被阅读器内设置覆盖。',
+          ),
+        ),
       );
     }
 
@@ -348,51 +355,46 @@ class _ReaderBackgroundPageState extends ConsumerState<ReaderBackgroundPage> {
       activeAdvancedTheme,
       reader: true,
     );
-    return GestureDetector(
+    return AppSurface(
+      padding: EdgeInsets.zero,
+      borderRadius: BorderRadius.circular(18),
+      clipBehavior: Clip.antiAlias,
+      backgroundColor: colorScheme.surfaceContainerLow,
+      borderColor: colorScheme.outlineVariant.withValues(alpha: 0.4),
       onTap: () => _openPreview(path),
       onLongPress: _isSaving ? null : () => _confirmDeleteBackground(path),
-      child: Container(
-        decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.4),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: LazyFileImage(
+              path: path,
+              fit: BoxFit.cover,
+              cacheWidth: 420,
+              placeholderIcon: Icons.broken_image_outlined,
+            ),
           ),
-        ),
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: LazyFileImage(
-                path: path,
-                fit: BoxFit.cover,
-                cacheWidth: 420,
-                borderRadius: BorderRadius.circular(18),
-                placeholderIcon: Icons.broken_image_outlined,
-              ),
+          Positioned(
+            top: 10,
+            right: 10,
+            child: const ImageResourceCornerHint(
+              label: '长按删除',
+              icon: Icons.delete_outline,
             ),
+          ),
+          if (usageLabels.isNotEmpty)
             Positioned(
+              left: 10,
               top: 10,
-              right: 10,
-              child: const ImageResourceCornerHint(
-                label: '长按删除',
-                icon: Icons.delete_outline,
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final label in usageLabels)
+                    ImageResourceUsageBadge(label: label),
+                ],
               ),
             ),
-            if (usageLabels.isNotEmpty)
-              Positioned(
-                left: 10,
-                top: 10,
-                child: Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [
-                    for (final label in usageLabels)
-                      ImageResourceUsageBadge(label: label),
-                  ],
-                ),
-              ),
-          ],
-        ),
+        ],
       ),
     );
   }

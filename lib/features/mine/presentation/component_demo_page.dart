@@ -1,39 +1,27 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
-import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/theme/app_official_theme_presets.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../app/theme/app_theme_palette.dart';
 import '../../../app/widgets/adaptive_card.dart';
 import '../../../app/widgets/adaptive_setting_tile.dart';
-import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
 import '../../../app/widgets/app_status_state_card.dart';
 import '../../../app/widgets/foundation/foundation.dart';
-import '../application/advanced_theme_provider.dart';
+import '../../../app/widgets/text_cover_placeholder.dart';
+import 'widgets/image_resource_collection_widgets.dart';
 import 'widgets/mine_route_top_bar.dart';
 
-enum ComponentDemoStyle { currentTheme, lumina }
-
-class ComponentDemoPage extends ConsumerStatefulWidget {
-  const ComponentDemoPage({
-    super.key,
-    this.style = ComponentDemoStyle.currentTheme,
-  });
-
-  const ComponentDemoPage.lumina({super.key})
-    : style = ComponentDemoStyle.lumina;
-
-  final ComponentDemoStyle style;
+class ComponentDemoPage extends StatefulWidget {
+  const ComponentDemoPage({super.key});
 
   @override
-  ConsumerState<ComponentDemoPage> createState() => _ComponentDemoPageState();
+  State<ComponentDemoPage> createState() => _ComponentDemoPageState();
 }
 
-class _ComponentDemoPageState extends ConsumerState<ComponentDemoPage> {
+class _ComponentDemoPageState extends State<ComponentDemoPage> {
   final TextEditingController _searchController = TextEditingController(
     text: '斗破苍穹',
   );
@@ -54,28 +42,17 @@ class _ComponentDemoPageState extends ConsumerState<ComponentDemoPage> {
 
   @override
   Widget build(BuildContext context) {
-    final previewTheme =
-        widget.style == ComponentDemoStyle.lumina
-            ? _buildLuminaTheme(Theme.of(context))
-            : Theme.of(context);
+    final previewTheme = _buildLuminaTheme(Theme.of(context));
     return Theme(data: previewTheme, child: Builder(builder: _buildDemoPage));
   }
 
   Widget _buildDemoPage(BuildContext context) {
     final theme = Theme.of(context);
     final metrics = AppAdaptiveMetrics.of(context);
-    final isLumina = widget.style == ComponentDemoStyle.lumina;
-    final backdrop =
-        isLumina
-            ? null
-            : resolveAdvancedThemeBackdrop(
-              theme.colorScheme,
-              ref.watch(activeAdvancedThemeProvider).valueOrNull,
-            );
     final routeTopBar = buildMineRouteTopBar(
       context: context,
-      title: isLumina ? 'Lumina 组件样板' : '组件样板',
-      subtitle: isLumina ? '局部套用 Lumina 风格，不跟随当前主题色' : '真实 Flutter 控件与当前主题效果',
+      title: 'Lumina 组件样板',
+      subtitle: '固定 Lumina 视觉基线，用于内部 QA 和视觉回归。',
       fallbackRoute: '/appearance',
     );
     final topInset = MediaQuery.paddingOf(context).top;
@@ -90,10 +67,7 @@ class _ComponentDemoPageState extends ConsumerState<ComponentDemoPage> {
       extendBodyBehindAppBar: true,
       appBar: routeTopBar,
       body: DecoratedBox(
-        decoration:
-            isLumina
-                ? BoxDecoration(color: theme.scaffoldBackgroundColor)
-                : buildAdvancedThemeBackdropDecoration(backdrop!),
+        decoration: BoxDecoration(color: theme.scaffoldBackgroundColor),
         child: Align(
           alignment: Alignment.topCenter,
           child: ConstrainedBox(
@@ -168,10 +142,7 @@ class _ComponentDemoPageState extends ConsumerState<ComponentDemoPage> {
                             label: '加入书架',
                             icon: const Icon(Icons.library_add_rounded),
                             variant: AppButtonVariant.tonal,
-                            style:
-                                isLumina
-                                    ? _luminaTonalButtonStyle(theme)
-                                    : null,
+                            style: _luminaTonalButtonStyle(theme),
                             onPressed: () {},
                           ),
                           AppButton(
@@ -445,6 +416,27 @@ class _ComponentDemoPageState extends ConsumerState<ComponentDemoPage> {
                       ),
                     ),
                   ],
+                ),
+                SizedBox(height: metrics.sectionGap),
+                _DemoSectionCard(
+                  title: '页面状态',
+                  icon: Icons.rule_folder_outlined,
+                  child: _DemoStateMatrix(onRetry: () {}, onDestructive: () {}),
+                ),
+                SizedBox(height: metrics.sectionGap),
+                _DemoSectionCard(
+                  title: '业务模式',
+                  icon: Icons.dashboard_customize_outlined,
+                  child: _ResponsiveDemoGrid(
+                    children: const [
+                      _DemoBookCard(),
+                      _DemoThemeCard(),
+                      _DemoSourceCard(),
+                      _DemoReaderSettingRow(),
+                      _DemoImageResourceTile(),
+                      _DemoTaskCard(),
+                    ],
+                  ),
                 ),
                 SizedBox(height: metrics.sectionGap),
                 AdaptiveSettingSection(
@@ -806,6 +798,273 @@ class _DemoListTile extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _DemoStateMatrix extends StatelessWidget {
+  const _DemoStateMatrix({required this.onRetry, required this.onDestructive});
+
+  final VoidCallback onRetry;
+  final VoidCallback onDestructive;
+
+  @override
+  Widget build(BuildContext context) {
+    return _ResponsiveDemoGrid(
+      children: [
+        const AppStateView(
+          kind: AppViewStateKind.loading,
+          title: '正在加载',
+          description: '读取主题资源和本地缓存。',
+          compact: true,
+        ),
+        const AppStateView(
+          kind: AppViewStateKind.locked,
+          title: '需要会员',
+          description: '自定义高级主题编辑需要会员权益。',
+          compact: true,
+        ),
+        const AppStateView(
+          kind: AppViewStateKind.offline,
+          title: '离线状态',
+          description: '网络恢复后可继续同步。',
+          compact: true,
+        ),
+        const AppStateView(
+          kind: AppViewStateKind.progress,
+          title: '正在导入',
+          description: '3 / 8 个资源包',
+          progress: 0.38,
+          compact: true,
+        ),
+        AppStateView(
+          kind: AppViewStateKind.filteredEmpty,
+          title: '没有筛选结果',
+          description: '换个关键词或清空筛选条件。',
+          primaryAction: AppStateAction(
+            label: '清空筛选',
+            icon: const Icon(Icons.filter_alt_off_outlined),
+            onPressed: onRetry,
+          ),
+          compact: true,
+        ),
+        AppStateView(
+          kind: AppViewStateKind.error,
+          title: '导入失败',
+          description: '资源包缺少 manifest，请重新选择文件。',
+          primaryAction: AppStateAction(
+            label: '重试',
+            icon: const Icon(Icons.refresh_rounded),
+            onPressed: onRetry,
+          ),
+          secondaryAction: AppStateAction(
+            label: '删除任务',
+            icon: const Icon(Icons.delete_outline),
+            variant: AppButtonVariant.danger,
+            onPressed: onDestructive,
+          ),
+          footer: const Text('诊断码: THEME_IMPORT_MANIFEST_MISSING'),
+          compact: true,
+        ),
+        const AppStateView(
+          kind: AppViewStateKind.error,
+          title: '依赖不可用',
+          description: '请先选择封面图集，再启用主题封面补位。',
+          primaryAction: AppStateAction(label: '选择图集', onPressed: null),
+          compact: true,
+        ),
+      ],
+    );
+  }
+}
+
+class _DemoBookCard extends StatelessWidget {
+  const _DemoBookCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AppPanel(
+      title: '书籍卡',
+      leading: const Icon(Icons.menu_book_outlined),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 48,
+            height: 66,
+            child: TextCoverPlaceholder(title: '长夜余火', width: 48, height: 66),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '长夜余火',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '第 218 章 · 阅读 64%',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DemoThemeCard extends StatelessWidget {
+  const _DemoThemeCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return AppPanel(
+      title: '主题卡',
+      leading: const Icon(Icons.auto_awesome_outlined),
+      trailing: const ImageResourceUsageBadge(label: '当前'),
+      child: Row(
+        children: [
+          for (final color in [
+            scheme.primary,
+            scheme.secondary,
+            scheme.surfaceContainerHighest,
+            scheme.tertiary,
+          ])
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: SizedBox(
+                  height: 36,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: color,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DemoSourceCard extends StatelessWidget {
+  const _DemoSourceCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return const AppPanel(
+      title: '书源卡',
+      subtitle: '响应 320ms · 目录完整 · 最近测试成功',
+      leading: Icon(Icons.public_rounded),
+      child: AppInlineProgress(
+        label: '健康检查',
+        message: '正在验证搜索、详情、目录、正文',
+        value: 0.72,
+      ),
+    );
+  }
+}
+
+class _DemoReaderSettingRow extends StatelessWidget {
+  const _DemoReaderSettingRow();
+
+  @override
+  Widget build(BuildContext context) {
+    return AppPanel(
+      title: '阅读设置行',
+      leading: const Icon(Icons.format_size_rounded),
+      child: Row(
+        children: [
+          Text(
+            '字号',
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(child: Slider(value: 0.5, onChanged: null)),
+          const SizedBox(width: 12),
+          const Text('18'),
+        ],
+      ),
+    );
+  }
+}
+
+class _DemoImageResourceTile extends StatelessWidget {
+  const _DemoImageResourceTile();
+
+  @override
+  Widget build(BuildContext context) {
+    return AppPanel(
+      title: '资源 Tile',
+      leading: const Icon(Icons.image_outlined),
+      trailing: const ImageResourceUsageBadge(label: '主题默认'),
+      child: AspectRatio(
+        aspectRatio: 3,
+        child: Row(
+          children: const [
+            Expanded(child: _DemoImageSwatch(index: 0)),
+            SizedBox(width: 6),
+            Expanded(child: _DemoImageSwatch(index: 1)),
+            SizedBox(width: 6),
+            Expanded(child: _DemoImageSwatch(index: 2)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DemoImageSwatch extends StatelessWidget {
+  const _DemoImageSwatch({required this.index});
+
+  final int index;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final colors = [
+      scheme.primaryContainer,
+      scheme.secondaryContainer,
+      scheme.tertiaryContainer,
+    ];
+    return AppSurface(
+      padding: EdgeInsets.zero,
+      borderRadius: BorderRadius.circular(10),
+      backgroundColor: colors[index],
+      child: Center(
+        child: Icon(Icons.image_outlined, color: scheme.onSurfaceVariant),
+      ),
+    );
+  }
+}
+
+class _DemoTaskCard extends StatelessWidget {
+  const _DemoTaskCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return const AppPanel(
+      title: '任务卡',
+      leading: Icon(Icons.task_alt_rounded),
+      child: AppTaskProgressRow(
+        title: '导出主题资源',
+        message: '正在写入封面图集和启动图集',
+        value: 0.64,
       ),
     );
   }

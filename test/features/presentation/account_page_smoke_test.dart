@@ -420,14 +420,14 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.text('组件样板'), findsOneWidget);
-    expect(find.text('当前主题组件样板'), findsOneWidget);
-    expect(find.text('Lumina 组件样板'), findsNothing);
+    expect(find.text('Lumina 组件样板'), findsOneWidget);
 
-    await tester.tap(find.text('当前主题组件样板'));
+    await tester.tap(find.text('Lumina 组件样板'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
-    expect(find.text('真实 Flutter 控件与当前主题效果'), findsOneWidget);
+    expect(find.text('固定 Lumina 视觉基线，用于内部 QA 和视觉回归。'), findsWidgets);
+    expect(find.text('搜索框'), findsOneWidget);
   });
 
   testWidgets('ErrorCenterPage renders on phone and large screens', (

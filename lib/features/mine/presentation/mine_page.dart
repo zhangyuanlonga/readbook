@@ -22,8 +22,7 @@ import '../../../app/theme/app_theme_provider.dart';
 import '../../../app/theme/app_theme_source_provider.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
-import '../../../app/widgets/foundation/app_feedback.dart';
-import '../../../app/widgets/foundation/app_refresh_indicator.dart';
+import '../../../app/widgets/foundation/foundation.dart';
 import '../../../core/auth/auth_event_bus.dart';
 import '../../../core/auth/auth_service.dart';
 import '../../../core/media/image_selection_service.dart';
@@ -746,41 +745,28 @@ class _MinePageState extends ConsumerState<MinePage> {
             ],
           ),
           const SizedBox(height: 10),
-          Container(
-            decoration: BoxDecoration(
-              color: palette.cardColor,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: resolveAppBorderColor(
-                  Theme.of(context).colorScheme,
-                  baseColor: palette.cardBorderColor,
-                  containerColor: palette.cardColor,
+          Column(
+            children: [
+              for (var index = 0; index < actions.length; index++) ...[
+                _buildActionListTile(
+                  context,
+                  item: actions[index],
+                  palette: palette,
                 ),
-              ),
-            ),
-            child: Column(
-              children: [
-                for (var index = 0; index < actions.length; index++) ...[
-                  _buildActionListTile(
-                    context,
-                    item: actions[index],
-                    palette: palette,
-                  ),
-                  if (index < actions.length - 1)
-                    Divider(
-                      height: 1,
-                      indent: 58,
-                      endIndent: 16,
-                      color: resolveAppBorderColor(
-                        Theme.of(context).colorScheme,
-                        baseColor: palette.cardBorderColor,
-                        containerColor: palette.cardColor,
-                        tone: AppBorderTone.subtle,
-                      ),
+                if (index < actions.length - 1)
+                  Divider(
+                    height: 1,
+                    indent: 58,
+                    endIndent: 16,
+                    color: resolveAppBorderColor(
+                      Theme.of(context).colorScheme,
+                      baseColor: palette.cardBorderColor,
+                      containerColor: palette.cardColor,
+                      tone: AppBorderTone.subtle,
                     ),
-                ],
+                  ),
               ],
-            ),
+            ],
           ),
         ],
       ),
@@ -930,106 +916,92 @@ class _MinePageState extends ConsumerState<MinePage> {
               height: 1.15,
             );
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: item.onTap,
-        child: Ink(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: borderColor),
-            color: palette.cardColor.withValues(alpha: 0.48),
-          ),
-          child: Padding(
-            padding:
-                denseGrid
-                    ? const EdgeInsets.fromLTRB(7, 6, 7, 6)
-                    : const EdgeInsets.fromLTRB(8, 8, 8, 8),
-            child: Stack(
+    return AppSurface(
+      padding:
+          denseGrid
+              ? const EdgeInsets.fromLTRB(7, 6, 7, 6)
+              : const EdgeInsets.fromLTRB(8, 8, 8, 8),
+      borderRadius: BorderRadius.circular(12),
+      borderColor: borderColor,
+      backgroundColor: palette.cardColor.withValues(alpha: 0.48),
+      onTap: item.onTap,
+      child: Stack(
+        children: [
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          Container(
-                            width: iconSize,
-                            height: iconSize,
-                            decoration: BoxDecoration(
-                              color: iconFill,
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              item.icon,
-                              size: iconGlyphSize,
-                              color: palette.textPrimaryColor,
-                            ),
-                          ),
-                          if (item.colorDot != null)
-                            Positioned(
-                              right: -1,
-                              bottom: -1,
-                              child: Container(
-                                width: 10,
-                                height: 10,
-                                decoration: BoxDecoration(
-                                  color: item.colorDot,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: palette.cardColor,
-                                    width: 1.2,
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                      SizedBox(height: denseGrid ? 4 : 6),
-                      Text(
-                        item.label,
-                        maxLines: denseGrid ? 1 : 2,
-                        textAlign: TextAlign.center,
-                        overflow: TextOverflow.ellipsis,
-                        style: labelTextStyle,
-                      ),
-                    ],
-                  ),
-                ),
-                if (denseGrid &&
-                    item.tagText != null &&
-                    item.tagText!.isNotEmpty)
-                  Positioned(
-                    top: 0,
-                    right: 0,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 5,
-                        vertical: 1.5,
-                      ),
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Container(
+                      width: iconSize,
+                      height: iconSize,
                       decoration: BoxDecoration(
-                        color: palette.noticeAccentColor.withValues(
-                          alpha: 0.14,
-                        ),
-                        borderRadius: BorderRadius.circular(999),
+                        color: iconFill,
+                        shape: BoxShape.circle,
                       ),
-                      child: Text(
-                        item.tagText!,
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: palette.noticeAccentColor,
-                          height: 1.0,
-                        ),
+                      child: Icon(
+                        item.icon,
+                        size: iconGlyphSize,
+                        color: palette.textPrimaryColor,
                       ),
                     ),
-                  ),
+                    if (item.colorDot != null)
+                      Positioned(
+                        right: -1,
+                        bottom: -1,
+                        child: Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            color: item.colorDot,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: palette.cardColor,
+                              width: 1.2,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                SizedBox(height: denseGrid ? 4 : 6),
+                Text(
+                  item.label,
+                  maxLines: denseGrid ? 1 : 2,
+                  textAlign: TextAlign.center,
+                  overflow: TextOverflow.ellipsis,
+                  style: labelTextStyle,
+                ),
               ],
             ),
           ),
-        ),
+          if (denseGrid && item.tagText != null && item.tagText!.isNotEmpty)
+            Positioned(
+              top: 0,
+              right: 0,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 5,
+                  vertical: 1.5,
+                ),
+                decoration: BoxDecoration(
+                  color: palette.noticeAccentColor.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  item.tagText!,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: palette.noticeAccentColor,
+                    height: 1.0,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -1039,7 +1011,11 @@ class _MinePageState extends ConsumerState<MinePage> {
     required Widget child,
     required EdgeInsetsGeometry padding,
   }) {
-    return Padding(padding: padding, child: child);
+    return AppSurface(
+      tone: AppSurfaceTone.muted,
+      padding: padding,
+      child: child,
+    );
   }
 
   Widget _buildPageEntrance({required int index, required Widget child}) {

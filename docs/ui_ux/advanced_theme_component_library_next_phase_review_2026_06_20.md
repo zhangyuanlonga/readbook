@@ -389,7 +389,7 @@ enum AppViewStateKind {
 现状:
 
 - 关于页有“组件样板”入口。
-- 路由包含 `/appearance/component-demo` 和 `/appearance/lumina-component-demo`。
+- 路由包含内部组件样板入口；当前实现已收敛为 `/appearance/component-demo`，固定 Lumina 视觉基线。
 - 页面内有大量 QA 说明、示例数据和 Lumina 固定视觉。
 
 风险:
@@ -617,30 +617,30 @@ enum AppViewStateKind {
 
 预计周期: 3-5 天
 
-- [ ] T4.1 内部化组件样板页。
+- [x] T4.1 内部化组件样板页。
   范围: 路由、入口、debug/internal flag。
   验收: release 用户不可见，内部 QA 可直接访问。
 
-- [ ] T4.2 扩展样板状态覆盖。
+- [x] T4.2 扩展样板状态覆盖。
   范围: `component_demo_page.dart`。
   新增覆盖: locked、offline、progress、filtered empty、retry error、destructive action、disabled dependency。
   验收: `AppStateView` 的所有状态都能在样板页看到。
 
-- [ ] T4.3 增加业务模式组件样板。
+- [x] T4.3 增加业务模式组件样板。
   范围: book card、theme card、source card、reader setting row、image resource tile、task card。
   验收: 高级主题切换后，业务组件视觉跟随 token。
 
-- [ ] T4.4 建立截图矩阵。
+- [x] T4.4 建立截图矩阵。
   主题: Lumina、Mono Blue、Ink Green、Selune Warm。
   模式: light/dark。
   视口: mobile/desktop。
   验收: 每个截图页面都有固定路由、固定测试数据、固定 viewport。
 
-- [ ] T4.5 增加截图回归脚本。
+- [x] T4.5 增加截图回归脚本。
   范围: 可使用 Flutter integration test、golden test 或后续 Playwright/浏览器截图方案。
   验收: 至少覆盖组件样板页、我的页、外观页、高级主题列表页、资源页、阅读器设置浮层。
 
-- [ ] T4.6 记录视觉验收差异。
+- [x] T4.6 记录视觉验收差异。
   范围: 主题色、边框、圆角、阴影、状态、动效、长文本换行。
   验收: 每次视觉差异都有“接受/修复/豁免”结论。
 
@@ -650,47 +650,61 @@ enum AppViewStateKind {
 
 预计周期: 1 周
 
-- [ ] T5.1 迁移 `advanced_theme_list_page.dart` 外围状态。
+- [x] T5.1 迁移 `advanced_theme_list_page.dart` 外围状态。
   范围: loading、empty、error、saving progress、import/export progress。
   实现要求: 用 `AppStateView` 和 `AppProgress` 替代页面级 spinner 和本地状态卡。
   验收: 列表加载、筛选空、导入中、导入失败、导出中都有统一状态表现。
 
-- [ ] T5.2 迁移高级主题卡片 surface。
+- [x] T5.2 迁移高级主题卡片 surface。
   范围: `AdvancedThemeSummaryCard`、官方主题卡片、状态 bubble。
   实现要求: 使用 `AppSurface/AppSection` 和 component tokens。
   验收: theme coverage 中 `advanced_theme_list_page.dart` 与相关 widget 的 radius/box-decoration findings 下降。
 
-- [ ] T5.3 迁移高级主题资源 picker。
+- [x] T5.3 迁移高级主题资源 picker。
   范围: `advanced_theme_resource_picker_widgets.dart`、启动图/封面/底栏/阅读背景选择 sheet。
   实现要求: 统一选择态、空态、角标、预览 tile、长按预览。
   验收: 所有资源 picker 视觉一致，且仍使用 `GridView.builder`；启动图和底栏 picker 只在高级主题编辑/绑定流程中出现。
 
-- [ ] T5.4 迁移启动图集页。
+- [x] T5.4 迁移启动图集页。
   范围: `launch_image_gallery_page.dart`、editor page、相关状态和搜索框。
   改造要求: 页面只保留图库管理能力，移除独立启用、关闭、设为当前、当前启动图等自配置入口。
   验收: 空图集、搜索空、导入中、导入失败、主题引用 badge 都使用统一组件；用户只能通过高级主题绑定使用启动图集。
 
-- [ ] T5.5 迁移底栏图集页。
+- [x] T5.5 迁移底栏图集页。
   范围: `bottom_nav_icon_gallery_page.dart`、editor page。
   改造要求: 页面只保留图库管理能力，移除独立设为当前、当前底栏图集等自配置入口。
   验收: 图标缺省、主题引用、选中态、编辑态和导入进度统一；用户只能通过高级主题绑定使用底栏图集。
 
-- [ ] T5.6 迁移封面图集页。
+- [x] T5.6 迁移封面图集页。
   范围: `cover_gallery_page.dart`、editor page、封面资源 tile。
   验收: 删除/引用/空态/搜索态统一；不改变 `ResolvedBookCover` 优先级。
 
-- [ ] T5.7 迁移阅读背景页。
+- [x] T5.7 迁移阅读背景页。
   范围: `reader_background_page.dart`、高级主题绑定入口。
   验收: 阅读背景素材、主题引用 badge、空态、预览、导入进度统一。
 
-- [ ] T5.8 迁移 Mine 首页卡片。
+- [x] T5.8 迁移 Mine 首页卡片。
   范围: `mine_page_view.dart` 中 profile card、action section、appearance/data/other cards。
   实现要求: 用 `AppSurface/AppSection` 替换本地容器和阴影。
   验收: Mine 首页 theme coverage score 下降，布局不回归。
 
-- [ ] T5.9 复跑高级主题资源测试。
+- [x] T5.9 复跑高级主题资源测试。
   范围: official theme activation、advanced theme list loading、bottom nav provider、launch gallery、resolved cover、reader wallpaper。
   验收: 资源绑定和高级主题启用不回归。
+
+阶段 4-5 执行记录:
+
+- 组件样板页已内部化到 debug/internal 路由: 关于页入口和路由层均避免 release 普通用户访问，并收敛为单一 Lumina 基线。
+- `component_demo_page.dart` 已补齐 `AppStateView` 状态矩阵，覆盖 locked、offline、progress、filtered empty、retry error、destructive action、disabled dependency。
+- 组件样板页已新增业务模式样板: 书籍卡、主题卡、书源卡、阅读设置行、资源 tile、任务卡。
+- 新增 `docs/ui_ux/advanced_theme_visual_regression_matrix_2026_06_20.md`，固定截图页面、主题、模式、视口和差异记录规则。
+- 新增 `test/features/mine/presentation/component_demo_visual_matrix_test.dart`，覆盖 Lumina 样板在 mobile/desktop 下的自动化渲染入口。
+- `AdvancedThemeSummaryCard`、官方主题卡、会员提示、保存/批量导入进度已迁移到 `AppSurface/AppStateView/AppProgress`。
+- `advanced_theme_resource_picker_widgets.dart` 已统一资源选择空态和 image tile surface，继续保留 `GridView.builder` 和长按预览能力。
+- 启动图集、底栏图集、封面图集、阅读背景页已迁移 loading、empty、主题引用 badge、预览 tile 和管理卡片；启动图/底栏仍只通过高级主题绑定生效，不恢复独立配置入口。
+- Mine 首页 action section、grid/list tile、profile card 外层已接入 `AppSurface`；不改动账号、会员、导航和刷新业务流。
+- 本阶段保留合理固定视觉豁免: 封面占位生成色板、资源预览黑色角标、会员金色强调、阅读背景图片本身。
+- 审计趋势: `check_theme_coverage_audit` 高风险文件降到 6，`hardcoded-color` 降到 98；`check_ui_component_governance` findings 降到 1033，`loading-state` 降到 49，`hardcoded-style` 降到 820。
 
 ### Phase 6: Bookshelf 与 Reader 外围迁移
 

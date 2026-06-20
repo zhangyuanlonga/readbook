@@ -270,7 +270,14 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
                         _isLoading
                             ? const Center(
                               key: ValueKey('cover_gallery_loading'),
-                              child: CircularProgressIndicator(),
+                              child: SizedBox(
+                                width: 280,
+                                child: AppStateView(
+                                  kind: AppViewStateKind.loading,
+                                  title: '正在加载封面图集',
+                                  description: '主题封面只会在书籍没有封面时补位。',
+                                ),
+                              ),
                             )
                             : _buildGalleryContent(
                               context,
@@ -434,163 +441,76 @@ class _CoverGalleryPageState extends ConsumerState<CoverGalleryPage> {
       activeAdvancedTheme,
     );
     const previewCount = 4;
-    return InkWell(
-      borderRadius: BorderRadius.circular(18),
+    return ImageResourceGalleryCard(
+      title: gallery.name,
+      subtitle: '${gallery.imageCount} 张封面',
       onTap: () => _openGalleryEditor(gallery),
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-        decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+      badges: [
+        for (final label in usageLabels) ImageResourceUsageBadge(label: label),
+      ],
+      trailing: AppMenuButton<_CoverGalleryAction>(
+        onSelected: (action) {
+          switch (action) {
+            case _CoverGalleryAction.edit:
+              _openGalleryEditor(gallery);
+              break;
+            case _CoverGalleryAction.rename:
+              _renameGallery(gallery);
+              break;
+            case _CoverGalleryAction.duplicate:
+              _duplicateGallery(gallery);
+              break;
+            case _CoverGalleryAction.delete:
+              _deleteGallery(gallery);
+              break;
+          }
+        },
+        icon: Icons.more_horiz_rounded,
+        iconColor: colorScheme.onSurfaceVariant,
+        actions: const [
+          AppMenuAction(
+            value: _CoverGalleryAction.edit,
+            label: '编辑图集',
+            icon: Icons.edit_outlined,
           ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    gallery.name,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+          AppMenuAction(
+            value: _CoverGalleryAction.rename,
+            label: '重命名',
+            icon: Icons.drive_file_rename_outline_rounded,
+          ),
+          AppMenuAction(
+            value: _CoverGalleryAction.duplicate,
+            label: '复制图集',
+            icon: Icons.copy_rounded,
+          ),
+          AppMenuAction(
+            value: _CoverGalleryAction.delete,
+            label: '删除图集',
+            icon: Icons.delete_outline,
+            destructive: true,
+          ),
+        ],
+      ),
+      preview: AspectRatio(
+        aspectRatio: 3.1,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: List.generate(previewCount, (index) {
+            final previewPaths =
+                _previewPathsByGalleryId[gallery.id] ?? const <String>[];
+            final path =
+                index < previewPaths.length ? previewPaths[index] : null;
+            return Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  right: index == previewCount - 1 ? 0 : 6,
                 ),
-                for (final label in usageLabels) ...[
-                  ImageResourceUsageBadge(label: label),
-                  const SizedBox(width: 6),
-                ],
-                AppMenuButton<_CoverGalleryAction>(
-                  onSelected: (action) {
-                    switch (action) {
-                      case _CoverGalleryAction.edit:
-                        _openGalleryEditor(gallery);
-                        break;
-                      case _CoverGalleryAction.rename:
-                        _renameGallery(gallery);
-                        break;
-                      case _CoverGalleryAction.duplicate:
-                        _duplicateGallery(gallery);
-                        break;
-                      case _CoverGalleryAction.delete:
-                        _deleteGallery(gallery);
-                        break;
-                    }
-                  },
-                  icon: Icons.more_horiz_rounded,
-                  iconColor: colorScheme.onSurfaceVariant,
-                  actions: const [
-                    AppMenuAction(
-                      value: _CoverGalleryAction.edit,
-                      label: '编辑图集',
-                      icon: Icons.edit_outlined,
-                    ),
-                    AppMenuAction(
-                      value: _CoverGalleryAction.rename,
-                      label: '重命名',
-                      icon: Icons.drive_file_rename_outline_rounded,
-                    ),
-                    AppMenuAction(
-                      value: _CoverGalleryAction.duplicate,
-                      label: '复制图集',
-                      icon: Icons.copy_rounded,
-                    ),
-                    AppMenuAction(
-                      value: _CoverGalleryAction.delete,
-                      label: '删除图集',
-                      icon: Icons.delete_outline,
-                      destructive: true,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 2),
-            Row(
-              children: [
-                Text(
-                  '${gallery.imageCount} 张封面',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const Spacer(),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  size: 18,
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            AspectRatio(
-              aspectRatio: 3.1,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: List.generate(previewCount, (index) {
-                  final previewPaths =
-                      _previewPathsByGalleryId[gallery.id] ?? const <String>[];
-                  final path =
-                      index < previewPaths.length ? previewPaths[index] : null;
-                  return Expanded(
-                    child: Padding(
-                      padding: EdgeInsets.only(
-                        right: index == previewCount - 1 ? 0 : 6,
-                      ),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: colorScheme.surface,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: colorScheme.outlineVariant.withValues(
-                              alpha: 0.4,
-                            ),
-                          ),
-                        ),
-                        child: _buildPreviewSlot(
-                          context,
-                          path: path,
-                          cacheWidth: 280,
-                        ),
-                      ),
-                    ),
-                  );
-                }),
+                child: ImageResourcePreviewSlot(path: path, cacheWidth: 280),
               ),
-            ),
-          ],
+            );
+          }),
         ),
       ),
-    );
-  }
-
-  Widget _buildPreviewSlot(
-    BuildContext context, {
-    required String? path,
-    required int cacheWidth,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    if (path == null) {
-      return ColoredBox(
-        color: colorScheme.surfaceContainerLow,
-        child: Center(
-          child: Icon(
-            Icons.image_outlined,
-            size: 24,
-            color: colorScheme.onSurfaceVariant,
-          ),
-        ),
-      );
-    }
-    return LazyFileImage(
-      path: path,
-      fit: BoxFit.cover,
-      cacheWidth: cacheWidth,
-      borderRadius: BorderRadius.circular(10),
-      placeholderIcon: Icons.broken_image_outlined,
     );
   }
 

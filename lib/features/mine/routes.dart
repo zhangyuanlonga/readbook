@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 
 import 'presentation/about_page.dart';
@@ -56,12 +57,11 @@ final List<RouteBase> mineRoutes = <RouteBase>[
   GoRoute(
     path: '/appearance/component-demo',
     name: 'appearance-component-demo',
-    builder: (context, state) => const ComponentDemoPage(),
-  ),
-  GoRoute(
-    path: '/appearance/lumina-component-demo',
-    name: 'appearance-lumina-component-demo',
-    builder: (context, state) => const ComponentDemoPage.lumina(),
+    builder:
+        (context, state) =>
+            kDebugMode
+                ? const ComponentDemoPage()
+                : const AppearancePage(section: AppearanceSection.appearance),
   ),
   GoRoute(
     path: '/appearance/launch-image',

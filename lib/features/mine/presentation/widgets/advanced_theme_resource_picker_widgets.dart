@@ -4,6 +4,7 @@ import '../../../../app/layout/app_layout.dart';
 import '../../../../app/navigation/bottom_nav_icon_gallery_tab_mapper.dart';
 import '../../../../app/navigation/bottom_nav_icon_resolver.dart';
 import '../../../../app/widgets/bottom_nav_icon_view.dart';
+import '../../../../app/widgets/foundation/foundation.dart';
 import '../../../../app/widgets/text_cover_placeholder.dart';
 import '../../../../domain/entities/bottom_nav_icon_gallery.dart';
 
@@ -80,39 +81,12 @@ class AdvancedThemeEmptyResourceState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(12, 18, 12, 18),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.4),
-        ),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: colorScheme.onSurfaceVariant),
-          const SizedBox(height: 8),
-          Text(
-            title,
-            style: Theme.of(
-              context,
-            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            description,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
+    return AppStateView(
+      kind: AppViewStateKind.empty,
+      icon: icon,
+      title: title,
+      description: description,
+      compact: true,
     );
   }
 }
@@ -188,54 +162,41 @@ class _AdvancedThemeSelectableImageTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        onLongPress: onLongPress,
-        child: Stack(
-          children: [
-            Positioned.fill(
+    return AppSurface(
+      padding: EdgeInsets.zero,
+      borderRadius: BorderRadius.circular(12),
+      clipBehavior: Clip.antiAlias,
+      backgroundColor: colorScheme.surface,
+      borderColor:
+          selected
+              ? colorScheme.primary
+              : colorScheme.outlineVariant.withValues(alpha: 0.45),
+      onTap: onTap,
+      onLongPress: onLongPress,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: imageBuilder(context, imagePath, BoxFit.cover),
+          ),
+          if (selected)
+            Positioned(
+              top: 8,
+              right: 8,
               child: Container(
+                width: 24,
+                height: 24,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color:
-                        selected
-                            ? colorScheme.primary
-                            : colorScheme.outlineVariant.withValues(
-                              alpha: 0.45,
-                            ),
-                    width: selected ? 2 : 1,
-                  ),
+                  color: colorScheme.primary,
+                  shape: BoxShape.circle,
                 ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: imageBuilder(context, imagePath, BoxFit.cover),
+                child: const Icon(
+                  Icons.check_rounded,
+                  size: 16,
+                  color: Colors.white,
                 ),
               ),
             ),
-            if (selected)
-              Positioned(
-                top: 8,
-                right: 8,
-                child: Container(
-                  width: 24,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    color: colorScheme.primary,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.check_rounded,
-                    size: 16,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-          ],
-        ),
+        ],
       ),
     );
   }

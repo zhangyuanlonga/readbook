@@ -36,6 +36,15 @@
 | `AdaptivePageScaffold` | 自适应页面骨架 | 新页面优先使用 |
 | `AdaptiveBottomSheet` | 自适应弹层 | 本地 bottom sheet 样式 |
 
+## 业务资源组件
+
+| 组件 | 用途 | 备注 |
+|---|---|---|
+| `ImageResourceGalleryCard` | 启动图集、底栏图集、封面图集卡片 | 统一标题、说明、主题引用 badge、操作菜单和预览区域 |
+| `ImageResourcePreviewSlot` | 图集缩略图预览槽 | 统一空槽、边框、圆角、图片缓存宽度 |
+| `ImageResourcePill` | 内置/自定义等轻量标签 | 与 `ImageResourceUsageBadge` 搭配使用 |
+| `AdvancedThemeImageSelectionGrid` | 高级主题资源绑定选择 | 保持 `GridView.builder`，支持长按预览 |
+
 ## 迁移优先级
 
 1. 新增代码必须优先使用本索引组件。

@@ -889,13 +889,13 @@ extension on _MinePageState {
       );
     }
 
-    return Card(
+    return AppSurface(
       key: const ValueKey<String>('mine_mobile_profile_card'),
+      padding: EdgeInsets.zero,
+      borderRadius: BorderRadius.circular(20),
+      borderColor: membershipBorderColor,
+      backgroundColor: palette.cardColor,
       clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: membershipBorderColor),
-      ),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
         onTap: _isLoggingOut ? null : _handleProfileCardTap,
@@ -1135,10 +1135,6 @@ extension on _MinePageState {
       containerColor: palette.cardColor,
       tone: AppBorderTone.subtle,
     );
-    final cardShadowColor =
-        colorScheme.brightness == Brightness.light
-            ? const Color(0xFFCBD5E1).withValues(alpha: 0.26)
-            : Colors.black.withValues(alpha: 0.22);
     final topTint = Color.alphaBlend(
       palette.primaryColor.withValues(alpha: 0.05),
       palette.cardColor,
@@ -1158,9 +1154,16 @@ extension on _MinePageState {
     final actionLabel =
         _userId == null ? '登录 / 注册' : (_isLoggingOut ? '退出中...' : '退出登录');
 
-    return Material(
+    return AppSurface(
       key: const ValueKey<String>('mine_desktop_profile_card'),
-      color: Colors.transparent,
+      tone: AppSurfaceTone.elevated,
+      padding: EdgeInsets.zero,
+      borderRadius: BorderRadius.circular(24),
+      borderColor:
+          _hasMembership
+              ? membershipAccent.withValues(alpha: 0.32)
+              : borderColor,
+      backgroundColor: palette.cardColor,
       child: InkWell(
         key: const ValueKey<String>('mine_desktop_profile_card_tap_area'),
         borderRadius: BorderRadius.circular(24),
@@ -1168,12 +1171,6 @@ extension on _MinePageState {
         child: Ink(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color:
-                  _hasMembership
-                      ? membershipAccent.withValues(alpha: 0.32)
-                      : borderColor,
-            ),
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -1192,13 +1189,6 @@ extension on _MinePageState {
                       ]
                       : [topTint, palette.cardColor, bottomTint],
             ),
-            boxShadow: [
-              BoxShadow(
-                color: cardShadowColor,
-                blurRadius: 28,
-                offset: const Offset(0, 14),
-              ),
-            ],
           ),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(24, 22, 24, 20),

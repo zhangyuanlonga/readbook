@@ -47,7 +47,7 @@
 路由:
 
 - `/appearance/component-demo`: 跟随当前主题，作为关于页默认入口
-- `/appearance/lumina-component-demo`: 固定 Lumina 视觉基线，保留为内部对照路由；由于默认官方主题已经是 Lumina，普通用户侧不再单独暴露这个入口
+- `/appearance/component-demo`: 固定 Lumina 视觉基线，作为唯一内部组件样板入口；由于默认官方主题已经是 Lumina，普通用户侧不再单独暴露额外对照入口
 
 入口:
 

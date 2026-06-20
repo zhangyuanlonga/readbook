@@ -16,6 +16,7 @@ class AppSurface extends StatelessWidget {
     this.backgroundColor,
     this.clipBehavior = Clip.none,
     this.onTap,
+    this.onLongPress,
   });
 
   final Widget child;
@@ -27,6 +28,7 @@ class AppSurface extends StatelessWidget {
   final Color? backgroundColor;
   final Clip clipBehavior;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -67,13 +69,18 @@ class AppSurface extends StatelessWidget {
       child: child,
     );
 
-    if (onTap == null) {
+    if (onTap == null && onLongPress == null) {
       return content;
     }
     return Material(
       color: Colors.transparent,
       borderRadius: radius,
-      child: InkWell(borderRadius: radius, onTap: onTap, child: content),
+      child: InkWell(
+        borderRadius: radius,
+        onTap: onTap,
+        onLongPress: onLongPress,
+        child: content,
+      ),
     );
   }
 

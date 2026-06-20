@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../app/images/local_file_image.dart';
 import '../../../../app/platform/app_input_focus_behavior.dart';
 import '../../../../app/widgets/adaptive_bottom_sheet.dart';
-import '../../../../app/widgets/app_empty_state_card.dart';
+import '../../../../app/widgets/foundation/foundation.dart';
 
 Future<String?> showImageResourceNameSurface({
   required BuildContext context,
@@ -218,10 +218,179 @@ class ImageResourceEmptyStateCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AppEmptyStateCard(
+    return AppStateView(
+      kind: AppViewStateKind.empty,
       icon: icon,
       title: title,
       description: description,
+    );
+  }
+}
+
+class ImageResourceGalleryCard extends StatelessWidget {
+  const ImageResourceGalleryCard({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    required this.preview,
+    this.badges = const <Widget>[],
+    this.trailing,
+    this.onTap,
+    this.onLongPress,
+    this.active = false,
+  });
+
+  final String title;
+  final String subtitle;
+  final Widget preview;
+  final List<Widget> badges;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return AppSurface(
+      borderRadius: BorderRadius.circular(18),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      backgroundColor:
+          active
+              ? colorScheme.secondaryContainer.withValues(alpha: 0.32)
+              : colorScheme.surfaceContainerLow,
+      borderColor:
+          active
+              ? colorScheme.primary.withValues(alpha: 0.3)
+              : colorScheme.outlineVariant.withValues(alpha: 0.45),
+      onTap: onTap,
+      onLongPress: onLongPress,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ),
+              if (badges.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                Flexible(
+                  flex: 0,
+                  child: Wrap(spacing: 6, runSpacing: 4, children: badges),
+                ),
+              ],
+              if (trailing != null) ...[const SizedBox(width: 6), trailing!],
+            ],
+          ),
+          const SizedBox(height: 2),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          preview,
+        ],
+      ),
+    );
+  }
+}
+
+class ImageResourcePreviewSlot extends StatelessWidget {
+  const ImageResourcePreviewSlot({
+    super.key,
+    required this.path,
+    this.cacheWidth = 280,
+    this.cacheHeight,
+    this.borderRadius = 10,
+    this.placeholderIcon = Icons.image_outlined,
+    this.fit = BoxFit.cover,
+  });
+
+  final String? path;
+  final int cacheWidth;
+  final int? cacheHeight;
+  final double borderRadius;
+  final IconData placeholderIcon;
+  final BoxFit fit;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final radius = BorderRadius.circular(borderRadius);
+    return AppSurface(
+      padding: EdgeInsets.zero,
+      borderRadius: radius,
+      clipBehavior: Clip.antiAlias,
+      backgroundColor: colorScheme.surface,
+      borderColor: colorScheme.outlineVariant.withValues(alpha: 0.4),
+      child:
+          path == null
+              ? ColoredBox(
+                color: colorScheme.surfaceContainerLow,
+                child: Center(
+                  child: Icon(
+                    placeholderIcon,
+                    size: 24,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              )
+              : LazyFileImage(
+                path: path!,
+                fit: fit,
+                cacheWidth: cacheWidth,
+                cacheHeight: cacheHeight,
+                placeholderIcon: Icons.broken_image_outlined,
+              ),
+    );
+  }
+}
+
+class ImageResourcePill extends StatelessWidget {
+  const ImageResourcePill({super.key, required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return AppSurface(
+      tone: AppSurfaceTone.transparent,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      borderRadius: BorderRadius.circular(999),
+      backgroundColor: colorScheme.surfaceContainerLow,
+      borderColor: Colors.transparent,
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          fontWeight: FontWeight.w700,
+          color: colorScheme.onSurfaceVariant,
+        ),
+      ),
     );
   }
 }
