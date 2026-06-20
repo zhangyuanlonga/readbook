@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../application/reader_layout_render_model.dart';
+import '../application/reader_selection_runtime.dart';
 import '../domain/entities/reader_layout_models.dart';
 
 typedef ReaderLayoutImagePlaceholderBuilder =
@@ -36,6 +37,8 @@ class ReaderLayoutPagedView extends StatefulWidget {
     this.annotationRanges = const <ReaderLayoutTextAnnotationRange>[],
     this.highlightColor,
     this.diagnosticsOverlay,
+    this.selectionRuntime = const ReaderSelectionRuntime(),
+    this.onSelectionChanged,
   });
 
   final List<ReaderLayoutPage> pages;
@@ -49,6 +52,8 @@ class ReaderLayoutPagedView extends StatefulWidget {
   final List<ReaderLayoutTextAnnotationRange> annotationRanges;
   final Color? highlightColor;
   final Widget? diagnosticsOverlay;
+  final ReaderSelectionRuntime selectionRuntime;
+  final ValueChanged<ReaderLayoutSelectionSnapshot>? onSelectionChanged;
 
   @override
   State<ReaderLayoutPagedView> createState() => _ReaderLayoutPagedViewState();
@@ -151,19 +156,37 @@ class _ReaderLayoutPagedViewState extends State<ReaderLayoutPagedView> {
             const ReaderLayoutRenderModelBuilder().buildPages(
               <ReaderLayoutPage>[pages[index]],
             ).single;
+        Widget pageChild = Align(
+          alignment: Alignment.topLeft,
+          child: ReaderLayoutPageView(
+            page: renderPage,
+            textStyle: widget.textStyle,
+            titleStyle: widget.titleStyle,
+            imagePlaceholderBuilder: widget.imagePlaceholderBuilder,
+            annotationRanges: widget.annotationRanges,
+            highlightColor: widget.highlightColor,
+          ),
+        );
+        if (widget.onSelectionChanged != null) {
+          pageChild = GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onLongPressStart: (details) {
+              final selection = widget.selectionRuntime.selectWordAt(
+                layoutPages: pages,
+                pageIndex: pages[index].pageIndex,
+                dx: details.localPosition.dx,
+                dy: details.localPosition.dy,
+              );
+              if (selection != null) {
+                widget.onSelectionChanged?.call(selection);
+              }
+            },
+            child: pageChild,
+          );
+        }
         return RepaintBoundary(
           key: ValueKey<String>('reader_layout_page_$index'),
-          child: Align(
-            alignment: Alignment.topLeft,
-            child: ReaderLayoutPageView(
-              page: renderPage,
-              textStyle: widget.textStyle,
-              titleStyle: widget.titleStyle,
-              imagePlaceholderBuilder: widget.imagePlaceholderBuilder,
-              annotationRanges: widget.annotationRanges,
-              highlightColor: widget.highlightColor,
-            ),
-          ),
+          child: pageChild,
         );
       },
     );

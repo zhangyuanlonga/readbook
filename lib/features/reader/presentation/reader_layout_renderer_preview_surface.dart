@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../application/reader_layout_diagnostics_service.dart';
 import '../application/reader_layout_renderer_controller.dart';
 import '../application/reader_layout_request.dart';
+import '../application/reader_selection_runtime.dart';
 import 'reader_layout_paged_view.dart';
 
 typedef ReaderLayoutLegacyRendererBuilder =
@@ -31,12 +32,14 @@ class ReaderLayoutRendererPreviewSurface extends StatefulWidget {
     this.showDiagnosticsOverlay = false,
     this.onDiagnostics,
     this.onPageChanged,
+    this.onSelectionChanged,
     this.textStyle,
     this.titleStyle,
     this.imagePlaceholderBuilder,
     this.annotationRanges = const <ReaderLayoutTextAnnotationRange>[],
     this.highlightColor,
     this.physics,
+    this.selectionRuntime = const ReaderSelectionRuntime(),
   });
 
   final ReaderLayoutRequest request;
@@ -51,12 +54,14 @@ class ReaderLayoutRendererPreviewSurface extends StatefulWidget {
   final bool showDiagnosticsOverlay;
   final ValueChanged<ReaderLayoutRendererState>? onDiagnostics;
   final ValueChanged<int>? onPageChanged;
+  final ValueChanged<ReaderLayoutSelectionSnapshot>? onSelectionChanged;
   final TextStyle? textStyle;
   final TextStyle? titleStyle;
   final ReaderLayoutImagePlaceholderBuilder? imagePlaceholderBuilder;
   final List<ReaderLayoutTextAnnotationRange> annotationRanges;
   final Color? highlightColor;
   final ScrollPhysics? physics;
+  final ReaderSelectionRuntime selectionRuntime;
 
   @override
   State<ReaderLayoutRendererPreviewSurface> createState() =>
@@ -170,6 +175,8 @@ class _ReaderLayoutRendererPreviewSurfaceState
       annotationRanges: widget.annotationRanges,
       highlightColor: widget.highlightColor,
       diagnosticsOverlay: diagnosticsOverlay,
+      selectionRuntime: widget.selectionRuntime,
+      onSelectionChanged: widget.onSelectionChanged,
     );
   }
 }

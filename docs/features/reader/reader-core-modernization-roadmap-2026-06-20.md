@@ -16,8 +16,9 @@
 - [x] V2 执行计划：`reader-core-modernization-v2-execution-plan-2026-06-20.md`。
 - [x] V2-P0/P1/P2/P3/P4/P5/P6/P7 已完成 alpha 代码侧落地。
 - [x] V3 已完成新 layout renderer alpha preview：可翻页、可 fallback、可输出 diagnostics。
+- [x] V4 已完成交互锚点 alpha：selection、annotation、bookmark、search、read-aloud 共享 layout position。
 - [ ] V1 真实样本手工行为记录仍需补齐。
-- [ ] 新 renderer 默认切换前必须完成 V4 交互闭环和 V6 灰度策略。
+- [ ] 新 renderer 默认切换前必须完成 V5 surface 语义和 V6 灰度策略。
 
 ---
 
@@ -28,7 +29,7 @@
 | V1 | `reader-core-modernization-v1-foundation-node-2026-06-20.md` | 代码侧收尾 | 底座完成，默认 UI 不变 |
 | V2 | `reader-core-modernization-v2-layout-engine-node-2026-06-20.md` | 已完成主体 | 新 layout engine 可运行 |
 | V3 | `reader-core-modernization-v3-renderer-node-2026-06-20.md` | 已完成 alpha | 新文本阅读器 debug/dev 灰度可用 |
-| V4 | `reader-core-modernization-v4-interaction-node-2026-06-20.md` | 未开始 | 选择、标注、书签、搜索、朗读闭环 |
+| V4 | `reader-core-modernization-v4-interaction-node-2026-06-20.md` | 已完成 alpha | 选择、标注、书签、搜索、朗读闭环 |
 | V5 | `reader-core-modernization-v5-surface-node-2026-06-20.md` | 未开始 | 文本、漫画、PDF、音频 surface 完整 |
 | V6 | `reader-core-modernization-v6-release-node-2026-06-20.md` | 未开始 | 新阅读器默认上线，旧阅读器 fallback |
 
@@ -298,43 +299,43 @@ ReaderLayoutPage
 
 ### 4.1 Selection runtime
 
-- [ ] 新建 `ReaderSelectionRuntimeController`。
-- [ ] 保存当前 selection 的 `ReaderLayoutRange`。
-- [ ] 系统 selection 只负责复制文本和 toolbar 展示。
-- [ ] 长按命中使用 `ReaderLayoutHitTestService`。
-- [ ] 拖拽选择使用 layout line/column 扩展 range。
-- [ ] 提供 selection handles 所需 rect。
+- [x] 新建 `ReaderSelectionRuntime`。
+- [x] 保存当前 selection 的 `ReaderLayoutRange`。
+- [x] 系统 selection 只负责复制文本和 toolbar 展示。
+- [x] 长按命中使用 `ReaderLayoutHitTestService`。
+- [x] 拖拽选择使用 layout line/column 扩展 range。
+- [x] 提供 selection handles 所需 rect。
 
 ### 4.2 Bookmark/annotation
 
-- [ ] bookmark 保存 chapterOffset start/end。
-- [ ] annotation 渲染通过 `rangeToRects` 获取 rect。
-- [ ] 删除旧的 paragraphIndex 强依赖路径。
-- [ ] 保留从旧 bookmark range 到新 range 的 migration adapter。
-- [ ] 支持跨段、跨页 annotation。
-- [ ] 支持图片 annotation 的预留 payload，先不开放 UI 也可建模。
+- [x] bookmark 保存 chapterOffset start/end。
+- [x] annotation 渲染通过 `rangeToRects` 获取 rect。
+- [x] 删除旧的 paragraphIndex 强依赖路径。
+- [x] 保留从旧 bookmark range 到新 range 的 migration adapter。
+- [x] 支持跨段、跨页 annotation。
+- [x] 支持图片 annotation 的预留 payload，先不开放 UI 也可建模。
 
 ### 4.3 Search
 
-- [ ] 搜索结果保存 chapterOffset range。
-- [ ] 当前页高亮由 layout range 转 rect。
-- [ ] 搜索跳转通过 `chapterOffsetToPosition` 定位页。
-- [ ] 支持搜索结果跨页时分段高亮。
+- [x] 搜索结果保存 chapterOffset range。
+- [x] 当前页高亮由 layout range 转 rect。
+- [x] 搜索跳转通过 `chapterOffsetToPosition` 定位页。
+- [x] 支持搜索结果跨页时分段高亮。
 
 ### 4.4 Read aloud
 
-- [ ] 朗读位置保存 chapterOffset。
-- [ ] 当前朗读句/段通过 layout range 高亮。
-- [ ] 自动翻页时从 layout position 判断下一页/下一章。
-- [ ] 保留现有音频章节能力，不和 TTS 一次性混改。
+- [x] 朗读位置保存 chapterOffset。
+- [x] 当前朗读句/段通过 layout range 高亮。
+- [x] 自动翻页时从 layout position 判断下一页/下一章。
+- [x] 保留现有音频章节能力，不和 TTS 一次性混改。
 
 ### 4.5 阶段验收
 
-- [ ] 跨页选择不丢范围。
-- [ ] 标注恢复位置稳定。
-- [ ] 搜索结果高亮和跳转页一致。
-- [ ] 朗读高亮跟随可见文字。
-- [ ] 旧 bookmark 数据可读。
+- [x] 跨页选择不丢范围。
+- [x] 标注恢复位置稳定。
+- [x] 搜索结果高亮和跳转页一致。
+- [x] 朗读高亮跟随可见文字。
+- [x] 旧 bookmark 数据可读。
 
 ---
 

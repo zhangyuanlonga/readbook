@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shuxiang_reading_next/features/reader/application/reader_selection_runtime.dart';
 import 'package:shuxiang_reading_next/features/reader/domain/entities/reader_layout_models.dart';
 import 'package:shuxiang_reading_next/features/reader/presentation/reader_layout_paged_view.dart';
 
@@ -68,6 +69,40 @@ void main() {
 
     expect(changedPage, 1);
     expect(find.text('第二页'), findsOneWidget);
+  });
+
+  testWidgets('ReaderLayoutPagedView reports runtime selection on long press', (
+    tester,
+  ) async {
+    ReaderLayoutSelectionSnapshot? selection;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 320,
+            height: 480,
+            child: ReaderLayoutPagedView(
+              pages: <ReaderLayoutPage>[_page(text: 'hello')],
+              textStyle: const TextStyle(fontSize: 14),
+              onSelectionChanged: (value) {
+                selection = value;
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('hello')),
+    );
+    await tester.pump(const Duration(milliseconds: 650));
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(selection, isNotNull);
+    expect(selection!.selectedText, 'hello');
   });
 }
 

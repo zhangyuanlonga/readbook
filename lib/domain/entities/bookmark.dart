@@ -5,12 +5,17 @@ import 'package:json_annotation/json_annotation.dart';
 part 'bookmark.g.dart';
 
 class BookmarkSnippetContent {
-  const BookmarkSnippetContent({required this.quote, this.note});
+  const BookmarkSnippetContent({
+    required this.quote,
+    this.note,
+    this.layoutAnchor,
+  });
 
   static const String _payloadPrefix = 'selune:bookmark:v1:';
 
   final String quote;
   final String? note;
+  final Map<String, Object?>? layoutAnchor;
 
   bool get hasNote => note?.trim().isNotEmpty == true;
 
@@ -40,19 +45,29 @@ class BookmarkSnippetContent {
       return BookmarkSnippetContent(
         quote: quote,
         note: note.isEmpty ? null : note,
+        layoutAnchor:
+            payload['layoutAnchor'] is Map
+                ? (payload['layoutAnchor'] as Map).map(
+                  (key, value) => MapEntry(key.toString(), value),
+                )
+                : null,
       );
     } catch (_) {
       return BookmarkSnippetContent(quote: normalized);
     }
   }
 
-  static String encode({required String quote, String? note}) {
+  static String encode({
+    required String quote,
+    String? note,
+    Map<String, Object?>? layoutAnchor,
+  }) {
     final normalizedQuote = quote.trim();
     final normalizedNote = note?.trim() ?? '';
-    if (normalizedNote.isEmpty) {
+    if (normalizedNote.isEmpty && layoutAnchor == null) {
       return normalizedQuote;
     }
-    return '$_payloadPrefix${jsonEncode(<String, String>{'quote': normalizedQuote, 'note': normalizedNote})}';
+    return '$_payloadPrefix${jsonEncode(<String, Object?>{'quote': normalizedQuote, if (normalizedNote.isNotEmpty) 'note': normalizedNote, if (layoutAnchor != null) 'layoutAnchor': layoutAnchor})}';
   }
 }
 
@@ -98,6 +113,7 @@ class Bookmark {
     return BookmarkSnippetContent(
       quote: decoded.quote,
       note: explicitNote?.isNotEmpty == true ? explicitNote : decoded.note,
+      layoutAnchor: decoded.layoutAnchor,
     );
   }
 
@@ -112,6 +128,18 @@ class Bookmark {
 
   static String buildSnippetPayload({required String quote, String? note}) {
     return BookmarkSnippetContent.encode(quote: quote, note: note);
+  }
+
+  static String buildLayoutSnippetPayload({
+    required String quote,
+    String? note,
+    required Map<String, Object?> layoutAnchor,
+  }) {
+    return BookmarkSnippetContent.encode(
+      quote: quote,
+      note: note,
+      layoutAnchor: layoutAnchor,
+    );
   }
 
   Bookmark copyWith({
