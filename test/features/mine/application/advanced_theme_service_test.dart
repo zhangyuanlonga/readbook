@@ -88,6 +88,25 @@ void main() {
     expect(themes.first.darkConfig.readerWallpaperPath, '/tmp/reader_dark.jpg');
   });
 
+  test('persists selected theme effect inside theme payload', () async {
+    final service = AdvancedThemeService(assetStore: await _createAssetStore());
+    final theme = AppAdvancedTheme(
+      id: 'theme_effect_save',
+      name: '特效保存',
+      createdAt: DateTime.parse('2026-06-20T00:00:00.000Z'),
+      updatedAt: DateTime.parse('2026-06-20T00:00:00.000Z'),
+      lightConfig: AppAdvancedThemeModeConfig(),
+      darkConfig: AppAdvancedThemeModeConfig(),
+      themeEffect: AppAdvancedThemeEffect.firefly,
+    );
+
+    await service.saveTheme(theme);
+    final restored = await service.loadThemeById(theme.id);
+
+    expect(restored?.themeEffect, AppAdvancedThemeEffect.firefly);
+    expect(restored?.toJson()['themeEffect'], 'firefly');
+  });
+
   test(
     'persists themes into advanced_themes index file instead of SharedPreferences',
     () async {

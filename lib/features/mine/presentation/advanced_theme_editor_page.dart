@@ -1086,7 +1086,7 @@ class _AdvancedThemeEditorPageState
       return;
     }
 
-    var selectedEffect = _draft?.themeEffect ?? AppAdvancedThemeEffect.none;
+    final selectedEffect = _draft?.themeEffect ?? AppAdvancedThemeEffect.none;
     final result = await showAdaptiveActionSurface<AppAdvancedThemeEffect>(
       context: context,
       maxWidth: 560,
@@ -1098,71 +1098,59 @@ class _AdvancedThemeEditorPageState
         final itemRadius = BorderRadius.all(
           Radius.circular(componentTokens.button.radius),
         );
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            return _buildResourcePickerSheet(
-              context,
-              title: '选择主题特效',
-              helperText: '特效跟随高级主题生效，会叠加在应用界面上，不影响点击和滚动。',
-              content: ListView.separated(
-                itemCount: appAdvancedThemeEffectOptions.length,
-                separatorBuilder: (_, __) => const Divider(height: 1),
-                itemBuilder: (context, index) {
-                  final effect = appAdvancedThemeEffectOptions[index];
-                  final selected = effect == selectedEffect;
-                  return InkWell(
-                    borderRadius: itemRadius,
-                    onTap: () {
-                      setSheetState(() {
-                        selectedEffect = effect;
-                      });
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 4,
-                        vertical: 10,
+        return _buildResourcePickerSheet(
+          context,
+          title: '选择主题特效',
+          helperText: '特效跟随高级主题生效，会叠加在应用界面上，不影响点击和滚动。',
+          content: ListView.separated(
+            itemCount: appAdvancedThemeEffectOptions.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              final effect = appAdvancedThemeEffectOptions[index];
+              final selected = effect == selectedEffect;
+              return InkWell(
+                borderRadius: itemRadius,
+                onTap: () => Navigator.of(context).pop(effect),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 10,
+                  ),
+                  child: Row(
+                    children: [
+                      _buildThemeEffectPreviewThumb(
+                        context,
+                        effect: effect,
+                        size: 44,
                       ),
-                      child: Row(
-                        children: [
-                          _buildThemeEffectPreviewThumb(
-                            context,
-                            effect: effect,
-                            size: 44,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              appAdvancedThemeEffectLabel(effect),
-                              style: Theme.of(context).textTheme.labelLarge
-                                  ?.copyWith(fontWeight: FontWeight.w700),
-                            ),
-                          ),
-                          if (selected)
-                            Icon(
-                              Icons.check_rounded,
-                              color: colorScheme.primary,
-                              size: 18,
-                            ),
-                        ],
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          appAdvancedThemeEffectLabel(effect),
+                          style: Theme.of(context).textTheme.labelLarge
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
                       ),
-                    ),
-                  );
-                },
-              ),
-              actions: [
-                AppButton(
-                  variant: AppButtonVariant.text,
-                  onPressed: () => Navigator.of(context).pop(),
-                  label: '取消',
+                      if (selected)
+                        Icon(
+                          Icons.check_rounded,
+                          color: colorScheme.primary,
+                          size: 18,
+                        ),
+                    ],
+                  ),
                 ),
-                const Spacer(),
-                AppButton(
-                  onPressed: () => Navigator.of(context).pop(selectedEffect),
-                  label: '应用',
-                ),
-              ],
-            );
-          },
+              );
+            },
+          ),
+          actions: [
+            AppButton(
+              variant: AppButtonVariant.text,
+              onPressed: () => Navigator.of(context).pop(),
+              label: '取消',
+            ),
+            const Spacer(),
+          ],
         );
       },
     );
@@ -2420,6 +2408,9 @@ class _AdvancedThemeEditorPageState
               return SizedBox(
                 height: gridHeight,
                 child: SingleChildScrollView(
+                  key: const ValueKey<String>(
+                    'advanced_theme_visual_resource_horizontal_scroll',
+                  ),
                   scrollDirection: Axis.horizontal,
                   child: SizedBox(
                     width: gridWidth,

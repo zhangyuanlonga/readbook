@@ -588,97 +588,79 @@ class _MinePageState extends ConsumerState<MinePage> {
   }) {
     final layout = _layoutMode;
     final sectionKey = ValueKey<String>('mine_section_${title}_$layout');
-    final sectionChild =
+    final body =
         layout == MinePageLayoutMode.list
             ? _buildActionListSection(
               context,
               palette: palette,
-              title: title,
               actions: actions,
               padding: padding,
-              trailing: trailing,
             )
             : _buildSectionCardShell(
               context,
               padding: padding ?? _actionSectionPaddingFor(context),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  var columns = AppLayout.mineActionGridColumnsForWidth(
+                    constraints.maxWidth,
+                  );
+                  final gridColumnLimit = maxGridColumns;
+                  if (gridColumnLimit != null && columns > gridColumnLimit) {
+                    columns = gridColumnLimit;
+                  }
+                  final denseGrid = columns >= 4;
+                  final crossSpacing = denseGrid ? 8.0 : 10.0;
+                  final runSpacing = denseGrid ? 8.0 : 10.0;
+                  final tileHeight = switch (columns) {
+                    >= 4 => 82.0,
+                    3 => 88.0,
+                    _ => 96.0,
+                  };
+                  final totalCrossSpacing = crossSpacing * (columns - 1);
+                  final tileWidth =
+                      (constraints.maxWidth - totalCrossSpacing) / columns;
+
+                  return Wrap(
+                    spacing: crossSpacing,
+                    runSpacing: runSpacing,
                     children: [
-                      Expanded(
-                        child: Text(
-                          title,
-                          style: Theme.of(
-                            context,
-                          ).textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color:
-                                Theme.of(context).colorScheme.onSurfaceVariant,
+                      for (var index = 0; index < actions.length; index++)
+                        SizedBox(
+                          width: tileWidth,
+                          height: tileHeight,
+                          child: _buildGridEntrance(
+                            section: title,
+                            index: index,
+                            child: _buildActionTile(
+                              context,
+                              item: actions[index],
+                              denseGrid: denseGrid,
+                              borderColor: resolveAppBorderColor(
+                                Theme.of(context).colorScheme,
+                                baseColor: palette.cardBorderColor,
+                                containerColor: palette.cardColor,
+                                tone:
+                                    denseGrid
+                                        ? AppBorderTone.subtle
+                                        : AppBorderTone.defaultTone,
+                              ),
+                              palette: palette,
+                            ),
                           ),
                         ),
-                      ),
-                      if (trailing != null) trailing,
                     ],
-                  ),
-                  const SizedBox(height: 10),
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      var columns = AppLayout.mineActionGridColumnsForWidth(
-                        constraints.maxWidth,
-                      );
-                      final gridColumnLimit = maxGridColumns;
-                      if (gridColumnLimit != null &&
-                          columns > gridColumnLimit) {
-                        columns = gridColumnLimit;
-                      }
-                      final denseGrid = columns >= 4;
-                      final crossSpacing = denseGrid ? 8.0 : 10.0;
-                      final runSpacing = denseGrid ? 8.0 : 10.0;
-                      final tileHeight = switch (columns) {
-                        >= 4 => 82.0,
-                        3 => 88.0,
-                        _ => 96.0,
-                      };
-                      final totalCrossSpacing = crossSpacing * (columns - 1);
-                      final tileWidth =
-                          (constraints.maxWidth - totalCrossSpacing) / columns;
-
-                      return Wrap(
-                        spacing: crossSpacing,
-                        runSpacing: runSpacing,
-                        children: [
-                          for (var index = 0; index < actions.length; index++)
-                            SizedBox(
-                              width: tileWidth,
-                              height: tileHeight,
-                              child: _buildGridEntrance(
-                                section: title,
-                                index: index,
-                                child: _buildActionTile(
-                                  context,
-                                  item: actions[index],
-                                  denseGrid: denseGrid,
-                                  borderColor: resolveAppBorderColor(
-                                    Theme.of(context).colorScheme,
-                                    baseColor: palette.cardBorderColor,
-                                    containerColor: palette.cardColor,
-                                    tone:
-                                        denseGrid
-                                            ? AppBorderTone.subtle
-                                            : AppBorderTone.defaultTone,
-                                  ),
-                                  palette: palette,
-                                ),
-                              ),
-                            ),
-                        ],
-                      );
-                    },
-                  ),
-                ],
+                  );
+                },
               ),
             );
+    final sectionChild = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildActionSectionHeader(context, title: title, trailing: trailing),
+        const SizedBox(height: 8),
+        body,
+      ],
+    );
 
     final incomingIsGrid = layout == MinePageLayoutMode.grid;
     return AppAnimatedSwitcher(
@@ -718,10 +700,8 @@ class _MinePageState extends ConsumerState<MinePage> {
   Widget _buildActionListSection(
     BuildContext context, {
     required _MineResolvedPalette palette,
-    required String title,
     required List<_MineActionItem> actions,
     EdgeInsetsGeometry? padding,
-    Widget? trailing,
   }) {
     return _buildSectionCardShell(
       context,
@@ -729,21 +709,6 @@ class _MinePageState extends ConsumerState<MinePage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-              if (trailing != null) trailing,
-            ],
-          ),
-          const SizedBox(height: 10),
           Column(
             children: [
               for (var index = 0; index < actions.length; index++) ...[
@@ -1000,6 +965,30 @@ class _MinePageState extends ConsumerState<MinePage> {
                 ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionSectionHeader(
+    BuildContext context, {
+    required String title,
+    Widget? trailing,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              title,
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          if (trailing != null) trailing,
         ],
       ),
     );
