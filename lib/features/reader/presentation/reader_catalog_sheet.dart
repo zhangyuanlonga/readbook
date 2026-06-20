@@ -7,7 +7,9 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/theme/app_component_theme_tokens.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
+import '../../../app/widgets/foundation/foundation.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../domain/entities/bookmark.dart';
 import '../../../domain/entities/chapter.dart';
@@ -203,51 +205,18 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
     EdgeInsetsGeometry padding = const EdgeInsets.fromLTRB(16, 12, 16, 10),
   }) {
     final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
     return Padding(
       padding: padding,
       child: SizedBox(
         height: 48,
-        child: TextField(
+        child: AppTextField(
           controller: controller,
-          style: textTheme.bodyMedium?.copyWith(fontSize: 14, height: 1.2),
-          textAlignVertical: TextAlignVertical.center,
-          decoration: InputDecoration(
-            isDense: true,
-            filled: true,
-            fillColor: colorScheme.surfaceContainerLow.withValues(alpha: 0.92),
-            hintText: hintText,
-            hintStyle: textTheme.bodyMedium?.copyWith(
-              fontSize: 14,
-              color: colorScheme.onSurfaceVariant,
-            ),
-            prefixIcon: Icon(
-              Icons.search_rounded,
-              size: 20,
-              color: colorScheme.onSurfaceVariant,
-            ),
-            prefixIconConstraints: const BoxConstraints(
-              minWidth: 42,
-              minHeight: 48,
-            ),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 13,
-            ),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(
-                color: colorScheme.outlineVariant.withValues(alpha: 0.5),
-              ),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(
-                color: colorScheme.primary.withValues(alpha: 0.9),
-                width: 1.1,
-              ),
-            ),
+          hintText: hintText,
+          textInputAction: TextInputAction.search,
+          prefixIcon: Icon(
+            Icons.search_rounded,
+            size: 20,
+            color: colorScheme.onSurfaceVariant,
           ),
         ),
       ),
@@ -261,6 +230,13 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final componentTokens = appComponentThemeTokensOf(context);
+    final tabContainerRadius = BorderRadius.all(
+      Radius.circular(componentTokens.selection.segmentRadius),
+    );
+    final tabIndicatorRadius = BorderRadius.all(
+      Radius.circular(componentTokens.selection.tabIndicatorRadius),
+    );
     final sheetHorizontal = AppSpacing.pageHorizontal(context);
 
     if (!hasBookmarkRequested) {
@@ -348,10 +324,10 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
               if (isSearching && searchState.isLoading)
                 const Expanded(
                   child: Center(
-                    child: SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                    child: AppProgressIndicator(
+                      size: 22,
+                      strokeWidth: 2,
+                      semanticLabel: '搜索目录',
                     ),
                   ),
                 )
@@ -360,27 +336,15 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
                   child: Center(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            '未找到匹配内容',
-                            style: textTheme.bodyMedium?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
+                      child: AppStateView(
+                        kind: AppViewStateKind.filteredEmpty,
+                        icon: Icons.manage_search_rounded,
+                        title: '未找到匹配内容',
+                        description:
                             supportsContentSearch
                                 ? '当前仅支持搜索目录标题与本章正文。'
                                 : '当前模式仅支持搜索目录标题。',
-                            textAlign: TextAlign.center,
-                            style: textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
+                        compact: true,
                       ),
                     ),
                   ),
@@ -486,22 +450,7 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
               chapters,
             );
             if (isBookmarkLoading) {
-              return Row(
-                children: [
-                  const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '正在加载灵感...',
-                    style: textTheme.bodyMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              );
+              return const AppInlineProgress(label: '正在加载灵感', compact: true);
             }
             if (bookmarkErrorText.isNotEmpty) {
               return Row(
@@ -599,6 +548,10 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
       ScrollController? listController,
     }) {
       final isCatalogTabActive = activeTabIndex == 0;
+      final componentTokens = appComponentThemeTokensOf(context);
+      final controlRadius = BorderRadius.all(
+        Radius.circular(componentTokens.input.radius),
+      );
       return Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
         child: Row(
@@ -616,26 +569,22 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
             ),
             if (isCatalogTabActive) ...[
               const SizedBox(width: 8),
-              Material(
-                color: colorScheme.surfaceContainerLow.withValues(alpha: 0.92),
-                borderRadius: BorderRadius.circular(14),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(14),
+              SizedBox.square(
+                dimension: 48,
+                child: AppSurface(
+                  padding: EdgeInsets.zero,
+                  borderRadius: controlRadius,
+                  backgroundColor: colorScheme.surfaceContainerLow.withValues(
+                    alpha: 0.92,
+                  ),
+                  borderColor: colorScheme.outlineVariant.withValues(
+                    alpha: 0.5,
+                  ),
                   onTap:
                       () => openCatalogMoreActions(
                         listController: listController,
                       ),
-                  child: Ink(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: colorScheme.outlineVariant.withValues(
-                          alpha: 0.5,
-                        ),
-                      ),
-                    ),
+                  child: Center(
                     child: Icon(
                       Icons.more_horiz_rounded,
                       size: 20,
@@ -779,36 +728,24 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
 
               if (isSearching && searchState.isLoading) {
                 return buildCenteredMobileState(
-                  child: const SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                  child: const AppProgressIndicator(
+                    size: 22,
+                    strokeWidth: 2,
+                    semanticLabel: '搜索目录',
                   ),
                 );
               }
               if (isSearching && searchState.entries.isEmpty) {
                 return buildCenteredMobileState(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        '未找到匹配内容',
-                        style: textTheme.bodyMedium?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
+                  child: AppStateView(
+                    kind: AppViewStateKind.filteredEmpty,
+                    icon: Icons.manage_search_rounded,
+                    title: '未找到匹配内容',
+                    description:
                         supportsContentSearch
                             ? '当前仅支持搜索目录标题与本章正文。'
                             : '当前模式仅支持搜索目录标题。',
-                        textAlign: TextAlign.center,
-                        style: textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
+                    compact: true,
                   ),
                 );
               }
@@ -892,22 +829,9 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
               );
               if (isBookmarkLoading) {
                 return buildCenteredMobileState(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        '正在加载灵感...',
-                        style: textTheme.bodyMedium?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
+                  child: const AppInlineProgress(
+                    label: '正在加载灵感',
+                    compact: true,
                   ),
                 );
               }
@@ -1010,48 +934,42 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
               sheetHorizontal,
               2,
             ),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: colorScheme.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: colorScheme.outlineVariant.withValues(alpha: 0.28),
+            child: AppSurface(
+              padding: const EdgeInsets.all(3),
+              borderRadius: tabContainerRadius,
+              backgroundColor: colorScheme.surfaceContainerLow,
+              borderColor: colorScheme.outlineVariant.withValues(alpha: 0.28),
+              child: TabBar(
+                labelColor: colorScheme.primary,
+                unselectedLabelColor: colorScheme.onSurfaceVariant,
+                dividerColor: colorScheme.outlineVariant.withValues(alpha: 0),
+                indicatorSize: TabBarIndicatorSize.tab,
+                // UI-GOV-EXEMPT: hardcoded-style fixed-visual
+                // reason: TabBar still requires Decoration for the selected segment indicator.
+                indicator: BoxDecoration(
+                  color: colorScheme.primaryContainer,
+                  borderRadius: tabIndicatorRadius,
                 ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(3),
-                child: TabBar(
-                  labelColor: colorScheme.primary,
-                  unselectedLabelColor: colorScheme.onSurfaceVariant,
-                  dividerColor: Colors.transparent,
-                  indicatorSize: TabBarIndicatorSize.tab,
-                  indicator: BoxDecoration(
-                    color: colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  splashBorderRadius: BorderRadius.circular(12),
-                  labelStyle: textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12,
-                  ),
-                  unselectedLabelStyle: textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
-                  ),
-                  onTap: (index) => handleTabChange(index),
-                  tabs: [
-                    _buildCountTab(
-                      context,
-                      label: '目录',
-                      countText: chapters.length.toString(),
-                    ),
-                    _buildCountTab(
-                      context,
-                      label: '灵感',
-                      countText: bookmarkCountLabel,
-                    ),
-                  ],
+                splashBorderRadius: tabIndicatorRadius,
+                labelStyle: textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
                 ),
+                unselectedLabelStyle: textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+                onTap: (index) => handleTabChange(index),
+                tabs: [
+                  _buildCountTab(
+                    context,
+                    label: '目录',
+                    countText: chapters.length.toString(),
+                  ),
+                  _buildCountTab(
+                    context,
+                    label: '灵感',
+                    countText: bookmarkCountLabel,
+                  ),
+                ],
               ),
             ),
           ),
@@ -1091,28 +1009,17 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
                     MediaQuery.sizeOf(context).height -
                     panelSpec.outerPadding.vertical,
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(22),
-                child: Material(
-                  type: MaterialType.transparency,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: readerModalTheme.colorScheme.surface,
-                      border: Border.all(
-                        color: readerModalTheme.colorScheme.outlineVariant
-                            .withValues(alpha: 0.35),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.16),
-                          blurRadius: 30,
-                          offset: const Offset(0, 14),
-                        ),
-                      ],
-                    ),
-                    child: content,
-                  ),
+              child: AppSurface(
+                tone: AppSurfaceTone.elevated,
+                padding: EdgeInsets.zero,
+                borderRadius: BorderRadius.all(
+                  Radius.circular(componentTokens.overlay.radius + 6),
                 ),
+                borderColor: readerModalTheme.colorScheme.outlineVariant
+                    .withValues(alpha: 0.35),
+                backgroundColor: readerModalTheme.colorScheme.surface,
+                clipBehavior: Clip.antiAlias,
+                child: content,
               ),
             ),
           ),
@@ -1140,32 +1047,22 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
           expand: false,
           shouldCloseOnMinExtent: true,
           builder: (context, draggableController) {
+            final mobileRadius = BorderRadius.vertical(
+              top: Radius.circular(componentTokens.overlay.topRadius),
+            );
             return ClipRRect(
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(16),
-              ),
+              borderRadius: mobileRadius,
               child: BackdropFilter(
                 filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: readerModalTheme.colorScheme.surface.withValues(
-                      alpha: 0.9,
-                    ),
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(16),
-                    ),
-                    border: Border.all(
-                      color: readerModalTheme.colorScheme.outlineVariant
-                          .withValues(alpha: 0.32),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.16),
-                        blurRadius: 30,
-                        offset: const Offset(0, -6),
-                      ),
-                    ],
-                  ),
+                child: AppSurface(
+                  tone: AppSurfaceTone.elevated,
+                  padding: EdgeInsets.zero,
+                  borderRadius: mobileRadius,
+                  borderColor: readerModalTheme.colorScheme.outlineVariant
+                      .withValues(alpha: 0.32),
+                  backgroundColor: readerModalTheme.colorScheme.surface
+                      .withValues(alpha: 0.9),
+                  clipBehavior: Clip.antiAlias,
                   child: NotificationListener<ScrollNotification>(
                     onNotification: (notification) {
                       if (notification is ScrollStartNotification ||
@@ -1529,8 +1426,17 @@ class _ReaderCatalogChapterTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final componentTokens = appComponentThemeTokensOf(context);
     final isVolume = chapter.isVolume;
-    final borderRadius = BorderRadius.circular(12);
+    final borderRadius = BorderRadius.all(
+      Radius.circular(componentTokens.selection.segmentRadius),
+    );
+    final iconRadius = BorderRadius.all(
+      Radius.circular(componentTokens.selection.chipRadius),
+    );
+    final pillRadius = BorderRadius.all(
+      Radius.circular(componentTokens.button.radius),
+    );
     final selectedBackground = Color.alphaBlend(
       colorScheme.primary.withValues(alpha: 0.15),
       colorScheme.surfaceContainerLow,
@@ -1540,115 +1446,101 @@ class _ReaderCatalogChapterTile extends StatelessWidget {
             ? colorScheme.secondaryContainer.withValues(alpha: 0.34)
             : colorScheme.surface.withValues(alpha: 0.78);
 
-    return Material(
-      color: Colors.transparent,
+    return AppSurface(
+      padding: EdgeInsets.zero,
       borderRadius: borderRadius,
-      child: InkWell(
-        borderRadius: borderRadius,
-        onTap: onTap,
-        child: Ink(
-          decoration: BoxDecoration(
-            color: selected ? selectedBackground : unselectedBackground,
-            borderRadius: borderRadius,
-            border: Border.all(
-              color:
-                  selected
-                      ? colorScheme.primary.withValues(alpha: 0.28)
-                      : colorScheme.outlineVariant.withValues(alpha: 0.18),
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(9, 7, 9, 7),
-            child: Row(
-              children: [
-                Container(
-                  width: 24,
-                  height: 24,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color:
-                        isVolume
-                            ? colorScheme.secondaryContainer
-                            : selected
-                            ? colorScheme.primary
-                            : colorScheme.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child:
-                      isVolume
-                          ? Icon(
-                            Icons.folder_outlined,
-                            size: 14,
-                            color: colorScheme.onSecondaryContainer,
-                          )
-                          : Icon(
-                            selected
-                                ? Icons.menu_book_rounded
-                                : Icons.article_outlined,
-                            size: 14,
-                            color:
-                                selected
-                                    ? colorScheme.onPrimary
-                                    : colorScheme.onSurfaceVariant,
-                          ),
-                ),
-                const SizedBox(width: 7),
-                Expanded(
-                  child: Text(
-                    chapter.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: textTheme.bodyMedium?.copyWith(
-                      height: 1.2,
-                      fontSize: 13,
-                      fontWeight:
-                          isVolume
-                              ? FontWeight.w700
-                              : (selected ? FontWeight.w700 : FontWeight.w500),
-                      color:
-                          isVolume
-                              ? colorScheme.onSecondaryContainer
-                              : selected
-                              ? colorScheme.primary
-                              : enabled
-                              ? colorScheme.onSurface
-                              : colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 4),
-                if (isVolume)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 7,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: colorScheme.secondaryContainer,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      '分卷',
-                      style: textTheme.labelSmall?.copyWith(
+      backgroundColor: selected ? selectedBackground : unselectedBackground,
+      borderColor:
+          selected
+              ? colorScheme.primary.withValues(alpha: 0.28)
+              : colorScheme.outlineVariant.withValues(alpha: 0.18),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(9, 7, 9, 7),
+        child: Row(
+          children: [
+            Container(
+              width: 24,
+              height: 24,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color:
+                    isVolume
+                        ? colorScheme.secondaryContainer
+                        : selected
+                        ? colorScheme.primary
+                        : colorScheme.surfaceContainerHigh,
+                borderRadius: iconRadius,
+              ),
+              child:
+                  isVolume
+                      ? Icon(
+                        Icons.folder_outlined,
+                        size: 14,
                         color: colorScheme.onSecondaryContainer,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  )
-                else
-                  Icon(
-                    selected
-                        ? Icons.play_circle_fill_rounded
-                        : Icons.chevron_right_rounded,
-                    size: 16,
-                    color:
+                      )
+                      : Icon(
                         selected
-                            ? colorScheme.primary
-                            : colorScheme.onSurfaceVariant,
-                  ),
-              ],
+                            ? Icons.menu_book_rounded
+                            : Icons.article_outlined,
+                        size: 14,
+                        color:
+                            selected
+                                ? colorScheme.onPrimary
+                                : colorScheme.onSurfaceVariant,
+                      ),
             ),
-          ),
+            const SizedBox(width: 7),
+            Expanded(
+              child: Text(
+                chapter.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: textTheme.bodyMedium?.copyWith(
+                  height: 1.2,
+                  fontWeight:
+                      isVolume
+                          ? FontWeight.w700
+                          : (selected ? FontWeight.w700 : FontWeight.w500),
+                  color:
+                      isVolume
+                          ? colorScheme.onSecondaryContainer
+                          : selected
+                          ? colorScheme.primary
+                          : enabled
+                          ? colorScheme.onSurface
+                          : colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            if (isVolume)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: BoxDecoration(
+                  color: colorScheme.secondaryContainer,
+                  borderRadius: pillRadius,
+                ),
+                child: Text(
+                  '分卷',
+                  style: textTheme.labelSmall?.copyWith(
+                    color: colorScheme.onSecondaryContainer,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              )
+            else
+              Icon(
+                selected
+                    ? Icons.play_circle_fill_rounded
+                    : Icons.chevron_right_rounded,
+                size: 16,
+                color:
+                    selected
+                        ? colorScheme.primary
+                        : colorScheme.onSurfaceVariant,
+              ),
+          ],
         ),
       ),
     );
@@ -1705,91 +1597,94 @@ class _CatalogSearchEntryTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final componentTokens = appComponentThemeTokensOf(context);
     final isVolumeEntry = !entry.isContent && entry.isVolume;
     final accentColor =
         entry.isContent
             ? colorScheme.tertiary
             : (isVolumeEntry ? colorScheme.secondary : colorScheme.primary);
+    final tileRadius = BorderRadius.all(
+      Radius.circular(componentTokens.selection.segmentRadius),
+    );
+    final iconRadius = BorderRadius.all(
+      Radius.circular(componentTokens.selection.chipRadius),
+    );
+    final pillRadius = BorderRadius.all(
+      Radius.circular(componentTokens.button.radius),
+    );
 
-    return Material(
-      color:
+    return AppSurface(
+      padding: EdgeInsets.zero,
+      borderRadius: tileRadius,
+      backgroundColor:
           entry.isContent
               ? colorScheme.tertiaryContainer.withValues(alpha: 0.32)
               : isVolumeEntry
               ? colorScheme.secondaryContainer.withValues(alpha: 0.32)
               : colorScheme.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(9, 7, 9, 7),
-          child: Row(
-            children: [
-              Container(
-                width: 24,
-                height: 24,
-                decoration: BoxDecoration(
-                  color: accentColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  entry.isContent
-                      ? Icons.article_outlined
-                      : isVolumeEntry
-                      ? Icons.folder_outlined
-                      : Icons.list_alt_outlined,
-                  size: 14,
-                  color: accentColor,
-                ),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(9, 7, 9, 7),
+        child: Row(
+          children: [
+            Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: accentColor.withValues(alpha: 0.12),
+                borderRadius: iconRadius,
               ),
-              const SizedBox(width: 7),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      entry.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                      ),
-                    ),
-                    const SizedBox(height: 1),
-                    Text(
-                      entry.subtitle,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        fontSize: 11.5,
-                      ),
-                    ),
-                  ],
-                ),
+              child: Icon(
+                entry.isContent
+                    ? Icons.article_outlined
+                    : isVolumeEntry
+                    ? Icons.folder_outlined
+                    : Icons.list_alt_outlined,
+                size: 14,
+                color: accentColor,
               ),
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 6,
-                  vertical: 2.5,
-                ),
-                decoration: BoxDecoration(
-                  color: accentColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  entry.isContent ? '正文' : (isVolumeEntry ? '分卷' : '目录'),
-                  style: textTheme.labelSmall?.copyWith(
-                    color: accentColor,
-                    fontWeight: FontWeight.w700,
+            ),
+            const SizedBox(width: 7),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    entry.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
+                  const SizedBox(height: 1),
+                  Text(
+                    entry.subtitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
+              decoration: BoxDecoration(
+                color: accentColor.withValues(alpha: 0.1),
+                borderRadius: pillRadius,
+              ),
+              child: Text(
+                entry.isContent ? '正文' : (isVolumeEntry ? '分卷' : '目录'),
+                style: textTheme.labelSmall?.copyWith(
+                  color: accentColor,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -1827,6 +1722,10 @@ class _BookmarkGroupSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final colorScheme = Theme.of(context).colorScheme;
+    final componentTokens = appComponentThemeTokensOf(context);
+    final tileRadius = BorderRadius.all(
+      Radius.circular(componentTokens.selection.segmentRadius),
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1842,61 +1741,57 @@ class _BookmarkGroupSection extends StatelessWidget {
         ...items.map((bookmark) {
           return Padding(
             padding: const EdgeInsets.only(bottom: 3),
-            child: Material(
-              color: colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(12),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(12),
-                onTap: () => onTap(bookmark),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(9, 7, 5, 7),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
+            child: AppSurface(
+              padding: EdgeInsets.zero,
+              borderRadius: tileRadius,
+              backgroundColor: colorScheme.surfaceContainerHighest,
+              onTap: () => onTap(bookmark),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(9, 7, 5, 7),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            bookmark.displaySnippet,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w500,
+                              height: 1.2,
+                            ),
+                          ),
+                          if (bookmark.hasNote) ...[
+                            const SizedBox(height: 3),
                             Text(
-                              bookmark.displaySnippet,
+                              bookmark.note!,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
-                              style: textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.w500,
-                                height: 1.2,
-                                fontSize: 13,
-                              ),
-                            ),
-                            if (bookmark.hasNote) ...[
-                              const SizedBox(height: 3),
-                              Text(
-                                bookmark.note!,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: textTheme.bodySmall?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                  height: 1.3,
-                                ),
-                              ),
-                            ],
-                            const SizedBox(height: 2),
-                            Text(
-                              timeLabel(bookmark.createdAt),
                               style: textTheme.bodySmall?.copyWith(
                                 color: colorScheme.onSurfaceVariant,
-                                fontSize: 11.5,
+                                height: 1.3,
                               ),
                             ),
                           ],
-                        ),
+                          const SizedBox(height: 2),
+                          Text(
+                            timeLabel(bookmark.createdAt),
+                            style: textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
                       ),
-                      IconButton(
-                        tooltip: '删除',
-                        visualDensity: VisualDensity.compact,
-                        icon: const Icon(Icons.delete_outline, size: 16),
-                        onPressed: () => onDelete(bookmark),
-                      ),
-                    ],
-                  ),
+                    ),
+                    IconButton(
+                      tooltip: '删除',
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.delete_outline, size: 16),
+                      onPressed: () => onDelete(bookmark),
+                    ),
+                  ],
                 ),
               ),
             ),

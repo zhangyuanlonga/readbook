@@ -3,6 +3,8 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../../../../../app/layout/app_adaptive.dart';
+import '../../../../../app/theme/app_component_theme_tokens.dart';
+import '../../../../../app/widgets/foundation/foundation.dart';
 import '../../../application/reader_mode_model.dart';
 import '../../reader_layout_context.dart';
 
@@ -19,6 +21,7 @@ Widget buildReaderFloatingSettingsSheet({
   required Widget child,
 }) {
   final metrics = AppAdaptiveMetrics.of(context);
+  final componentTokens = appComponentThemeTokensOf(context);
   final readerLayoutContext = ReaderLayoutContext.resolve(
     context,
     viewportKind: viewportKind,
@@ -34,7 +37,13 @@ Widget buildReaderFloatingSettingsSheet({
     preferredHeightFactor: heightFactor,
   );
   final useEdgeToEdgeSheet = panelSpec.edgeToEdge;
-  final radius = metrics.cardRadius + (useEdgeToEdgeSheet ? 10 : 12);
+  final radius =
+      componentTokens.overlay.radius +
+      metrics.cardRadius * (useEdgeToEdgeSheet ? 0.35 : 0.45);
+  final borderRadius =
+      useEdgeToEdgeSheet
+          ? BorderRadius.vertical(top: Radius.circular(radius))
+          : BorderRadius.all(Radius.circular(radius));
   final resolvedMaxWidth = min(maxWidth, panelSpec.maxWidth);
 
   return AnimatedPadding(
@@ -57,29 +66,14 @@ Widget buildReaderFloatingSettingsSheet({
           constraints: BoxConstraints(
             maxWidth: useEdgeToEdgeSheet ? double.infinity : resolvedMaxWidth,
           ),
-          child: ClipRRect(
-            borderRadius:
-                useEdgeToEdgeSheet
-                    ? BorderRadius.vertical(top: Radius.circular(radius))
-                    : BorderRadius.circular(radius),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: floatingColor,
-                borderRadius:
-                    useEdgeToEdgeSheet
-                        ? BorderRadius.vertical(top: Radius.circular(radius))
-                        : BorderRadius.circular(radius),
-                border: Border.all(color: borderColor),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.12),
-                    blurRadius: 28,
-                    offset: const Offset(0, 16),
-                  ),
-                ],
-              ),
-              child: child,
-            ),
+          child: AppSurface(
+            tone: AppSurfaceTone.elevated,
+            padding: EdgeInsets.zero,
+            borderRadius: borderRadius,
+            borderColor: borderColor,
+            backgroundColor: floatingColor,
+            clipBehavior: Clip.antiAlias,
+            child: child,
           ),
         ),
       ),

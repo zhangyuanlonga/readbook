@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../app/theme/app_component_theme_tokens.dart';
 import '../../../app/widgets/foundation/foundation.dart';
 import '../application/audio_reading_mode.dart';
 import '../application/reader_audio_controller.dart';
@@ -78,6 +79,7 @@ class _ReaderAudioViewState extends State<ReaderAudioView> {
       animation: _controller,
       builder: (context, _) {
         final theme = Theme.of(context);
+        final componentTokens = appComponentThemeTokensOf(context);
         final state = _controller.state;
         final session = state.session ?? widget.model.contentSession;
         final playback = state.playbackState;
@@ -111,18 +113,16 @@ class _ReaderAudioViewState extends State<ReaderAudioView> {
                 ),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 760),
-                  child: Material(
-                    color: theme.colorScheme.surfaceContainerHigh.withValues(
-                      alpha: 0.9,
+                  child: AppSurface(
+                    padding: EdgeInsets.zero,
+                    borderRadius: BorderRadius.all(
+                      Radius.circular(componentTokens.overlay.radius),
                     ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      side: BorderSide(
-                        color: theme.colorScheme.outlineVariant.withValues(
-                          alpha: 0.55,
-                        ),
-                      ),
+                    borderColor: theme.colorScheme.outlineVariant.withValues(
+                      alpha: 0.55,
                     ),
+                    backgroundColor: theme.colorScheme.surfaceContainerHigh
+                        .withValues(alpha: 0.9),
                     clipBehavior: Clip.antiAlias,
                     child: Padding(
                       padding: EdgeInsets.fromLTRB(
@@ -198,19 +198,30 @@ class _ReaderAudioViewState extends State<ReaderAudioView> {
     required int? chapterIndex,
     required AudioPlaybackStatus status,
   }) {
+    final componentTokens = appComponentThemeTokensOf(context);
     return Row(
       children: [
-        Container(
+        SizedBox(
           width: 48,
           height: 48,
-          decoration: BoxDecoration(
-            color: theme.colorScheme.primaryContainer.withValues(alpha: 0.72),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(
-            Icons.graphic_eq_rounded,
-            color: theme.colorScheme.onPrimaryContainer,
-            size: 26,
+          child: AppSurface(
+            padding: EdgeInsets.zero,
+            borderRadius: BorderRadius.all(
+              Radius.circular(componentTokens.selection.chipRadius),
+            ),
+            backgroundColor: theme.colorScheme.primaryContainer.withValues(
+              alpha: 0.72,
+            ),
+            borderColor: theme.colorScheme.outlineVariant.withValues(
+              alpha: 0.18,
+            ),
+            child: Center(
+              child: Icon(
+                Icons.graphic_eq_rounded,
+                color: theme.colorScheme.onPrimaryContainer,
+                size: 26,
+              ),
+            ),
           ),
         ),
         const SizedBox(width: 12),
@@ -392,6 +403,10 @@ class _ReaderAudioViewState extends State<ReaderAudioView> {
     bool emphasized = false,
     double? iconSize,
   }) {
+    final componentTokens = appComponentThemeTokensOf(context);
+    final controlRadius = BorderRadius.all(
+      Radius.circular(componentTokens.selection.chipRadius),
+    );
     final button =
         emphasized
             ? IconButton.filled(
@@ -401,9 +416,7 @@ class _ReaderAudioViewState extends State<ReaderAudioView> {
               style: IconButton.styleFrom(
                 fixedSize: Size.square(size),
                 padding: EdgeInsets.zero,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
+                shape: RoundedRectangleBorder(borderRadius: controlRadius),
               ),
             )
             : IconButton.outlined(
@@ -422,9 +435,7 @@ class _ReaderAudioViewState extends State<ReaderAudioView> {
                     alpha: 0.75,
                   ),
                 ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
+                shape: RoundedRectangleBorder(borderRadius: controlRadius),
               ),
             );
 
@@ -441,6 +452,10 @@ class _ReaderAudioViewState extends State<ReaderAudioView> {
     required bool isReady,
     required double speed,
   }) {
+    final componentTokens = appComponentThemeTokensOf(context);
+    final chipRadius = BorderRadius.all(
+      Radius.circular(componentTokens.selection.chipRadius),
+    );
     const speeds = [0.75, 1.0, 1.25, 1.5, 2.0];
 
     return Column(
@@ -465,9 +480,7 @@ class _ReaderAudioViewState extends State<ReaderAudioView> {
                   showCheckmark: false,
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   visualDensity: VisualDensity.compact,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: chipRadius),
                   onSelected:
                       isReady ? (_) => _controller.setSpeed(item) : null,
                 );
@@ -482,85 +495,94 @@ class _ReaderAudioViewState extends State<ReaderAudioView> {
     required ThemeData theme,
     required String rawMessage,
   }) {
-    return Container(
+    final componentTokens = appComponentThemeTokensOf(context);
+    return SizedBox(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.errorContainer.withValues(alpha: 0.42),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: theme.colorScheme.error.withValues(alpha: 0.18),
+      child: AppSurface(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        borderRadius: BorderRadius.all(
+          Radius.circular(componentTokens.selection.chipRadius),
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(
-                Icons.error_outline_rounded,
-                color: theme.colorScheme.error,
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '播放失败',
-                      style: theme.textTheme.labelLarge?.copyWith(
-                        color: theme.colorScheme.onErrorContainer,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _friendlyAudioError(rawMessage),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onErrorContainer,
-                        height: 1.35,
-                      ),
-                    ),
-                  ],
+        backgroundColor: theme.colorScheme.errorContainer.withValues(
+          alpha: 0.42,
+        ),
+        borderColor: theme.colorScheme.error.withValues(alpha: 0.18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.error_outline_rounded,
+                  color: theme.colorScheme.error,
+                  size: 20,
                 ),
-              ),
-              IconButton.filledTonal(
-                onPressed: _controller.retry,
-                tooltip: '重试',
-                icon: const Icon(Icons.refresh_rounded),
-                style: IconButton.styleFrom(
-                  fixedSize: const Size.square(36),
-                  padding: EdgeInsets.zero,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '播放失败',
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: theme.colorScheme.onErrorContainer,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _friendlyAudioError(rawMessage),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onErrorContainer,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
+                IconButton.filledTonal(
+                  onPressed: _controller.retry,
+                  tooltip: '重试',
+                  icon: const Icon(Icons.refresh_rounded),
+                  style: IconButton.styleFrom(
+                    fixedSize: const Size.square(36),
+                    padding: EdgeInsets.zero,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.all(
+                        Radius.circular(componentTokens.selection.chipRadius),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Divider(
+              height: 1,
+              color: theme.colorScheme.error.withValues(alpha: 0.14),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '错误详情',
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.onErrorContainer.withValues(
+                  alpha: 0.72,
+                ),
               ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Divider(
-            height: 1,
-            color: theme.colorScheme.error.withValues(alpha: 0.14),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '错误详情',
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: theme.colorScheme.onErrorContainer.withValues(alpha: 0.72),
             ),
-          ),
-          const SizedBox(height: 4),
-          SelectableText(
-            rawMessage,
-            maxLines: 3,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onErrorContainer.withValues(alpha: 0.84),
+            const SizedBox(height: 4),
+            SelectableText(
+              rawMessage,
+              maxLines: 3,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onErrorContainer.withValues(
+                  alpha: 0.84,
+                ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -638,6 +660,7 @@ class _ReaderAudioViewState extends State<ReaderAudioView> {
   }
 
   Widget _buildStatusChip(ThemeData theme, AudioPlaybackStatus status) {
+    final componentTokens = appComponentThemeTokensOf(context);
     final (label, color) = switch (status) {
       AudioPlaybackStatus.error => ('播放失败', theme.colorScheme.error),
       AudioPlaybackStatus.buffering => ('准备中', theme.colorScheme.tertiary),
@@ -650,7 +673,9 @@ class _ReaderAudioViewState extends State<ReaderAudioView> {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.all(
+          Radius.circular(componentTokens.selection.chipRadius),
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),

@@ -876,13 +876,11 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
               ),
               child:
                   busy
-                      ? SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: statusColor,
-                        ),
+                      ? AppProgressIndicator(
+                        size: 18,
+                        strokeWidth: 2,
+                        color: statusColor,
+                        semanticLabel: '导入处理中',
                       )
                       : Icon(
                         Icons.insert_drive_file_outlined,

@@ -61,6 +61,8 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
       context: context,
       barrierDismissible: true,
       barrierLabel: 'reader-settings',
+      // UI-GOV-EXEMPT: hardcoded-style fixed-visual
+      // reason: Reader settings keeps the reading surface visible behind its floating sheet.
       barrierColor: Colors.transparent,
       transitionDuration: const Duration(milliseconds: 180),
       pageBuilder: (context, animation, secondaryAnimation) {

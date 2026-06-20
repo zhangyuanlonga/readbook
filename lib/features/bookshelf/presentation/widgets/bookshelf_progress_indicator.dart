@@ -2,8 +2,9 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
+import '../../../../app/theme/app_component_theme_tokens.dart';
+import '../../../../app/widgets/foundation/app_haptics.dart';
 import '../bookshelf_page_models.dart';
 
 class BookshelfAnimatedProgressSection extends StatefulWidget {
@@ -131,7 +132,7 @@ class _BookshelfAnimatedProgressSectionState
     }
     if (triggerCompletion) {
       _completionFlashController.forward(from: 0);
-      unawaited(HapticFeedback.mediumImpact());
+      unawaited(AppHaptics.success());
     }
   }
 
@@ -144,6 +145,16 @@ class _BookshelfAnimatedProgressSectionState
         _completionFlashController,
       ]),
       builder: (context, _) {
+        final colorScheme = Theme.of(context).colorScheme;
+        final componentTokens = appComponentThemeTokensOf(context);
+        final progressRadius = BorderRadius.all(
+          Radius.circular(
+            math.max(
+              widget.minHeight * 2,
+              componentTokens.selection.chipRadius,
+            ),
+          ),
+        );
         final animatedValue = _progressAnimation.value.clamp(0.0, 1.0);
         final animatedPercent = (animatedValue * 100).round().clamp(0, 100);
         final flashStrength = Curves.easeOut.transform(
@@ -153,7 +164,7 @@ class _BookshelfAnimatedProgressSectionState
             Color.lerp(
               widget.fillColor,
               Color.alphaBlend(
-                Colors.white.withValues(alpha: 0.32),
+                colorScheme.onPrimary.withValues(alpha: 0.32),
                 widget.fillColor,
               ),
               flashStrength,
@@ -189,7 +200,7 @@ class _BookshelfAnimatedProgressSectionState
             if (widget.showBar) ...[
               if (showTextRow) SizedBox(height: widget.spacing),
               ClipRRect(
-                borderRadius: BorderRadius.circular(widget.minHeight * 2),
+                borderRadius: progressRadius,
                 child: _BookshelfAnimatedProgressBar(
                   value: animatedValue,
                   minHeight: widget.minHeight,
@@ -197,6 +208,7 @@ class _BookshelfAnimatedProgressSectionState
                   fillColor: fillColor,
                   sweepProgress: _sweepController.value,
                   completionFlashStrength: flashStrength,
+                  borderRadius: progressRadius,
                 ),
               ),
             ],
@@ -215,6 +227,7 @@ class _BookshelfAnimatedProgressBar extends StatelessWidget {
     required this.fillColor,
     required this.sweepProgress,
     required this.completionFlashStrength,
+    required this.borderRadius,
   });
 
   final double value;
@@ -223,9 +236,12 @@ class _BookshelfAnimatedProgressBar extends StatelessWidget {
   final Color fillColor;
   final double sweepProgress;
   final double completionFlashStrength;
+  final BorderRadius borderRadius;
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final componentTokens = appComponentThemeTokensOf(context);
     return SizedBox(
       height: minHeight,
       child: Stack(
@@ -234,7 +250,7 @@ class _BookshelfAnimatedProgressBar extends StatelessWidget {
           DecoratedBox(
             decoration: BoxDecoration(
               color: backgroundColor,
-              borderRadius: BorderRadius.circular(minHeight * 2),
+              borderRadius: borderRadius,
             ),
           ),
           Align(
@@ -262,16 +278,20 @@ class _BookshelfAnimatedProgressBar extends StatelessWidget {
                                     ],
                                   ),
                           color: value >= 0.999 ? fillColor : null,
-                          borderRadius: BorderRadius.circular(minHeight * 2),
+                          borderRadius: borderRadius,
                           boxShadow:
                               completionFlashStrength > 0
                                   ? [
                                     BoxShadow(
                                       color: fillColor.withValues(
-                                        alpha: 0.22 * completionFlashStrength,
+                                        alpha:
+                                            componentTokens.card.shadowAlpha *
+                                            completionFlashStrength,
                                       ),
-                                      blurRadius: 8,
-                                      spreadRadius: 0.5,
+                                      blurRadius:
+                                          componentTokens.card.shadowBlur / 2,
+                                      spreadRadius:
+                                          componentTokens.card.borderWidth / 2,
                                     ),
                                   ]
                                   : null,
@@ -287,10 +307,12 @@ class _BookshelfAnimatedProgressBar extends StatelessWidget {
                               decoration: BoxDecoration(
                                 gradient: LinearGradient(
                                   colors: [
-                                    Colors.transparent,
-                                    Colors.white.withValues(alpha: 0),
-                                    Colors.white.withValues(alpha: 0.52),
-                                    Colors.transparent,
+                                    colorScheme.onPrimary.withValues(alpha: 0),
+                                    colorScheme.onPrimary.withValues(alpha: 0),
+                                    colorScheme.onPrimary.withValues(
+                                      alpha: 0.52,
+                                    ),
+                                    colorScheme.onPrimary.withValues(alpha: 0),
                                   ],
                                   stops: const [0, 0.18, 0.55, 1],
                                 ),

@@ -19,6 +19,7 @@ import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/navigation/mobile_bottom_navigation_inset.dart';
 import '../../../app/navigation/app_navigation_style_provider.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/theme/app_component_theme_tokens.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/app_task_bottom_sheet.dart';
@@ -667,10 +668,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                         const Padding(
                           padding: EdgeInsets.only(right: 16),
                           child: Center(
-                            child: SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                            child: AppProgressIndicator(
+                              size: 18,
+                              strokeWidth: 2,
+                              semanticLabel: '批量处理中',
                             ),
                           ),
                         )
@@ -2362,16 +2363,22 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
 
   Widget _buildDesktopOnlineSearchButton(BuildContext buttonContext) {
     final colorScheme = Theme.of(context).colorScheme;
+    final componentTokens = appComponentThemeTokensOf(context);
+    final buttonRadius = BorderRadius.all(
+      Radius.circular(componentTokens.navigation.standardFloatingRadius),
+    );
     return Tooltip(
       message: '在线搜书',
       child: Material(
         key: const ValueKey<String>('desktop_bookshelf_online_search_fab'),
         color: colorScheme.primaryContainer,
-        elevation: 4,
-        shadowColor: colorScheme.shadow.withValues(alpha: 0.24),
-        borderRadius: BorderRadius.circular(999),
+        elevation: componentTokens.card.elevation,
+        shadowColor: colorScheme.shadow.withValues(
+          alpha: componentTokens.card.shadowAlpha,
+        ),
+        borderRadius: buttonRadius,
         child: InkWell(
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: buttonRadius,
           onTap: () => unawaited(_openOnlineSearchWithReveal(buttonContext)),
           child: SizedBox.square(
             dimension: _kDesktopOnlineSearchButtonSize,
@@ -2817,6 +2824,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     required bool compact,
   }) {
     final color = Color(item.colorValue);
+    final componentTokens = appComponentThemeTokensOf(context);
+    final pillRadius = BorderRadius.all(
+      Radius.circular(componentTokens.selection.chipRadius),
+    );
     return Container(
       constraints: BoxConstraints(maxWidth: compact ? 92 : 128),
       padding: EdgeInsets.symmetric(
@@ -2825,7 +2836,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       ),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.13),
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: pillRadius,
         border: Border.all(color: color.withValues(alpha: 0.24)),
       ),
       child: Row(
@@ -3045,27 +3056,25 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                         color: colorScheme.scrim.withValues(alpha: 0.42),
                         borderRadius: BorderRadius.circular(999),
                       ),
-                      child: const Padding(
-                        padding: EdgeInsets.symmetric(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
                           horizontal: 8,
                           vertical: 3,
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            SizedBox(
-                              width: 10,
-                              height: 10,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 1.8,
-                                color: Colors.white,
-                              ),
+                            AppProgressIndicator(
+                              size: 10,
+                              strokeWidth: 1.8,
+                              color: colorScheme.onPrimary,
+                              semanticLabel: '打开书籍中',
                             ),
-                            SizedBox(width: 6),
+                            const SizedBox(width: 6),
                             Text(
                               '打开中',
                               style: TextStyle(
-                                color: Colors.white,
+                                color: colorScheme.onPrimary,
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -3510,12 +3519,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                               if (!_isSelectionMode) ...[
                                 const SizedBox(width: 8),
                                 if (isOpening)
-                                  const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 1.9,
-                                    ),
+                                  const AppProgressIndicator(
+                                    size: 18,
+                                    strokeWidth: 1.9,
+                                    semanticLabel: '打开书籍中',
                                   )
                                 else
                                   _buildBookMoreButton(book, compact: false),

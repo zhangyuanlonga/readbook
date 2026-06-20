@@ -98,7 +98,47 @@ dart run tool/check_theme_coverage_audit.dart --top=20
 - Reader/Bookshelf 主渲染、主数据流未做业务重构；仅替换外围 loading/haptics 或补结构豁免。
 - `TextCoverPlaceholder` 已作为内容资产色板归档，不再作为 App surface 强制主题化对象。
 
-## 3. 改造原则
+## 3. 阶段 11-12 执行结果
+
+本轮已执行 Phase 11、Phase 12，并复跑以下命令:
+
+```bash
+flutter analyze
+flutter test test/app/widgets/foundation_components_test.dart
+flutter test test/features/bookshelf/presentation/bookshelf_card_width_smoke_test.dart
+flutter test test/features/mine/application/official_theme_activation_test.dart
+flutter test test/features/reader/application/reader_catalog_search_presentation_test.dart test/features/reader/application/reader_audio_controller_test.dart test/features/reader/presentation/reader_settings_sheet_helpers_test.dart
+dart run tool/check_ui_component_governance.dart --strict-new
+dart run tool/check_theme_coverage_audit.dart --strict-new --top=20
+dart run tool/check_ui_component_governance.dart
+dart run tool/check_theme_coverage_audit.dart --top=30
+```
+
+实际结果:
+
+| 指标 | 阶段 8-10 后 | 阶段 11-12 后 |
+|---|---:|---:|
+| Theme high risk | 2 | 1 |
+| Theme `local-alpha` | 555 | 547 |
+| Theme `border-radius` | 534 | 497 |
+| Theme `box-decoration` | 364 | 355 |
+| Theme `material-color` | 85 | 77 |
+| Theme `hardcoded-color` | 62 | 62 |
+| Theme `box-shadow` | 30 | 27 |
+| UI Governance findings | 818 | 754 |
+| UI Governance exempted | 87 | 88 |
+| `hardcoded-style` | 784 | 724 |
+| `loading-state` | 8 | 4 |
+
+本轮确认:
+
+- `bookshelf_progress_indicator.dart` 已从 medium 降到 low。
+- `bookshelf_page.dart` 已从 high 降到 medium；剩余项保留给 Phase 13 的大页/核心边界收尾。
+- `reader_catalog_sheet.dart` 已从 medium 降到 low。
+- `reader_audio_view.dart` 与 `reader_floating_settings_sheet.dart` 已降到 low。
+- Reader 主页面仍为唯一 high risk，已明确留给 Phase 13，避免在本阶段误拆阅读渲染、翻页、分页缓存、阅读背景合成等核心链路。
+
+## 4. 改造原则
 
 - 不追求一次清零，先处理高收益、低风险、可验证的问题。
 - Reader 与 Bookshelf 继续只改外围 UI，暂不触碰核心阅读渲染、翻页、分页缓存、书架数据计算和批量选择主流程。
@@ -106,7 +146,7 @@ dart run tool/check_theme_coverage_audit.dart --top=20
 - 新增代码继续使用 `--strict-new` 门禁，历史问题按阶段下降。
 - 每个阶段完成后都复跑两类审计，实际数字以脚本结果为准。
 
-## 4. 阶段任务
+## 5. 阶段任务
 
 ### Phase 8: 快速清零阻断项与低成本豁免
 
@@ -220,22 +260,22 @@ dart run tool/check_theme_coverage_audit.dart --top=20
 
 目标: Bookshelf 放在 Reader 前面，但仍只做外围，不拆核心数据流。
 
-- [ ] T11.1 迁移 `bookshelf_progress_indicator.dart`。
+- [x] T11.1 迁移 `bookshelf_progress_indicator.dart`。
   范围: 书架进度条、未读提示、动画高亮。
   要求: token 化颜色/圆角/阴影；保留动画语义和 reduce motion 口径。
   验收: 文件从 medium 降到 low。
 
-- [ ] T11.2 迁移 Bookshelf toolbar 与 setting sheet 外围。
+- [x] T11.2 迁移 Bookshelf toolbar 与 setting sheet 外围。
   范围: toolbar、筛选、设置面板非核心卡片。
   要求: 不改书籍筛选、排序、批量选择数据流。
   验收: `bookshelf_page.dart` 和 `bookshelf_page_flow.dart` score 下降。
 
-- [ ] T11.3 建立 `bookshelf_page.dart` 拆分边界。
+- [x] T11.3 建立 `bookshelf_page.dart` 拆分边界。
   范围: 书架主页面遗留本地样式、继续阅读卡、局部浮层。
   要求: 每次只抽一个外围 widget，保持 book card 手势和数据流稳定。
   验收: high risk score 下降或形成明确拆分 backlog。
 
-- [ ] T11.4 清理第二批 Bookshelf loading/state。
+- [x] T11.4 清理第二批 Bookshelf loading/state。
   范围: 书架设置、局部任务状态、非核心导入展示。
   要求: 使用 `AppStateView`、`AppProgressIndicator`、`AppTaskProgressRow`。
   验收: `loading-state` 再下降 10-15 个。
@@ -251,22 +291,22 @@ dart run tool/check_theme_coverage_audit.dart --top=20
 
 目标: Reader 往后放，只做 sheet/chrome/状态外围，不碰核心阅读渲染。
 
-- [ ] T12.1 迁移 `reader_catalog_sheet.dart` 外围。
+- [x] T12.1 迁移 `reader_catalog_sheet.dart` 外围。
   范围: catalog sheet 的 surface、搜索、空态、分组、进度。
   要求: 使用 `AppSurface`、`AppTextField`、`AppStateView/AppStatusStateCard`；不改目录数据和跳章逻辑。
   验收: `reader_catalog_sheet.dart` 从 medium 降到 low。
 
-- [ ] T12.2 迁移 `reader_page_settings_sheet.dart` 外围。
+- [x] T12.2 迁移 `reader_page_settings_sheet.dart` 外围。
   范围: 设置 sheet 中仍散落的本地容器、按钮、状态、progress。
   要求: 与 `reader_settings_components.dart` 保持同一组件族。
   验收: Reader settings 视觉一致，不影响设置持久化。
 
-- [ ] T12.3 迁移 `reader_audio_view.dart`、`reader_floating_settings_sheet.dart` 的外围控件。
+- [x] T12.3 迁移 `reader_audio_view.dart`、`reader_floating_settings_sheet.dart` 的外围控件。
   范围: 音频视图和浮动设置 sheet 的卡片、按钮、状态。
   要求: 不改播放/设置业务逻辑。
   验收: 两个文件 score 下降。
 
-- [ ] T12.4 为 Reader 固定视觉建立豁免记录。
+- [x] T12.4 为 Reader 固定视觉建立豁免记录。
   范围: Reader 渲染透明层、翻页动画、阅读背景合成、overlay 对比度。
   要求: 不改核心渲染；只标注合理项，能迁移的外围项拆出 backlog。
   验收: Reader 高风险项可解释，避免误拆核心阅读链路。
@@ -307,7 +347,7 @@ dart run tool/check_theme_coverage_audit.dart --top=20
 - UI governance `hardcoded-style`: 预计减少或转豁免 40-70 个。
 - 完成后剩余项主要应是大页拆分、平台桥接和内容资产豁免。
 
-## 4. 完成后预计覆盖与剩余
+## 6. 完成后预计覆盖与剩余
 
 以下是保守目标。实际完成后必须以脚本复跑结果为准。
 
@@ -351,7 +391,7 @@ dart run tool/check_theme_coverage_audit.dart --top=20
 - `hardcoded-style` 数量最大，后续应继续按高风险文件和业务域滚动治理。
 - 完成本计划后，最关键的变化不是“全部变 0”，而是高风险文件归零或接近归零，blocking 型治理项基本归零，新增代码继续由 `--strict-new` 防回归。
 
-## 5. 每阶段验收命令
+## 7. 每阶段验收命令
 
 每个阶段完成后至少执行:
 
@@ -366,7 +406,7 @@ dart run tool/check_ui_component_governance.dart
 
 涉及 Reader/Bookshelf 时追加对应目标测试；涉及高级主题资源时追加高级主题资源测试和 Lumina 组件样板测试。
 
-## 6. 推荐执行顺序
+## 8. 推荐执行顺序
 
 1. Phase 8: 快速清零阻断项与低成本豁免，先把最容易降的数字拿掉。
 2. Phase 9: Mine 首页与非核心中风险页面，优先处理体验收益明显且业务风险低的区域。
