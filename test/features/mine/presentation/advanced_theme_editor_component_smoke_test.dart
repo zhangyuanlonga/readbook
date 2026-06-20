@@ -143,6 +143,13 @@ void main() {
     expect(find.text('启动图集'), findsOneWidget);
     expect(find.text('底栏图集'), findsOneWidget);
     expect(find.text('主题特效'), findsOneWidget);
+    final resourceGrid = tester.widget<GridView>(
+      find.byKey(const ValueKey<String>('advanced_theme_visual_resource_grid')),
+    );
+    final resourceGridDelegate =
+        resourceGrid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
+    expect(resourceGridDelegate.crossAxisCount, 3);
+    expect(resourceGridDelegate.mainAxisExtent, 216);
 
     await _dragUntilFound(tester, editorScroll, find.text('圆角比例'));
     await tester.pump();
