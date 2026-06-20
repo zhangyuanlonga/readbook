@@ -103,6 +103,7 @@ class ReaderTopOverlayWidget extends StatelessWidget {
                     ),
                   ),
                   boxShadow: [
+                    // UI-GOV-EXEMPT: box-shadow reader-overlay-depth
                     BoxShadow(
                       color: Colors.black.withValues(alpha: 0.05 * fade),
                       blurRadius: 12,
@@ -233,6 +234,7 @@ class ReaderBottomOverlayWidget extends StatelessWidget {
                     ),
                   ),
                   boxShadow: [
+                    // UI-GOV-EXEMPT: box-shadow reader-overlay-depth
                     BoxShadow(
                       color: Colors.black.withValues(alpha: 0.06 * fade),
                       blurRadius: 14,

@@ -771,6 +771,7 @@ class _StartupAnnouncementBanner extends StatelessWidget {
               borderRadius: BorderRadius.circular(18),
               border: Border.all(color: accent.withValues(alpha: 0.28)),
               boxShadow: [
+                // UI-GOV-EXEMPT: box-shadow announcement-banner
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.16),
                   blurRadius: 18,

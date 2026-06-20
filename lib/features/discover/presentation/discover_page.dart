@@ -330,6 +330,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: borderColor),
           boxShadow: [
+            // UI-GOV-EXEMPT: box-shadow discover-search-surface
             BoxShadow(
               color: colorScheme.shadow.withValues(alpha: 0.05),
               blurRadius: 18,
@@ -1134,6 +1135,7 @@ class _StatusDot extends StatelessWidget {
             color: color,
             shape: BoxShape.circle,
             boxShadow: [
+              // UI-GOV-EXEMPT: box-shadow status-indicator-glow
               BoxShadow(
                 color: color.withValues(alpha: 0.3),
                 blurRadius: 8,

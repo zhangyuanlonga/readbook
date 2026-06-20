@@ -186,6 +186,7 @@ class _DockSurface extends StatelessWidget {
           width: navigationTokens.dockSurfaceBorderWidth,
         ),
         boxShadow: [
+          // UI-GOV-EXEMPT: box-shadow tokenized-component
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.028),
             blurRadius: navigationTokens.dockSurfaceShadowBlur,
@@ -357,6 +358,7 @@ class _SearchIconButton extends StatelessWidget {
           width: navigationTokens.dockSurfaceBorderWidth,
         ),
         boxShadow: [
+          // UI-GOV-EXEMPT: box-shadow tokenized-component
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.02),
             blurRadius: navigationTokens.dockSearchShadowBlur,

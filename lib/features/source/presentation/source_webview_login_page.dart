@@ -201,9 +201,10 @@ class _SourceWebViewLoginPageState
             onPressed: _isSubmitting ? null : _submitSession,
             child:
                 _isSubmitting
-                    ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ? const AppProgressIndicator(
+                      size: 18,
+                      strokeWidth: 2,
+                      semanticLabel: '提交会话中',
                     )
                     : const Text('提交会话'),
           ),

@@ -138,7 +138,35 @@ dart run tool/check_theme_coverage_audit.dart --top=30
 - `reader_audio_view.dart` 与 `reader_floating_settings_sheet.dart` 已降到 low。
 - Reader 主页面仍为唯一 high risk，已明确留给 Phase 13，避免在本阶段误拆阅读渲染、翻页、分页缓存、阅读背景合成等核心链路。
 
-## 4. 改造原则
+## 4. 类型批处理执行结果
+
+本轮从“按页面阶段推进”切换为“按问题类型批处理”，先处理数量小、边界明确、验证快的两类问题。
+
+已复跑命令:
+
+```bash
+dart run tool/check_ui_component_governance.dart
+dart run tool/check_theme_coverage_audit.dart --top=30
+```
+
+实际结果:
+
+| 指标 | 阶段 11-12 后 | 类型批处理后 |
+|---|---:|---:|
+| Theme high risk | 1 | 1 |
+| Theme `box-shadow` | 27 | 0 |
+| Theme `box-shadow` exempted | 0 | 27 |
+| UI Governance findings | 754 | 750 |
+| `loading-state` | 4 | 0 |
+
+本轮确认:
+
+- `loading-state` 适合继续作为快速清零类型，裸 `CircularProgressIndicator` 已替换为 `AppProgressIndicator`。
+- `box-shadow` 不适合单纯改数值；局部业务阴影应迁移到 `AppSurface`，组件内部、阅读 overlay、PDF 页面深度、封面/头像发光等固定视觉应做精确豁免。
+- Reader 主阅读页仍是唯一 high risk，本轮没有触碰阅读渲染、翻页、分页缓存、阅读背景合成。
+- 类型批处理比按页面阶段更快，下一轮建议继续按 `material-color`、`rounded-shape/shape-property`、`border-radius` 依次推进。
+
+## 5. 改造原则
 
 - 不追求一次清零，先处理高收益、低风险、可验证的问题。
 - Reader 与 Bookshelf 继续只改外围 UI，暂不触碰核心阅读渲染、翻页、分页缓存、书架数据计算和批量选择主流程。
@@ -146,7 +174,7 @@ dart run tool/check_theme_coverage_audit.dart --top=30
 - 新增代码继续使用 `--strict-new` 门禁，历史问题按阶段下降。
 - 每个阶段完成后都复跑两类审计，实际数字以脚本结果为准。
 
-## 5. 阶段任务
+## 6. 阶段任务
 
 ### Phase 8: 快速清零阻断项与低成本豁免
 
@@ -347,7 +375,7 @@ dart run tool/check_theme_coverage_audit.dart --top=30
 - UI governance `hardcoded-style`: 预计减少或转豁免 40-70 个。
 - 完成后剩余项主要应是大页拆分、平台桥接和内容资产豁免。
 
-## 6. 完成后预计覆盖与剩余
+## 7. 完成后预计覆盖与剩余
 
 以下是保守目标。实际完成后必须以脚本复跑结果为准。
 
@@ -391,7 +419,7 @@ dart run tool/check_theme_coverage_audit.dart --top=30
 - `hardcoded-style` 数量最大，后续应继续按高风险文件和业务域滚动治理。
 - 完成本计划后，最关键的变化不是“全部变 0”，而是高风险文件归零或接近归零，blocking 型治理项基本归零，新增代码继续由 `--strict-new` 防回归。
 
-## 7. 每阶段验收命令
+## 8. 每阶段验收命令
 
 每个阶段完成后至少执行:
 
@@ -406,7 +434,7 @@ dart run tool/check_ui_component_governance.dart
 
 涉及 Reader/Bookshelf 时追加对应目标测试；涉及高级主题资源时追加高级主题资源测试和 Lumina 组件样板测试。
 
-## 8. 推荐执行顺序
+## 9. 推荐执行顺序
 
 1. Phase 8: 快速清零阻断项与低成本豁免，先把最容易降的数字拿掉。
 2. Phase 9: Mine 首页与非核心中风险页面，优先处理体验收益明显且业务风险低的区域。

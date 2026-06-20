@@ -2386,6 +2386,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
             color: colorScheme.outlineVariant.withValues(alpha: 0.5),
           ),
           boxShadow: [
+            // UI-GOV-EXEMPT: box-shadow selection-action-bar
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.06),
               blurRadius: 18,

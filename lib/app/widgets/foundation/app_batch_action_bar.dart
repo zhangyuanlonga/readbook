@@ -125,6 +125,7 @@ class AppBatchActionBar extends StatelessWidget {
               width: tokens.card.borderWidth,
             ),
             boxShadow: [
+              // UI-GOV-EXEMPT: box-shadow tokenized-component
               BoxShadow(
                 color: colorScheme.shadow.withValues(alpha: 0.08),
                 blurRadius: 12,

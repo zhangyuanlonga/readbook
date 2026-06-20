@@ -162,6 +162,7 @@ class AppTaskBottomSheet extends StatelessWidget {
                       color: colorScheme.outlineVariant.withValues(alpha: 0.35),
                     ),
                     boxShadow: [
+                      // UI-GOV-EXEMPT: box-shadow task-sheet-token
                       BoxShadow(
                         color: colorScheme.shadow.withValues(alpha: 0.12),
                         blurRadius: 18,

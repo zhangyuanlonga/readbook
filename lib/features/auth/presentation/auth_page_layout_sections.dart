@@ -105,6 +105,7 @@ extension _AuthPageLayoutSections on _AuthPageState {
                               ),
                             ),
                             boxShadow: [
+                              // UI-GOV-EXEMPT: box-shadow responsive-auth-shell
                               BoxShadow(
                                 color: colorScheme.shadow.withValues(
                                   alpha: 0.05,
@@ -380,6 +381,7 @@ extension _AuthPageLayoutSections on _AuthPageState {
         boxShadow:
             mediumWidth
                 ? [
+                  // UI-GOV-EXEMPT: box-shadow responsive-auth-shell
                   BoxShadow(
                     color: colorScheme.shadow.withValues(alpha: 0.05),
                     blurRadius: 24,
@@ -483,6 +485,7 @@ extension _AuthPageLayoutSections on _AuthPageState {
           color: colorScheme.outlineVariant.withValues(alpha: 0.72),
         ),
         boxShadow: [
+          // UI-GOV-EXEMPT: box-shadow responsive-auth-shell
           BoxShadow(
             color: colorScheme.shadow.withValues(alpha: 0.05),
             blurRadius: 22,
@@ -806,6 +809,7 @@ extension _AuthPageLayoutSections on _AuthPageState {
                   color: colorScheme.outlineVariant.withValues(alpha: 0.72),
                 ),
                 boxShadow: [
+                  // UI-GOV-EXEMPT: box-shadow responsive-auth-shell
                   BoxShadow(
                     color: colorScheme.shadow.withValues(alpha: 0.05),
                     blurRadius: 24,

@@ -187,6 +187,7 @@ class _ImportExportTaskPane extends StatelessWidget {
                     color: colorScheme.outlineVariant.withValues(alpha: 0.4),
                   ),
                   boxShadow: [
+                    // UI-GOV-EXEMPT: box-shadow task-overlay-token
                     BoxShadow(
                       color: colorScheme.shadow.withValues(alpha: 0.16),
                       blurRadius: 28,

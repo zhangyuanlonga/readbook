@@ -275,9 +275,10 @@ class _SourceWebViewTaskPageState extends ConsumerState<SourceWebViewTaskPage> {
             onPressed: _isSubmitting ? null : _submitNow,
             child:
                 _isSubmitting
-                    ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ? const AppProgressIndicator(
+                      size: 18,
+                      strokeWidth: 2,
+                      semanticLabel: '提交结果中',
                     )
                     : const Text('提交结果'),
           ),

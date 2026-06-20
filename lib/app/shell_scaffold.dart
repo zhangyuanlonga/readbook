@@ -981,10 +981,10 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
             key: const ValueKey<String>('desktop_account_menu_logout'),
             leadingIcon:
                 _isShellLoggingOut
-                    ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ? const AppProgressIndicator(
+                      size: 18,
+                      strokeWidth: 2,
+                      semanticLabel: '退出登录中',
                     )
                     : Icon(Icons.logout_rounded, color: colorScheme.error),
             onPressed:
@@ -1538,10 +1538,10 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
             children: [
               const SizedBox(width: 16),
               if (_isShellLoggingOut)
-                const SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                const AppProgressIndicator(
+                  size: 22,
+                  strokeWidth: 2,
+                  semanticLabel: '退出登录中',
                 )
               else
                 Icon(
@@ -1700,6 +1700,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
                       ),
                     ),
             boxShadow: [
+              // UI-GOV-EXEMPT: box-shadow tokenized-component
               BoxShadow(
                 color: Colors.black.withValues(alpha: floating ? 0.045 : 0.03),
                 blurRadius:

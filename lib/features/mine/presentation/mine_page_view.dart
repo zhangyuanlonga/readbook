@@ -968,6 +968,7 @@ extension on _MinePageState {
                             boxShadow:
                                 _hasMembership
                                     ? [
+                                      // UI-GOV-EXEMPT: box-shadow membership-accent
                                       BoxShadow(
                                         color: membershipAccent.withValues(
                                           alpha: 0.18,
@@ -1369,6 +1370,7 @@ extension on _MinePageState {
                   width: _hasMembership ? 2 : 1,
                 ),
                 boxShadow: [
+                  // UI-GOV-EXEMPT: box-shadow tokenized-avatar
                   BoxShadow(
                     color: (_hasMembership
                             ? membershipAccent
@@ -1405,6 +1407,7 @@ extension on _MinePageState {
                   shape: BoxShape.circle,
                   border: Border.all(color: palette.cardColor, width: 2),
                   boxShadow: [
+                    // UI-GOV-EXEMPT: box-shadow tokenized-avatar
                     BoxShadow(
                       color: colorScheme.shadow.withValues(
                         alpha: componentTokens.card.shadowAlpha,

@@ -43,6 +43,7 @@ class AppSurface extends StatelessWidget {
     final shadows =
         tone == AppSurfaceTone.elevated
             ? <BoxShadow>[
+              // UI-GOV-EXEMPT: box-shadow tokenized-component
               BoxShadow(
                 color: colorScheme.shadow.withValues(
                   alpha: tokens.card.shadowAlpha,

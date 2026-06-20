@@ -3008,6 +3008,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                     boxShadow:
                         _gridCoverShadow
                             ? [
+                              // UI-GOV-EXEMPT: box-shadow cover-depth
                               BoxShadow(
                                 color: palette.shadowColor,
                                 blurRadius: 10,
@@ -5749,6 +5750,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
             color: palette.cardBorderColor.withValues(alpha: 0.42),
           ),
           boxShadow: [
+            // UI-GOV-EXEMPT: box-shadow continue-reading-card
             BoxShadow(
               color: palette.shadowColor,
               blurRadius: 14,

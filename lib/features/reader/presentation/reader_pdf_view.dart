@@ -49,6 +49,7 @@ class _ReaderPdfViewState extends State<ReaderPdfView> {
       initialPageNumber: widget.initialPage.clamp(1, 1 << 20),
       params: PdfViewerParams(
         backgroundColor: Theme.of(context).colorScheme.surface,
+        // UI-GOV-EXEMPT: box-shadow pdf-page-depth
         pageDropShadow: BoxShadow(
           color: Colors.black.withValues(alpha: 0.18),
           blurRadius: 20,

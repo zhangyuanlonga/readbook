@@ -90,6 +90,7 @@ class ReaderTopOverlayBar extends StatelessWidget {
                         ),
                       ),
                       boxShadow: [
+                        // UI-GOV-EXEMPT: box-shadow reader-chrome-depth
                         BoxShadow(
                           color: Colors.black.withValues(
                             alpha: 0.05 * fadeProgress,
@@ -268,6 +269,7 @@ class ReaderMobileBottomOverlayBar extends StatelessWidget {
                         ),
                       ),
                       boxShadow: [
+                        // UI-GOV-EXEMPT: box-shadow reader-chrome-depth
                         BoxShadow(
                           color: Colors.black.withValues(
                             alpha: 0.06 * fadeProgress,
@@ -410,6 +412,7 @@ class ReaderDesktopBottomProgressOverlay extends StatelessWidget {
                                 color: colors.divider.withValues(alpha: 0.22),
                               ),
                               boxShadow: [
+                                // UI-GOV-EXEMPT: box-shadow reader-chrome-depth
                                 BoxShadow(
                                   color: Colors.black.withValues(
                                     alpha: 0.08 * fadeProgress,

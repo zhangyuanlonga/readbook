@@ -282,6 +282,7 @@ class _BookshelfAnimatedProgressBar extends StatelessWidget {
                           boxShadow:
                               completionFlashStrength > 0
                                   ? [
+                                    // UI-GOV-EXEMPT: box-shadow progress-completion-flash
                                     BoxShadow(
                                       color: fillColor.withValues(
                                         alpha:
