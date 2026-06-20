@@ -32,9 +32,10 @@ class ReaderLayoutHitTestService {
 
     final line = _nearestLine(page.lines, dy);
     final column = _nearestColumn(line.columns, dx: dx, dy: dy);
-    final chapterOffset = column == null
-        ? _clampInt(line.chapterOffset, page.startOffset, page.endOffset)
-        : _resolveColumnOffset(column, dx);
+    final chapterOffset =
+        column == null
+            ? _clampInt(line.chapterOffset, page.startOffset, page.endOffset)
+            : _resolveColumnOffset(column, dx);
 
     return ReaderLayoutHitTestResult(
       page: page,
@@ -45,9 +46,10 @@ class ReaderLayoutHitTestService {
         lineIndex: line.lineIndex,
         columnIndex: column?.columnIndex ?? 0,
         chapterOffset: chapterOffset,
-        affinity: dx < (column?.rect.left ?? 0)
-            ? ReaderLayoutPositionAffinity.upstream
-            : ReaderLayoutPositionAffinity.downstream,
+        affinity:
+            dx < (column?.rect.left ?? 0)
+                ? ReaderLayoutPositionAffinity.upstream
+                : ReaderLayoutPositionAffinity.downstream,
       ),
       dx: dx,
       dy: dy,
@@ -97,7 +99,11 @@ class ReaderLayoutHitTestService {
 
     final page = _pageByIndex(layoutPages, position.pageIndex);
     if (page.lines.isEmpty) {
-      return _clampInt(position.chapterOffset, page.startOffset, page.endOffset);
+      return _clampInt(
+        position.chapterOffset,
+        page.startOffset,
+        page.endOffset,
+      );
     }
 
     final line = _lineByIndex(page.lines, position.lineIndex);
@@ -122,7 +128,8 @@ class ReaderLayoutHitTestService {
     int chapterOffset,
   ) {
     for (final page in pages) {
-      if (chapterOffset >= page.startOffset && chapterOffset <= page.endOffset) {
+      if (chapterOffset >= page.startOffset &&
+          chapterOffset <= page.endOffset) {
         return page;
       }
     }
@@ -238,7 +245,9 @@ class ReaderLayoutHitTestService {
         return column;
       }
     }
-    return columnIndex < columns.first.columnIndex ? columns.first : columns.last;
+    return columnIndex < columns.first.columnIndex
+        ? columns.first
+        : columns.last;
   }
 
   int _resolveColumnOffset(ReaderLayoutColumn column, double dx) {

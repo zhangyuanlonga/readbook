@@ -17,7 +17,9 @@ class ReaderLayoutRangeService {
     }
     if (range.isCollapsed) {
       final caret = caretRectForPosition(layoutPages, range.start);
-      return caret == null ? const <ReaderLayoutRect>[] : <ReaderLayoutRect>[caret];
+      return caret == null
+          ? const <ReaderLayoutRect>[]
+          : <ReaderLayoutRect>[caret];
     }
 
     final rects = <ReaderLayoutRect>[];

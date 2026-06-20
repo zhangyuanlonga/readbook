@@ -6,6 +6,18 @@
 
 ---
 
+## 0. 当前落地状态
+
+- [x] V1 底座已落地：surface position、layout model、旧分页 adapter、hit-test/range service、adapterOnly fallback runner。
+- [x] V1 默认不改变现有阅读器 UI 行为。
+- [x] V1 出口报告：`reader-core-modernization-v1-exit-report-2026-06-20.md`。
+- [x] V2 执行计划：`reader-core-modernization-v2-execution-plan-2026-06-20.md`。
+- [x] V2-P0/P1/P2/P3 已启动并完成 alpha 代码侧落地。
+- [ ] V1 真实样本手工行为记录仍需补齐。
+- [ ] V2 默认切换新 renderer 前必须完成 diagnostics 和 smoke。
+
+---
+
 ## 1. 改造原则
 
 - [ ] 保持用户可见行为渐进变化，避免一次性重写阅读器。
@@ -104,41 +116,41 @@ ReaderLayoutPage
 
 ### 1.1 新增核心实体
 
-- [ ] 新建 `lib/features/reader/domain/entities/reader_layout_page.dart`。
-- [ ] 定义 `ReaderLayoutPage`：`chapterId`、`chapterIndex`、`pageIndex`、`startOffset`、`endOffset`、`contentRect`、`lines`、`blocks`、`isCompleted`。
-- [ ] 新建 `reader_layout_line.dart`。
-- [ ] 定义 `ReaderLayoutLine`：`text`、`paragraphIndex`、`chapterOffset`、`pageOffset`、`lineTop`、`lineBase`、`lineBottom`、`columns`、`flags`。
-- [ ] 新建 `reader_layout_column.dart`。
-- [ ] 定义 `ReaderLayoutColumn`：text/image/link/span 等 kind、`startOffset`、`endOffset`、`rect`、`styleKey`、`payload`。
-- [ ] 新建 `reader_layout_position.dart`。
-- [ ] 定义 `ReaderLayoutPosition`：`pageIndex`、`lineIndex`、`columnIndex`、`chapterOffset`、`affinity`。
-- [ ] 新建 `reader_layout_range.dart`。
-- [ ] 定义 `ReaderLayoutRange`：`start`、`end`、`selectedText`、`rects`。
+- [x] 新建 `lib/features/reader/domain/entities/reader_layout_page.dart`。
+- [x] 定义 `ReaderLayoutPage`：`chapterId`、`chapterIndex`、`pageIndex`、`startOffset`、`endOffset`、`contentRect`、`lines`、`blocks`、`isCompleted`。
+- [x] 新建 `reader_layout_line.dart`。
+- [x] 定义 `ReaderLayoutLine`：`text`、`paragraphIndex`、`chapterOffset`、`pageOffset`、`lineTop`、`lineBase`、`lineBottom`、`columns`、`flags`。
+- [x] 新建 `reader_layout_column.dart`。
+- [x] 定义 `ReaderLayoutColumn`：text/image/link/span 等 kind、`startOffset`、`endOffset`、`rect`、`styleKey`、`payload`。
+- [x] 新建 `reader_layout_position.dart`。
+- [x] 定义 `ReaderLayoutPosition`：`pageIndex`、`lineIndex`、`columnIndex`、`chapterOffset`、`affinity`。
+- [x] 新建 `reader_layout_range.dart`。
+- [x] 定义 `ReaderLayoutRange`：`start`、`end`、`selectedText`、`rects`。
 
 ### 1.2 兼容旧分页模型
 
-- [ ] 新建 `ReaderPagedSliceLayoutAdapter`。
-- [ ] 将 `List<List<ReaderPagedSlice>>` 转换成最低可用的 `List<ReaderLayoutPage>`。
-- [ ] adapter 生成 line 时先允许一段一行或 slice 一行，作为过渡模型。
-- [ ] 保留旧 `ReaderTextPagedView` 入参，不直接切 UI。
-- [ ] 给 adapter 补测试：段落 index、start/end、pageIndex、chapter offset 不丢失。
+- [x] 新建 `ReaderPagedSliceLayoutAdapter`。
+- [x] 将 `List<List<ReaderPagedSlice>>` 转换成最低可用的 `List<ReaderLayoutPage>`。
+- [x] adapter 生成 line 时先允许一段一行或 slice 一行，作为过渡模型。
+- [x] 保留旧 `ReaderTextPagedView` 入参，不直接切 UI。
+- [x] 给 adapter 补测试：段落 index、start/end、pageIndex、chapter offset 不丢失。
 
 ### 1.3 坐标工具
 
-- [ ] 新建 `ReaderLayoutHitTestService`。
-- [ ] 实现 `hitTestPage(page, offset)`。
-- [ ] 新建 `ReaderLayoutRangeService`。
-- [ ] 实现 `rangeToRects(layoutPages, startOffset, endOffset)`。
-- [ ] 实现 `positionToChapterOffset(position)`。
-- [ ] 实现 `chapterOffsetToPosition(layoutPages, offset)`。
+- [x] 新建 `ReaderLayoutHitTestService`。
+- [x] 实现 `hitTestPage(page, offset)`。
+- [x] 新建 `ReaderLayoutRangeService`。
+- [x] 实现 `rangeToRects(layoutPages, startOffset, endOffset)`。
+- [x] 实现 `positionToChapterOffset(position)`。
+- [x] 实现 `chapterOffsetToPosition(layoutPages, offset)`。
 
 ### 1.4 阶段验收
 
-- [ ] 新模型有纯 Dart 单测。
-- [ ] 旧分页结果可以无损转换成 layout page。
-- [ ] 不改现有 UI 行为。
-- [ ] `flutter analyze` 通过。
-- [ ] 记录哪些字段目前由 adapter 填假值，作为 Phase 2 输入。
+- [x] 新模型有纯 Dart 单测。
+- [x] 旧分页结果可以无损转换成 layout page。
+- [x] 不改现有 UI 行为。
+- [x] 新增文件定向 `flutter analyze` 通过。
+- [x] 记录哪些字段目前由 adapter 填假值，作为 Phase 2 输入。
 
 ---
 
@@ -570,4 +582,3 @@ ReaderLayoutPage
 - [ ] 有手工 smoke 记录。
 - [ ] 有 fallback 或回滚路径。
 - [ ] 没有把新业务状态继续塞回 `_ReaderPageState`。
-

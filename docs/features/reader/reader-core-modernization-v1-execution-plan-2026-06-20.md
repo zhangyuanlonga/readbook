@@ -8,6 +8,8 @@
 - `reader-core-modernization-roadmap-2026-06-20.md`
 - `reader-surface-special-audit-2026-06-20.md`
 - `reader-v1-test-samples-baseline-2026-06-20.md`
+- `reader-core-modernization-v1-exit-report-2026-06-20.md`
+- `reader-core-modernization-v2-execution-plan-2026-06-20.md`
 
 ---
 
@@ -19,9 +21,9 @@ V1 的目标是建立“后续所有阅读能力可以共用的底座”，不�
 - [x] 建立 `ReaderSurfacePosition`，统一文本、漫画、PDF、音频的进度表达。
 - [x] 建立 `ReaderLayoutPage / Line / Column / Position / Range` 第一版。
 - [x] 建立旧 `ReaderPagedSlice` 到新 layout model 的 adapter。
-- [ ] 建立 layout hit-test / range 工具的最小实现。
-- [ ] 接入 feature flag / fallback 策略，保证旧阅读器路径可回退。
-- [x] 补齐首批 P1-P3 单元测试，避免后续阶段失控。
+- [x] 建立 layout hit-test / range 工具的最小实现。
+- [x] 接入 feature flag / fallback 策略，保证旧阅读器路径可回退。
+- [x] 补齐首批 P1-P5 单元测试，避免后续阶段失控。
 
 ---
 
@@ -46,11 +48,11 @@ V1 的目标是建立“后续所有阅读能力可以共用的底座”，不�
 | P1 | Surface Position | 已完成主体 | 85% | 模型、codec、旧 progress mapper 与单测已完成，ReaderPage runtime 收口待后续 |
 | P2 | Layout 核心模型 | 已完成主体 | 90% | 页/行/列/位置/范围模型与单测已完成，复杂不变量后续服务层继续强化 |
 | P3 | 旧分页 Adapter | 已完成主体 | 90% | 旧 slice 可转 layout page，offset policy 与防御测试已完成，图片 marker 细分待后续 |
-| P4 | Layout 工具服务 | 未开始 | 0% | hitTest/range/offset 转换 |
-| P5 | 灰度与 fallback | 未开始 | 0% | 不影响现有阅读器 |
-| P6 | 测试与验收 | 进行中 | 25% | P1-P3 单测通过，P4/P5/smoke 待补 |
+| P4 | Layout 工具服务 | 已完成主体 | 100% | hitTest/range/offset 转换与单测完成 |
+| P5 | 灰度与 fallback | 已完成主体 | 85% | mode/fallback/diagnostics 底座完成，UI debug 入口待 V2 |
+| P6 | 测试与验收 | 代码侧收尾 | 85% | P1-P5 与 V2-P0-P3 单测通过，手工样本与 UI smoke 转 V2-P0 |
 
-**V1 总进度**: 45%
+**V1 总进度**: 90%
 
 进度口径：
 
@@ -119,7 +121,7 @@ V1 的目标是建立“后续所有阅读能力可以共用的底座”，不�
 ## 5. Phase P1：ReaderSurfacePosition 第一版
 
 **目标**: 统一表达不同 surface 的阅读位置，先解决 `_mangaPageIndex` 同时表示漫画/PDF 的语义混乱。  
-**状态**: 已完成主体  
+**状态**: 已完成主体
 **进度**: 85%
 
 ### P1.1 模型定义
@@ -169,7 +171,7 @@ V1 的目标是建立“后续所有阅读能力可以共用的底座”，不�
 ## 6. Phase P2：ReaderLayout 核心模型
 
 **目标**: 建立文本阅读内核的最小页/行/列/位置/范围模型。  
-**状态**: 已完成主体  
+**状态**: 已完成主体
 **进度**: 90%
 
 ### P2.1 文件与目录
@@ -311,114 +313,114 @@ V1 的目标是建立“后续所有阅读能力可以共用的底座”，不�
 
 ## 8. Phase P4：Layout 工具服务
 
-**目标**: 建立后续选择、标注、搜索、朗读会用到的最小工具层。  
-**状态**: 进行中  
-**进度**: 25%
+**目标**: 建立后续选择、标注、搜索、朗读会用到的最小工具层。
+**状态**: 已完成主体
+**进度**: 100%
 
 ### P4.1 Hit Test
 
-- [ ] 新建 `ReaderLayoutHitTestService`。
-- [ ] 实现 `hitTestPage(page, offset)`。
-- [ ] 支持按 lineTop/lineBottom 命中 line。
-- [ ] 支持按 column rect 命中 column。
-- [ ] 未命中 column 时返回最近 column。
-- [ ] 支持空 page 返回 null。
+- [x] 新建 `ReaderLayoutHitTestService`。
+- [x] 实现 `hitTestPage(page, offset)`。
+- [x] 支持按 lineTop/lineBottom 命中 line。
+- [x] 支持按 column rect 命中 column。
+- [x] 未命中 column 时返回最近 column。
+- [x] 支持空 page 返回 null。
 
 ### P4.2 Offset / Position 转换
 
-- [ ] 实现 `chapterOffsetToPosition(layoutPages, offset)`。
-- [ ] 实现 `positionToChapterOffset(position)`。
-- [ ] 支持 pageIndex 越界防御。
-- [ ] 支持 lineIndex 越界防御。
-- [ ] 支持 offset 超出章节范围 clamp。
+- [x] 实现 `chapterOffsetToPosition(layoutPages, offset)`。
+- [x] 实现 `positionToChapterOffset(position)`。
+- [x] 支持 pageIndex 越界防御。
+- [x] 支持 lineIndex 越界防御。
+- [x] 支持 offset 超出章节范围 clamp。
 
 ### P4.3 Range 转 Rect
 
-- [ ] 新建 `ReaderLayoutRangeService`。
-- [ ] 实现同一 line range rect。
-- [ ] 实现跨 line range rect。
-- [ ] 预留跨 page range 返回多 page rects。
-- [ ] 支持 collapsed range 返回 caret rect。
-- [ ] 支持空 range 返回空 rects。
+- [x] 新建 `ReaderLayoutRangeService`。
+- [x] 实现同一 line range rect。
+- [x] 实现跨 line range rect。
+- [x] 预留跨 page range 返回多 page rects。
+- [x] 支持 collapsed range 返回 caret rect。
+- [x] 支持空 range 返回空 rects。
 
 ### P4.4 与现有选择链路的关系
 
-- [ ] V1 不替换 `SelectionArea`。
-- [ ] V1 只新增工具服务和测试。
-- [ ] 现有 `reader_text_offset_mapper.dart` 保留。
-- [ ] 为 Phase 4 selection migration 标注接入点。
+- [x] V1 不替换 `SelectionArea`。
+- [x] V1 只新增工具服务和测试。
+- [x] 现有 `reader_text_offset_mapper.dart` 保留。
+- [x] 为后续 selection migration 标注接入点。
 
 ### P4.5 测试
 
-- [ ] hitTest 命中 line 测试。
-- [ ] hitTest 命中 column 测试。
-- [ ] hitTest 空 page 测试。
-- [ ] chapterOffsetToPosition 测试。
-- [ ] positionToChapterOffset 测试。
-- [ ] rangeToRects 单行测试。
-- [ ] rangeToRects 多行测试。
-- [ ] collapsed caret 测试。
+- [x] hitTest 命中 line 测试。
+- [x] hitTest 命中 column 测试。
+- [x] hitTest 空 page 测试。
+- [x] chapterOffsetToPosition 测试。
+- [x] positionToChapterOffset 测试。
+- [x] rangeToRects 单行测试。
+- [x] rangeToRects 多行测试。
+- [x] collapsed caret 测试。
 
 ### P4 验收
 
-- [ ] 工具服务纯 Dart 可测。
-- [ ] 不引入 UI 依赖。
-- [ ] 不改变现有 selection 行为。
-- [ ] 为后续标注/朗读迁移提供 API。
+- [x] 工具服务纯 Dart 可测。
+- [x] 不引入 UI 依赖。
+- [x] 不改变现有 selection 行为。
+- [x] 为后续标注/朗读迁移提供 API。
 
 ---
 
 ## 9. Phase P5：灰度入口与 Fallback
 
-**目标**: 让新模型可以被安全打开和关闭，V1 不影响默认阅读体验。  
-**状态**: 未开始  
-**进度**: 0%
+**目标**: 让新模型可以被安全打开和关闭，V1 不影响默认阅读体验。
+**状态**: 已完成主体
+**进度**: 85%
 
 ### P5.1 Feature Flag
 
-- [ ] 定义 `ReaderLayoutEngineMode`: legacy、adapterOnly、experimental。
-- [ ] 默认 `legacy`。
-- [ ] debug/dev 可切到 `adapterOnly`。
-- [ ] experimental 仅预留，不在 V1 默认启用。
-- [ ] flag 来源先用本地 debug setting 或 provider，不接远程配置。
+- [x] 定义 `ReaderLayoutEngineMode`: legacy、adapterOnly、experimental。
+- [x] 默认 `legacy`。
+- [x] debug/dev 可通过 runner 参数切到 `adapterOnly`。
+- [x] experimental 仅预留，不在 V1 默认启用。
+- [x] flag 来源先不接远程配置。
 
 ### P5.2 接入点
 
-- [ ] 在分页完成后可选生成 layout pages。
-- [ ] 在 reader diagnostics 中输出 layout mode。
-- [ ] 在 debug log 中输出 layout page count。
-- [ ] adapter 失败时捕获并回退 legacy。
-- [ ] 不因 adapter 失败影响阅读器显示。
+- [x] 提供分页完成后可选生成 layout pages 的 runner。
+- [x] 在 diagnostics model 中输出 layout mode。
+- [x] 在 diagnostics model 中输出 layout page count。
+- [x] adapter 失败时捕获并回退 legacy。
+- [x] 不因 adapter 失败影响阅读器显示。
 
 ### P5.3 Diagnostics
 
-- [ ] 记录 layout adapter 耗时。
-- [ ] 记录 layout page count。
-- [ ] 记录 adapter fallback/error。
-- [ ] 记录 surface position kind。
-- [ ] 记录旧 progress 与 surface position 映射结果。
+- [x] 记录 layout adapter 耗时。
+- [x] 记录 layout page count。
+- [x] 记录 adapter fallback/error。
+- [x] 记录 surface position kind。
+- [x] 旧 progress 与 surface position 映射结果由 `ReaderSurfacePositionMapper` 覆盖。
 
 ### P5.4 Fallback
 
-- [ ] legacy 模式完全不构建新 layout。
-- [ ] adapterOnly 模式构建 layout 但不驱动 UI。
-- [ ] adapter 失败后只打日志，不弹错误。
-- [ ] 保留关闭开关。
+- [x] legacy 模式完全不构建新 layout。
+- [x] adapterOnly 模式构建 layout 但不驱动 UI。
+- [x] adapter 失败后返回 diagnostics，不向 UI 抛错。
+- [x] 保留关闭开关。
 
 ### P5 验收
 
-- [ ] 默认行为与当前一致。
-- [ ] debug 下可观察新 layout 输出。
-- [ ] 新逻辑失败不会影响正文显示。
-- [ ] 有日志可以定位 adapter 问题。
+- [x] 默认行为与当前一致。
+- [ ] debug UI 下可观察新 layout 输出。
+- [x] 新逻辑失败不会影响正文显示。
+- [x] 有 diagnostics 可以定位 adapter 问题。
 
 ---
 
 ## 10. Phase P6：测试与 V1 出口验收
 
 **目标**: V1 结束时不是“写了一堆模型”，而是有保护线、有 fallback、有下一阶段接入点。  
-**状态**: 进行中  
-**进度**: 25%
+**状态**: 代码侧收尾
+**进度**: 85%
 
 ### P6.1 单元测试
 
@@ -428,8 +430,9 @@ V1 的目标是建立“后续所有阅读能力可以共用的底座”，不�
 - [x] `ReaderLayoutColumn` 模型测试。
 - [x] `ReaderLayoutRange` 模型测试。
 - [x] `ReaderPagedSliceLayoutAdapter` 测试。
-- [ ] `ReaderLayoutHitTestService` 测试。
-- [ ] `ReaderLayoutRangeService` 测试。
+- [x] `ReaderLayoutHitTestService` 测试。
+- [x] `ReaderLayoutRangeService` 测试。
+- [x] `ReaderLayoutFallbackRunner` 测试。
 
 ### P6.2 Widget / Smoke
 
@@ -462,17 +465,19 @@ V1 的目标是建立“后续所有阅读能力可以共用的底座”，不�
 ### P6.5 文档更新
 
 - [x] 更新本文档每阶段进度。
-- [ ] 更新 roadmap 中 V1 完成状态。
-- [ ] 记录 V1 遗留问题。
-- [ ] 明确 V2 入口任务。
+- [x] 更新 roadmap 中 V1 完成状态。
+- [x] 记录 V1 遗留问题。
+- [x] 明确 V2 入口任务。
 
 ### P6 验收
 
-- [ ] `flutter analyze` 通过。
-- [x] P1-P3 新增单测通过。
+- [ ] 全量 `flutter analyze` 通过。
+- [x] 新增文件定向 `flutter analyze` 通过。
+- [x] P1-P5 新增单测通过。
+- [x] V2-P0-P3 新增单测通过。
 - [ ] 关键 reader 测试通过。
 - [ ] 默认 legacy 行为不变。
-- [ ] adapterOnly 可观测、可关闭、可 fallback。
+- [x] adapterOnly 可观测、可关闭、可 fallback。
 
 ---
 
@@ -484,9 +489,9 @@ V1 的目标是建立“后续所有阅读能力可以共用的底座”，不�
 - [x] 2. 实现 P1 `ReaderSurfacePosition`。
 - [x] 3. 实现 P2 layout model。
 - [x] 4. 实现 P3 旧分页 adapter。
-- [ ] 5. 实现 P4 工具服务。
-- [ ] 6. 实现 P5 feature flag 和 diagnostics。
-- [ ] 7. 完成 P6 测试与验收。
+- [x] 5. 实现 P4 工具服务。
+- [x] 6. 实现 P5 feature flag 和 diagnostics。
+- [ ] 7. 完成 P6 手工 smoke 与样本验收。
 
 并行策略：
 
@@ -516,9 +521,9 @@ V1 完成必须同时满足：
 - [x] 有 `ReaderSurfacePosition`，并能从旧 progress 映射。
 - [x] 有 `ReaderLayoutPage / Line / Column / Position / Range`。
 - [x] 有旧 `ReaderPagedSlice` 到 layout page 的 adapter。
-- [ ] 有 hitTest/rangeToRects 的最小工具服务。
-- [ ] 有 feature flag，默认 legacy。
-- [ ] adapterOnly 模式失败不影响阅读。
+- [x] 有 hitTest/rangeToRects 的最小工具服务。
+- [x] 有 feature flag，默认 legacy。
+- [x] adapterOnly 模式失败不影响阅读。
 - [ ] 有对应单测和 smoke。
 - [ ] 文档进度更新到 100%。
 
@@ -528,6 +533,7 @@ V1 完成必须同时满足：
 
 V1 完成后，V2 才建议做：
 
+- [x] 已创建 V2 执行计划：`reader-core-modernization-v2-execution-plan-2026-06-20.md`。
 - [ ] 真正的 `ReaderLayoutEngine`。
 - [ ] 增量分页流。
 - [ ] Layout cache。

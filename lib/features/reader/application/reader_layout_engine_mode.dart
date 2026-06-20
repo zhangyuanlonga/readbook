@@ -79,7 +79,6 @@ class ReaderLayoutFallbackRunner {
           layoutPageCount: 0,
           elapsedMicros: 0,
           surfaceKind: surfaceKind,
-          fallbackReason: 'legacy_mode',
         ),
       );
     }
