@@ -12,6 +12,7 @@ import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
+import '../../../app/widgets/foundation/app_button.dart';
 import '../../../app/widgets/foundation/app_feedback.dart';
 import '../../../app/widgets/foundation/app_progress.dart';
 import '../../../app/widgets/foundation/app_refresh_indicator.dart';
@@ -434,15 +435,16 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
                 LayoutBuilder(
                   builder: (context, constraints) {
                     final compact = constraints.maxWidth < 360;
-                    final loginButton = FilledButton.icon(
+                    final loginButton = AppButton(
+                      label: '去登录',
                       onPressed: () => context.push('/auth'),
                       icon: const Icon(Icons.login_rounded),
-                      label: const Text('去登录'),
                     );
-                    final membershipButton = OutlinedButton.icon(
+                    final membershipButton = AppButton(
+                      label: '了解会员',
+                      variant: AppButtonVariant.secondary,
                       onPressed: () => context.push('/membership'),
                       icon: const Icon(Icons.workspace_premium_outlined),
-                      label: const Text('了解会员'),
                     );
                     if (compact) {
                       return Column(
@@ -551,39 +553,25 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
                         context,
                         constraints,
                       ).isCompactDensity;
-                  final refreshButton = OutlinedButton.icon(
+                  final refreshButton = AppButton(
+                    label: '刷新资料',
+                    variant: AppButtonVariant.secondary,
                     onPressed: _isLoadingProfile ? null : _refreshPage,
                     icon: const Icon(Icons.refresh_rounded),
-                    label: const Text('刷新资料'),
                   );
-                  final clearCacheButton = OutlinedButton.icon(
+                  final clearCacheButton = AppButton(
+                    label: _isClearingCache ? '清除中...' : '清除缓存',
+                    variant: AppButtonVariant.secondary,
                     onPressed: _isClearingCache ? null : _handleClearCache,
-                    icon:
-                        _isClearingCache
-                            ? const AppProgressIndicator(
-                              size: 16,
-                              strokeWidth: 2,
-                              semanticLabel: '清除缓存',
-                            )
-                            : const Icon(Icons.cleaning_services_outlined),
-                    label: Text(_isClearingCache ? '清除中...' : '清除缓存'),
+                    icon: const Icon(Icons.cleaning_services_outlined),
+                    isLoading: _isClearingCache,
                   );
-                  final logoutButton = FilledButton.icon(
+                  final logoutButton = AppButton(
+                    label: _isLoggingOut ? '退出中...' : '退出登录',
+                    variant: AppButtonVariant.danger,
                     onPressed: _isLoggingOut ? null : _handleLogout,
-                    icon:
-                        _isLoggingOut
-                            ? AppProgressIndicator(
-                              size: 16,
-                              strokeWidth: 2,
-                              color: Theme.of(context).colorScheme.onPrimary,
-                              semanticLabel: '退出登录',
-                            )
-                            : const Icon(Icons.logout_rounded),
-                    label: Text(_isLoggingOut ? '退出中...' : '退出登录'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: colorScheme.error,
-                      foregroundColor: colorScheme.onError,
-                    ),
+                    icon: const Icon(Icons.logout_rounded),
+                    isLoading: _isLoggingOut,
                   );
                   if (compact) {
                     return Column(
@@ -805,20 +793,11 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
                 ],
               ),
             ),
-            FilledButton.icon(
+            AppButton(
+              label: '开通会员',
+              size: AppButtonSize.compact,
               onPressed: () => context.push('/membership'),
               icon: const Icon(Icons.workspace_premium_rounded, size: 16),
-              label: const Text('开通会员'),
-              style: FilledButton.styleFrom(
-                minimumSize: const Size(0, 36),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                textStyle: Theme.of(
-                  context,
-                ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w800),
-              ),
             ),
           ],
         ),
@@ -879,17 +858,12 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
                     ),
                   ),
                 ),
-                TextButton.icon(
+                AppButton(
+                  label: '查看权益',
+                  variant: AppButtonVariant.text,
+                  size: AppButtonSize.compact,
                   onPressed: () => context.push('/membership'),
                   icon: const Icon(Icons.chevron_right_rounded, size: 16),
-                  label: const Text('查看权益'),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    minimumSize: const Size(0, 32),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    textStyle: Theme.of(context).textTheme.labelMedium
-                        ?.copyWith(fontWeight: FontWeight.w800),
-                  ),
                 ),
               ],
             ),

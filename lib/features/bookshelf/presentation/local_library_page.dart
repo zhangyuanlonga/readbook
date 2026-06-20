@@ -434,18 +434,19 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
                 status: _taskStatus ?? status,
                 primaryAction:
                     !_isImporting && _lastImportedResult != null
-                        ? FilledButton.icon(
+                        ? AppButton(
+                          label: '立即阅读',
                           onPressed: _openLatestImportedBook,
                           icon: const Icon(Icons.menu_book_rounded),
-                          label: const Text('立即阅读'),
                         )
                         : null,
                 secondaryAction:
                     !_isImporting && _lastImportedResult != null
-                        ? OutlinedButton.icon(
+                        ? AppButton(
+                          label: '返回书架',
+                          variant: AppButtonVariant.secondary,
                           onPressed: _returnToBookshelf,
                           icon: const Icon(Icons.library_books_outlined),
-                          label: const Text('返回书架'),
                         )
                         : null,
               );
@@ -681,30 +682,32 @@ class _LocalLibraryPageState extends ConsumerState<LocalLibraryPage> {
               spacing: 10,
               runSpacing: 10,
               children: [
-                FilledButton.icon(
+                AppButton(
+                  label:
+                      _isImporting
+                          ? '导入中'
+                          : supportsImport
+                          ? '选择文件'
+                          : '暂不可用',
                   onPressed:
                       _isImporting || !supportsImport
                           ? null
                           : _pickAndImportFiles,
                   icon: const Icon(Icons.upload_file_outlined),
-                  label: Text(
-                    _isImporting
-                        ? '导入中'
-                        : supportsImport
-                        ? '选择文件'
-                        : '暂不可用',
-                  ),
+                  isLoading: _isImporting,
                 ),
                 if (!_isImporting && _lastImportedResult != null) ...[
-                  OutlinedButton.icon(
+                  AppButton(
+                    label: '立即阅读',
+                    variant: AppButtonVariant.secondary,
                     onPressed: _openLatestImportedBook,
                     icon: const Icon(Icons.menu_book_rounded),
-                    label: const Text('立即阅读'),
                   ),
-                  OutlinedButton.icon(
+                  AppButton(
+                    label: '返回书架',
+                    variant: AppButtonVariant.secondary,
                     onPressed: _returnToBookshelf,
                     icon: const Icon(Icons.library_books_outlined),
-                    label: const Text('返回书架'),
                   ),
                 ],
               ],

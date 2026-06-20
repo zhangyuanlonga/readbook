@@ -30,6 +30,12 @@ void main() {
                 },
               ),
               const AppButton(label: '保存中', isLoading: true, onPressed: null),
+              const AppButton(
+                label: '紧凑',
+                size: AppButtonSize.compact,
+                variant: AppButtonVariant.secondary,
+                onPressed: null,
+              ),
             ],
           ),
         ),
@@ -40,6 +46,7 @@ void main() {
     expect(tapped, isTrue);
     expect(find.byIcon(Icons.save_rounded), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.text('紧凑'), findsOneWidget);
 
     final expandedBox = tester.widget<SizedBox>(
       find.ancestor(of: find.text('保存'), matching: find.byType(SizedBox)).first,

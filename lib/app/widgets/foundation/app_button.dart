@@ -4,12 +4,15 @@ import '../../theme/app_component_theme_tokens.dart';
 
 enum AppButtonVariant { primary, secondary, tonal, danger, ghost, text }
 
+enum AppButtonSize { standard, compact }
+
 class AppButton extends StatelessWidget {
   const AppButton({
     super.key,
     required this.label,
     required this.onPressed,
     this.variant = AppButtonVariant.primary,
+    this.size = AppButtonSize.standard,
     this.icon,
     this.isLoading = false,
     this.expanded = false,
@@ -21,6 +24,7 @@ class AppButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
   final AppButtonVariant variant;
+  final AppButtonSize size;
   final Widget? icon;
   final bool isLoading;
   final bool expanded;
@@ -37,40 +41,41 @@ class AppButton extends StatelessWidget {
       isLoading: isLoading,
       variant: variant,
     );
+    final resolvedStyle = _sizeStyle(context).merge(style);
     final button = switch (variant) {
       AppButtonVariant.primary => FilledButton(
         onPressed: effectiveOnPressed,
-        style: style,
+        style: resolvedStyle,
         autofocus: autofocus,
         child: child,
       ),
       AppButtonVariant.secondary => OutlinedButton(
         onPressed: effectiveOnPressed,
-        style: style,
+        style: resolvedStyle,
         autofocus: autofocus,
         child: child,
       ),
       AppButtonVariant.tonal => FilledButton.tonal(
         onPressed: effectiveOnPressed,
-        style: style,
+        style: resolvedStyle,
         autofocus: autofocus,
         child: child,
       ),
       AppButtonVariant.danger => FilledButton(
         onPressed: effectiveOnPressed,
-        style: _dangerStyle(context).merge(style),
+        style: _dangerStyle(context).merge(resolvedStyle),
         autofocus: autofocus,
         child: child,
       ),
       AppButtonVariant.ghost => TextButton(
         onPressed: effectiveOnPressed,
-        style: style,
+        style: resolvedStyle,
         autofocus: autofocus,
         child: child,
       ),
       AppButtonVariant.text => TextButton(
         onPressed: effectiveOnPressed,
-        style: style,
+        style: resolvedStyle,
         autofocus: autofocus,
         child: child,
       ),
@@ -81,6 +86,30 @@ class AppButton extends StatelessWidget {
       return content;
     }
     return Tooltip(message: tooltip!, child: content);
+  }
+
+  ButtonStyle _sizeStyle(BuildContext context) {
+    if (size == AppButtonSize.standard) {
+      return const ButtonStyle();
+    }
+    final theme = Theme.of(context);
+    final tokens = appComponentThemeTokensOf(context);
+    return ButtonStyle(
+      minimumSize: const WidgetStatePropertyAll(Size(0, 34)),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      padding: const WidgetStatePropertyAll(
+        EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      ),
+      // UI-GOV-EXEMPT: shape-property rounded-shape border-radius tokenized-component
+      shape: WidgetStatePropertyAll(
+        RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(tokens.button.radius),
+        ),
+      ),
+      textStyle: WidgetStatePropertyAll(
+        theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700),
+      ),
+    );
   }
 
   ButtonStyle _dangerStyle(BuildContext context) {

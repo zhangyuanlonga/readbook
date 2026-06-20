@@ -46,25 +46,6 @@ class BookshelfTaxonomyPickerSurface extends StatelessWidget {
         desktopLike
             ? const EdgeInsets.fromLTRB(18, 16, 18, 14)
             : const EdgeInsets.fromLTRB(16, 14, 16, 16);
-    final compactButtonStyle = TextButton.styleFrom(
-      minimumSize: const Size(0, 32),
-      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      textStyle: theme.textTheme.labelMedium?.copyWith(
-        fontWeight: FontWeight.w700,
-      ),
-    );
-    final saveButtonStyle = FilledButton.styleFrom(
-      minimumSize: const Size(0, 34),
-      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      textStyle: theme.textTheme.labelMedium?.copyWith(
-        fontWeight: FontWeight.w700,
-      ),
-    );
-
     return Padding(
       padding: padding,
       child: Column(
@@ -107,11 +88,12 @@ class BookshelfTaxonomyPickerSurface extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 10),
-              TextButton.icon(
-                style: compactButtonStyle,
+              AppButton(
+                label: createLabel,
+                variant: AppButtonVariant.text,
+                size: AppButtonSize.compact,
                 onPressed: onCreate,
                 icon: const Icon(Icons.add_rounded, size: 17),
-                label: Text(createLabel),
               ),
             ],
           ),
@@ -140,17 +122,18 @@ class BookshelfTaxonomyPickerSurface extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              TextButton(
-                style: compactButtonStyle,
+              AppButton(
+                label: '取消',
+                variant: AppButtonVariant.text,
+                size: AppButtonSize.compact,
                 onPressed: onCancel,
-                child: const Text('取消'),
               ),
               const SizedBox(width: 8),
-              FilledButton.icon(
-                style: saveButtonStyle,
+              AppButton(
+                label: '保存',
+                size: AppButtonSize.compact,
                 onPressed: onSave,
                 icon: const Icon(Icons.check_rounded, size: 17),
-                label: const Text('保存'),
               ),
             ],
           ),
@@ -240,9 +223,18 @@ class BookshelfInlineTaxonomyCreatePanel extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              TextButton(onPressed: onCancel, child: const Text('取消')),
+              AppButton(
+                label: '取消',
+                variant: AppButtonVariant.text,
+                size: AppButtonSize.compact,
+                onPressed: onCancel,
+              ),
               const SizedBox(width: 8),
-              FilledButton(onPressed: onSubmit, child: const Text('添加')),
+              AppButton(
+                label: '添加',
+                size: AppButtonSize.compact,
+                onPressed: onSubmit,
+              ),
             ],
           ),
         ],
