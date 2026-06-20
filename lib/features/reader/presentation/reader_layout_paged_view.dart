@@ -14,12 +14,18 @@ class ReaderLayoutTextAnnotationRange {
     required this.startOffset,
     required this.endOffset,
     this.hasHighlight = true,
+    this.hasBold = false,
+    this.hasUnderline = false,
+    this.hasWavyUnderline = false,
     this.color,
   }) : assert(endOffset >= startOffset);
 
   final int startOffset;
   final int endOffset;
   final bool hasHighlight;
+  final bool hasBold;
+  final bool hasUnderline;
+  final bool hasWavyUnderline;
   final Color? color;
 }
 
@@ -62,6 +68,7 @@ class ReaderLayoutPagedView extends StatefulWidget {
 class _ReaderLayoutPagedViewState extends State<ReaderLayoutPagedView> {
   PageController? _ownedPageController;
   int? _pendingJumpPage;
+  ({int pageIndex, double dx, double dy})? _selectionDragStart;
 
   @override
   void initState() {
@@ -152,9 +159,10 @@ class _ReaderLayoutPagedViewState extends State<ReaderLayoutPagedView> {
       itemCount: pages.length,
       onPageChanged: widget.onPageChanged,
       itemBuilder: (context, index) {
+        final layoutPage = pages[index];
         final renderPage =
             const ReaderLayoutRenderModelBuilder().buildPages(
-              <ReaderLayoutPage>[pages[index]],
+              <ReaderLayoutPage>[layoutPage],
             ).single;
         Widget pageChild = Align(
           alignment: Alignment.topLeft,
@@ -170,16 +178,20 @@ class _ReaderLayoutPagedViewState extends State<ReaderLayoutPagedView> {
         if (widget.onSelectionChanged != null) {
           pageChild = GestureDetector(
             behavior: HitTestBehavior.translucent,
-            onLongPressStart: (details) {
-              final selection = widget.selectionRuntime.selectWordAt(
-                layoutPages: pages,
-                pageIndex: pages[index].pageIndex,
-                dx: details.localPosition.dx,
-                dy: details.localPosition.dy,
-              );
-              if (selection != null) {
-                widget.onSelectionChanged?.call(selection);
-              }
+            onLongPressStart:
+                (details) => _handleLongPressStart(
+                  pages: pages,
+                  page: layoutPage,
+                  details: details,
+                ),
+            onLongPressMoveUpdate:
+                (details) => _handleLongPressMoveUpdate(
+                  pages: pages,
+                  page: layoutPage,
+                  details: details,
+                ),
+            onLongPressEnd: (_) {
+              _selectionDragStart = null;
             },
             child: pageChild,
           );
@@ -203,6 +215,89 @@ class _ReaderLayoutPagedViewState extends State<ReaderLayoutPagedView> {
         ),
       ],
     );
+  }
+
+  void _handleLongPressStart({
+    required List<ReaderLayoutPage> pages,
+    required ReaderLayoutPage page,
+    required LongPressStartDetails details,
+  }) {
+    _selectionDragStart = (
+      pageIndex: page.pageIndex,
+      dx: details.localPosition.dx,
+      dy: details.localPosition.dy,
+    );
+    final selection = widget.selectionRuntime.selectWordAt(
+      layoutPages: pages,
+      pageIndex: page.pageIndex,
+      dx: details.localPosition.dx,
+      dy: details.localPosition.dy,
+    );
+    if (selection != null) {
+      widget.onSelectionChanged?.call(selection);
+    }
+  }
+
+  void _handleLongPressMoveUpdate({
+    required List<ReaderLayoutPage> pages,
+    required ReaderLayoutPage page,
+    required LongPressMoveUpdateDetails details,
+  }) {
+    final start = _selectionDragStart;
+    if (start == null) {
+      return;
+    }
+    final endpoint = _resolveSelectionDragEndpoint(
+      pages: pages,
+      page: page,
+      localPosition: details.localPosition,
+    );
+    final selection = widget.selectionRuntime.selectBetweenPoints(
+      layoutPages: pages,
+      startPageIndex: start.pageIndex,
+      startDx: start.dx,
+      startDy: start.dy,
+      endPageIndex: endpoint.pageIndex,
+      endDx: endpoint.dx,
+      endDy: endpoint.dy,
+    );
+    if (selection != null) {
+      widget.onSelectionChanged?.call(selection);
+    }
+  }
+
+  ({int pageIndex, double dx, double dy}) _resolveSelectionDragEndpoint({
+    required List<ReaderLayoutPage> pages,
+    required ReaderLayoutPage page,
+    required Offset localPosition,
+  }) {
+    var targetPage = page;
+    var dx = localPosition.dx;
+    if (dx < 0) {
+      targetPage = _pageByIndex(pages, page.pageIndex - 1) ?? page;
+      if (targetPage != page) {
+        dx = targetPage.contentWidth + dx;
+      }
+    } else if (dx > page.contentWidth) {
+      targetPage = _pageByIndex(pages, page.pageIndex + 1) ?? page;
+      if (targetPage != page) {
+        dx = dx - page.contentWidth;
+      }
+    }
+    return (
+      pageIndex: targetPage.pageIndex,
+      dx: dx.clamp(0.0, targetPage.contentWidth).toDouble(),
+      dy: localPosition.dy.clamp(0.0, targetPage.contentHeight).toDouble(),
+    );
+  }
+
+  ReaderLayoutPage? _pageByIndex(List<ReaderLayoutPage> pages, int pageIndex) {
+    for (final page in pages) {
+      if (page.pageIndex == pageIndex) {
+        return page;
+      }
+    }
+    return null;
   }
 }
 
@@ -301,9 +396,6 @@ class _ReaderLayoutFragmentView extends StatelessWidget {
     }
     final ranges = <ReaderLayoutTextAnnotationRange>[];
     for (final range in annotationRanges) {
-      if (!range.hasHighlight) {
-        continue;
-      }
       final overlapStart = math.max(range.startOffset, fragment.startOffset);
       final overlapEnd = math.min(range.endOffset, fragment.endOffset);
       if (overlapEnd <= overlapStart) {
@@ -313,6 +405,10 @@ class _ReaderLayoutFragmentView extends StatelessWidget {
         ReaderLayoutTextAnnotationRange(
           startOffset: overlapStart - fragment.startOffset,
           endOffset: overlapEnd - fragment.startOffset,
+          hasHighlight: range.hasHighlight,
+          hasBold: range.hasBold,
+          hasUnderline: range.hasUnderline,
+          hasWavyUnderline: range.hasWavyUnderline,
           color: range.color,
         ),
       );
@@ -348,14 +444,68 @@ class ReaderLayoutTextPainter extends StatelessWidget {
         ),
         child: Align(
           alignment: Alignment.topLeft,
-          child: Text(
-            text,
+          child: RichText(
             maxLines: 1,
             overflow: TextOverflow.clip,
-            style: textStyle,
+            text: _buildTextSpan(),
           ),
         ),
       ),
+    );
+  }
+
+  TextSpan _buildTextSpan() {
+    if (text.isEmpty || annotationRanges.isEmpty) {
+      return TextSpan(text: text, style: textStyle);
+    }
+
+    final boundaries = <int>{0, text.length};
+    for (final range in annotationRanges) {
+      boundaries
+        ..add(range.startOffset.clamp(0, text.length).toInt())
+        ..add(range.endOffset.clamp(0, text.length).toInt());
+    }
+    final sortedBoundaries = boundaries.toList(growable: false)..sort();
+    final children = <InlineSpan>[];
+    for (var index = 0; index < sortedBoundaries.length - 1; index++) {
+      final start = sortedBoundaries[index];
+      final end = sortedBoundaries[index + 1];
+      if (end <= start) {
+        continue;
+      }
+      final segmentText = text.substring(start, end);
+      final activeRanges = annotationRanges
+          .where((range) => start < range.endOffset && end > range.startOffset)
+          .toList(growable: false);
+      children.add(
+        TextSpan(text: segmentText, style: _styleForRanges(activeRanges)),
+      );
+    }
+    return TextSpan(style: textStyle, children: children);
+  }
+
+  TextStyle _styleForRanges(List<ReaderLayoutTextAnnotationRange> ranges) {
+    if (ranges.isEmpty) {
+      return textStyle;
+    }
+    final hasBold = ranges.any((range) => range.hasBold);
+    final hasWavy = ranges.any((range) => range.hasWavyUnderline);
+    final hasUnderline = ranges.any((range) => range.hasUnderline) || hasWavy;
+    Color? decorationColor = textStyle.color;
+    for (final range in ranges) {
+      if (range.color != null) {
+        decorationColor = range.color;
+        break;
+      }
+    }
+    return textStyle.copyWith(
+      fontWeight: hasBold ? FontWeight.w700 : textStyle.fontWeight,
+      decoration:
+          hasUnderline ? TextDecoration.underline : textStyle.decoration,
+      decorationStyle:
+          hasWavy ? TextDecorationStyle.wavy : textStyle.decorationStyle,
+      decorationColor:
+          hasUnderline ? decorationColor : textStyle.decorationColor,
     );
   }
 }
@@ -386,6 +536,9 @@ class _ReaderLayoutTextHighlightPainter extends CustomPainter {
       maxLines: 1,
     )..layout(maxWidth: size.width);
     for (final range in ranges) {
+      if (!range.hasHighlight) {
+        continue;
+      }
       final start = range.startOffset.clamp(0, text.length).toInt();
       final end = range.endOffset.clamp(start, text.length).toInt();
       if (end <= start) {

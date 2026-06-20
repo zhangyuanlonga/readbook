@@ -3,10 +3,12 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart' as crypto;
 
 import '../../../domain/entities/reader_document.dart';
+import '../../../domain/entities/reader_settings.dart';
 import 'reader_content_session.dart';
 import 'reader_layout_diagnostics_service.dart';
 import 'reader_layout_engine_mode.dart';
 import 'reader_mode_model.dart';
+import 'reader_page_turn_delegate.dart';
 
 class ReaderLayoutReleasePolicy {
   const ReaderLayoutReleasePolicy({
@@ -14,6 +16,7 @@ class ReaderLayoutReleasePolicy {
     this.forceLegacy = _forceLegacyFromEnvironment,
     this.showDiagnosticsOverlay = _showDiagnosticsOverlayFromEnvironment,
     this.maxContentLength = _maxContentLengthFromEnvironment,
+    this.pageTurnDelegate = const ReaderPageTurnDelegate(),
   });
 
   static const bool _releaseEnabledFromEnvironment = bool.fromEnvironment(
@@ -34,12 +37,14 @@ class ReaderLayoutReleasePolicy {
   final bool forceLegacy;
   final bool showDiagnosticsOverlay;
   final int maxContentLength;
+  final ReaderPageTurnDelegate pageTurnDelegate;
 
   ReaderLayoutReleaseDecision resolve({
     required ReaderContentMode contentMode,
     required ReaderModeViewportKind viewportKind,
     required bool hasRenderableText,
     required int contentLength,
+    ReaderPageAnimationStyle pageAnimationStyle = ReaderPageAnimationStyle.none,
   }) {
     final disabledReason = _resolveDisabledReason(
       contentMode: contentMode,
@@ -47,10 +52,23 @@ class ReaderLayoutReleasePolicy {
       hasRenderableText: hasRenderableText,
       contentLength: contentLength,
     );
-    final enabled = disabledReason == null;
+    final pageTurnDecision =
+        disabledReason == null
+            ? pageTurnDelegate.resolve(
+              ReaderPageTurnDelegateRequest(
+                surface: ReaderPageTurnRendererSurface.layoutRelease,
+                requestedStyle: pageAnimationStyle,
+              ),
+            )
+            : null;
+    final pageTurnFallbackReason =
+        pageTurnDecision?.usesLegacyFallback == true
+            ? pageTurnDecision!.reason
+            : null;
+    final enabled = disabledReason == null && pageTurnFallbackReason == null;
     return ReaderLayoutReleaseDecision(
       useReleaseRenderer: enabled,
-      reason: disabledReason ?? 'enabled',
+      reason: disabledReason ?? pageTurnFallbackReason ?? 'enabled',
       mode:
           enabled
               ? ReaderLayoutEngineMode.experimental
@@ -60,6 +78,8 @@ class ReaderLayoutReleasePolicy {
       releaseEnabled: releaseEnabled,
       forceLegacy: forceLegacy,
       maxContentLength: maxContentLength,
+      requestedPageAnimationStyle: pageAnimationStyle,
+      pageTurnDelegateReason: pageTurnDecision?.reason,
     );
   }
 
@@ -142,6 +162,8 @@ class ReaderLayoutReleaseDecision {
     required this.releaseEnabled,
     required this.forceLegacy,
     required this.maxContentLength,
+    required this.requestedPageAnimationStyle,
+    this.pageTurnDelegateReason,
   });
 
   final bool useReleaseRenderer;
@@ -152,6 +174,8 @@ class ReaderLayoutReleaseDecision {
   final bool releaseEnabled;
   final bool forceLegacy;
   final int maxContentLength;
+  final ReaderPageAnimationStyle requestedPageAnimationStyle;
+  final String? pageTurnDelegateReason;
 
   ReaderLayoutDevOptions get options {
     return ReaderLayoutDevOptions(
@@ -168,6 +192,9 @@ class ReaderLayoutReleaseDecision {
       'readerLayoutReleaseMode': mode.name,
       'readerLayoutReleaseForceLegacy': forceLegacy,
       'readerLayoutReleaseShowDiagnostics': showDiagnosticsOverlay,
+      'readerLayoutReleaseRequestedAnimation': requestedPageAnimationStyle.name,
+      if (pageTurnDelegateReason != null)
+        'readerLayoutReleasePageTurnDelegate': pageTurnDelegateReason,
       if (maxContentLength > 0)
         'readerLayoutReleaseMaxContentLength': maxContentLength,
     };

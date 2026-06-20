@@ -86,6 +86,26 @@ void main() {
       expect(decision.message, contains('纸页卷动'));
     });
 
+    test('rejects page commands while selection is active', () {
+      final decision = dispatcher.resolve(
+        command: const ReaderNavigationCommand.nextPage(
+          source: ReaderNavigationCommandSource.volumeKey,
+        ),
+        snapshot: _snapshot(selectionActive: true),
+      );
+      final chapterDecision = dispatcher.resolve(
+        command: const ReaderNavigationCommand.nextChapter(),
+        snapshot: _snapshot(selectionActive: true, currentChapterIndex: 1),
+      );
+
+      expect(decision.shouldExecute, isFalse);
+      expect(
+        decision.rejectReason,
+        ReaderNavigationCommandRejectReason.selectionActive,
+      );
+      expect(chapterDecision.shouldExecute, isTrue);
+    });
+
     test('validates jump chapter target', () {
       final invalid = dispatcher.resolve(
         command: const ReaderNavigationCommand.jumpChapter(
@@ -122,6 +142,7 @@ ReaderNavigationCommandSnapshot _snapshot({
   bool isLocalContent = false,
   bool usesContinuousTextFlow = false,
   bool hasError = false,
+  bool selectionActive = false,
 }) {
   return ReaderNavigationCommandSnapshot(
     mounted: mounted,
@@ -138,5 +159,6 @@ ReaderNavigationCommandSnapshot _snapshot({
     viewportKind: 'textPaged',
     contentMode: 'text',
     hasError: hasError,
+    selectionActive: selectionActive,
   );
 }

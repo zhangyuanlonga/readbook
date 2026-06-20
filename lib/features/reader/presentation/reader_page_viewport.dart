@@ -649,6 +649,9 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
           _paragraphs.any((paragraph) => paragraph.trim().isNotEmpty) ||
           _content.trim().isNotEmpty,
       contentLength: _chapterTextLength(),
+      pageAnimationStyle:
+          _currentReaderMode.pageAnimationStyle ??
+          ReaderPageAnimationStyle.none,
     );
   }
 
@@ -815,6 +818,10 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
           startOffset: start,
           endOffset: end,
           hasHighlight: _bookmarkHasHighlight(bookmark),
+          hasBold: bookmark.isBold,
+          hasUnderline: bookmark.isUnderline,
+          hasWavyUnderline: bookmark.isWavy,
+          color: _layoutReleaseBookmarkColor(bookmark),
         ),
       );
     }
@@ -827,5 +834,17 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
       );
     }
     return List<ReaderLayoutTextAnnotationRange>.unmodifiable(ranges);
+  }
+
+  Color? _layoutReleaseBookmarkColor(Bookmark bookmark) {
+    final raw = bookmark.color?.trim();
+    if (raw == null ||
+        raw.isEmpty ||
+        raw == _ReaderPageState._kBookmarkNoHighlightToken ||
+        raw == readerBookmarkDefaultHighlightToken) {
+      return null;
+    }
+    final parsed = _parseReaderHexColor(raw);
+    return parsed == null ? null : Color(parsed);
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shuxiang_reading_next/domain/entities/reader_document.dart';
+import 'package:shuxiang_reading_next/domain/entities/reader_settings.dart';
 import 'package:shuxiang_reading_next/features/reader/application/reader_content_session.dart';
 import 'package:shuxiang_reading_next/features/reader/application/reader_layout_engine_mode.dart';
 import 'package:shuxiang_reading_next/features/reader/application/reader_layout_release_policy.dart';
@@ -70,6 +71,26 @@ void main() {
 
       expect(decision.useReleaseRenderer, isFalse);
       expect(decision.reason, 'content_length_over_cap');
+    });
+
+    test('keeps legacy renderer for old page animations not yet bridged', () {
+      const policy = ReaderLayoutReleasePolicy();
+
+      final decision = policy.resolve(
+        contentMode: ReaderContentMode.text,
+        viewportKind: ReaderModeViewportKind.textPaged,
+        hasRenderableText: true,
+        contentLength: 120,
+        pageAnimationStyle: ReaderPageAnimationStyle.paperCurl,
+      );
+
+      expect(decision.useReleaseRenderer, isFalse);
+      expect(decision.mode, ReaderLayoutEngineMode.legacy);
+      expect(decision.reason, 'layout_release_page_animation_requires_legacy');
+      expect(
+        decision.toDiagnosticsContext(),
+        containsPair('readerLayoutReleaseRequestedAnimation', 'paperCurl'),
+      );
     });
 
     test('builds stable document fingerprints', () {

@@ -30,7 +30,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('正文'), findsOneWidget);
+    expect(_richTextWithPlainText('正文'), findsOneWidget);
     expect(find.byType(ReaderLayoutTextPainter), findsOneWidget);
     expect(
       find.byWidgetPredicate(
@@ -68,7 +68,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(changedPage, 1);
-    expect(find.text('第二页'), findsOneWidget);
+    expect(_richTextWithPlainText('第二页'), findsOneWidget);
   });
 
   testWidgets('ReaderLayoutPagedView reports runtime selection on long press', (
@@ -95,7 +95,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final gesture = await tester.startGesture(
-      tester.getCenter(find.text('hello')),
+      tester.getCenter(_richTextWithPlainText('hello')),
     );
     await tester.pump(const Duration(milliseconds: 650));
     await gesture.up();
@@ -104,6 +104,117 @@ void main() {
     expect(selection, isNotNull);
     expect(selection!.selectedText, 'hello');
   });
+
+  testWidgets('ReaderLayoutPagedView paints annotation text styles', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 320,
+            height: 480,
+            child: ReaderLayoutPagedView(
+              pages: <ReaderLayoutPage>[_page(text: 'abc')],
+              textStyle: const TextStyle(fontSize: 14),
+              annotationRanges: const <ReaderLayoutTextAnnotationRange>[
+                ReaderLayoutTextAnnotationRange(
+                  startOffset: 0,
+                  endOffset: 3,
+                  hasBold: true,
+                  hasWavyUnderline: true,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final richText = tester.widget<RichText>(
+      find
+          .descendant(
+            of: find.byType(ReaderLayoutTextPainter),
+            matching: find.byType(RichText),
+          )
+          .first,
+    );
+    final span = _firstTextSpan(richText.text as TextSpan, 'abc');
+
+    expect(span?.style?.fontWeight, FontWeight.w700);
+    expect(span?.style?.decoration, TextDecoration.underline);
+    expect(span?.style?.decorationStyle, TextDecorationStyle.wavy);
+  });
+
+  testWidgets('ReaderLayoutPagedView updates selection across adjacent pages', (
+    tester,
+  ) async {
+    ReaderLayoutSelectionSnapshot? selection;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 320,
+            height: 480,
+            child: ReaderLayoutPagedView(
+              pages: <ReaderLayoutPage>[
+                _page(text: 'alpha'),
+                _page(text: 'beta', pageIndex: 1, startOffset: 6),
+              ],
+              textStyle: const TextStyle(fontSize: 14),
+              onSelectionChanged: (value) {
+                selection = value;
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(_richTextWithPlainText('alpha')),
+    );
+    await tester.pump(const Duration(milliseconds: 650));
+    await gesture.moveBy(const Offset(360, 0));
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(selection, isNotNull);
+    expect(
+      selection!.segments.map((segment) => segment.pageIndex),
+      containsAll(<int>[0, 1]),
+    );
+  });
+}
+
+TextSpan? _firstTextSpan(TextSpan root, String text) {
+  if (root.text == text) {
+    return root;
+  }
+  final children = root.children;
+  if (children == null) {
+    return null;
+  }
+  for (final child in children) {
+    if (child is! TextSpan) {
+      continue;
+    }
+    final found = _firstTextSpan(child, text);
+    if (found != null) {
+      return found;
+    }
+  }
+  return null;
+}
+
+Finder _richTextWithPlainText(String text) {
+  return find.byWidgetPredicate(
+    (widget) => widget is RichText && widget.text.toPlainText() == text,
+    description: 'RichText with "$text"',
+  );
 }
 
 ReaderLayoutPage _page({

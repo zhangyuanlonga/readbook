@@ -33,6 +33,7 @@ enum ReaderNavigationCommandRejectReason {
   boundary,
   invalidTarget,
   unsupported,
+  selectionActive,
 }
 
 class ReaderNavigationCommand {
@@ -110,6 +111,7 @@ class ReaderNavigationCommandSnapshot {
     required this.viewportKind,
     required this.contentMode,
     this.hasError = false,
+    this.selectionActive = false,
   });
 
   final bool mounted;
@@ -126,6 +128,7 @@ class ReaderNavigationCommandSnapshot {
   final String viewportKind;
   final String contentMode;
   final bool hasError;
+  final bool selectionActive;
 
   bool get readerLoading => bootstrapping || loadingContent;
 }
@@ -180,6 +183,13 @@ class ReaderNavigationCommandDispatcher {
       return ReaderNavigationCommandDecision.reject(
         reason: ReaderNavigationCommandRejectReason.pageTurnBusy,
         message: snapshot.pageTurnBusyMessage ?? '章节切换处理中，请稍后再试。',
+      );
+    }
+
+    if (snapshot.selectionActive && command.isPageCommand) {
+      return const ReaderNavigationCommandDecision.reject(
+        reason: ReaderNavigationCommandRejectReason.selectionActive,
+        message: '文本选择中，请先完成当前操作。',
       );
     }
 

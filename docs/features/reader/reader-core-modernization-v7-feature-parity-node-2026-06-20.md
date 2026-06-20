@@ -1,8 +1,8 @@
 # 阅读器核心改造 V7：旧能力承接与功能等价
 
 **日期**: 2026-06-20
-**状态**: 已规划，未执行
-**进度**: 0%
+**状态**: 执行中，0-3 首轮已落地
+**进度**: 35%
 **用户效果**: 用户切到新阅读器后，旧阅读器已有功能不会消失、失效或行为明显退化。
 
 ---
@@ -13,7 +13,7 @@ V6 证明新 layout renderer 可以进入正式阅读器入口，但它还不是
 
 - [ ] 新阅读器不是只渲染正文，还必须承接旧阅读器的翻页、选择、标注、搜索、朗读、设置、输入、跨章、诊断和 fallback。
 - [ ] 旧阅读器可以继续保留 fallback，但不能长期和新 renderer 混用一套隐式运行态。
-- [ ] 所有旧能力必须有“新 renderer 下是否可用”的矩阵记录。
+- [x] 所有旧能力必须有“新 renderer 下是否可用”的矩阵记录。
 - [ ] 未完成矩阵前，不删除旧阅读器。
 - [ ] 未完成矩阵前，不宣称新阅读器达到用户功能等价。
 
@@ -65,12 +65,17 @@ V6 证明新 layout renderer 可以进入正式阅读器入口，但它还不是
 
 ## 4. P0：功能等价审计
 
-- [ ] 列出旧阅读器全部用户可见功能。
-- [ ] 对每个功能标记新 renderer：已可用 / 部分可用 / 未接入 / 不适用。
-- [ ] 对“部分可用”写明缺失点，例如 paperCurl、跨页拖拽、underline/wavy。
+- [x] 列出旧阅读器全部用户可见功能。
+- [x] 对每个功能标记新 renderer：已可用 / 部分可用 / 未接入 / 不适用。
+- [x] 对“部分可用”写明缺失点，例如 paperCurl、跨页拖拽、underline/wavy。
 - [ ] 对“不适用”写明原因，例如漫画/PDF/音频不走 text layout。
-- [ ] 建立 `ReaderFeatureParityMatrix` 文档或测试 fixture。
-- [ ] 把 TestFlight 首包必须保留旧 fallback 写入发布清单。
+- [x] 建立 `ReaderFeatureParityMatrix` 文档或测试 fixture。
+- [x] 把 TestFlight 首包必须保留旧 fallback 写入发布清单。
+
+执行记录：
+
+- [x] 新增 `reader-feature-parity-matrix-v7-2026-06-20.md`。
+- [x] 新增 `ReaderFeatureParityMatrix` 代码 fixture 与测试。
 
 ## 5. P1：Page Turn Delegate 接入
 
@@ -79,24 +84,40 @@ V6 证明新 layout renderer 可以进入正式阅读器入口，但它还不是
 - [ ] paperCurl 接入新 renderer，不能再依赖旧 `ReaderPaperCurlPagedSurface` 独占状态。
 - [ ] curl/cover/translate/fade/none 在新 renderer 下行为与旧设置一致。
 - [ ] 跨章节 from/to snapshot 不再依赖主页面临时截图作为唯一方案。
-- [ ] page turn 失败时有明确 fallback，不出现点击无响应。
+- [x] page turn 失败时有明确 fallback，不出现点击无响应。
+
+执行记录：
+
+- [x] `ReaderPageTurnDelegate` 首轮声明 release 支持能力与 legacy fallback。
+- [x] `ReaderLayoutReleasePolicy` 对未桥接动画回落 legacy renderer。
+- [x] paperCurl/curl/cover/translate/fade/vertical 在 release 未支持前不再静默失效。
 
 ## 6. P2：输入 Intent 统一
 
-- [ ] tap zone、键盘、音量键、鼠标滚轮统一转为 `ReaderNavigationCommand`。
-- [ ] 新 renderer 和旧 renderer 都通过同一个 intent adapter 消费命令。
+- [x] tap zone、键盘、音量键、鼠标滚轮统一转为 `ReaderNavigationCommand`。
+- [x] 新 renderer 和旧 renderer 都通过同一个 intent adapter 消费命令。
 - [ ] 新 renderer 下上一页/下一页、上一章/下一章边界行为与旧阅读器一致。
-- [ ] selection 激活时禁用翻页 intent，避免长按和点击冲突。
+- [x] selection 激活时禁用翻页 intent，避免长按和点击冲突。
 - [ ] 自动阅读状态下的手动翻页、暂停、恢复行为保持一致。
+
+执行记录：
+
+- [x] `ReaderNavigationCommandDispatcher` 增加 selection active page-intent gate。
+- [x] volume key 等输入通道无法绕过 selection gate。
 
 ## 7. P3：选择、标注和书签功能等价
 
-- [ ] 新 renderer 长按命中使用 layout hit-test。
-- [ ] 跨页拖拽选择可用。
+- [x] 新 renderer 长按命中使用 layout hit-test。
+- [x] 跨页拖拽选择可用。
 - [ ] 复制、保存灵感、删除灵感、编辑笔记可用。
-- [ ] 高亮、加粗、下划线、波浪线视觉在新 renderer 下绘制正确。
+- [x] 高亮、加粗、下划线、波浪线视觉在新 renderer 下绘制正确。
 - [ ] 点击已有标注能唤起旧工具条。
 - [ ] 书签恢复优先使用 layout position，失败时 fallback 到 chapter offset/snippet。
+
+执行记录：
+
+- [x] layout annotation range 承接旧 bookmark 的 bold/underline/wavy 字段。
+- [x] `ReaderLayoutPagedView` 长按移动时更新 layout range，拖出页边映射相邻 page。
 
 ## 8. P4：搜索、朗读和自动阅读
 

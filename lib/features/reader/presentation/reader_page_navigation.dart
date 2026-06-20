@@ -85,6 +85,7 @@ extension _ReaderPageNavigationExtension on _ReaderPageState {
       viewportKind: _currentViewportKind.name,
       contentMode: _currentContentMode.name,
       hasError: _errorText != null,
+      selectionActive: _isTextSelectionActive,
     );
   }
 
@@ -204,6 +205,7 @@ extension _ReaderPageNavigationExtension on _ReaderPageState {
       'usesContinuousTextFlow': snapshot.usesContinuousTextFlow,
       'viewportKind': snapshot.viewportKind,
       'contentMode': snapshot.contentMode,
+      'selectionActive': snapshot.selectionActive,
       'chapterId': _chapterId,
     };
     developer.Timeline.instantSync(
