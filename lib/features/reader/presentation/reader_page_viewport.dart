@@ -616,11 +616,12 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
           initialPageIndex: _layoutReleaseInitialPageIndex,
           pageIndex: _pageTurnRuntimeController.currentPageIndex,
           nearbyPageRadius: 1,
-          legacyBuilder: buildLegacyViewport,
+          legacyBuilder: (context, state) => buildLegacyViewport(state),
           loadingBuilder:
               (context, state) =>
                   buildLoadingViewport(total: _currentPagedPageCount),
-          readyBuilder: buildReleaseFrame,
+          readyBuilder:
+              (context, state, child) => buildReleaseFrame(state, child),
           showDiagnosticsOverlay: releaseDecision.showDiagnosticsOverlay,
           onDiagnostics:
               (state) =>
