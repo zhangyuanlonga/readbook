@@ -40,6 +40,7 @@ enum AdvancedThemeColorSlot {
       ThemeSemanticFieldId.secondaryText =>
         AdvancedThemeColorSlot.textSecondary,
       ThemeSemanticFieldId.border => AdvancedThemeColorSlot.outline,
+      ThemeSemanticFieldId.divider => AdvancedThemeColorSlot.cardBorder,
       ThemeSemanticFieldId.cardBackground => AdvancedThemeColorSlot.card,
       ThemeSemanticFieldId.cardText => AdvancedThemeColorSlot.cardText,
       ThemeSemanticFieldId.cardBorder => AdvancedThemeColorSlot.cardBorder,

@@ -14,15 +14,9 @@ class AdvancedThemeSectionLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Flexible(child: _AdvancedThemeSectionTitle(title: title)),
-          if (tooltipMessage != null && tooltipMessage!.trim().isNotEmpty) ...[
-            const SizedBox(width: 4),
-            AdvancedThemeInfoTooltipIcon(message: tooltipMessage!),
-          ],
-        ],
+      child: _AdvancedThemeSectionHeading(
+        title: title,
+        description: tooltipMessage,
       ),
     );
   }
@@ -53,16 +47,9 @@ class AdvancedThemeExpandableSectionHeader extends StatelessWidget {
         child: Row(
           children: [
             Expanded(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Flexible(child: _AdvancedThemeSectionTitle(title: title)),
-                  if (tooltipMessage != null &&
-                      tooltipMessage!.trim().isNotEmpty) ...[
-                    const SizedBox(width: 4),
-                    AdvancedThemeInfoTooltipIcon(message: tooltipMessage!),
-                  ],
-                ],
+              child: _AdvancedThemeSectionHeading(
+                title: title,
+                description: tooltipMessage,
               ),
             ),
             Icon(
@@ -132,49 +119,29 @@ class AdvancedThemeListSectionBody extends StatelessWidget {
   }
 }
 
-class AdvancedThemeInfoTooltipIcon extends StatefulWidget {
-  const AdvancedThemeInfoTooltipIcon({super.key, required this.message});
+class _AdvancedThemeSectionHeading extends StatelessWidget {
+  const _AdvancedThemeSectionHeading({
+    required this.title,
+    required this.description,
+  });
 
-  final String message;
-
-  @override
-  State<AdvancedThemeInfoTooltipIcon> createState() =>
-      _AdvancedThemeInfoTooltipIconState();
-}
-
-class _AdvancedThemeInfoTooltipIconState
-    extends State<AdvancedThemeInfoTooltipIcon> {
-  final GlobalKey<TooltipState> _tooltipKey = GlobalKey<TooltipState>();
-
-  void _showTooltip() {
-    _tooltipKey.currentState?.ensureTooltipVisible();
-  }
+  final String title;
+  final String? description;
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => _showTooltip(),
-      child: Tooltip(
-        key: _tooltipKey,
-        message: widget.message,
-        triggerMode: TooltipTriggerMode.tap,
-        waitDuration: Duration.zero,
-        showDuration: const Duration(seconds: 3),
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: _showTooltip,
-          child: Padding(
-            padding: const EdgeInsets.all(2),
-            child: Icon(
-              Icons.help_outline_rounded,
-              size: 14,
-              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.82),
-            ),
-          ),
-        ),
-      ),
+    final normalizedDescription = description?.trim();
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _AdvancedThemeSectionTitle(title: title),
+        if (normalizedDescription != null &&
+            normalizedDescription.isNotEmpty) ...[
+          const SizedBox(height: 2),
+          _AdvancedThemeSectionDescription(description: normalizedDescription),
+        ],
+      ],
     );
   }
 }
@@ -192,6 +159,25 @@ class _AdvancedThemeSectionTitle extends StatelessWidget {
         fontSize: 12,
         fontWeight: FontWeight.w700,
         color: Theme.of(context).colorScheme.onSurfaceVariant,
+      ),
+    );
+  }
+}
+
+class _AdvancedThemeSectionDescription extends StatelessWidget {
+  const _AdvancedThemeSectionDescription({required this.description});
+
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Text(
+      description,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: theme.textTheme.bodySmall?.copyWith(
+        color: theme.colorScheme.onSurfaceVariant,
       ),
     );
   }

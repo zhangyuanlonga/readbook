@@ -12,11 +12,11 @@ void main() {
       <ThemeSemanticFieldId>[
         ThemeSemanticFieldId.accent,
         ThemeSemanticFieldId.pageBackground,
-        ThemeSemanticFieldId.modalBackground,
         ThemeSemanticFieldId.secondaryBackground,
         ThemeSemanticFieldId.primaryText,
         ThemeSemanticFieldId.secondaryText,
         ThemeSemanticFieldId.border,
+        ThemeSemanticFieldId.divider,
       ],
     );
   });
@@ -72,11 +72,11 @@ void main() {
     expect(previews[0].color, const Color(0xFFCCCCCC));
     expect(previews[1].id, ThemeSemanticFieldId.pageBackground);
     expect(previews[1].color, const Color(0xFF010203));
-    expect(previews[2].id, ThemeSemanticFieldId.modalBackground);
-    expect(previews[2].color, const Color(0xFF222222));
-    expect(previews[3].id, ThemeSemanticFieldId.secondaryBackground);
-    expect(previews[3].color, const Color(0xFF444444));
-    expect(previews[6].id, ThemeSemanticFieldId.border);
-    expect(previews[6].color, const Color(0xFF888888));
+    expect(previews[2].id, ThemeSemanticFieldId.secondaryBackground);
+    expect(previews[2].color, const Color(0xFF444444));
+    expect(previews[5].id, ThemeSemanticFieldId.border);
+    expect(previews[5].color, const Color(0xFF888888));
+    expect(previews[6].id, ThemeSemanticFieldId.divider);
+    expect(previews[6].color, const Color(0xFF777777));
   });
 }

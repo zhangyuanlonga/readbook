@@ -26,7 +26,7 @@ class AdvancedThemeWallpaperResourceCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+          padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
           decoration: BoxDecoration(
             color: colorScheme.surface.withValues(alpha: 0.84),
             borderRadius: BorderRadius.circular(14),
@@ -38,12 +38,14 @@ class AdvancedThemeWallpaperResourceCard extends StatelessWidget {
             children: [
               Text(
                 title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.labelLarge?.copyWith(
                   fontWeight: FontWeight.w700,
                 ),
               ),
               if (badges.isNotEmpty) ...[
-                const SizedBox(height: 6),
+                const SizedBox(height: 5),
                 Wrap(
                   alignment: WrapAlignment.center,
                   spacing: 5,
@@ -54,11 +56,13 @@ class AdvancedThemeWallpaperResourceCard extends StatelessWidget {
                   ],
                 ),
               ],
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               Center(child: preview),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               Text(
                 subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: colorScheme.onSurfaceVariant,
                   fontWeight: FontWeight.w600,
@@ -89,6 +93,8 @@ class _AdvancedThemeResourceBadge extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
         child: Text(
           label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
             color: colorScheme.onPrimaryContainer,
             fontWeight: FontWeight.w800,

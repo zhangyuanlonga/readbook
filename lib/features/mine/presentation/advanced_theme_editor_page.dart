@@ -23,6 +23,7 @@ import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/foundation/app_button.dart';
 import '../../../app/widgets/foundation/app_feedback.dart';
 import '../../../app/widgets/foundation/app_progress.dart';
+import '../../../app/widgets/foundation/app_surface.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
 import '../../../domain/entities/bottom_nav_icon_gallery.dart';
@@ -40,10 +41,8 @@ import '../application/theme_semantic_spec.dart';
 import '../providers.dart';
 import 'advanced_theme_editor_models.dart';
 import 'widgets/advanced_theme_basic_section.dart';
-import 'widgets/advanced_theme_cover_gallery_section.dart';
 import 'widgets/advanced_theme_editor_shell_widgets.dart';
 import 'widgets/advanced_theme_font_section.dart';
-import 'widgets/advanced_theme_launch_gallery_section.dart';
 import 'widgets/advanced_theme_wallpaper_section.dart';
 import 'widgets/advanced_theme_launch_gallery_selection_card.dart';
 import 'widgets/advanced_theme_preview_panel.dart';
@@ -127,20 +126,6 @@ class _AdvancedThemeEditorPageState
       _pageState.launchImageGalleries;
 
   List<ReaderCustomFontEntry> get _availableFonts => _pageState.availableFonts;
-
-  bool get _strengthControlsExpanded => _pageState.strengthControlsExpanded;
-  set _strengthControlsExpanded(bool value) {
-    _pageStateNotifier.update(
-      (state) => _editorController.setStrengthControlsExpanded(state, value),
-    );
-  }
-
-  bool get _componentControlsExpanded => _pageState.componentControlsExpanded;
-  set _componentControlsExpanded(bool value) {
-    _pageStateNotifier.update(
-      (state) => _editorController.setComponentControlsExpanded(state, value),
-    );
-  }
 
   bool get _isEditingName => _pageState.isEditingName;
   set _isEditingName(bool value) {
@@ -1737,28 +1722,6 @@ class _AdvancedThemeEditorPageState
     });
   }
 
-  void _setShadowIntensity(double value) {
-    if (_isSaving) {
-      return;
-    }
-    final controller = _currentControllers[AdvancedThemeColorSlot.shadow]!;
-    final fallback = _fallbackColorForSlot(
-      _selectedMode,
-      AdvancedThemeColorSlot.shadow,
-    );
-    final currentColor = AdvancedThemeColorCodec.resolvedColor(
-      AdvancedThemeColorCodec.parseHexColor(controller.text.trim()),
-      fallback,
-    );
-    final normalized = value.clamp(0.0, 1.0).toDouble();
-    if ((currentColor.a - normalized).abs() < 0.001) {
-      return;
-    }
-    controller.text = AdvancedThemeColorCodec.formatHex(
-      currentColor.withValues(alpha: normalized).toARGB32(),
-    );
-  }
-
   void _selectMode(AppAdvancedThemeMode mode) {
     _modeTabController.animateTo(mode.index);
     setState(() {
@@ -1988,6 +1951,7 @@ class _AdvancedThemeEditorPageState
     AppAdvancedTheme? draft,
   ) {
     final title = draft == null ? '高级主题' : draft.name;
+    final colorScheme = Theme.of(context).colorScheme;
     return AdaptiveRouteTopBar(
       title: title,
       subtitle: _modeLabel(_selectedMode),
@@ -2010,6 +1974,7 @@ class _AdvancedThemeEditorPageState
       actions: _buildDesktopTopBarActions(),
       mobileActions: _buildMobileTopBarActions(),
       backgroundColor: Colors.transparent,
+      foregroundColor: colorScheme.onSurface,
       surfaceTintColor: Colors.transparent,
       shadowColor: Colors.transparent,
       dividerColor: Colors.transparent,
@@ -2128,70 +2093,90 @@ class _AdvancedThemeEditorPageState
         MediaQuery.paddingOf(context).top + kToolbarHeight + 42 + 6;
     final draft = _draft;
     const sectionGap = 8.0;
-    return Scaffold(
-      extendBodyBehindAppBar: true,
-      backgroundColor: _colorSchemeForMode(AppAdvancedThemeMode.light).surface,
-      resizeToAvoidBottomInset: true,
-      appBar: _buildRouteTopBar(context, draft),
-      body: ValueListenableBuilder<int>(
-        valueListenable: _colorPreviewRevision,
-        builder: (context, _, __) {
-          final hasWallpaper =
-              draft != null &&
-              (_selectedWallpaperPreviewPath(draft)?.trim().isNotEmpty ??
-                  false);
-          final decoration =
-              draft != null && hasWallpaper
-                  ? buildAdvancedThemeBackdropDecoration(
-                    resolveAdvancedThemeBackdropFromModeConfig(
-                      _colorSchemeForMode(_selectedMode),
-                      _previewModeConfig(draft, _selectedMode),
-                    ),
-                  )
-                  : BoxDecoration(
-                    color:
-                        _colorSchemeForMode(AppAdvancedThemeMode.light).surface,
-                  );
-          final maxWidth = AppLayout.pageContentMaxWidth(
-            context,
-            maxWidth: AppLayout.settingsContentMaxWidth,
-          );
-          return AdvancedThemePreviewPanel(
-            decoration: decoration,
-            maxWidth: maxWidth,
-            child: LayoutBuilder(
-              builder: (context, _) {
-                return _isLoading
-                    ? const Center(
-                      key: ValueKey<String>('advanced_theme_loading'),
-                      child: AppProgressIndicator(semanticLabel: '加载高级主题'),
-                    )
-                    : draft == null
-                    ? const Center(
-                      key: ValueKey<String>('advanced_theme_missing'),
-                      child: Text('高级主题不存在'),
-                    )
-                    : AppFadeSlideTransition(
-                      key: const ValueKey<String>('advanced_theme_editor'),
-                      child: ListView(
-                        key: const ValueKey<String>(
-                          'advanced_theme_editor_scroll',
-                        ),
-                        keyboardDismissBehavior:
-                            ScrollViewKeyboardDismissBehavior.onDrag,
-                        padding: EdgeInsets.fromLTRB(
-                          horizontal,
-                          topInset,
-                          horizontal,
-                          10 + bottomSafe,
-                        ),
-                        children: [
-                          _buildColorsSection(context),
-                          const SizedBox(height: sectionGap),
-                          _buildResourceSection(context, draft),
-                        ],
-                      ),
-                    );
+    final editorColorScheme = _colorSchemeForMode(_selectedMode);
+    final baseTheme = Theme.of(context);
+    final editorTextTheme = baseTheme.textTheme.apply(
+      bodyColor: editorColorScheme.onSurface,
+      displayColor: editorColorScheme.onSurface,
+    );
+    final editorTheme = baseTheme.copyWith(
+      colorScheme: editorColorScheme,
+      scaffoldBackgroundColor: editorColorScheme.surface,
+      textTheme: editorTextTheme,
+      primaryTextTheme: baseTheme.primaryTextTheme.apply(
+        bodyColor: editorColorScheme.onSurface,
+        displayColor: editorColorScheme.onSurface,
+      ),
+    );
+    return Theme(
+      data: editorTheme,
+      child: Builder(
+        builder: (context) {
+          return Scaffold(
+            extendBodyBehindAppBar: true,
+            backgroundColor: editorColorScheme.surface,
+            resizeToAvoidBottomInset: true,
+            appBar: _buildRouteTopBar(context, draft),
+            body: ValueListenableBuilder<int>(
+              valueListenable: _colorPreviewRevision,
+              builder: (context, _, __) {
+                final previewModeConfig =
+                    draft == null
+                        ? _defaultModeConfigForMode(_selectedMode)
+                        : _previewModeConfig(draft, _selectedMode);
+                final decoration = buildAdvancedThemeBackdropDecoration(
+                  resolveAdvancedThemeBackdropFromModeConfig(
+                    editorColorScheme,
+                    previewModeConfig,
+                  ),
+                );
+                final maxWidth = AppLayout.pageContentMaxWidth(
+                  context,
+                  maxWidth: AppLayout.settingsContentMaxWidth,
+                );
+                return AdvancedThemePreviewPanel(
+                  decoration: decoration,
+                  maxWidth: maxWidth,
+                  child: LayoutBuilder(
+                    builder: (context, _) {
+                      return _isLoading
+                          ? const Center(
+                            key: ValueKey<String>('advanced_theme_loading'),
+                            child: AppProgressIndicator(
+                              semanticLabel: '加载高级主题',
+                            ),
+                          )
+                          : draft == null
+                          ? const Center(
+                            key: ValueKey<String>('advanced_theme_missing'),
+                            child: Text('高级主题不存在'),
+                          )
+                          : AppFadeSlideTransition(
+                            key: const ValueKey<String>(
+                              'advanced_theme_editor',
+                            ),
+                            child: ListView(
+                              key: const ValueKey<String>(
+                                'advanced_theme_editor_scroll',
+                              ),
+                              keyboardDismissBehavior:
+                                  ScrollViewKeyboardDismissBehavior.onDrag,
+                              padding: EdgeInsets.fromLTRB(
+                                horizontal,
+                                topInset,
+                                horizontal,
+                                10 + bottomSafe,
+                              ),
+                              children: [
+                                _buildColorsSection(context),
+                                const SizedBox(height: sectionGap),
+                                _buildResourceSection(context, draft),
+                              ],
+                            ),
+                          );
+                    },
+                  ),
+                );
               },
             ),
           );
@@ -2234,66 +2219,6 @@ class _AdvancedThemeEditorPageState
         .toList(growable: false);
   }
 
-  Widget _buildStrengthSection(BuildContext context) {
-    final draft = _draft;
-    if (draft == null) {
-      return const SizedBox.shrink();
-    }
-    final currentConfig = draft.configFor(_selectedMode);
-    final shadowColor = AdvancedThemeColorCodec.resolvedColor(
-      AdvancedThemeColorCodec.parseHexColor(
-        _currentControllers[AdvancedThemeColorSlot.shadow]!.text.trim(),
-      ),
-      _fallbackColorForSlot(_selectedMode, AdvancedThemeColorSlot.shadow),
-    );
-    return _buildListSectionBody(
-      context,
-      child: Column(
-        children: [
-          _buildStrengthSliderRow(
-            context,
-            label: '卡片阴影强度',
-            valueLabel: '${(shadowColor.a * 100).round()}%',
-            value: shadowColor.a,
-            min: 0,
-            max: 1,
-            onChanged: _isSaving ? null : _setShadowIntensity,
-          ),
-          const Divider(height: 1),
-          _buildWallpaperOverlayOpacityRow(
-            context,
-            opacity: currentConfig.wallpaperOverlayOpacity,
-          ),
-          const Divider(height: 1),
-          _buildWallpaperOpacityRow(
-            context,
-            opacity: currentConfig.wallpaperOpacity,
-          ),
-          const Divider(height: 1),
-          _buildWallpaperBlurRow(
-            context,
-            blurSigma: currentConfig.wallpaperBlurSigma,
-          ),
-          const Divider(height: 1),
-          _buildReaderWallpaperOverlayOpacityRow(
-            context,
-            opacity: currentConfig.readerWallpaperOverlayOpacity,
-          ),
-          const Divider(height: 1),
-          _buildReaderWallpaperOpacityRow(
-            context,
-            opacity: currentConfig.readerWallpaperOpacity,
-          ),
-          const Divider(height: 1),
-          _buildReaderWallpaperBlurRow(
-            context,
-            blurSigma: currentConfig.readerWallpaperBlurSigma,
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildResourceSection(BuildContext context, AppAdvancedTheme draft) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2324,160 +2249,166 @@ class _AdvancedThemeEditorPageState
         _buildPanel(
           context,
           padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
-          child: Column(
-            children: [
-              Row(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final columnCount = constraints.maxWidth < 360 ? 2 : 3;
+              return GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: columnCount,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+                childAspectRatio: columnCount == 3 ? 0.52 : 0.72,
                 children: [
-                  Expanded(
-                    child: AdvancedThemeWallpaperResourceCard(
+                  AdvancedThemeWallpaperResourceCard(
+                    title: '应用背景',
+                    subtitle: wallpaperPath == null ? '未设置' : '已设置',
+                    badges: _visualResourceBadges(
+                      draft,
+                      hasResource: wallpaperPath != null,
+                    ),
+                    preview: _buildGalleryPreviewThumb(
+                      context,
+                      previewPath: wallpaperPath,
                       title: '应用背景',
-                      subtitle: wallpaperPath == null ? '未设置' : '已设置',
-                      badges: _visualResourceBadges(
-                        draft,
-                        hasResource: wallpaperPath != null,
-                      ),
-                      preview: _buildGalleryPreviewThumb(
-                        context,
-                        previewPath: wallpaperPath,
-                        title: '应用背景',
-                        width: 72,
-                        height: 72,
-                        borderRadius: 12,
-                        useAddPlaceholder: true,
-                        onLongPress:
-                            wallpaperPath == null
-                                ? null
-                                : () => unawaited(
-                                  _showImagePreviewDialog(
-                                    imagePath: wallpaperPath,
-                                    title: '应用背景',
-                                  ),
+                      width: 72,
+                      height: 72,
+                      borderRadius: 12,
+                      useAddPlaceholder: true,
+                      onLongPress:
+                          wallpaperPath == null
+                              ? null
+                              : () => unawaited(
+                                _showImagePreviewDialog(
+                                  imagePath: wallpaperPath,
+                                  title: '应用背景',
                                 ),
-                      ),
-                      onTap:
-                          _isSaving
-                              ? () {}
-                              : _pickWallpaperFromBackgroundLibrary,
+                              ),
                     ),
+                    onTap:
+                        _isSaving ? () {} : _pickWallpaperFromBackgroundLibrary,
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: AdvancedThemeWallpaperResourceCard(
-                      title: '阅读背景',
-                      subtitle: readerWallpaperPath == null ? '未设置' : '已设置',
-                      badges: _visualResourceBadges(
-                        draft,
-                        hasResource: readerWallpaperPath != null,
-                      ),
-                      preview: _buildGalleryPreviewThumb(
-                        context,
-                        previewPath: readerWallpaperPath,
-                        title: '阅读器背景',
-                        width: 72,
-                        height: 72,
-                        borderRadius: 12,
-                        useAddPlaceholder: true,
-                        onLongPress:
-                            readerWallpaperPath == null
-                                ? null
-                                : () => unawaited(
-                                  _showImagePreviewDialog(
-                                    imagePath: readerWallpaperPath,
-                                    title: '阅读器背景',
-                                  ),
-                                ),
-                      ),
-                      onTap:
-                          _isSaving
-                              ? () {}
-                              : _pickReaderWallpaperFromBackgroundLibrary,
+                  AdvancedThemeWallpaperResourceCard(
+                    title: '阅读背景',
+                    subtitle: readerWallpaperPath == null ? '未设置' : '已设置',
+                    badges: _visualResourceBadges(
+                      draft,
+                      hasResource: readerWallpaperPath != null,
                     ),
+                    preview: _buildGalleryPreviewThumb(
+                      context,
+                      previewPath: readerWallpaperPath,
+                      title: '阅读器背景',
+                      width: 72,
+                      height: 72,
+                      borderRadius: 12,
+                      useAddPlaceholder: true,
+                      onLongPress:
+                          readerWallpaperPath == null
+                              ? null
+                              : () => unawaited(
+                                _showImagePreviewDialog(
+                                  imagePath: readerWallpaperPath,
+                                  title: '阅读器背景',
+                                ),
+                              ),
+                    ),
+                    onTap:
+                        _isSaving
+                            ? () {}
+                            : _pickReaderWallpaperFromBackgroundLibrary,
+                  ),
+                  AdvancedThemeWallpaperResourceCard(
+                    title: '书籍封面',
+                    subtitle: coverGalleryPreviewPath == null ? '未设置' : '已设置',
+                    badges: _visualResourceBadges(
+                      draft,
+                      hasResource: coverGalleryPreviewPath != null,
+                    ),
+                    preview: _buildGalleryPreviewThumb(
+                      context,
+                      previewPath: coverGalleryPreviewPath,
+                      title: _selectedCoverGallery()?.name ?? '书籍封面',
+                      width: 72,
+                      height: 72,
+                      borderRadius: 12,
+                      useAddPlaceholder: true,
+                      onLongPress:
+                          coverGalleryPreviewPath == null
+                              ? null
+                              : () => unawaited(
+                                _showImagePreviewDialog(
+                                  imagePath: coverGalleryPreviewPath,
+                                  title:
+                                      _selectedCoverGallery()?.name ?? '书籍封面',
+                                ),
+                              ),
+                    ),
+                    onTap: _pickCoverGallery,
+                  ),
+                  AdvancedThemeWallpaperResourceCard(
+                    title: '启动图集',
+                    subtitle: launchGalleryPreviewPath == null ? '未设置' : '已设置',
+                    badges: _visualResourceBadges(
+                      draft,
+                      hasResource: launchGalleryPreviewPath != null,
+                    ),
+                    preview: _buildGalleryPreviewThumb(
+                      context,
+                      previewPath: launchGalleryPreviewPath,
+                      title: _selectedLaunchImageGallery()?.name ?? '启动图集',
+                      width: 72,
+                      height: 72,
+                      borderRadius: 12,
+                      useAddPlaceholder: true,
+                      onLongPress:
+                          launchGalleryPreviewPath == null
+                              ? null
+                              : () => unawaited(
+                                _showImagePreviewDialog(
+                                  imagePath: launchGalleryPreviewPath,
+                                  title:
+                                      _selectedLaunchImageGallery()?.name ??
+                                      '启动图集',
+                                ),
+                              ),
+                    ),
+                    onTap: _pickLaunchImageGallery,
+                  ),
+                  AdvancedThemeWallpaperResourceCard(
+                    title: '底栏图集',
+                    subtitle: _resolvedBottomNavGalleryName(),
+                    badges: _visualResourceBadges(
+                      draft,
+                      hasResource: bottomNavGallery != null,
+                    ),
+                    preview: _buildBottomNavGalleryPreview(
+                      context,
+                      gallery: bottomNavGallery,
+                    ),
+                    onTap: _isSaving ? () {} : _pickBottomNavGallery,
+                  ),
+                  AdvancedThemeWallpaperResourceCard(
+                    title: '主题特效',
+                    subtitle: '后续接入',
+                    preview: _buildGalleryPreviewThumb(
+                      context,
+                      previewPath: null,
+                      title: '主题特效',
+                      width: 72,
+                      height: 72,
+                      borderRadius: 12,
+                      useAddPlaceholder: true,
+                    ),
+                    onTap: () => _showMessage('主题特效后续接入'),
                   ),
                 ],
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: AdvancedThemeCoverGallerySection(
-                      subtitle: coverGalleryPreviewPath == null ? '未设置' : '已设置',
-                      badges: _visualResourceBadges(
-                        draft,
-                        hasResource: coverGalleryPreviewPath != null,
-                      ),
-                      preview: _buildGalleryPreviewThumb(
-                        context,
-                        previewPath: coverGalleryPreviewPath,
-                        title: _selectedCoverGallery()?.name ?? '书籍封面',
-                        width: 72,
-                        height: 72,
-                        borderRadius: 12,
-                        useAddPlaceholder: true,
-                        onLongPress:
-                            coverGalleryPreviewPath == null
-                                ? null
-                                : () => unawaited(
-                                  _showImagePreviewDialog(
-                                    imagePath: coverGalleryPreviewPath,
-                                    title:
-                                        _selectedCoverGallery()?.name ?? '书籍封面',
-                                  ),
-                                ),
-                      ),
-                      onTap: _pickCoverGallery,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: AdvancedThemeLaunchGallerySection(
-                      subtitle:
-                          launchGalleryPreviewPath == null ? '未设置' : '已设置',
-                      badges: _visualResourceBadges(
-                        draft,
-                        hasResource: launchGalleryPreviewPath != null,
-                      ),
-                      preview: _buildGalleryPreviewThumb(
-                        context,
-                        previewPath: launchGalleryPreviewPath,
-                        title: _selectedLaunchImageGallery()?.name ?? '启动图集',
-                        width: 72,
-                        height: 72,
-                        borderRadius: 12,
-                        useAddPlaceholder: true,
-                        onLongPress:
-                            launchGalleryPreviewPath == null
-                                ? null
-                                : () => unawaited(
-                                  _showImagePreviewDialog(
-                                    imagePath: launchGalleryPreviewPath,
-                                    title:
-                                        _selectedLaunchImageGallery()?.name ??
-                                        '启动图集',
-                                  ),
-                                ),
-                      ),
-                      onTap: _pickLaunchImageGallery,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              AdvancedThemeWallpaperResourceCard(
-                title: '底栏图集',
-                subtitle: _resolvedBottomNavGalleryName(),
-                badges: _visualResourceBadges(
-                  draft,
-                  hasResource: bottomNavGallery != null,
-                ),
-                preview: _buildBottomNavGalleryPreview(
-                  context,
-                  gallery: bottomNavGallery,
-                ),
-                onTap: _isSaving ? () {} : _pickBottomNavGallery,
-              ),
-            ],
+              );
+            },
           ),
         ),
+        const SizedBox(height: 10),
+        _buildBackgroundResourceTuningSection(context, draft),
       ],
     );
   }
@@ -2493,6 +2424,61 @@ class _AdvancedThemeEditorPageState
     return <String>['高级主题引用', if (activeThemeId == draft.id) '当前主题'];
   }
 
+  Widget _buildBackgroundResourceTuningSection(
+    BuildContext context,
+    AppAdvancedTheme draft,
+  ) {
+    final currentConfig = draft.configFor(_selectedMode);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionLabel(
+          context,
+          '背景资源参数',
+          tooltipMessage: '应用背景和阅读背景的透明度、遮罩和模糊参数。',
+        ),
+        const SizedBox(height: 4),
+        _buildPanel(
+          context,
+          padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+          child: Column(
+            children: [
+              _buildWallpaperOverlayOpacityRow(
+                context,
+                opacity: currentConfig.wallpaperOverlayOpacity,
+              ),
+              const Divider(height: 1),
+              _buildWallpaperOpacityRow(
+                context,
+                opacity: currentConfig.wallpaperOpacity,
+              ),
+              const Divider(height: 1),
+              _buildWallpaperBlurRow(
+                context,
+                blurSigma: currentConfig.wallpaperBlurSigma,
+              ),
+              const Divider(height: 1),
+              _buildReaderWallpaperOverlayOpacityRow(
+                context,
+                opacity: currentConfig.readerWallpaperOverlayOpacity,
+              ),
+              const Divider(height: 1),
+              _buildReaderWallpaperOpacityRow(
+                context,
+                opacity: currentConfig.readerWallpaperOpacity,
+              ),
+              const Divider(height: 1),
+              _buildReaderWallpaperBlurRow(
+                context,
+                blurSigma: currentConfig.readerWallpaperBlurSigma,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildStyleResourceSection(
     BuildContext context,
     AppAdvancedTheme draft,
@@ -2500,9 +2486,30 @@ class _AdvancedThemeEditorPageState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionLabel(context, '风格组件'),
+        _buildSectionLabel(context, '组件'),
         const SizedBox(height: 4),
         _buildComponentStyleSection(context, draft),
+        const SizedBox(height: 10),
+        _buildThemeFieldSection(
+          context,
+          title: modalThemeSemanticGroup.title,
+          tooltipMessage: modalThemeSemanticGroup.subtitle,
+          fields: _fieldSpecsForGroup(modalThemeSemanticGroup),
+        ),
+        const SizedBox(height: 10),
+        _buildThemeFieldSection(
+          context,
+          title: cardThemeSemanticGroup.title,
+          tooltipMessage: cardThemeSemanticGroup.subtitle,
+          fields: _fieldSpecsForGroup(cardThemeSemanticGroup),
+        ),
+        const SizedBox(height: 10),
+        _buildThemeFieldSection(
+          context,
+          title: inputThemeSemanticGroup.title,
+          tooltipMessage: inputThemeSemanticGroup.subtitle,
+          fields: _fieldSpecsForGroup(inputThemeSemanticGroup),
+        ),
         const SizedBox(height: 10),
         _buildPanel(
           context,
@@ -2530,217 +2537,137 @@ class _AdvancedThemeEditorPageState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildExpandableSectionHeader(
+        _buildSectionLabel(
           context,
-          title: '组件样式',
-          tooltipMessage: '控制当前模式下卡片、按钮、输入框、浮层、导航和开关的形态。',
-          expanded: _componentControlsExpanded,
-          onToggle: () {
-            setState(() {
-              _componentControlsExpanded = !_componentControlsExpanded;
-            });
-          },
+          '圆角比例',
+          tooltipMessage: '控制卡片、按钮、输入框和弹窗的整体圆角。',
         ),
-        AnimatedCrossFade(
-          duration: const Duration(milliseconds: 220),
-          crossFadeState:
-              _componentControlsExpanded
-                  ? CrossFadeState.showFirst
-                  : CrossFadeState.showSecond,
-          firstChild: _buildPanel(
-            context,
-            padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
-            child: Column(
-              children: [
-                _buildStrengthSliderRow(
-                  context,
-                  label: '全局圆角比例',
-                  valueLabel: '${(style.globalRadiusScale * 100).round()}%',
-                  value: style.globalRadiusScale,
-                  min: 0.72,
-                  max: 1.45,
-                  divisions: 73,
-                  onChanged:
-                      _isSaving
-                          ? null
-                          : (value) => _updateComponentStyle(
-                            (current) =>
-                                current.copyWith(globalRadiusScale: value),
-                          ),
-                ),
-                const Divider(height: 1),
-                _buildStrengthSliderRow(
-                  context,
-                  label: '组件阴影强度',
-                  valueLabel: '${(style.shadowStrength * 100).round()}%',
-                  value: style.shadowStrength,
-                  min: 0.1,
-                  max: 1,
-                  divisions: 90,
-                  onChanged:
-                      _isSaving
-                          ? null
-                          : (value) => _updateComponentStyle(
-                            (current) =>
-                                current.copyWith(shadowStrength: value),
-                          ),
-                ),
-                const Divider(height: 1),
-                _buildComponentStyleChoiceRow<AppAdvancedThemeCardStyle>(
-                  context,
-                  label: '卡片',
-                  value: style.cardStyle,
-                  choices: const [
-                    AdvancedThemeComponentStyleChoice(
-                      AppAdvancedThemeCardStyle.soft,
-                      '柔和',
-                    ),
-                    AdvancedThemeComponentStyleChoice(
-                      AppAdvancedThemeCardStyle.outlined,
-                      '描边',
-                    ),
-                    AdvancedThemeComponentStyleChoice(
-                      AppAdvancedThemeCardStyle.elevated,
-                      '浮起',
-                    ),
-                  ],
-                  onChanged:
-                      _isSaving
-                          ? null
-                          : (value) => _updateComponentStyle(
-                            (current) => current.copyWith(cardStyle: value),
-                          ),
-                ),
-                const Divider(height: 1),
-                _buildComponentStyleChoiceRow<AppAdvancedThemeButtonStyle>(
-                  context,
-                  label: '按钮',
-                  value: style.buttonStyle,
-                  choices: const [
-                    AdvancedThemeComponentStyleChoice(
-                      AppAdvancedThemeButtonStyle.stadium,
-                      '胶囊',
-                    ),
-                    AdvancedThemeComponentStyleChoice(
-                      AppAdvancedThemeButtonStyle.rounded,
-                      '圆润',
-                    ),
-                    AdvancedThemeComponentStyleChoice(
-                      AppAdvancedThemeButtonStyle.sharp,
-                      '利落',
-                    ),
-                  ],
-                  onChanged:
-                      _isSaving
-                          ? null
-                          : (value) => _updateComponentStyle(
-                            (current) => current.copyWith(buttonStyle: value),
-                          ),
-                ),
-                const Divider(height: 1),
-                _buildComponentStyleChoiceRow<AppAdvancedThemeInputStyle>(
-                  context,
-                  label: '输入框',
-                  value: style.inputStyle,
-                  choices: const [
-                    AdvancedThemeComponentStyleChoice(
-                      AppAdvancedThemeInputStyle.soft,
-                      '柔和',
-                    ),
-                    AdvancedThemeComponentStyleChoice(
-                      AppAdvancedThemeInputStyle.outlined,
-                      '描边',
-                    ),
-                    AdvancedThemeComponentStyleChoice(
-                      AppAdvancedThemeInputStyle.underlined,
-                      '下划线',
-                    ),
-                  ],
-                  onChanged:
-                      _isSaving
-                          ? null
-                          : (value) => _updateComponentStyle(
-                            (current) => current.copyWith(inputStyle: value),
-                          ),
-                ),
-                const Divider(height: 1),
-                _buildComponentStyleChoiceRow<AppAdvancedThemeOverlayStyle>(
-                  context,
-                  label: '浮层',
-                  value: style.overlayStyle,
-                  choices: const [
-                    AdvancedThemeComponentStyleChoice(
-                      AppAdvancedThemeOverlayStyle.comfortable,
-                      '舒展',
-                    ),
-                    AdvancedThemeComponentStyleChoice(
-                      AppAdvancedThemeOverlayStyle.compact,
-                      '紧凑',
-                    ),
-                  ],
-                  onChanged:
-                      _isSaving
-                          ? null
-                          : (value) => _updateComponentStyle(
-                            (current) => current.copyWith(overlayStyle: value),
-                          ),
-                ),
-                const Divider(height: 1),
-                _buildComponentStyleChoiceRow<AppAdvancedThemeNavigationStyle>(
-                  context,
-                  label: '导航',
-                  value: style.navigationStyle,
-                  choices: const [
-                    AdvancedThemeComponentStyleChoice(
-                      AppAdvancedThemeNavigationStyle.soft,
-                      '柔和',
-                    ),
-                    AdvancedThemeComponentStyleChoice(
-                      AppAdvancedThemeNavigationStyle.floating,
-                      '悬浮',
-                    ),
-                    AdvancedThemeComponentStyleChoice(
-                      AppAdvancedThemeNavigationStyle.compact,
-                      '紧凑',
-                    ),
-                  ],
-                  onChanged:
-                      _isSaving
-                          ? null
-                          : (value) => _updateComponentStyle(
-                            (current) =>
-                                current.copyWith(navigationStyle: value),
-                          ),
-                ),
-                const Divider(height: 1),
-                _buildComponentStyleChoiceRow<AppAdvancedThemeSwitchStyle>(
-                  context,
-                  label: '切换',
-                  value: style.switchStyle,
-                  choices: const [
-                    AdvancedThemeComponentStyleChoice(
-                      AppAdvancedThemeSwitchStyle.soft,
-                      '柔和',
-                    ),
-                    AdvancedThemeComponentStyleChoice(
-                      AppAdvancedThemeSwitchStyle.contrast,
-                      '高对比',
-                    ),
-                  ],
-                  onChanged:
-                      _isSaving
-                          ? null
-                          : (value) => _updateComponentStyle(
-                            (current) => current.copyWith(switchStyle: value),
-                          ),
-                ),
-              ],
-            ),
+        const SizedBox(height: 4),
+        _buildPanel(
+          context,
+          padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+          child: Column(
+            children: [
+              _buildComponentStyleChoiceRow<double>(
+                context,
+                label: '圆角比例',
+                value: _nearestRadiusScaleChoice(style.globalRadiusScale),
+                choices: const [
+                  AdvancedThemeComponentStyleChoice<double>(0.75, '利落'),
+                  AdvancedThemeComponentStyleChoice<double>(1.00, '标准'),
+                  AdvancedThemeComponentStyleChoice<double>(1.20, '柔和'),
+                  AdvancedThemeComponentStyleChoice<double>(1.40, '圆润'),
+                ],
+                onChanged:
+                    _isSaving
+                        ? null
+                        : (value) => _updateComponentStyle(
+                          (current) =>
+                              current.copyWith(globalRadiusScale: value),
+                        ),
+              ),
+              const Divider(height: 1),
+              _buildComponentRadiusPreview(context, style.globalRadiusScale),
+            ],
           ),
-          secondChild: const SizedBox.shrink(),
         ),
       ],
     );
+  }
+
+  Widget _buildComponentRadiusPreview(BuildContext context, double scale) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final radius = (12 * scale).clamp(6.0, 24.0).toDouble();
+    final inputRadius = (10 * scale).clamp(6.0, 22.0).toDouble();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(2, 10, 2, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '圆角预览',
+            style: Theme.of(
+              context,
+            ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildRadiusPreviewChip(
+                context,
+                label: '卡片',
+                borderRadius: radius,
+                backgroundColor: colorScheme.surface,
+              ),
+              _buildRadiusPreviewChip(
+                context,
+                label: '按钮',
+                borderRadius: inputRadius,
+                backgroundColor: colorScheme.primaryContainer,
+                foregroundColor: colorScheme.onPrimaryContainer,
+              ),
+              _buildRadiusPreviewChip(
+                context,
+                label: '输入框',
+                borderRadius: inputRadius,
+                backgroundColor: colorScheme.surface,
+              ),
+              _buildRadiusPreviewChip(
+                context,
+                label: '弹窗',
+                borderRadius: radius,
+                backgroundColor: colorScheme.surfaceContainerHighest,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRadiusPreviewChip(
+    BuildContext context, {
+    required String label,
+    required double borderRadius,
+    required Color backgroundColor,
+    Color? foregroundColor,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return SizedBox(
+      width: 70,
+      height: 34,
+      child: AppSurface(
+        padding: EdgeInsets.zero,
+        backgroundColor: backgroundColor,
+        // UI-GOV-EXEMPT: radius preview intentionally visualizes the selected radius value.
+        borderRadius: BorderRadius.circular(borderRadius),
+        child: Center(
+          child: Text(
+            label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: foregroundColor ?? colorScheme.onSurface,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  double _nearestRadiusScaleChoice(double value) {
+    const choices = <double>[0.75, 1, 1.2, 1.4];
+    var nearest = choices.first;
+    var nearestDistance = (value - nearest).abs();
+    for (final choice in choices.skip(1)) {
+      final distance = (value - choice).abs();
+      if (distance < nearestDistance) {
+        nearest = choice;
+        nearestDistance = distance;
+      }
+    }
+    return nearest;
   }
 
   Widget _buildWallpaperOverlayOpacityRow(
@@ -3111,28 +3038,23 @@ class _AdvancedThemeEditorPageState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            field.label,
-                            style: Theme.of(
-                              context,
-                            ).textTheme.labelMedium?.copyWith(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        if (field.tooltipMessage.isNotEmpty) ...[
-                          const SizedBox(width: 4),
-                          _buildInlineTooltipIcon(
-                            context,
-                            field.tooltipMessage,
-                          ),
-                        ],
-                      ],
+                    Text(
+                      field.label,
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
+                    if (field.description.trim().isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        field.description.trim(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -3225,54 +3147,6 @@ class _AdvancedThemeEditorPageState
     return AdvancedThemeSectionLabel(
       title: title,
       tooltipMessage: tooltipMessage,
-    );
-  }
-
-  Widget _buildInlineTooltipIcon(BuildContext context, String message) {
-    return AdvancedThemeInfoTooltipIcon(message: message);
-  }
-
-  Widget _buildExpandableSectionHeader(
-    BuildContext context, {
-    required String title,
-    String? tooltipMessage,
-    required bool expanded,
-    required VoidCallback onToggle,
-  }) {
-    return AdvancedThemeExpandableSectionHeader(
-      title: title,
-      tooltipMessage: tooltipMessage,
-      expanded: expanded,
-      onToggle: onToggle,
-    );
-  }
-
-  Widget _buildExpandableColorSection(
-    BuildContext context, {
-    required String title,
-    String? tooltipMessage,
-    required bool expanded,
-    required VoidCallback onToggle,
-    required Widget child,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildExpandableSectionHeader(
-          context,
-          title: title,
-          tooltipMessage: tooltipMessage,
-          expanded: expanded,
-          onToggle: onToggle,
-        ),
-        AnimatedCrossFade(
-          duration: const Duration(milliseconds: 220),
-          crossFadeState:
-              expanded ? CrossFadeState.showFirst : CrossFadeState.showSecond,
-          firstChild: child,
-          secondChild: const SizedBox.shrink(),
-        ),
-      ],
     );
   }
 

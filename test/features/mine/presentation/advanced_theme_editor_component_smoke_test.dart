@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shuxiang_reading_next/app/theme/app_theme_palette.dart';
 import 'package:shuxiang_reading_next/core/storage/managed_asset_store.dart';
 import 'package:shuxiang_reading_next/domain/entities/app_advanced_theme.dart';
 import 'package:shuxiang_reading_next/domain/entities/bottom_nav_icon_gallery.dart';
@@ -60,7 +61,7 @@ void main() {
     }
   });
 
-  testWidgets('editor renders component style section without preview area', (
+  testWidgets('editor renders simplified component and resource sections', (
     tester,
   ) async {
     final prefs = await SharedPreferences.getInstance();
@@ -136,19 +137,29 @@ void main() {
     await tester.pump();
 
     expect(find.text('视觉资源'), findsOneWidget);
+    expect(find.text('应用背景'), findsOneWidget);
+    expect(find.text('阅读背景'), findsOneWidget);
+    expect(find.text('书籍封面'), findsOneWidget);
+    expect(find.text('启动图集'), findsOneWidget);
+    expect(find.text('底栏图集'), findsOneWidget);
+    expect(find.text('主题特效'), findsOneWidget);
+
     await _dragUntilFound(tester, editorScroll, find.text('圆角比例'));
     await tester.pump();
 
-    expect(find.text('风格组件'), findsOneWidget);
-    expect(find.text('组件样式'), findsOneWidget);
-    expect(find.text('圆角比例'), findsOneWidget);
-    expect(find.text('卡片'), findsOneWidget);
-    expect(find.text('按钮'), findsOneWidget);
-    expect(find.text('输入框'), findsOneWidget);
-    expect(find.text('导航'), findsOneWidget);
-    expect(find.text('切换'), findsOneWidget);
-    expect(find.text('风格组件'), findsOneWidget);
-    expect(find.text('预览'), findsNothing);
+    expect(find.text('组件'), findsOneWidget);
+    expect(find.text('圆角比例'), findsWidgets);
+    expect(find.text('利落'), findsOneWidget);
+    expect(find.text('标准'), findsOneWidget);
+    expect(find.text('柔和'), findsOneWidget);
+    expect(find.text('圆润'), findsOneWidget);
+    expect(find.text('圆角预览'), findsOneWidget);
+    expect(find.text('卡片样式'), findsNothing);
+    expect(find.text('按钮样式'), findsNothing);
+    expect(find.text('输入框样式'), findsNothing);
+    expect(find.text('弹窗样式'), findsNothing);
+    expect(find.text('导航样式'), findsNothing);
+    expect(find.text('切换样式'), findsNothing);
     expect(find.text('页面预览'), findsNothing);
     expect(find.text('搜索预览'), findsNothing);
     expect(tester.takeException(), isNull);
@@ -214,6 +225,70 @@ void main() {
     await tester.pump();
 
     expect(find.text('我的新主题'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('section descriptions and labels follow selected mode colors', (
+    tester,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    final service = AdvancedThemeService(
+      preferences: prefs,
+      assetStore: ManagedAssetStore(),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          advancedThemeServiceProvider.overrideWithValue(service),
+          advancedThemeEditorStateServiceProvider.overrideWithValue(
+            _FakeAdvancedThemeEditorStateService(
+              draft: _theme(),
+              service: service,
+              bottomNavIconGalleryService: BottomNavIconGalleryService(),
+              appBackgroundService: AppBackgroundService(),
+              coverGalleryService: CoverGalleryService(),
+              launchImageGalleryService: LaunchImageGalleryService(),
+              readerBackgroundService: ReaderBackgroundService(),
+              fontRegistryService: ReaderFontRegistryService(),
+            ),
+          ),
+        ],
+        child: const MediaQuery(
+          data: MediaQueryData(size: Size(430, 932)),
+          child: MaterialApp(
+            home: AdvancedThemeEditorPage(themeId: 'editor_component_smoke'),
+          ),
+        ),
+      ),
+    );
+
+    for (var index = 0; index < 20; index += 1) {
+      await tester.pump(const Duration(milliseconds: 100));
+      if (find
+          .byKey(const ValueKey<String>('advanced_theme_editor_scroll'))
+          .evaluate()
+          .isNotEmpty) {
+        break;
+      }
+    }
+
+    expect(find.text('颜色卡片'), findsOneWidget);
+    expect(find.text('这里放全局共享的颜色语义，优先决定整体氛围。'), findsOneWidget);
+    expect(find.text('按钮、链接和选中状态的颜色'), findsOneWidget);
+    expect(find.byIcon(Icons.help_outline_rounded), findsNothing);
+
+    await tester.tap(find.text('深色主题'));
+    await tester.pumpAndSettle();
+
+    final darkScheme = buildAppBaseDarkColorScheme(
+      AppBaseColorSchemeId.luminaNeutral,
+    );
+    final sectionTitle = tester.widget<Text>(find.text('颜色卡片'));
+    final fieldLabel = tester.widget<Text>(find.text('强调色'));
+
+    expect(sectionTitle.style?.color, darkScheme.onSurfaceVariant);
+    expect(fieldLabel.style?.color, darkScheme.onSurface);
     expect(tester.takeException(), isNull);
   });
 }

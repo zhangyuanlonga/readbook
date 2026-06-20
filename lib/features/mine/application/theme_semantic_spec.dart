@@ -10,6 +10,7 @@ enum ThemeSemanticFieldId {
   primaryText,
   secondaryText,
   border,
+  divider,
   cardBackground,
   cardText,
   cardBorder,
@@ -66,44 +67,44 @@ const List<ThemeSemanticFieldSpec> colorCardThemeSemanticFields =
       ThemeSemanticFieldSpec(
         id: ThemeSemanticFieldId.accent,
         label: '强调色',
-        description: '影响主按钮、选中态和核心高亮颜色',
-        scopeLabels: <String>['主按钮', '选中态', '核心高亮'],
+        description: '按钮、链接和选中状态的颜色',
+        scopeLabels: <String>['按钮', '链接', '选中状态'],
       ),
       ThemeSemanticFieldSpec(
         id: ThemeSemanticFieldId.pageBackground,
         label: '页面背景',
-        description: '影响页面主背景和整体底色',
-        scopeLabels: <String>['页面底色', '壳层背景'],
-      ),
-      ThemeSemanticFieldSpec(
-        id: ThemeSemanticFieldId.modalBackground,
-        label: '弹窗背景',
-        description: '影响弹窗、菜单、底部浮层等悬浮内容背景',
-        scopeLabels: <String>['Dialog', 'BottomSheet', '菜单', '局部浮层'],
+        description: '页面底色',
+        scopeLabels: <String>['页面底色'],
       ),
       ThemeSemanticFieldSpec(
         id: ThemeSemanticFieldId.secondaryBackground,
         label: '次级背景',
-        description: '影响分组容器、轻表面和部分次级区域背景',
-        scopeLabels: <String>['筛选条', '分组容器', '轻表面'],
+        description: '分组、提示和说明区域的底色',
+        scopeLabels: <String>['分组', '提示', '说明区域'],
       ),
       ThemeSemanticFieldSpec(
         id: ThemeSemanticFieldId.primaryText,
         label: '主要文字',
-        description: '影响标题、正文和主要操作说明',
-        scopeLabels: <String>['标题', '正文', '主操作说明'],
+        description: '正文和标题的颜色',
+        scopeLabels: <String>['正文', '标题'],
       ),
       ThemeSemanticFieldSpec(
         id: ThemeSemanticFieldId.secondaryText,
         label: '辅助文字',
-        description: '影响描述、提示和未选中内容文字',
-        scopeLabels: <String>['描述', '提示', '未选中内容'],
+        description: '提示和说明的颜色',
+        scopeLabels: <String>['提示', '说明'],
       ),
       ThemeSemanticFieldSpec(
         id: ThemeSemanticFieldId.border,
         label: '边框',
-        description: '影响通用边框、输入框边框和分隔线',
-        scopeLabels: <String>['输入框边框', '分隔线', '通用描边'],
+        description: '输入框、卡片和控件描边颜色',
+        scopeLabels: <String>['输入框', '卡片', '控件描边'],
+      ),
+      ThemeSemanticFieldSpec(
+        id: ThemeSemanticFieldId.divider,
+        label: '分割线',
+        description: '列表、菜单和分组分割线颜色',
+        scopeLabels: <String>['列表', '菜单', '分组分割线'],
       ),
     ];
 
@@ -114,9 +115,22 @@ const ThemeSemanticGroupSpec colorCardThemeSemanticGroup =
       fields: colorCardThemeSemanticFields,
     );
 
+const ThemeSemanticGroupSpec modalThemeSemanticGroup = ThemeSemanticGroupSpec(
+  title: '弹窗组件',
+  subtitle: '控制普通弹窗、菜单和底部面板的背景。',
+  fields: <ThemeSemanticFieldSpec>[
+    ThemeSemanticFieldSpec(
+      id: ThemeSemanticFieldId.modalBackground,
+      label: '弹窗背景',
+      description: '普通弹窗、菜单和底部面板的背景颜色',
+      scopeLabels: <String>['Dialog', 'BottomSheet', '菜单', '局部浮层'],
+    ),
+  ],
+);
+
 const ThemeSemanticGroupSpec cardThemeSemanticGroup = ThemeSemanticGroupSpec(
   title: '卡片组件',
-  subtitle: '用于卡片本身的背景、文字和边框，不放在全局颜色卡片里。',
+  subtitle: '控制卡片自己的背景，不放在全局颜色里。',
   fields: <ThemeSemanticFieldSpec>[
     ThemeSemanticFieldSpec(
       id: ThemeSemanticFieldId.cardBackground,
@@ -124,26 +138,34 @@ const ThemeSemanticGroupSpec cardThemeSemanticGroup = ThemeSemanticGroupSpec(
       description: '书架卡片、设置卡片和信息卡片背景',
       scopeLabels: <String>['书架卡片', '设置卡片', '信息卡片'],
     ),
-    ThemeSemanticFieldSpec(
-      id: ThemeSemanticFieldId.cardText,
-      label: '卡片文字',
-      description: '卡片内主要文字的颜色',
-      scopeLabels: <String>['卡片标题', '卡片正文'],
-    ),
-    ThemeSemanticFieldSpec(
-      id: ThemeSemanticFieldId.cardBorder,
-      label: '卡片边框',
-      description: '卡片和面板描边颜色',
-      scopeLabels: <String>['卡片描边', '面板描边'],
-    ),
-    ThemeSemanticFieldSpec(
-      id: ThemeSemanticFieldId.iconBackground,
-      label: '图标底色',
-      description: '图标圆底和小型入口底色',
-      scopeLabels: <String>['图标圆底', '小型入口'],
-    ),
   ],
 );
+
+const ThemeSemanticGroupSpec advancedColorThemeSemanticGroup =
+    ThemeSemanticGroupSpec(
+      title: '高级颜色',
+      subtitle: '低频颜色参数默认隐藏，保留底层兼容。',
+      fields: <ThemeSemanticFieldSpec>[
+        ThemeSemanticFieldSpec(
+          id: ThemeSemanticFieldId.cardText,
+          label: '卡片文字',
+          description: '卡片内主要文字的颜色',
+          scopeLabels: <String>['卡片标题', '卡片正文'],
+        ),
+        ThemeSemanticFieldSpec(
+          id: ThemeSemanticFieldId.cardBorder,
+          label: '卡片边框',
+          description: '卡片和面板描边颜色',
+          scopeLabels: <String>['卡片描边', '面板描边'],
+        ),
+        ThemeSemanticFieldSpec(
+          id: ThemeSemanticFieldId.iconBackground,
+          label: '图标底色',
+          description: '图标圆底和小型入口底色',
+          scopeLabels: <String>['图标圆底', '小型入口'],
+        ),
+      ],
+    );
 
 const ThemeSemanticGroupSpec buttonThemeSemanticGroup = ThemeSemanticGroupSpec(
   title: '按钮组件',
@@ -219,11 +241,13 @@ const ThemeSemanticGroupSpec pageEffectThemeSemanticGroup =
 const List<ThemeSemanticGroupSpec> themeSemanticEditorGroups =
     <ThemeSemanticGroupSpec>[
       colorCardThemeSemanticGroup,
+      modalThemeSemanticGroup,
       cardThemeSemanticGroup,
       buttonThemeSemanticGroup,
       inputThemeSemanticGroup,
       optionThemeSemanticGroup,
       pageEffectThemeSemanticGroup,
+      advancedColorThemeSemanticGroup,
     ];
 
 final Map<ThemeSemanticFieldId, ThemeSemanticFieldSpec>
@@ -252,11 +276,6 @@ List<ThemeSemanticColorPreview> buildColorCardThemeSemanticPreviews({
       color: backdrop.backgroundColor,
     ),
     ThemeSemanticColorPreview(
-      id: ThemeSemanticFieldId.modalBackground,
-      label: '弹窗背景',
-      color: palette.surfaceColor,
-    ),
-    ThemeSemanticColorPreview(
       id: ThemeSemanticFieldId.secondaryBackground,
       label: '次级背景',
       color: palette.elevatedSurfaceColor,
@@ -275,6 +294,11 @@ List<ThemeSemanticColorPreview> buildColorCardThemeSemanticPreviews({
       id: ThemeSemanticFieldId.border,
       label: '边框',
       color: palette.outlineColor,
+    ),
+    ThemeSemanticColorPreview(
+      id: ThemeSemanticFieldId.divider,
+      label: '分割线',
+      color: palette.cardBorderColor,
     ),
   ];
 }
