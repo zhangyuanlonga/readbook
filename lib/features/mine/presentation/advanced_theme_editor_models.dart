@@ -21,6 +21,7 @@ enum AdvancedThemeColorSlot {
   primaryContainer('强调背景', '标签、筛选和选中态背景色'),
   secondary('辅助强调', '次级徽标和辅助操作的强调色'),
   buttonText('按钮文字', '主按钮和高亮按钮上的文字'),
+  divider('分割线', '列表、菜单和分组分割线颜色'),
   shadow('阴影', '卡片和浮层的阴影或光晕颜色'),
   wallpaperOverlay('壁纸遮罩色', '壁纸上层覆盖的颜色');
 
@@ -40,7 +41,7 @@ enum AdvancedThemeColorSlot {
       ThemeSemanticFieldId.secondaryText =>
         AdvancedThemeColorSlot.textSecondary,
       ThemeSemanticFieldId.border => AdvancedThemeColorSlot.outline,
-      ThemeSemanticFieldId.divider => AdvancedThemeColorSlot.cardBorder,
+      ThemeSemanticFieldId.divider => AdvancedThemeColorSlot.divider,
       ThemeSemanticFieldId.cardBackground => AdvancedThemeColorSlot.card,
       ThemeSemanticFieldId.cardText => AdvancedThemeColorSlot.cardText,
       ThemeSemanticFieldId.cardBorder => AdvancedThemeColorSlot.cardBorder,
@@ -49,6 +50,7 @@ enum AdvancedThemeColorSlot {
       ThemeSemanticFieldId.emphasisBackground =>
         AdvancedThemeColorSlot.primaryContainer,
       ThemeSemanticFieldId.buttonText => AdvancedThemeColorSlot.buttonText,
+      ThemeSemanticFieldId.shadow => AdvancedThemeColorSlot.shadow,
       ThemeSemanticFieldId.secondaryAccent => AdvancedThemeColorSlot.secondary,
       ThemeSemanticFieldId.searchFieldBackground =>
         AdvancedThemeColorSlot.searchFieldBackground,

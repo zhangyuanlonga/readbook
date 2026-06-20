@@ -43,6 +43,7 @@ void main() {
         cardColor: Color(0xFF555555),
         cardTextColor: Color(0xFF666666),
         cardBorderColor: Color(0xFF777777),
+        dividerColor: Color(0xFF789ABC),
         outlineColor: Color(0xFF888888),
         iconBackgroundColor: Color(0xFF999999),
         textPrimaryColor: Color(0xFFAAAAAA),
@@ -77,6 +78,6 @@ void main() {
     expect(previews[5].id, ThemeSemanticFieldId.border);
     expect(previews[5].color, const Color(0xFF888888));
     expect(previews[6].id, ThemeSemanticFieldId.divider);
-    expect(previews[6].color, const Color(0xFF777777));
+    expect(previews[6].color, const Color(0xFF789ABC));
   });
 }

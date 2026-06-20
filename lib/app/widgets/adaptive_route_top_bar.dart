@@ -194,7 +194,9 @@ class _DesktopRouteTopBar extends StatelessWidget {
     final resolvedBackground = backgroundColor ?? colorScheme.surface;
     final resolvedForeground = foregroundColor ?? colorScheme.onSurface;
     final resolvedDivider =
-        dividerColor ?? colorScheme.outlineVariant.withValues(alpha: 0.7);
+        dividerColor ??
+        DividerTheme.of(context).color ??
+        colorScheme.outlineVariant.withValues(alpha: 0.7);
     final horizontal = AppSpacing.pageHorizontal(context);
 
     final bottomWidget = bottom;

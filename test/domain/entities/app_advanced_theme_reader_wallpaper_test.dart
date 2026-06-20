@@ -30,6 +30,7 @@ void main() {
       primaryColorValue: 0xFF123456,
       backgroundColorValue: 0xFFF5F1E8,
       cardColorValue: 0xFFFFFFFF,
+      dividerColorValue: 0xFFE6DFD3,
       shadowColorValue: 0xFF334455,
     );
 
@@ -40,6 +41,7 @@ void main() {
     expect(json['primaryColorValue'], 0xFF123456);
     expect((semanticGroups['core'] as Map)['primary'], 0xFF123456);
     expect((semanticGroups['core'] as Map)['background'], 0xFFF5F1E8);
+    expect((semanticGroups['core'] as Map)['divider'], 0xFFE6DFD3);
     expect((semanticGroups['component'] as Map)['card'], 0xFFFFFFFF);
     expect((semanticGroups['effects'] as Map)['shadow'], 0xFF334455);
   });
@@ -54,6 +56,7 @@ void main() {
           'textPrimary': 0xFF1A1A1A,
           'textSecondary': 0xFF666666,
           'outline': 0xFFD0C7B8,
+          'divider': 0xFFE6DFD3,
         },
         'component': <String, dynamic>{'card': 0xFFFFFFFF},
         'state': <String, dynamic>{
@@ -84,6 +87,7 @@ void main() {
     expect(restored.cardColorValue, 0xFFFFFFFF);
     expect(restored.secondaryColorValue, 0xFF886644);
     expect(restored.buttonTextColorValue, 0xFFFFFFFF);
+    expect(restored.dividerColorValue, 0xFFE6DFD3);
     expect(restored.shadowColorValue, 0xFF334455);
   });
 

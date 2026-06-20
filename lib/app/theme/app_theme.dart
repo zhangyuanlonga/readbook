@@ -32,6 +32,8 @@ class AppTheme {
         advancedPalette?.textPrimaryColor ?? effectiveColorScheme.onSurface;
     final cardColor =
         advancedPalette?.cardColor ?? effectiveColorScheme.surface;
+    final dividerColor =
+        advancedPalette?.dividerColor ?? effectiveColorScheme.outlineVariant;
     final modalSurfaceColor =
         advancedPalette?.surfaceColor ??
         effectiveColorScheme.surfaceContainerLow;
@@ -65,7 +67,9 @@ class AppTheme {
       extensions: <ThemeExtension<dynamic>>[componentTokens],
       fontFamily: fontFamily,
       scaffoldBackgroundColor: scaffoldBackgroundColor,
+      dividerColor: dividerColor,
       visualDensity: const VisualDensity(horizontal: -0.2, vertical: -0.2),
+      dividerTheme: DividerThemeData(color: dividerColor, thickness: 1),
       appBarTheme: AppBarTheme(
         centerTitle: false,
         elevation: 0,

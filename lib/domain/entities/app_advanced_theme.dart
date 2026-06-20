@@ -165,6 +165,7 @@ class AppAdvancedThemeColors {
     this.textSecondaryColorValue,
     this.buttonTextColorValue,
     this.outlineColorValue,
+    this.dividerColorValue,
     this.shadowColorValue,
     this.wallpaperOverlayColorValue,
   });
@@ -186,6 +187,7 @@ class AppAdvancedThemeColors {
   final int? textSecondaryColorValue;
   final int? buttonTextColorValue;
   final int? outlineColorValue;
+  final int? dividerColorValue;
   final int? shadowColorValue;
   final int? wallpaperOverlayColorValue;
 
@@ -220,6 +222,7 @@ class AppAdvancedThemeColors {
       if (buttonTextColorValue != null)
         'buttonTextColorValue': buttonTextColorValue,
       if (outlineColorValue != null) 'outlineColorValue': outlineColorValue,
+      if (dividerColorValue != null) 'dividerColorValue': dividerColorValue,
       if (shadowColorValue != null) 'shadowColorValue': shadowColorValue,
       if (wallpaperOverlayColorValue != null)
         'wallpaperOverlayColorValue': wallpaperOverlayColorValue,
@@ -288,6 +291,9 @@ class AppAdvancedThemeColors {
       outlineColorValue:
           _readInt(json, 'outlineColorValue') ??
           _readSemanticColor(json, group: 'core', key: 'outline'),
+      dividerColorValue:
+          _readInt(json, 'dividerColorValue') ??
+          _readSemanticColor(json, group: 'core', key: 'divider'),
       shadowColorValue:
           _readInt(json, 'shadowColorValue') ??
           _readSemanticColor(json, group: 'effects', key: 'shadow'),
@@ -336,6 +342,8 @@ class AppAdvancedThemeColors {
     bool clearButtonTextColorValue = false,
     int? outlineColorValue,
     bool clearOutlineColorValue = false,
+    int? dividerColorValue,
+    bool clearDividerColorValue = false,
     int? shadowColorValue,
     bool clearShadowColorValue = false,
     int? wallpaperOverlayColorValue,
@@ -409,6 +417,10 @@ class AppAdvancedThemeColors {
           clearOutlineColorValue
               ? null
               : (outlineColorValue ?? this.outlineColorValue),
+      dividerColorValue:
+          clearDividerColorValue
+              ? null
+              : (dividerColorValue ?? this.dividerColorValue),
       shadowColorValue:
           clearShadowColorValue
               ? null
@@ -439,6 +451,7 @@ class AppAdvancedThemeColors {
       textSecondaryColorValue,
       buttonTextColorValue,
       outlineColorValue,
+      dividerColorValue,
       shadowColorValue,
       wallpaperOverlayColorValue,
     ].whereType<int>().length;
@@ -467,6 +480,7 @@ class AppAdvancedThemeColors {
       if (textSecondaryColorValue != null)
         'textSecondary': textSecondaryColorValue,
       if (outlineColorValue != null) 'outline': outlineColorValue,
+      if (dividerColorValue != null) 'divider': dividerColorValue,
     };
     final component = <String, dynamic>{
       if (cardColorValue != null) 'card': cardColorValue,

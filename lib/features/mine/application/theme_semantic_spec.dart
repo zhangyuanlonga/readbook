@@ -17,6 +17,7 @@ enum ThemeSemanticFieldId {
   iconBackground,
   emphasisBackground,
   buttonText,
+  shadow,
   secondaryAccent,
   searchFieldBackground,
   noticeAccent,
@@ -117,7 +118,7 @@ const ThemeSemanticGroupSpec colorCardThemeSemanticGroup =
 
 const ThemeSemanticGroupSpec modalThemeSemanticGroup = ThemeSemanticGroupSpec(
   title: '弹窗组件',
-  subtitle: '控制普通弹窗、菜单和底部面板的背景。',
+  subtitle: '控制普通弹窗、菜单和底部面板背景；未设置时跟随默认浮层背景。',
   fields: <ThemeSemanticFieldSpec>[
     ThemeSemanticFieldSpec(
       id: ThemeSemanticFieldId.modalBackground,
@@ -163,6 +164,12 @@ const ThemeSemanticGroupSpec advancedColorThemeSemanticGroup =
           label: '图标底色',
           description: '图标圆底和小型入口底色',
           scopeLabels: <String>['图标圆底', '小型入口'],
+        ),
+        ThemeSemanticFieldSpec(
+          id: ThemeSemanticFieldId.shadow,
+          label: '阴影色',
+          description: '卡片、弹窗和浮层阴影颜色',
+          scopeLabels: <String>['卡片阴影', '弹窗阴影', '浮层阴影'],
         ),
       ],
     );
@@ -298,7 +305,7 @@ List<ThemeSemanticColorPreview> buildColorCardThemeSemanticPreviews({
     ThemeSemanticColorPreview(
       id: ThemeSemanticFieldId.divider,
       label: '分割线',
-      color: palette.cardBorderColor,
+      color: palette.dividerColor,
     ),
   ];
 }

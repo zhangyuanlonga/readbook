@@ -1395,8 +1395,10 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
     );
   }
 
-  Color _desktopDividerColor(ColorScheme colorScheme) {
-    return colorScheme.outlineVariant.withValues(alpha: 0.3);
+  Color _desktopDividerColor(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return DividerTheme.of(context).color ??
+        colorScheme.outlineVariant.withValues(alpha: 0.3);
   }
 
   Widget _desktopInkWell({
@@ -1496,7 +1498,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
 
   Widget _buildDesktopSidebarFooter(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final dividerColor = _desktopDividerColor(colorScheme);
+    final dividerColor = _desktopDividerColor(context);
     final session = _topBarSession;
 
     // 桌面端账号资料和设置统一放在顶部右侧，侧边栏底部只保留登录态退出入口，

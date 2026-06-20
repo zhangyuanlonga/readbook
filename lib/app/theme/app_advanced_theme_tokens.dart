@@ -11,6 +11,7 @@ class ResolvedAdvancedThemePalette {
     required this.cardColor,
     required this.cardTextColor,
     required this.cardBorderColor,
+    required this.dividerColor,
     required this.outlineColor,
     required this.iconBackgroundColor,
     required this.textPrimaryColor,
@@ -31,6 +32,7 @@ class ResolvedAdvancedThemePalette {
   final Color cardColor;
   final Color cardTextColor;
   final Color cardBorderColor;
+  final Color dividerColor;
   final Color outlineColor;
   final Color iconBackgroundColor;
   final Color textPrimaryColor;
@@ -162,6 +164,10 @@ ResolvedAdvancedThemePalette resolveAdvancedThemePaletteFromModeConfig(
             outlineColor: outlineColor,
             cardColor: cardColor,
           );
+  final dividerColor =
+      colors?.dividerColorValue != null
+          ? Color(colors!.dividerColorValue!)
+          : cardBorderColor;
   final iconBackgroundColor =
       colors?.iconBackgroundColorValue != null
           ? Color(colors!.iconBackgroundColorValue!)
@@ -197,6 +203,7 @@ ResolvedAdvancedThemePalette resolveAdvancedThemePaletteFromModeConfig(
     cardColor: cardColor,
     cardTextColor: cardTextColor,
     cardBorderColor: cardBorderColor,
+    dividerColor: dividerColor,
     outlineColor: outlineColor,
     iconBackgroundColor: iconBackgroundColor,
     textPrimaryColor: textPrimaryColor,
@@ -272,6 +279,7 @@ AppAdvancedThemeModeConfig buildDefaultAdvancedThemeModeConfig(
       cardColorValue: colorScheme.surface.toARGB32(),
       cardTextColorValue: colorScheme.onSurface.toARGB32(),
       cardBorderColorValue: colorScheme.outlineVariant.toARGB32(),
+      dividerColorValue: colorScheme.outlineVariant.toARGB32(),
       iconBackgroundColorValue:
           Color.alphaBlend(
             colorScheme.onSurface.withValues(alpha: 0.04),

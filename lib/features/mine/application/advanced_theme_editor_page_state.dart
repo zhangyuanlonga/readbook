@@ -26,7 +26,7 @@ abstract class AdvancedThemeEditorPageState
     List<ReaderCustomFontEntry> availableFonts,
     String? activeBottomNavGalleryName,
     @Default(true) bool strengthControlsExpanded,
-    @Default(true) bool componentControlsExpanded,
+    @Default(false) bool componentControlsExpanded,
     @Default(false) bool isEditingName,
     @Default(true) bool isLoading,
     @Default(false) bool isSaving,

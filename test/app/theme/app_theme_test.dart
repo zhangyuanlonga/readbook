@@ -113,6 +113,7 @@ void main() {
           cardColor: Color(0xFF1C1C1C),
           cardTextColor: Colors.white,
           cardBorderColor: Color(0xFF2F2F2F),
+          dividerColor: Color(0xFF353535),
           outlineColor: Color(0xFF3A3A3A),
           iconBackgroundColor: Color(0xFF242424),
           textPrimaryColor: Colors.white,

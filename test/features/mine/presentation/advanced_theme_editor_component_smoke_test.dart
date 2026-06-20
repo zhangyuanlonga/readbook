@@ -154,6 +154,19 @@ void main() {
     expect(find.text('柔和'), findsOneWidget);
     expect(find.text('圆润'), findsOneWidget);
     expect(find.text('圆角预览'), findsOneWidget);
+    await _dragUntilFound(tester, editorScroll, find.text('弹窗预览'));
+    await tester.pump();
+
+    expect(find.text('弹窗预览'), findsOneWidget);
+    expect(find.text('普通弹窗'), findsOneWidget);
+    expect(find.text('底部面板'), findsOneWidget);
+    expect(find.text('弹窗背景模糊'), findsNothing);
+
+    await _dragUntilFound(tester, editorScroll, find.text('高级参数'));
+    await tester.ensureVisible(find.text('高级参数'));
+    await tester.pump();
+
+    expect(find.text('高级参数'), findsOneWidget);
     expect(find.text('卡片样式'), findsNothing);
     expect(find.text('按钮样式'), findsNothing);
     expect(find.text('输入框样式'), findsNothing);
@@ -162,6 +175,27 @@ void main() {
     expect(find.text('切换样式'), findsNothing);
     expect(find.text('页面预览'), findsNothing);
     expect(find.text('搜索预览'), findsNothing);
+
+    await tester.tap(find.text('高级参数'));
+    await tester.pump();
+    await _dragUntilFound(tester, editorScroll, find.text('卡片样式'));
+    await tester.ensureVisible(find.text('卡片样式'));
+    await tester.pump();
+
+    expect(find.text('组件样式'), findsOneWidget);
+    expect(find.text('卡片样式'), findsOneWidget);
+    expect(find.text('按钮样式'), findsOneWidget);
+    expect(find.text('输入框样式'), findsOneWidget);
+    expect(find.text('弹窗样式'), findsOneWidget);
+    expect(find.text('导航样式'), findsOneWidget);
+    expect(find.text('切换样式'), findsOneWidget);
+
+    await _dragUntilFound(tester, editorScroll, find.text('阴影色'));
+    await tester.ensureVisible(find.text('阴影色'));
+    await tester.pump();
+
+    expect(find.text('卡片文字'), findsOneWidget);
+    expect(find.text('阴影色'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

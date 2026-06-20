@@ -85,6 +85,29 @@ void main() {
     },
   );
 
+  test('resolves divider color with card border fallback', () {
+    final colorScheme = ColorScheme.fromSeed(seedColor: Colors.blue);
+
+    final explicit = resolveAdvancedThemePaletteFromModeConfig(
+      colorScheme,
+      AppAdvancedThemeModeConfig(
+        colors: const AppAdvancedThemeColors(
+          cardBorderColorValue: 0xFF112233,
+          dividerColorValue: 0xFF445566,
+        ),
+      ),
+    );
+    final fallback = resolveAdvancedThemePaletteFromModeConfig(
+      colorScheme,
+      AppAdvancedThemeModeConfig(
+        colors: const AppAdvancedThemeColors(cardBorderColorValue: 0xFF112233),
+      ),
+    );
+
+    expect(explicit.dividerColor, const Color(0xFF445566));
+    expect(fallback.dividerColor, const Color(0xFF112233));
+  });
+
   test('derives wallpaper overlay opacity from brightness when unset', () {
     final lightBackdrop = resolveAdvancedThemeBackdropFromModeConfig(
       ColorScheme.fromSeed(
