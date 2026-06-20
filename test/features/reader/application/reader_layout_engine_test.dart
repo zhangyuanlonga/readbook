@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shuxiang_reading_next/domain/entities/reader_document.dart';
 import 'package:shuxiang_reading_next/domain/entities/reader_settings.dart';
 import 'package:shuxiang_reading_next/features/reader/application/reader_layout_engine.dart';
 import 'package:shuxiang_reading_next/features/reader/application/reader_layout_request.dart';
@@ -107,6 +108,39 @@ void main() {
         ]);
         expect(payloads.first.url, 'https://example.com');
         expect(payloads.last.url, 'https://example.com/a.png');
+      },
+    );
+
+    test(
+      'keeps image block offsets compatible with document paragraphs',
+      () async {
+        const imageUrl = 'https://example.com/a.png';
+        final imageMarkerLength =
+            ReaderDocument.inlineImageParagraph(imageUrl).length;
+        final result = await engine.layout(
+          ReaderLayoutRequest(
+            chapterId: 'chapter-1',
+            chapterIndex: 0,
+            blocks: <ReaderLayoutBlock>[
+              const ReaderLayoutBlock.paragraph(text: '前', sourceIndex: 0),
+              ReaderLayoutBlock.image(
+                imageUrl: imageUrl,
+                estimatedHeight: 12,
+                contentLength: imageMarkerLength,
+                sourceIndex: 1,
+              ),
+              const ReaderLayoutBlock.paragraph(text: '后', sourceIndex: 2),
+            ],
+            spec: _spec,
+            documentFingerprint: 'doc-offset',
+          ),
+        );
+
+        final lines = result!.pages.expand((page) => page.lines).toList();
+        expect(lines[0].chapterOffset, 0);
+        expect(lines[1].chapterOffset, 3);
+        expect(lines[1].endChapterOffset, 3 + imageMarkerLength);
+        expect(lines[2].chapterOffset, 3 + imageMarkerLength + 2);
       },
     );
 

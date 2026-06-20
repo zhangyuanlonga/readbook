@@ -13,8 +13,10 @@ class ReaderLayoutBlock {
     this.imageUrl,
     this.linkUrl,
     this.estimatedHeight = 0,
+    this.contentLengthOverride,
     this.payload = const <String, Object?>{},
-  }) : assert(estimatedHeight >= 0);
+  }) : assert(estimatedHeight >= 0),
+       assert(contentLengthOverride == null || contentLengthOverride >= 0);
 
   const ReaderLayoutBlock.paragraph({
     required String text,
@@ -76,6 +78,7 @@ class ReaderLayoutBlock {
   const ReaderLayoutBlock.image({
     required String imageUrl,
     double estimatedHeight = 180,
+    int contentLength = 1,
     int? sourceIndex,
     Map<String, Object?> payload = const <String, Object?>{},
   }) : this._(
@@ -83,6 +86,7 @@ class ReaderLayoutBlock {
          text: '',
          imageUrl: imageUrl,
          estimatedHeight: estimatedHeight,
+         contentLengthOverride: contentLength,
          sourceIndex: sourceIndex,
          payload: payload,
        );
@@ -93,6 +97,7 @@ class ReaderLayoutBlock {
   final String? imageUrl;
   final String? linkUrl;
   final double estimatedHeight;
+  final int? contentLengthOverride;
   final Map<String, Object?> payload;
 
   bool get isText => kind != ReaderLayoutBlockKind.image;
@@ -101,7 +106,7 @@ class ReaderLayoutBlock {
   bool get isLink => kind == ReaderLayoutBlockKind.link;
   bool get isFootnote => kind == ReaderLayoutBlockKind.footnote;
   bool get isCaption => kind == ReaderLayoutBlockKind.caption;
-  int get contentLength => isImage ? 1 : text.length;
+  int get contentLength => contentLengthOverride ?? (isImage ? 1 : text.length);
 
   Map<String, Object?> get semanticPayload {
     return switch (kind) {
@@ -378,11 +383,16 @@ class ReaderLayoutRequest {
       return ReaderLayoutBlock.caption(text: block.text, sourceIndex: index);
     }
     if (block is ReaderFootnoteBlock) {
-      return ReaderLayoutBlock.footnote(text: block.text, sourceIndex: index);
+      return ReaderLayoutBlock.footnote(
+        text: '注: ${block.text}',
+        sourceIndex: index,
+      );
     }
     if (block is ReaderImageBlock) {
       return ReaderLayoutBlock.image(
         imageUrl: block.imageUrl,
+        contentLength:
+            ReaderDocument.inlineImageParagraph(block.imageUrl).length,
         sourceIndex: index,
       );
     }

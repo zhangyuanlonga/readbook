@@ -134,6 +134,33 @@ void main() {
         'https://example.com/p.png',
       );
     });
+
+    test(
+      'keeps document layout offsets aligned with compatibility paragraphs',
+      () {
+        const imageUrl = 'https://example.com/p.png';
+        final document = ReaderDocument(
+          blocks: const <ReaderBlock>[
+            ReaderTextBlock(text: '正文'),
+            ReaderImageBlock(imageUrl: imageUrl),
+            ReaderFootnoteBlock(text: '脚注'),
+          ],
+        );
+        final request = ReaderLayoutRequest.fromDocument(
+          chapterId: 'chapter-1',
+          chapterIndex: 0,
+          document: document,
+          spec: ReaderLayoutSpec.fromPaginationSpec(_paginationSpec),
+          documentFingerprint: 'doc-offset',
+        );
+
+        expect(
+          request.blocks.map((block) => block.contentLength),
+          document.paragraphs.map((paragraph) => paragraph.length),
+        );
+        expect(request.blocks[2].text, '注: 脚注');
+      },
+    );
   });
 }
 

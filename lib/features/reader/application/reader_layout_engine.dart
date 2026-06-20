@@ -241,7 +241,7 @@ class ReaderLayoutEngine {
       columnIndex: 0,
       kind: ReaderLayoutColumnKind.image,
       startOffset: chapterOffset,
-      endOffset: chapterOffset + 1,
+      endOffset: chapterOffset + block.contentLength,
       rect: ReaderLayoutRect(
         left: 0,
         top: y,

@@ -12,6 +12,7 @@ import 'package:shuxiang_reading_next/features/mine/presentation/widgets/advance
 void main() {
   testWidgets('title starts editing and submits changed text', (tester) async {
     var editStarted = false;
+    String? changed;
     String? submitted;
     final controller = TextEditingController(text: '初始主题');
     addTearDown(controller.dispose);
@@ -25,6 +26,7 @@ void main() {
               nameController: controller,
               title: '初始主题',
               onStartEditing: () => editStarted = true,
+              onChanged: (value) => changed = value,
               onSubmitted: (value) => submitted = value,
             ),
           ),
@@ -45,6 +47,7 @@ void main() {
               nameController: controller,
               title: '初始主题',
               onStartEditing: () => editStarted = true,
+              onChanged: (value) => changed = value,
               onSubmitted: (value) => submitted = value,
             ),
           ),
@@ -55,6 +58,7 @@ void main() {
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pump();
 
+    expect(changed, '新主题');
     expect(submitted, '新主题');
   });
 
