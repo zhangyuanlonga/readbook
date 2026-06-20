@@ -1,12 +1,6 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/layout/app_adaptive.dart';
 import '../../../app/layout/app_layout.dart';
@@ -39,23 +33,11 @@ class MembershipCenterPage extends ConsumerStatefulWidget {
 }
 
 class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
-  static const String _supportQqNumber = '782045011';
-  static const String _paymentQrAssetPath = 'assets/logo/vx.jpg';
-  static final Uri _supportChatUri = Uri.parse(
-    'mqqwpa://im/chat?chat_type=wpa&uin=$_supportQqNumber&version=1&src_type=app',
-  );
-  static final Uri _supportFallbackUri = Uri.parse(
-    'https://wpa.qq.com/msgrd?v=3&uin=$_supportQqNumber&site=qq&menu=yes',
-  );
-  static final Uri _supportGroupUri = Uri.parse(
-    'https://qun.qq.com/universal-share/share?ac=1&authKey=Tabvg05EAafVbER7E8%2BzAQ18yErg2a%2B5PoqQH41t6dbPjcZIfDSnNX%2F4KCAXhzVh&busi_data=eyJncm91cENvZGUiOiIxMDgyODI3MjI0IiwidG9rZW4iOiIzam5tVFQ0cUs1T3VlMytzVk9iOXB1Zk40Q1RaUXJiQytzd2JlZUx3NDhXQTJscy9ZZGE5WW1hQXhPdGFwMHU1IiwidWluIjoiNzgyMDQ1MDExIn0%3D&data=PHNA5IOU4A3ujR5i9rmpWqWn4Qc-L9MNr8ByREa7IfvpXTo1utwnHVIfjkB7Rlk4x3yE9dfMR5_ZjOfsQ9wYcA&svctype=4&tempid=h5_group_info',
-  );
-
   static const List<_MembershipFeatureItem> _featureItems = [
     _MembershipFeatureItem(
       icon: Icons.all_inclusive_rounded,
       title: '无限制阅读',
-      description: '畅享完整阅读能力，解锁所有高级会员功能，获得更自由的使用体验。',
+      description: '畅享完整阅读能力，解锁所有高级权益，获得更自由的使用体验。',
     ),
     _MembershipFeatureItem(
       icon: Icons.sell_outlined,
@@ -161,7 +143,7 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
     final horizontal = metrics.pagePadding;
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
-    const title = '会员中心';
+    const title = '许可证权益';
 
     return PopScope<void>(
       canPop: context.canPop(),
@@ -205,7 +187,7 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
                 child: ConstrainedBox(
                   constraints: BoxConstraints(maxWidth: maxWidth),
                   child: AppRefreshIndicator(
-                    semanticsLabel: '刷新会员中心',
+                    semanticsLabel: '刷新许可证权益',
                     onRefresh: _refreshPage,
                     child: ListView(
                       controller: _scrollController,
@@ -523,14 +505,14 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              '领取试用会员',
+              '领取试用权益',
               style: Theme.of(
                 surfaceContext,
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 10),
             Text(
-              '将为当前账号领取 7 天 Pro 试用会员，每个账号限领一次。确认立即领取吗？',
+              '将为当前账号领取 7 天 Pro 试用权益，每个账号限领一次。确认立即领取吗？',
               style: Theme.of(surfaceContext).textTheme.bodyMedium?.copyWith(
                 color: colorScheme.onSurfaceVariant,
               ),
@@ -578,82 +560,6 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
           _isClaimingTrial = false;
         });
       }
-    }
-  }
-
-  Future<void> _openSupport() async {
-    if (!mounted) {
-      return;
-    }
-    await showAdaptiveActionSurface<void>(
-      context: context,
-      maxWidth: 520,
-      builder:
-          (surfaceContext) =>
-              SingleChildScrollView(child: _buildSupportSheet(surfaceContext)),
-    );
-  }
-
-  Future<void> _copySupportQqNumber() async {
-    await Clipboard.setData(const ClipboardData(text: _supportQqNumber));
-    if (!mounted) {
-      return;
-    }
-    _showMessage('已复制客服 QQ：$_supportQqNumber');
-  }
-
-  Future<void> _openSupportChatDirectly() async {
-    final launched = await launchUrl(
-      _supportChatUri,
-      mode: LaunchMode.externalApplication,
-    );
-    if (launched || !mounted) {
-      return;
-    }
-    final fallbackLaunched = await launchUrl(
-      _supportFallbackUri,
-      mode: LaunchMode.externalApplication,
-    );
-    if (fallbackLaunched || !mounted) {
-      return;
-    }
-    _showMessage('当前无法直接发起私聊，可先复制 QQ 号添加好友。');
-  }
-
-  Future<void> _openSupportGroup() async {
-    final launched = await launchUrl(
-      _supportGroupUri,
-      mode: LaunchMode.externalApplication,
-    );
-    if (launched || !mounted) {
-      return;
-    }
-    _showMessage('跳转失败，请稍后重试。');
-  }
-
-  Future<void> _savePaymentQrCode() async {
-    try {
-      final data = await rootBundle.load(_paymentQrAssetPath);
-      final documentsDirectory = await getApplicationDocumentsDirectory();
-      final saveDirectory = Directory(
-        p.join(documentsDirectory.path, 'membership_payments'),
-      );
-      if (!await saveDirectory.exists()) {
-        await saveDirectory.create(recursive: true);
-      }
-      final targetFile = File(
-        p.join(saveDirectory.path, 'membership_payment_qr.jpg'),
-      );
-      await targetFile.writeAsBytes(data.buffer.asUint8List(), flush: true);
-      if (!mounted) {
-        return;
-      }
-      _showMessage('二维码已保存到 ${targetFile.path}');
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      _showMessage('保存二维码失败，请直接截图保存。');
     }
   }
 
@@ -720,12 +626,9 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
         _session == null
             ? '登录/注册'
             : _hasActiveMembership
-            ? '管理会员'
-            : '¥68 立即购买';
-    final primaryColor =
-        _hasActiveMembership
-            ? Theme.of(context).colorScheme.primary
-            : const Color(0xFFD84B4B);
+            ? '管理许可证'
+            : '激活许可证';
+    final primaryColor = Theme.of(context).colorScheme.primary;
     return Container(
       padding: EdgeInsets.fromLTRB(
         metrics.pagePadding,
@@ -760,7 +663,7 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
                       ? _handleLoginAction
                       : _hasActiveMembership
                       ? _handleManageAction
-                      : _openSupport,
+                      : _handleActivateAction,
               child: Text(primaryLabel),
             ),
           ),
@@ -783,14 +686,8 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
               else
                 TextButton(
                   onPressed: _isActing ? null : _handleTrialAction,
-                  child: Text(_isClaimingTrial ? '领取中...' : '试用会员'),
+                  child: Text(_isClaimingTrial ? '领取中...' : '试用权益'),
                 ),
-              if (!_hasActiveMembership)
-                TextButton(
-                  onPressed: _isActing ? null : _handleActivateAction,
-                  child: const Text('激活许可证'),
-                ),
-              TextButton(onPressed: _openSupport, child: const Text('联系客服')),
             ],
           ),
         ],
@@ -808,10 +705,10 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
     final metrics = AppAdaptiveMetrics.of(context);
     final message =
         _session == null
-            ? '登录账号后可自助领取 7 天试用会员，每个账号限领一次。'
+            ? '登录账号后可自助领取 7 天试用权益，每个账号限领一次。'
             : _hasActiveMembership && (_entitlement?.isTrial ?? false)
-            ? '当前账号正处于试用期内，试用结束后可通过许可证继续开通正式会员。'
-            : '当前账号可自助领取 7 天试用会员，每个账号限领一次。';
+            ? '当前账号正处于试用期内，试用结束后可通过许可证延续权益。'
+            : '当前账号可自助领取 7 天试用权益，每个账号限领一次。';
     return Container(
       margin: EdgeInsets.only(bottom: metrics.contentGap),
       padding: EdgeInsets.all(metrics.cardPadding),
@@ -840,142 +737,6 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
     );
   }
 
-  Widget _buildSupportSheet(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final metrics = AppAdaptiveMetrics.of(context);
-    return Card(
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(metrics.cardRadius + 8),
-      ),
-      child: Padding(
-        padding: EdgeInsets.all(metrics.cardPadding + 4),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 42,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: colorScheme.outlineVariant,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-            ),
-            Text(
-              '扫码支付',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '默认展示微信支付二维码。你可以先保存到本地，或者直接截图后扫码支付；如需确认开通结果，也可以使用下方方式联系我。',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-                height: 1.45,
-              ),
-            ),
-            const SizedBox(height: 14),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
-              decoration: BoxDecoration(
-                color: colorScheme.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: colorScheme.outlineVariant.withValues(alpha: 0.42),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(18),
-                      child: Image.asset(
-                        _paymentQrAssetPath,
-                        width: 220,
-                        height: 220,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Center(
-                    child: Text(
-                      '支付后如需人工确认，可联系 QQ：$_supportQqNumber',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '建议优先保存二维码到本地，若保存失败也可以直接截图后扫码支付。支付完成后可复制客服 QQ、尝试私聊，或前往官方群继续处理。',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      height: 1.45,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            DecoratedBox(
-              decoration: BoxDecoration(
-                color: colorScheme.surfaceContainerLowest,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: colorScheme.outlineVariant.withValues(alpha: 0.3),
-                ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(6, 6, 6, 6),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _SupportActionButton(
-                        icon: Icons.download_rounded,
-                        label: '保存二维码',
-                        onPressed: _savePaymentQrCode,
-                      ),
-                    ),
-                    Expanded(
-                      child: _SupportActionButton(
-                        icon: Icons.copy_rounded,
-                        label: '复制客服QQ号',
-                        onPressed: _copySupportQqNumber,
-                      ),
-                    ),
-                    Expanded(
-                      child: _SupportActionButton(
-                        icon: Icons.chat_bubble_outline_rounded,
-                        label: '尝试私聊',
-                        onPressed: _openSupportChatDirectly,
-                      ),
-                    ),
-                    Expanded(
-                      child: _SupportActionButton(
-                        icon: Icons.groups_rounded,
-                        label: '前往官方群',
-                        onPressed: _openSupportGroup,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildMembershipStatusStrip(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final metrics = AppAdaptiveMetrics.of(context);
@@ -983,14 +744,14 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
         _session == null
             ? '当前状态：未登录'
             : _hasActiveMembership
-            ? '当前状态：会员已生效'
-            : '当前状态：未开通会员';
+            ? '当前状态：权益已生效'
+            : '当前状态：未激活权益';
     final detail =
         _session == null
             ? '登录后可激活许可证并同步权益信息。'
             : _hasActiveMembership
-            ? '可继续管理许可证、设备席位与会员权益。'
-            : '可通过许可证激活会员，立即解锁完整能力。';
+            ? '可继续管理许可证、设备席位与高级权益。'
+            : '可通过许可证激活高级权益。';
     return Container(
       margin: EdgeInsets.only(bottom: metrics.contentGap),
       padding: EdgeInsets.all(metrics.cardPadding),
@@ -1043,7 +804,6 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
   Widget _buildHeroCard(BuildContext context, {required bool loggedIn}) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    const accentColor = Color(0xFFB68A4D);
     const accentDeepColor = Color(0xFF8D6730);
     return Container(
       padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
@@ -1073,46 +833,18 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
             ),
           ),
           const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '¥68',
-                style: theme.textTheme.headlineLarge?.copyWith(
-                  color: accentDeepColor,
-                  fontWeight: FontWeight.w900,
-                  height: 1.0,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                '¥88/永久',
-                style: theme.textTheme.titleSmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w700,
-                  decoration: TextDecoration.lineThrough,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: accentColor.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  '早鸟价',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: accentDeepColor,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: const [
+              _HeroBadge(icon: Icons.verified_user_outlined, label: '许可证激活'),
+              _HeroBadge(icon: Icons.timer_outlined, label: '7 天试用'),
+              _HeroBadge(icon: Icons.devices_rounded, label: '设备席位同步'),
             ],
           ),
           const SizedBox(height: 12),
           Text(
-            '解锁会员，享受最舒服的阅读体验',
+            '通过许可证同步 Pro 权益，保留完整阅读体验与多端授权管理。',
             style: theme.textTheme.bodyLarge?.copyWith(
               color: colorScheme.onSurface,
               fontWeight: FontWeight.w600,
@@ -1133,7 +865,7 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '高级会员权益',
+            '许可证权益',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w800,
               letterSpacing: 0.1,
@@ -1252,7 +984,7 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
                       Text(
                         hasMembership
                             ? _buildEntitlementSummary(activeEntitlement!)
-                            : '当前账号还没有有效会员，可通过底部“许可证激活”输入许可证码完成开通。',
+                            : '当前账号还没有有效权益，可通过底部“许可证激活”输入许可证码完成授权。',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: colorScheme.onSurfaceVariant,
                           height: 1.4,
@@ -1266,7 +998,7 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
             const SizedBox(height: 14),
             _buildInfoRow(
               context,
-              '会员状态',
+              '权益状态',
               _describeStatus(entitlement.vipStatus),
             ),
             _buildInfoRow(context, '权益来源', _describeSource(entitlement)),
@@ -1322,14 +1054,14 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
               ),
             ),
             Text(
-              '激活会员',
+              '激活许可证',
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 8),
             Text(
-              '输入您获取的许可证码，即可开通或续期会员。',
+              '输入已持有的许可证码，即可激活或延续 Pro 权益。',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
                 height: 1.45,
@@ -1341,7 +1073,7 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
               decoration: const InputDecoration(
                 labelText: '许可证码',
                 hintText: '例如：PRO-XXXX-XXXX',
-                helperText: '许可证码通常以邮件或短信形式发送',
+                helperText: '请使用你已持有的许可证码',
                 prefixIcon: Icon(Icons.confirmation_number_outlined),
               ),
             ),
@@ -1813,8 +1545,8 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
 }
 
 class _MembershipMessages {
-  static const String redeemSuccess = '激活成功，会员权益已生效';
-  static const String trialSuccess = '试用领取成功，会员权益已生效';
+  static const String redeemSuccess = '激活成功，许可证权益已生效';
+  static const String trialSuccess = '试用领取成功，许可证权益已生效';
   static const String trialFailed = '试用领取失败，请稍后重试';
   static const String seatReleased = '设备已释放，席位已空出';
   static const String redeemFailed = '激活失败，请检查许可证码';
@@ -1838,44 +1570,38 @@ class _MembershipFeatureItem {
   final String? note;
 }
 
-class _SupportActionButton extends StatelessWidget {
-  const _SupportActionButton({
-    required this.icon,
-    required this.label,
-    required this.onPressed,
-  });
+class _HeroBadge extends StatelessWidget {
+  const _HeroBadge({required this.icon, required this.label});
 
   final IconData icon;
   final String label;
-  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return TextButton(
-      onPressed: onPressed,
-      style: TextButton.styleFrom(
-        minimumSize: const Size(0, 64),
-        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 8),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    const accentColor = Color(0xFFB68A4D);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: accentColor.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: accentColor.withValues(alpha: 0.22)),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 18, color: colorScheme.primary),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              fontSize: 10.5,
-              height: 1.15,
-              fontWeight: FontWeight.w600,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 15, color: accentColor),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: colorScheme.onSurface,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
