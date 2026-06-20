@@ -18,8 +18,9 @@
 - [x] V3 已完成新 layout renderer alpha preview：可翻页、可 fallback、可输出 diagnostics。
 - [x] V4 已完成交互锚点 alpha：selection、annotation、bookmark、search、read-aloud 共享 layout position。
 - [x] V5 已完成多 surface 进度语义 alpha：文本、漫画、PDF、音频、EPUB 混排 payload 不再互相顶替。
+- [x] V6 已完成正式入口默认切换代码 alpha：text+paged 默认新 renderer，旧 renderer fallback。
 - [ ] V1 真实样本手工行为记录仍需补齐。
-- [ ] 新 renderer 默认切换前必须完成 V6 灰度策略。
+- [ ] V6 TF 样本 smoke、profile 性能和外部反馈记录仍需补齐。
 
 ---
 
@@ -32,7 +33,7 @@
 | V3 | `reader-core-modernization-v3-renderer-node-2026-06-20.md` | 已完成 alpha | 新文本阅读器 debug/dev 灰度可用 |
 | V4 | `reader-core-modernization-v4-interaction-node-2026-06-20.md` | 已完成 alpha | 选择、标注、书签、搜索、朗读闭环 |
 | V5 | `reader-core-modernization-v5-surface-node-2026-06-20.md` | 已完成 alpha | 文本、漫画、PDF、音频 surface 完整 |
-| V6 | `reader-core-modernization-v6-release-node-2026-06-20.md` | 未开始 | 新阅读器默认上线，旧阅读器 fallback |
+| V6 | `reader-core-modernization-v6-release-node-2026-06-20.md` | 代码 alpha 完成 | 新阅读器默认上线，旧阅读器 fallback |
 
 ---
 

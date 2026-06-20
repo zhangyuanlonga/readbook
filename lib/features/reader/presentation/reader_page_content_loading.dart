@@ -87,6 +87,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
     _pagedPages = resolvedContentState.pagedPages;
     _pagedBlockPages = const <List<ReaderPagedBlock>>[];
     _textPaginationFallbackDiagnostic = null;
+    _resetLayoutReleaseRuntime();
     _pageTurnRuntimeController.currentPageIndex =
         resolvedContentState.currentPageIndex;
     _pageTurnRuntimeController.pagedPaginationState =

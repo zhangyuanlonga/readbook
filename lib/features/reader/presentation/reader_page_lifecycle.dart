@@ -170,6 +170,7 @@ extension _ReaderPageLifecycleExtension on _ReaderPageState {
     _pagedTransitionController.stop();
     _curlAutoTurnController.stop();
     _crossChapterSnapshotController.stop();
+    _layoutReleaseRendererController.cancelActive();
     _pageTurnRuntimeController.resetPagedTransition();
     _pageTurnRuntimeController.resetCurlTransition(
       pageIndex: _pageTurnRuntimeController.currentPageIndex,

@@ -58,7 +58,8 @@ class ReaderSurfacePolicyResolver {
     final pagedInfoOverlayReserve =
         !hasPagedInfoOverlay
             ? bottomProgressReserve
-            : footerMarginBottom +
+            : footerMarginTop +
+                footerMarginBottom +
                 _kPagedFooterVerticalPadding +
                 (footerFontSize * footerLineHeightFactor) +
                 6 +

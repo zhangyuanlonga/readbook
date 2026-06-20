@@ -17,6 +17,13 @@ typedef ReaderLayoutRendererLoadingBuilder =
 typedef ReaderLayoutRendererDiagnosticsBuilder =
     Widget Function(BuildContext context, ReaderLayoutRendererState state);
 
+typedef ReaderLayoutRendererReadyBuilder =
+    Widget Function(
+      BuildContext context,
+      ReaderLayoutRendererState state,
+      Widget child,
+    );
+
 class ReaderLayoutRendererPreviewSurface extends StatefulWidget {
   const ReaderLayoutRendererPreviewSurface({
     super.key,
@@ -25,10 +32,12 @@ class ReaderLayoutRendererPreviewSurface extends StatefulWidget {
     this.controller,
     this.targetRatio = 0,
     this.initialPageIndex,
+    this.pageIndex,
     this.nearbyPageRadius = 1,
     this.legacyBuilder,
     this.loadingBuilder,
     this.diagnosticsBuilder,
+    this.readyBuilder,
     this.showDiagnosticsOverlay = false,
     this.onDiagnostics,
     this.onPageChanged,
@@ -47,10 +56,12 @@ class ReaderLayoutRendererPreviewSurface extends StatefulWidget {
   final ReaderLayoutRendererController? controller;
   final double targetRatio;
   final int? initialPageIndex;
+  final int? pageIndex;
   final int nearbyPageRadius;
   final ReaderLayoutLegacyRendererBuilder? legacyBuilder;
   final ReaderLayoutRendererLoadingBuilder? loadingBuilder;
   final ReaderLayoutRendererDiagnosticsBuilder? diagnosticsBuilder;
+  final ReaderLayoutRendererReadyBuilder? readyBuilder;
   final bool showDiagnosticsOverlay;
   final ValueChanged<ReaderLayoutRendererState>? onDiagnostics;
   final ValueChanged<int>? onPageChanged;
@@ -164,9 +175,9 @@ class _ReaderLayoutRendererPreviewSurfaceState
             ? widget.diagnosticsBuilder?.call(context, state) ??
                 _ReaderLayoutDiagnosticsOverlay(state: state)
             : null;
-    return ReaderLayoutPagedView(
+    final pagedView = ReaderLayoutPagedView(
       pages: state.pages,
-      pageIndex: state.pageIndex,
+      pageIndex: widget.pageIndex ?? state.pageIndex,
       onPageChanged: widget.onPageChanged,
       physics: widget.physics,
       textStyle: widget.textStyle,
@@ -178,6 +189,7 @@ class _ReaderLayoutRendererPreviewSurfaceState
       selectionRuntime: widget.selectionRuntime,
       onSelectionChanged: widget.onSelectionChanged,
     );
+    return widget.readyBuilder?.call(context, state, pagedView) ?? pagedView;
   }
 }
 

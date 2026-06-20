@@ -104,6 +104,9 @@ import '../application/removed_script_source_guard.dart';
 import '../application/reader_jump_facade.dart';
 import '../application/reader_jump_planner.dart';
 import '../application/reader_layout_resolver.dart';
+import '../application/reader_layout_release_policy.dart';
+import '../application/reader_layout_renderer_controller.dart';
+import '../application/reader_layout_request.dart';
 import '../application/reader_navigation_command_dispatcher.dart';
 import '../application/reader_navigation_entry_resolver.dart';
 import '../application/reader_overlay_controller.dart';
@@ -124,6 +127,7 @@ import '../application/reader_settings_groups.dart';
 import '../application/reader_settings_entry_controller.dart';
 import '../application/reader_settings_resolution_service.dart';
 import '../application/reader_selection_controller.dart';
+import '../application/reader_selection_runtime.dart';
 import '../application/reader_session_presentation_facade.dart';
 import '../application/reader_surface_policy_resolver.dart';
 import '../application/reader_surface_metrics.dart';
@@ -175,6 +179,8 @@ import 'reader_desktop_input_dispatcher.dart';
 import 'reader_error_presenter.dart';
 import 'reader_feedback_widgets.dart';
 import 'reader_layout_context.dart';
+import 'reader_layout_paged_view.dart';
+import 'reader_layout_release_surface.dart';
 import 'paged_animation/curl_paged_animation_renderer.dart';
 import 'paged_animation/reader_paged_animation_surface.dart';
 import 'reader_interaction_coordinator.dart';
@@ -862,9 +868,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   String? _lightModeBackgroundImageBackup;
   final _ReaderBackgroundAssetStore _backgroundAssets =
       _ReaderBackgroundAssetStore();
+  final ReaderLayoutReleasePolicy _layoutReleasePolicy =
+      const ReaderLayoutReleasePolicy();
+  final ReaderLayoutRendererController _layoutReleaseRendererController =
+      ReaderLayoutRendererController();
   List<List<ReaderPagedSlice>> _pagedPages = const [];
   List<List<ReaderPagedBlock>> _pagedBlockPages = const [];
   String? _textPaginationFallbackDiagnostic;
+  int? _layoutReleasePageCount;
+  String? _layoutReleaseRequestSignature;
+  String? _layoutReleaseDiagnostic;
+  double _layoutReleaseTargetRatio = 0;
+  int _layoutReleaseInitialPageIndex = 0;
+  bool _layoutReleaseRendererActive = false;
   int get _paginationTaskId => _readerSessionController.paginationGeneration;
   ReaderPaginationSpec? _lastPaginationSpec;
   double? _measuredPinnedChapterHeaderWidth;
@@ -981,8 +997,42 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool get _isPagedTransitionAnimating =>
       _pageTurnRuntimeController.pagedTransition.isAnimating;
   bool get _shouldUseContinuousTextFlow => _isTextScrollViewport;
-  int get _currentPagedPageCount =>
-      max(_pagedPages.length, _pagedBlockPages.length);
+  int get _currentPagedPageCount => max(
+    max(_pagedPages.length, _pagedBlockPages.length),
+    _currentLayoutReleasePageCount,
+  );
+  int get _currentLayoutReleasePageCount {
+    if (!_layoutReleaseRendererActive) {
+      return 0;
+    }
+    return _layoutReleasePageCount ?? 0;
+  }
+
+  void _resetLayoutReleaseRuntime() {
+    _layoutReleaseRendererActive = false;
+    _layoutReleasePageCount = null;
+    _layoutReleaseRequestSignature = null;
+    _layoutReleaseDiagnostic = null;
+    _layoutReleaseTargetRatio = 0;
+    _layoutReleaseInitialPageIndex = 0;
+    _layoutReleaseRendererController.cancelActive();
+  }
+
+  void _syncLayoutReleaseRequest(
+    ReaderLayoutRequest request, {
+    required double targetRatio,
+    required int initialPageIndex,
+  }) {
+    if (_layoutReleaseRequestSignature == request.layoutSignature) {
+      return;
+    }
+    _layoutReleaseRequestSignature = request.layoutSignature;
+    _layoutReleaseRendererActive = true;
+    _layoutReleasePageCount = null;
+    _layoutReleaseDiagnostic = null;
+    _layoutReleaseTargetRatio = targetRatio.clamp(0.0, 1.0).toDouble();
+    _layoutReleaseInitialPageIndex = max(0, initialPageIndex);
+  }
 
   PageController? _resolveStaticPagedTextPageController(int pageCount) {
     if (pageCount <= 0) {

@@ -51,6 +51,14 @@ void main() {
               showDiagnosticsOverlay: true,
               textStyle: const TextStyle(fontSize: 16),
               onDiagnostics: diagnostics.add,
+              readyBuilder:
+                  (context, state, child) => DecoratedBox(
+                    decoration: const BoxDecoration(color: Color(0xFFFFFFFF)),
+                    child: KeyedSubtree(
+                      key: const ValueKey<String>('ready-wrapper'),
+                      child: child,
+                    ),
+                  ),
             ),
           ),
         ),
@@ -59,6 +67,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(ReaderLayoutPagedView), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('ready-wrapper')), findsOneWidget);
     expect(find.text('正文内容'), findsOneWidget);
     expect(diagnostics.last.kind, ReaderLayoutRendererStateKind.ready);
     expect(diagnostics.last.completed, isTrue);

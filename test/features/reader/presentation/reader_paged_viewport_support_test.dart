@@ -362,6 +362,9 @@ void main() {
       expect(find.byType(ReaderPaperCurlPagedView), findsOneWidget);
       expect(find.text('paper 1'), findsOneWidget);
       expect(find.text('fallback 1'), findsNothing);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 400));
     });
   });
 }

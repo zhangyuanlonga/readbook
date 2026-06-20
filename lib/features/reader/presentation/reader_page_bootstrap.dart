@@ -83,6 +83,7 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
       'title: $_bookTitle',
       'error: ${_errorText ?? ''}',
       'textPaginationFallbackDiagnostic: ${_textPaginationFallbackDiagnostic ?? ''}',
+      'layoutReleaseDiagnostic: ${_layoutReleaseDiagnostic ?? ''}',
       if (localBook != null) ...[
         'format: ${localBook.format.name}',
         'indexStatus: ${localBook.indexStatus.name}',
@@ -169,6 +170,9 @@ extension _ReaderPageBootstrapExtension on _ReaderPageState {
           (_chapterExecutionContext?.trim().isNotEmpty ?? false),
       'readerGatewayFailureStage': _readerGatewayFailureStage,
       'openRouteKind': widget.openRouteKind,
+      'layoutReleaseActive': _layoutReleaseRendererActive,
+      'layoutReleasePageCount': _layoutReleasePageCount,
+      'layoutReleaseDiagnostic': _layoutReleaseDiagnostic,
     };
   }
 

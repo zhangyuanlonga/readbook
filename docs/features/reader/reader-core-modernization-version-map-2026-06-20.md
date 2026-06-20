@@ -14,7 +14,7 @@
 | V3 | 新文本阅读器灰度可用 | 已完成 alpha | 90% | `reader-core-modernization-v3-renderer-node-2026-06-20.md` |
 | V4 | 交互闭环 | 已完成 alpha | 90% | `reader-core-modernization-v4-interaction-node-2026-06-20.md` |
 | V5 | 多内容 Surface 完整 | 已完成 alpha | 90% | `reader-core-modernization-v5-surface-node-2026-06-20.md` |
-| V6 | 正式替换与质量打磨 | 未开始 | 0% | `reader-core-modernization-v6-release-node-2026-06-20.md` |
+| V6 | 正式替换与质量打磨 | 代码 alpha 完成 | 78% | `reader-core-modernization-v6-release-node-2026-06-20.md` |
 
 ---
 
@@ -25,7 +25,8 @@
 - [x] V3 才是第一个用户可感知节点：debug/dev 可打开新文本阅读器。
 - [x] V4 让新阅读器真正可用：选择、标注、书签、搜索、朗读共享 layout position。
 - [x] V5 补齐文本以外的内容形态：漫画、PDF、音频、EPUB 混排。
-- [ ] V6 才允许默认切换新阅读器，并把旧阅读器降为 fallback。
+- [x] V6 已完成 text+paged 默认切换代码 alpha，并把旧阅读器保留为 fallback。
+- [ ] V6 仍需补齐 TF 样本 smoke、profile 性能和外部邀请反馈记录。
 
 ---
 
@@ -47,4 +48,5 @@
 - [x] V3：完成新 layout renderer alpha preview surface。
 - [x] V4：完成选择、标注、搜索、朗读锚点统一 alpha。
 - [x] V5：完成多 surface 语义拆分和进度统一 alpha。
-- [ ] V6：新阅读器正式入口灰度、质量门禁和旧阅读器隐藏回滚。
+- [x] V6：新阅读器正式入口灰度、质量门禁和旧阅读器隐藏回滚代码 alpha。
+- [ ] V6：补齐样本 smoke、profile 性能和 TF 外部反馈闭环。
