@@ -52,8 +52,10 @@ class AppBatchActionBar extends StatelessWidget {
     this.selectAllLabel = '全选',
     this.clearLabel = '取消选择',
     this.showWhenEmpty = false,
+    this.actionColumnCount,
   }) : assert(selectedCount >= 0),
-       assert(totalCount == null || totalCount >= 0);
+       assert(totalCount == null || totalCount >= 0),
+       assert(actionColumnCount == null || actionColumnCount > 0);
 
   final int selectedCount;
   final int? totalCount;
@@ -66,6 +68,7 @@ class AppBatchActionBar extends StatelessWidget {
   final String selectAllLabel;
   final String clearLabel;
   final bool showWhenEmpty;
+  final int? actionColumnCount;
 
   @override
   Widget build(BuildContext context) {
@@ -142,21 +145,23 @@ class AppBatchActionBar extends StatelessWidget {
   Widget _buildActionWrap(BuildContext context) {
     final actionButtons = <Widget>[
       if (onSelectAll != null)
-        AppButton(
+        _buildActionButton(
           label: selectAllLabel,
           icon: const Icon(Icons.select_all_rounded),
           variant: AppButtonVariant.secondary,
           onPressed: enabled ? onSelectAll : null,
+          expanded: actionColumnCount != null,
         ),
       if (onClearSelection != null)
-        AppButton(
+        _buildActionButton(
           label: clearLabel,
           icon: const Icon(Icons.close_rounded),
           variant: AppButtonVariant.text,
           onPressed: enabled ? onClearSelection : null,
+          expanded: actionColumnCount != null,
         ),
       ...actions.map((action) {
-        return AppButton(
+        return _buildActionButton(
           label: action.label,
           icon: Icon(action.icon),
           variant:
@@ -169,11 +174,41 @@ class AppBatchActionBar extends StatelessWidget {
                     _handleAction(context, action);
                   }
                   : null,
+          expanded: actionColumnCount != null,
         );
       }),
     ];
 
+    if (actionColumnCount != null) {
+      return Row(
+        key: const ValueKey<String>('app_batch_action_fixed_row'),
+        children: [
+          for (var index = 0; index < actionButtons.length; index++) ...[
+            Expanded(child: actionButtons[index]),
+            if (index < actionButtons.length - 1) const SizedBox(width: 8),
+          ],
+        ],
+      );
+    }
+
     return Wrap(spacing: 8, runSpacing: 8, children: actionButtons);
+  }
+
+  Widget _buildActionButton({
+    required String label,
+    required Widget icon,
+    required AppButtonVariant variant,
+    required VoidCallback? onPressed,
+    required bool expanded,
+  }) {
+    return AppButton(
+      label: label,
+      icon: icon,
+      variant: variant,
+      size: expanded ? AppButtonSize.compact : AppButtonSize.standard,
+      expanded: expanded,
+      onPressed: onPressed,
+    );
   }
 
   String _defaultSelectedLabel() {

@@ -149,7 +149,7 @@ void main() {
     final resourceGridDelegate =
         resourceGrid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
     expect(resourceGridDelegate.crossAxisCount, 3);
-    expect(resourceGridDelegate.mainAxisExtent, 216);
+    expect(resourceGridDelegate.mainAxisExtent, 190);
 
     await _dragUntilFound(tester, editorScroll, find.text('圆角比例'));
     await tester.pump();

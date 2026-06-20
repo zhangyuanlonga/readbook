@@ -348,33 +348,47 @@ class _CategoryBooksGrid extends ConsumerWidget {
       child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
-          SliverPadding(
-            padding: EdgeInsets.fromLTRB(
-              metrics.pagePadding,
-              topInset + 8,
-              metrics.pagePadding,
-              bottomSafe + metrics.sectionGap,
-            ),
-            sliver: SliverGrid.builder(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                mainAxisSpacing: 10,
-                crossAxisSpacing: 14,
-                childAspectRatio: 0.56,
-              ),
-              itemCount: books.length,
-              itemBuilder: (context, index) {
-                final book = books[index];
-                return AppFadeSlideTransition(
-                  delay: Duration(milliseconds: (index % 9) * 18),
-                  child: _DiscoverBookTile(
-                    source: source,
-                    book: book,
-                    palette: palette,
+          SliverLayoutBuilder(
+            builder: (context, constraints) {
+              const crossSpacing = 14.0;
+              final contentWidth =
+                  constraints.crossAxisExtent - metrics.pagePadding * 2;
+              final columns = metrics.gridColumnsFor(
+                availableWidth: contentWidth,
+                minItemWidth: 112,
+                minColumns: 2,
+                maxColumns: 5,
+                spacing: crossSpacing,
+              );
+              return SliverPadding(
+                padding: EdgeInsets.fromLTRB(
+                  metrics.pagePadding,
+                  topInset + 8,
+                  metrics.pagePadding,
+                  bottomSafe + metrics.sectionGap,
+                ),
+                sliver: SliverGrid.builder(
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: columns,
+                    mainAxisSpacing: 10,
+                    crossAxisSpacing: crossSpacing,
+                    childAspectRatio: 0.56,
                   ),
-                );
-              },
-            ),
+                  itemCount: books.length,
+                  itemBuilder: (context, index) {
+                    final book = books[index];
+                    return AppFadeSlideTransition(
+                      delay: Duration(milliseconds: (index % 9) * 18),
+                      child: _DiscoverBookTile(
+                        source: source,
+                        book: book,
+                        palette: palette,
+                      ),
+                    );
+                  },
+                ),
+              );
+            },
           ),
         ],
       ),
@@ -432,32 +446,45 @@ class _DiscoverBooksGridLoadingState extends StatelessWidget {
   Widget build(BuildContext context) {
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
     final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
-    return GridView.builder(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: EdgeInsets.fromLTRB(
-        metrics.pagePadding,
-        topInset + 8,
-        metrics.pagePadding,
-        bottomSafe + metrics.sectionGap,
-      ),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        mainAxisSpacing: 10,
-        crossAxisSpacing: 14,
-        childAspectRatio: 0.56,
-      ),
-      itemCount: 6,
-      itemBuilder:
-          (context, index) => const Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: AppSkeletonBlock(height: 160)),
-              SizedBox(height: 6),
-              AppSkeletonBlock(height: 12),
-              SizedBox(height: 5),
-              AppSkeletonBlock(width: 56, height: 12),
-            ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const crossSpacing = 14.0;
+        final contentWidth = constraints.maxWidth - metrics.pagePadding * 2;
+        final columns = metrics.gridColumnsFor(
+          availableWidth: contentWidth,
+          minItemWidth: 112,
+          minColumns: 2,
+          maxColumns: 5,
+          spacing: crossSpacing,
+        );
+        return GridView.builder(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.fromLTRB(
+            metrics.pagePadding,
+            topInset + 8,
+            metrics.pagePadding,
+            bottomSafe + metrics.sectionGap,
           ),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: columns,
+            mainAxisSpacing: 10,
+            crossAxisSpacing: crossSpacing,
+            childAspectRatio: 0.56,
+          ),
+          itemCount: 6,
+          itemBuilder:
+              (context, index) => const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: AppSkeletonBlock(height: 160)),
+                  SizedBox(height: 6),
+                  AppSkeletonBlock(height: 12),
+                  SizedBox(height: 5),
+                  AppSkeletonBlock(width: 56, height: 12),
+                ],
+              ),
+        );
+      },
     );
   }
 }

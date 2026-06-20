@@ -404,107 +404,116 @@ class _FontFamilyPickerDialogState
       );
     }
 
+    final viewportHeight = MediaQuery.sizeOf(context).height;
+    final sheetHeight = (viewportHeight * 0.48).clamp(320.0, 520.0).toDouble();
     return SizedBox(
-      height: 320,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              '选择字体',
-              textAlign: TextAlign.center,
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '与阅读器共用同一批已导入字体，只调整应用界面全局显示。',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: GridView.count(
-                crossAxisCount: 3,
-                crossAxisSpacing: 10,
-                mainAxisSpacing: 10,
-                childAspectRatio: 2.35,
-                children: [
-                  buildFontChoiceTile(
-                    label: appInterfaceSystemFontPresetLabel(
-                      AppInterfaceSystemFontPreset.defaultSans,
-                    ),
-                    selected:
-                        selectedFont.fontSource ==
-                            AppInterfaceFontSource.system &&
-                        selectedFont.systemFontPreset ==
-                            AppInterfaceSystemFontPreset.defaultSans,
-                    icon: Icons.text_fields_rounded,
-                    onTap:
-                        () => _selectSystemFont(
+      height: sheetHeight,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          const spacing = 10.0;
+          final columns =
+              constraints.maxWidth < AppLayout.phoneLargeWidth ? 2 : 3;
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  '选择字体',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '与阅读器共用同一批已导入字体，只调整应用界面全局显示。',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: GridView.count(
+                    crossAxisCount: columns,
+                    crossAxisSpacing: spacing,
+                    mainAxisSpacing: spacing,
+                    childAspectRatio: columns == 2 ? 2.15 : 2.35,
+                    children: [
+                      buildFontChoiceTile(
+                        label: appInterfaceSystemFontPresetLabel(
                           AppInterfaceSystemFontPreset.defaultSans,
                         ),
-                  ),
-                  buildFontChoiceTile(
-                    label: appInterfaceSystemFontPresetLabel(
-                      AppInterfaceSystemFontPreset.serif,
-                    ),
-                    selected:
-                        selectedFont.fontSource ==
-                            AppInterfaceFontSource.system &&
-                        selectedFont.systemFontPreset ==
-                            AppInterfaceSystemFontPreset.serif,
-                    icon: Icons.format_shapes_rounded,
-                    onTap:
-                        () => _selectSystemFont(
+                        selected:
+                            selectedFont.fontSource ==
+                                AppInterfaceFontSource.system &&
+                            selectedFont.systemFontPreset ==
+                                AppInterfaceSystemFontPreset.defaultSans,
+                        icon: Icons.text_fields_rounded,
+                        onTap:
+                            () => _selectSystemFont(
+                              AppInterfaceSystemFontPreset.defaultSans,
+                            ),
+                      ),
+                      buildFontChoiceTile(
+                        label: appInterfaceSystemFontPresetLabel(
                           AppInterfaceSystemFontPreset.serif,
                         ),
-                  ),
-                  buildFontChoiceTile(
-                    label: appInterfaceSystemFontPresetLabel(
-                      AppInterfaceSystemFontPreset.monospace,
-                    ),
-                    selected:
-                        selectedFont.fontSource ==
-                            AppInterfaceFontSource.system &&
-                        selectedFont.systemFontPreset ==
-                            AppInterfaceSystemFontPreset.monospace,
-                    icon: Icons.code_rounded,
-                    onTap:
-                        () => _selectSystemFont(
+                        selected:
+                            selectedFont.fontSource ==
+                                AppInterfaceFontSource.system &&
+                            selectedFont.systemFontPreset ==
+                                AppInterfaceSystemFontPreset.serif,
+                        icon: Icons.format_shapes_rounded,
+                        onTap:
+                            () => _selectSystemFont(
+                              AppInterfaceSystemFontPreset.serif,
+                            ),
+                      ),
+                      buildFontChoiceTile(
+                        label: appInterfaceSystemFontPresetLabel(
                           AppInterfaceSystemFontPreset.monospace,
                         ),
+                        selected:
+                            selectedFont.fontSource ==
+                                AppInterfaceFontSource.system &&
+                            selectedFont.systemFontPreset ==
+                                AppInterfaceSystemFontPreset.monospace,
+                        icon: Icons.code_rounded,
+                        onTap:
+                            () => _selectSystemFont(
+                              AppInterfaceSystemFontPreset.monospace,
+                            ),
+                      ),
+                      ..._availableCustomFonts.map(
+                        (entry) => buildFontChoiceTile(
+                          label: entry.displayName,
+                          selected:
+                              selectedCustomFont?.fontFamilyKey ==
+                              entry.fontFamilyKey,
+                          icon: Icons.font_download_outlined,
+                          onTap: () => _selectCustomFont(entry),
+                        ),
+                      ),
+                      buildFontChoiceTile(
+                        label: '自定义',
+                        selected: false,
+                        loading: _isImporting,
+                        icon: Icons.upload_file_rounded,
+                        onTap: _importCustomFontFromSheet,
+                      ),
+                    ],
                   ),
-                  ..._availableCustomFonts.map(
-                    (entry) => buildFontChoiceTile(
-                      label: entry.displayName,
-                      selected:
-                          selectedCustomFont?.fontFamilyKey ==
-                          entry.fontFamilyKey,
-                      icon: Icons.font_download_outlined,
-                      onTap: () => _selectCustomFont(entry),
-                    ),
-                  ),
-                  buildFontChoiceTile(
-                    label: '自定义',
-                    selected: false,
-                    loading: _isImporting,
-                    icon: Icons.upload_file_rounded,
-                    onTap: _importCustomFontFromSheet,
-                  ),
+                ),
+                if (_inlineImportStatus != null) ...[
+                  const SizedBox(height: 12),
+                  ImportExportInlineStatus(status: _inlineImportStatus!),
                 ],
-              ),
+              ],
             ),
-            if (_inlineImportStatus != null) ...[
-              const SizedBox(height: 12),
-              ImportExportInlineStatus(status: _inlineImportStatus!),
-            ],
-          ],
-        ),
+          );
+        },
       ),
     );
   }

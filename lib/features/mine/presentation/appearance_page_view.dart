@@ -1115,6 +1115,7 @@ extension on _AppearancePageState {
   }
 
   Widget _buildBackgroundGallerySection(BuildContext context) {
+    final metrics = AppAdaptiveMetrics.of(context);
     final activeAdvancedTheme =
         ref.watch(activeAdvancedThemeProvider).valueOrNull;
     return Column(
@@ -1146,7 +1147,13 @@ extension on _AppearancePageState {
           LayoutBuilder(
             builder: (context, constraints) {
               const spacing = 8.0;
-              const columns = 3;
+              final columns = metrics.gridColumnsFor(
+                availableWidth: constraints.maxWidth,
+                minItemWidth: 120,
+                minColumns: 2,
+                maxColumns: 5,
+                spacing: spacing,
+              );
               if (_visibleBackgroundPaths.isEmpty) {
                 return const SizedBox(
                   width: double.infinity,
@@ -1165,7 +1172,7 @@ extension on _AppearancePageState {
                 addAutomaticKeepAlives: false,
                 addRepaintBoundaries: true,
                 itemCount: _visibleBackgroundPaths.length,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: columns,
                   crossAxisSpacing: spacing,
                   mainAxisSpacing: spacing,

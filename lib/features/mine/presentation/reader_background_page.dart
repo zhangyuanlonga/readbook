@@ -309,7 +309,13 @@ class _ReaderBackgroundPageState extends ConsumerState<ReaderBackgroundPage> {
                     : LayoutBuilder(
                       key: const ValueKey('reader_background_grid'),
                       builder: (context, constraints) {
-                        const columns = 3;
+                        final columns = metrics.gridColumnsFor(
+                          availableWidth: constraints.maxWidth - horizontal * 2,
+                          minItemWidth: 120,
+                          minColumns: 2,
+                          maxColumns: 5,
+                          spacing: metrics.contentGap,
+                        );
                         return GridView.builder(
                           addAutomaticKeepAlives: false,
                           addRepaintBoundaries: true,

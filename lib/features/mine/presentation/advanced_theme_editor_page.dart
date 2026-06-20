@@ -1669,8 +1669,9 @@ class _AdvancedThemeEditorPageState
   Widget _buildBottomNavGalleryPreview(
     BuildContext context, {
     required BottomNavIconGallery? gallery,
+    double width = 190,
   }) {
-    return AdvancedThemeBottomNavGalleryPreview(gallery: gallery);
+    return AdvancedThemeBottomNavGalleryPreview(gallery: gallery, width: width);
   }
 
   Widget _buildThemeEffectPreviewThumb(
@@ -2399,190 +2400,177 @@ class _AdvancedThemeEditorPageState
           child: LayoutBuilder(
             builder: (context, constraints) {
               const gridSpacing = 10.0;
-              const gridItemExtent = 216.0;
-              const gridHeight = gridItemExtent * 2 + gridSpacing;
-              final gridWidth =
-                  constraints.maxWidth < AppLayout.mediumBreakpointWidth
-                      ? AppLayout.mediumBreakpointWidth
-                      : constraints.maxWidth;
+              final compactGrid = constraints.maxWidth < 430;
+              final gridColumns = constraints.maxWidth < 330 ? 2 : 3;
+              final gridItemExtent = compactGrid ? 190.0 : 216.0;
+              final previewSize = compactGrid ? 52.0 : 72.0;
+              final rowCount = (6 / gridColumns).ceil();
+              final gridHeight =
+                  gridItemExtent * rowCount + gridSpacing * (rowCount - 1);
               return SizedBox(
                 height: gridHeight,
-                child: SingleChildScrollView(
+                child: GridView(
                   key: const ValueKey<String>(
-                    'advanced_theme_visual_resource_horizontal_scroll',
+                    'advanced_theme_visual_resource_grid',
                   ),
-                  scrollDirection: Axis.horizontal,
-                  child: SizedBox(
-                    width: gridWidth,
-                    height: gridHeight,
-                    child: GridView(
-                      key: const ValueKey<String>(
-                        'advanced_theme_visual_resource_grid',
+                  primary: false,
+                  padding: EdgeInsets.zero,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: gridColumns,
+                    crossAxisSpacing: gridSpacing,
+                    mainAxisSpacing: gridSpacing,
+                    mainAxisExtent: gridItemExtent,
+                  ),
+                  children: [
+                    AdvancedThemeWallpaperResourceCard(
+                      title: '应用背景',
+                      subtitle: wallpaperPath == null ? '未设置' : '已设置',
+                      badges: _visualResourceBadges(
+                        draft,
+                        hasResource: wallpaperPath != null,
                       ),
-                      physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 3,
-                            crossAxisSpacing: gridSpacing,
-                            mainAxisSpacing: gridSpacing,
-                            mainAxisExtent: gridItemExtent,
-                          ),
-                      children: [
-                        AdvancedThemeWallpaperResourceCard(
-                          title: '应用背景',
-                          subtitle: wallpaperPath == null ? '未设置' : '已设置',
-                          badges: _visualResourceBadges(
-                            draft,
-                            hasResource: wallpaperPath != null,
-                          ),
-                          preview: _buildGalleryPreviewThumb(
-                            context,
-                            previewPath: wallpaperPath,
-                            title: '应用背景',
-                            width: 72,
-                            height: 72,
-                            borderRadius: 12,
-                            useAddPlaceholder: true,
-                            onLongPress:
-                                wallpaperPath == null
-                                    ? null
-                                    : () => unawaited(
-                                      _showImagePreviewDialog(
-                                        imagePath: wallpaperPath,
-                                        title: '应用背景',
-                                      ),
-                                    ),
-                          ),
-                          onTap:
-                              _isSaving
-                                  ? () {}
-                                  : _pickWallpaperFromBackgroundLibrary,
-                        ),
-                        AdvancedThemeWallpaperResourceCard(
-                          title: '阅读背景',
-                          subtitle: readerWallpaperPath == null ? '未设置' : '已设置',
-                          badges: _visualResourceBadges(
-                            draft,
-                            hasResource: readerWallpaperPath != null,
-                          ),
-                          preview: _buildGalleryPreviewThumb(
-                            context,
-                            previewPath: readerWallpaperPath,
-                            title: '阅读器背景',
-                            width: 72,
-                            height: 72,
-                            borderRadius: 12,
-                            useAddPlaceholder: true,
-                            onLongPress:
-                                readerWallpaperPath == null
-                                    ? null
-                                    : () => unawaited(
-                                      _showImagePreviewDialog(
-                                        imagePath: readerWallpaperPath,
-                                        title: '阅读器背景',
-                                      ),
-                                    ),
-                          ),
-                          onTap:
-                              _isSaving
-                                  ? () {}
-                                  : _pickReaderWallpaperFromBackgroundLibrary,
-                        ),
-                        AdvancedThemeWallpaperResourceCard(
-                          title: '书籍封面',
-                          subtitle:
-                              coverGalleryPreviewPath == null ? '未设置' : '已设置',
-                          badges: _visualResourceBadges(
-                            draft,
-                            hasResource: coverGalleryPreviewPath != null,
-                          ),
-                          preview: _buildGalleryPreviewThumb(
-                            context,
-                            previewPath: coverGalleryPreviewPath,
-                            title: _selectedCoverGallery()?.name ?? '书籍封面',
-                            width: 72,
-                            height: 72,
-                            borderRadius: 12,
-                            useAddPlaceholder: true,
-                            onLongPress:
-                                coverGalleryPreviewPath == null
-                                    ? null
-                                    : () => unawaited(
-                                      _showImagePreviewDialog(
-                                        imagePath: coverGalleryPreviewPath,
-                                        title:
-                                            _selectedCoverGallery()?.name ??
-                                            '书籍封面',
-                                      ),
-                                    ),
-                          ),
-                          onTap: _pickCoverGallery,
-                        ),
-                        AdvancedThemeWallpaperResourceCard(
-                          title: '启动图集',
-                          subtitle:
-                              launchGalleryPreviewPath == null ? '未设置' : '已设置',
-                          badges: _visualResourceBadges(
-                            draft,
-                            hasResource: launchGalleryPreviewPath != null,
-                          ),
-                          preview: _buildGalleryPreviewThumb(
-                            context,
-                            previewPath: launchGalleryPreviewPath,
-                            title:
-                                _selectedLaunchImageGallery()?.name ?? '启动图集',
-                            width: 72,
-                            height: 72,
-                            borderRadius: 12,
-                            useAddPlaceholder: true,
-                            onLongPress:
-                                launchGalleryPreviewPath == null
-                                    ? null
-                                    : () => unawaited(
-                                      _showImagePreviewDialog(
-                                        imagePath: launchGalleryPreviewPath,
-                                        title:
-                                            _selectedLaunchImageGallery()
-                                                ?.name ??
-                                            '启动图集',
-                                      ),
-                                    ),
-                          ),
-                          onTap: _pickLaunchImageGallery,
-                        ),
-                        AdvancedThemeWallpaperResourceCard(
-                          title: '底栏图集',
-                          subtitle: _resolvedBottomNavGalleryName(),
-                          badges: _visualResourceBadges(
-                            draft,
-                            hasResource: bottomNavGallery != null,
-                          ),
-                          preview: _buildBottomNavGalleryPreview(
-                            context,
-                            gallery: bottomNavGallery,
-                          ),
-                          onTap: _isSaving ? () {} : _pickBottomNavGallery,
-                        ),
-                        AdvancedThemeWallpaperResourceCard(
-                          title: '主题特效',
-                          subtitle: appAdvancedThemeEffectStatus(
-                            draft.themeEffect,
-                          ),
-                          badges: _visualResourceBadges(
-                            draft,
-                            hasResource:
-                                draft.themeEffect !=
-                                AppAdvancedThemeEffect.none,
-                          ),
-                          preview: _buildThemeEffectPreviewThumb(
-                            context,
-                            effect: draft.themeEffect,
-                          ),
-                          onTap: _isSaving ? () {} : _pickThemeEffect,
-                        ),
-                      ],
+                      preview: _buildGalleryPreviewThumb(
+                        context,
+                        previewPath: wallpaperPath,
+                        title: '应用背景',
+                        width: previewSize,
+                        height: previewSize,
+                        borderRadius: 12,
+                        useAddPlaceholder: true,
+                        onLongPress:
+                            wallpaperPath == null
+                                ? null
+                                : () => unawaited(
+                                  _showImagePreviewDialog(
+                                    imagePath: wallpaperPath,
+                                    title: '应用背景',
+                                  ),
+                                ),
+                      ),
+                      onTap:
+                          _isSaving
+                              ? () {}
+                              : _pickWallpaperFromBackgroundLibrary,
                     ),
-                  ),
+                    AdvancedThemeWallpaperResourceCard(
+                      title: '阅读背景',
+                      subtitle: readerWallpaperPath == null ? '未设置' : '已设置',
+                      badges: _visualResourceBadges(
+                        draft,
+                        hasResource: readerWallpaperPath != null,
+                      ),
+                      preview: _buildGalleryPreviewThumb(
+                        context,
+                        previewPath: readerWallpaperPath,
+                        title: '阅读器背景',
+                        width: previewSize,
+                        height: previewSize,
+                        borderRadius: 12,
+                        useAddPlaceholder: true,
+                        onLongPress:
+                            readerWallpaperPath == null
+                                ? null
+                                : () => unawaited(
+                                  _showImagePreviewDialog(
+                                    imagePath: readerWallpaperPath,
+                                    title: '阅读器背景',
+                                  ),
+                                ),
+                      ),
+                      onTap:
+                          _isSaving
+                              ? () {}
+                              : _pickReaderWallpaperFromBackgroundLibrary,
+                    ),
+                    AdvancedThemeWallpaperResourceCard(
+                      title: '书籍封面',
+                      subtitle: coverGalleryPreviewPath == null ? '未设置' : '已设置',
+                      badges: _visualResourceBadges(
+                        draft,
+                        hasResource: coverGalleryPreviewPath != null,
+                      ),
+                      preview: _buildGalleryPreviewThumb(
+                        context,
+                        previewPath: coverGalleryPreviewPath,
+                        title: _selectedCoverGallery()?.name ?? '书籍封面',
+                        width: previewSize,
+                        height: previewSize,
+                        borderRadius: 12,
+                        useAddPlaceholder: true,
+                        onLongPress:
+                            coverGalleryPreviewPath == null
+                                ? null
+                                : () => unawaited(
+                                  _showImagePreviewDialog(
+                                    imagePath: coverGalleryPreviewPath,
+                                    title:
+                                        _selectedCoverGallery()?.name ?? '书籍封面',
+                                  ),
+                                ),
+                      ),
+                      onTap: _pickCoverGallery,
+                    ),
+                    AdvancedThemeWallpaperResourceCard(
+                      title: '启动图集',
+                      subtitle:
+                          launchGalleryPreviewPath == null ? '未设置' : '已设置',
+                      badges: _visualResourceBadges(
+                        draft,
+                        hasResource: launchGalleryPreviewPath != null,
+                      ),
+                      preview: _buildGalleryPreviewThumb(
+                        context,
+                        previewPath: launchGalleryPreviewPath,
+                        title: _selectedLaunchImageGallery()?.name ?? '启动图集',
+                        width: previewSize,
+                        height: previewSize,
+                        borderRadius: 12,
+                        useAddPlaceholder: true,
+                        onLongPress:
+                            launchGalleryPreviewPath == null
+                                ? null
+                                : () => unawaited(
+                                  _showImagePreviewDialog(
+                                    imagePath: launchGalleryPreviewPath,
+                                    title:
+                                        _selectedLaunchImageGallery()?.name ??
+                                        '启动图集',
+                                  ),
+                                ),
+                      ),
+                      onTap: _pickLaunchImageGallery,
+                    ),
+                    AdvancedThemeWallpaperResourceCard(
+                      title: '底栏图集',
+                      subtitle: _resolvedBottomNavGalleryName(),
+                      badges: _visualResourceBadges(
+                        draft,
+                        hasResource: bottomNavGallery != null,
+                      ),
+                      preview: _buildBottomNavGalleryPreview(
+                        context,
+                        gallery: bottomNavGallery,
+                        width: previewSize,
+                      ),
+                      onTap: _isSaving ? () {} : _pickBottomNavGallery,
+                    ),
+                    AdvancedThemeWallpaperResourceCard(
+                      title: '主题特效',
+                      subtitle: appAdvancedThemeEffectStatus(draft.themeEffect),
+                      badges: _visualResourceBadges(
+                        draft,
+                        hasResource:
+                            draft.themeEffect != AppAdvancedThemeEffect.none,
+                      ),
+                      preview: _buildThemeEffectPreviewThumb(
+                        context,
+                        effect: draft.themeEffect,
+                        size: previewSize,
+                      ),
+                      onTap: _isSaving ? () {} : _pickThemeEffect,
+                    ),
+                  ],
                 ),
               );
             },

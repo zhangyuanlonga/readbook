@@ -90,8 +90,14 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('已选择 0 项'), findsOneWidget);
+      expect(find.text('全选'), findsOneWidget);
+      expect(find.text('取消选择'), findsOneWidget);
       expect(find.text('封面'), findsOneWidget);
       expect(find.text('删除'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('app_batch_action_fixed_row')),
+        findsOneWidget,
+      );
       expect(tester.takeException(), isNull);
 
       await tester.pumpWidget(const SizedBox.shrink());

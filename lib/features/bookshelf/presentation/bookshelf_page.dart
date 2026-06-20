@@ -2709,6 +2709,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         totalCount: filteredBooks.length,
         enabled: !isSelectionActionBusy,
         showWhenEmpty: true,
+        actionColumnCount: 4,
         onSelectAll: filteredBooks.isEmpty ? null : _selectAllBooks,
         onClearSelection: _exitSelectionMode,
         actions: [

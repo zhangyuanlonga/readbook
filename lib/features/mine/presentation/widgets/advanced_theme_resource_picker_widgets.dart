@@ -306,9 +306,11 @@ class AdvancedThemeBottomNavGalleryPreview extends StatelessWidget {
   const AdvancedThemeBottomNavGalleryPreview({
     super.key,
     required this.gallery,
+    this.width = 190,
   });
 
   final BottomNavIconGallery? gallery;
+  final double width;
 
   @override
   Widget build(BuildContext context) {
@@ -323,8 +325,8 @@ class AdvancedThemeBottomNavGalleryPreview extends StatelessWidget {
     final gallery = this.gallery;
     if (gallery == null) {
       return SizedBox(
-        width: 168,
-        height: 62,
+        width: width,
+        height: width * 0.42,
         child: AppSurface(
           padding: EdgeInsets.zero,
           borderRadius: previewRadius,
@@ -341,7 +343,7 @@ class AdvancedThemeBottomNavGalleryPreview extends StatelessWidget {
       );
     }
     return SizedBox(
-      width: 190,
+      width: width,
       child: AppSurface(
         padding: const EdgeInsets.all(6),
         borderRadius: previewRadius,
