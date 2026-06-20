@@ -109,11 +109,30 @@ final _themeHookPatterns = <_AuditPattern>[
 void main(List<String> args) {
   final root = _parseRoot(args);
   final verbose = args.contains('--verbose');
-  final failOnHighRisk = args.contains('--fail-on-high-risk');
+  final strictNew = args.contains('--strict-new');
+  final diffOnly =
+      args.contains('--diff-only') || args.contains('--changed') || strictNew;
+  final failOnHighRisk = args.contains('--fail-on-high-risk') || strictNew;
   final top = _parseTop(args);
+  final changedLines =
+      diffOnly ? _changedDartLines(root) : <String, Set<int>>{};
   final files = _dartFiles(root).toList(growable: false);
   final reports = files
-    .map((file) => _auditFile(root, file))
+    .where((file) {
+      if (!diffOnly) {
+        return true;
+      }
+      final relativePath = p.relative(file.path, from: root.path);
+      return changedLines.containsKey(relativePath);
+    })
+    .map(
+      (file) => _auditFile(
+        root,
+        file,
+        changedLines: changedLines,
+        diffOnly: diffOnly,
+      ),
+    )
     .where((report) => report.relevant)
     .toList(growable: false)..sort((a, b) {
     final riskCompare = b.riskScore.compareTo(a.riskScore);
@@ -140,6 +159,13 @@ void main(List<String> args) {
 
   stdout.writeln('==> Theme coverage audit');
   stdout.writeln('Root       : ${root.path}');
+  stdout.writeln(
+    'Mode       : ${strictNew
+        ? 'strict-new gate'
+        : diffOnly
+        ? 'diff-only report'
+        : 'full report'}',
+  );
   stdout.writeln('Files      : ${reports.length}');
   stdout.writeln('High risk  : ${highRiskReports.length}');
   stdout.writeln('');
@@ -199,7 +225,12 @@ Iterable<File> _dartFiles(Directory root) sync* {
   }
 }
 
-_FileThemeReport _auditFile(Directory root, File file) {
+_FileThemeReport _auditFile(
+  Directory root,
+  File file, {
+  required Map<String, Set<int>> changedLines,
+  required bool diffOnly,
+}) {
   final relativePath = p.relative(file.path, from: root.path);
   final lines = file.readAsLinesSync();
   final findingCounts = <String, int>{};
@@ -208,6 +239,10 @@ _FileThemeReport _auditFile(Directory root, File file) {
   final sampleFindings = <_AuditFinding>[];
 
   for (var index = 0; index < lines.length; index += 1) {
+    final lineNumber = index + 1;
+    if (!_shouldScanLine(relativePath, lineNumber, changedLines, diffOnly)) {
+      continue;
+    }
     final line = lines[index];
     if (_isCommentOnly(line)) {
       continue;
@@ -228,7 +263,7 @@ _FileThemeReport _auditFile(Directory root, File file) {
         sampleFindings.add(
           _AuditFinding(
             key: pattern.key,
-            line: index + 1,
+            line: lineNumber,
             message: pattern.message,
           ),
         );
@@ -266,6 +301,106 @@ _FileThemeReport _auditFile(Directory root, File file) {
     themeHookCounts: themeHookCounts,
     sampleFindings: sampleFindings,
   );
+}
+
+bool _shouldScanLine(
+  String path,
+  int line,
+  Map<String, Set<int>> changedLines,
+  bool diffOnly,
+) {
+  if (!diffOnly) {
+    return true;
+  }
+  return changedLines[path]?.contains(line) ?? false;
+}
+
+Map<String, Set<int>> _changedDartLines(Directory root) {
+  final changed = <String, Set<int>>{};
+  _collectChangedLinesFromDiff(root, changed, const [
+    'diff',
+    '--unified=0',
+    '--no-ext-diff',
+    '--',
+    '*.dart',
+  ]);
+  _collectChangedLinesFromDiff(root, changed, const [
+    'diff',
+    '--cached',
+    '--unified=0',
+    '--no-ext-diff',
+    '--',
+    '*.dart',
+  ]);
+
+  final untracked = Process.runSync(
+    'git',
+    const ['ls-files', '--others', '--exclude-standard', '--', '*.dart'],
+    runInShell: false,
+    workingDirectory: root.path,
+  );
+  if (untracked.exitCode == 0) {
+    for (final rawPath in '${untracked.stdout}'.split('\n')) {
+      final path = rawPath.trim();
+      if (path.isEmpty) {
+        continue;
+      }
+      final file = File(p.join(root.path, path));
+      if (!file.existsSync()) {
+        continue;
+      }
+      final lineCount = file.readAsLinesSync().length;
+      changed[path] = <int>{for (var line = 1; line <= lineCount; line++) line};
+    }
+  }
+  return changed;
+}
+
+void _collectChangedLinesFromDiff(
+  Directory root,
+  Map<String, Set<int>> changed,
+  List<String> arguments,
+) {
+  final result = Process.runSync(
+    'git',
+    arguments,
+    runInShell: false,
+    workingDirectory: root.path,
+  );
+  if (result.exitCode != 0) {
+    return;
+  }
+  String? currentPath;
+  var nextLine = 0;
+  for (final line in '${result.stdout}'.split('\n')) {
+    if (line.startsWith('+++ b/')) {
+      currentPath = line.substring('+++ b/'.length);
+      changed.putIfAbsent(currentPath, () => <int>{});
+      continue;
+    }
+    final hunk = RegExp(
+      r'^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@',
+    ).firstMatch(line);
+    if (hunk != null) {
+      nextLine = int.parse(hunk.group(1)!);
+      continue;
+    }
+    if (currentPath == null || nextLine <= 0) {
+      continue;
+    }
+    if (line.startsWith('+++') || line.startsWith('---')) {
+      continue;
+    }
+    if (line.startsWith('+')) {
+      changed[currentPath]!.add(nextLine);
+      nextLine += 1;
+      continue;
+    }
+    if (line.startsWith('-') || line.startsWith(r'\')) {
+      continue;
+    }
+    nextLine += 1;
+  }
 }
 
 bool _isCommentOnly(String line) {

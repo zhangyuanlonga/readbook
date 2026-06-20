@@ -41,22 +41,10 @@ extension on _BookshelfPageState {
     if (_isLoading && _books.isEmpty) {
       return SliverToBoxAdapter(
         child: AppAnimatedSwitcher(
-          child: const Card(
+          child: const AppBlockingProgressCard(
             key: ValueKey<String>('bookshelf_loading'),
-            child: Padding(
-              padding: EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                  SizedBox(width: 12),
-                  Expanded(child: Text('正在加载书架...')),
-                ],
-              ),
-            ),
+            title: '正在加载书架',
+            compact: true,
           ),
         ),
       );

@@ -712,35 +712,35 @@ enum AppViewStateKind {
 
 预计周期: 1-2 周
 
-- [ ] T6.1 迁移 Bookshelf 分类选择面板。
+- [x] T6.1 迁移 Bookshelf 分类选择面板。
   范围: `bookshelf_taxonomy_picker_surface.dart`。
   实现要求: 接入 `AppSurface`、统一 chip/selection/empty/error。
   验收: 分类/标签增删改不回归，theme coverage score 下降。
 
-- [ ] T6.2 迁移 Bookshelf 外围状态。
+- [x] T6.2 迁移 Bookshelf 外围状态。
   范围: 书架 loading、empty、filtered empty、批处理 progress、导入进度。
   实现要求: 优先迁移状态层，不触碰书籍数据计算。
   验收: 书架主要空态和进度态统一。
 
-- [ ] T6.3 迁移 Bookshelf 外围卡片。
+- [x] T6.3 迁移 Bookshelf 外围卡片。
   范围: toolbar、setting sheet、progress indicator、非核心卡片边框/阴影。
   验收: 书架布局不回归，长列表仍使用 builder/sliver。
 
-- [ ] T6.4 迁移 Reader overlay bars。
+- [x] T6.4 迁移 Reader overlay bars。
   范围: `reader_overlay_bars.dart`、reader chrome widgets。
   实现要求: 统一 overlay surface、alpha、shadow、motion duration。
   验收: 阅读器顶部/底部栏显示隐藏顺滑，减少动画关闭时可停用。
 
-- [ ] T6.5 迁移 Reader settings sheet 外围组件。
+- [x] T6.5 迁移 Reader settings sheet 外围组件。
   范围: reader settings sheet 中按钮、状态、progress、surface。
   验收: 阅读设置项视觉统一，设置持久化不回归。
 
-- [ ] T6.6 验证背景图 blur 性能。
+- [x] T6.6 验证背景图 blur 性能。
   范围: app backdrop、reader background、主题 wallpaper blur。
   实现要求: 使用 profile 模式或 DevTools 观察低端设备/模拟器帧耗时。
   验收: 默认配置不产生明显 jank；高 blur 档位有上限和提示。
 
-- [ ] T6.7 为 Reader/Bookshelf 建立豁免记录。
+- [x] T6.7 为 Reader/Bookshelf 建立豁免记录。
   范围: 阅读器专用颜色、翻页透明层、书籍封面生成色板、内容渲染边界。
   验收: 审计 findings 中合理项不再反复被当成迁移任务。
 
@@ -750,28 +750,37 @@ enum AppViewStateKind {
 
 预计周期: 2-3 天
 
-- [ ] T7.1 建立 UI 组件治理文档。
+- [x] T7.1 建立 UI 组件治理文档。
   范围: 补齐当前脚本提示缺失的治理文档或更新为新的统一文档。
   内容: 组件选择规则、页面 scaffold 规则、状态组件规则、modal surface 规则、adaptive 规则。
   验收: `missing-doc` finding 能下降或被新文档替代。
 
-- [ ] T7.2 将审计脚本改成分级门禁。
+- [x] T7.2 将审计脚本改成分级门禁。
   范围: `check_theme_coverage_audit`、`check_ui_component_governance`。
   实现要求: 历史 baseline 允许存在；新增文件或新增高风险 finding 需要失败或警告。
   验收: CI 或本地 guard 能阻止新增明显硬编码样式。
 
-- [ ] T7.3 建立豁免注释格式。
+- [x] T7.3 建立豁免注释格式。
   范围: 允许豁免的固定色、固定透明度、固定动画。
   实现要求: 豁免必须说明原因、所属视觉语义、复查日期。
   验收: 审计报告能区分“未治理”和“已豁免”。
 
-- [ ] T7.4 更新组件样板和组件索引。
+- [x] T7.4 更新组件样板和组件索引。
   范围: 所有新增 App 组件、迁移后的业务模式组件。
   验收: 文档、样板页、代码导出入口一致。
 
-- [ ] T7.5 做最终回归审查。
+- [x] T7.5 做最终回归审查。
   范围: 高级主题、Mine、Appearance、资源页、Bookshelf 外围、Reader 外围。
   验收: 关键测试通过，视觉截图通过，审计趋势下降，未完成项进入下一轮 backlog。
+
+### Phase 6-7 执行记录
+
+- Bookshelf 分类/标签 picker、初始 loading 已接入 foundation 组件；书籍数据计算、打开阅读、批量选择、导入流程未改动。
+- Reader overlay、自动阅读浮动提示、settings sheet、章节缓存 sheet 已完成外围 surface/progress 迁移；Reader 核心渲染、翻页、目录和缓存服务未改动。
+- Reader overlay blur 上限统一收敛到 `sigmaX/Y = 8`，不新增全屏 blur；性能和豁免记录见 `docs/ui_ux/reader_bookshelf_ui_exemptions_2026_06_20.md`。
+- 新增 `docs/ui_ux/app_ui_component_governance_2026_06_20.md`，明确组件选择、分级门禁和豁免注释格式。
+- `check_ui_component_governance.dart` 和 `check_theme_coverage_audit.dart` 已支持 `--strict-new`，用于只拦截新增/变更代码里的治理问题。
+- 组件索引已补充 Bookshelf/Reader 外围模式；Lumina 仍是唯一组件样板基线。
 
 ## 12. 拆分后复核
 

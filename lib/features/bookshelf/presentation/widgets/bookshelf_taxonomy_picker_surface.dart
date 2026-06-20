@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../../app/layout/app_layout.dart';
+import '../../../../app/widgets/foundation/foundation.dart';
 import '../../application/bookshelf_service.dart';
 
 class BookshelfTaxonomyPickerSurface extends StatelessWidget {
@@ -119,14 +120,14 @@ class BookshelfTaxonomyPickerSurface extends StatelessWidget {
             createPanel!,
           ],
           const SizedBox(height: 12),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerLowest.withValues(alpha: 0.7),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: colorScheme.outlineVariant.withValues(alpha: 0.58),
-              ),
+          AppSurface(
+            tone: AppSurfaceTone.muted,
+            padding: EdgeInsets.zero,
+            borderRadius: BorderRadius.circular(10),
+            backgroundColor: colorScheme.surfaceContainerLowest.withValues(
+              alpha: 0.7,
             ),
+            borderColor: colorScheme.outlineVariant.withValues(alpha: 0.58),
             child: ConstrainedBox(
               constraints: BoxConstraints(maxHeight: contentMaxHeight),
               child: SingleChildScrollView(
@@ -193,69 +194,58 @@ class BookshelfInlineTaxonomyCreatePanel extends StatelessWidget {
       fallbackName: isTag ? '新标签' : '新分类',
     );
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.72),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.72),
-        ),
+    return AppSurface(
+      tone: AppSurfaceTone.muted,
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      borderRadius: BorderRadius.circular(14),
+      backgroundColor: colorScheme.surfaceContainerHighest.withValues(
+        alpha: 0.72,
       ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            TextField(
-              controller: nameController,
-              autofocus: true,
-              decoration: InputDecoration(
-                labelText: isTag ? '标签名称' : '分类名称',
-                errorText: errorText,
-                isDense: true,
-                filled: true,
-                fillColor: colorScheme.surface,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
+      borderColor: colorScheme.outlineVariant.withValues(alpha: 0.72),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AppTextField(
+            controller: nameController,
+            autofocus: true,
+            labelText: isTag ? '标签名称' : '分类名称',
+            errorText: errorText,
+            textInputAction: TextInputAction.done,
+            onChanged: onNameChanged,
+            onSubmitted: (_) => onSubmit(),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '选择颜色',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final swatch in swatches)
+                BookshelfTaxonomyCreateColorButton(
+                  color: swatch,
+                  selected: swatch.toARGB32() == color.toARGB32(),
+                  onTap: () => onColorChanged(swatch),
+                  formatColorLabel: formatColorLabel,
                 ),
-              ),
-              textInputAction: TextInputAction.done,
-              onChanged: onNameChanged,
-              onSubmitted: (_) => onSubmit(),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              '选择颜色',
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final swatch in swatches)
-                  BookshelfTaxonomyCreateColorButton(
-                    color: swatch,
-                    selected: swatch.toARGB32() == color.toARGB32(),
-                    onTap: () => onColorChanged(swatch),
-                    formatColorLabel: formatColorLabel,
-                  ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(onPressed: onCancel, child: const Text('取消')),
-                const SizedBox(width: 8),
-                FilledButton(onPressed: onSubmit, child: const Text('添加')),
-              ],
-            ),
-          ],
-        ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(onPressed: onCancel, child: const Text('取消')),
+              const SizedBox(width: 8),
+              FilledButton(onPressed: onSubmit, child: const Text('添加')),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -375,56 +365,45 @@ class BookshelfTaxonomyOptionChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    return Material(
-      color:
+    return AppSurface(
+      onTap: onTap,
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+      borderRadius: BorderRadius.circular(8),
+      backgroundColor:
           selected
               ? colorScheme.primaryContainer.withValues(alpha: 0.72)
               : colorScheme.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(
-          color:
-              selected
-                  ? colorScheme.primary.withValues(alpha: 0.38)
-                  : colorScheme.outlineVariant.withValues(alpha: 0.72),
-        ),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconTheme.merge(
-                data: IconThemeData(
-                  size: 15,
-                  color:
-                      selected
-                          ? colorScheme.primary
-                          : colorScheme.onSurfaceVariant,
-                ),
-                child: avatar,
-              ),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color:
-                        selected
-                            ? colorScheme.onPrimaryContainer
-                            : colorScheme.onSurface,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                  ),
-                ),
-              ),
-            ],
+      borderColor:
+          selected
+              ? colorScheme.primary.withValues(alpha: 0.38)
+              : colorScheme.outlineVariant.withValues(alpha: 0.72),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconTheme.merge(
+            data: IconThemeData(
+              size: 15,
+              color:
+                  selected ? colorScheme.primary : colorScheme.onSurfaceVariant,
+            ),
+            child: avatar,
           ),
-        ),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color:
+                    selected
+                        ? colorScheme.onPrimaryContainer
+                        : colorScheme.onSurface,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

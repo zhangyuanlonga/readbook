@@ -9,6 +9,9 @@ class AppProgressIndicator extends StatelessWidget {
     this.value,
     this.size = 22,
     this.strokeWidth = 2.6,
+    this.minHeight,
+    this.color,
+    this.backgroundColor,
     this.linear = false,
     this.semanticLabel,
   });
@@ -16,6 +19,9 @@ class AppProgressIndicator extends StatelessWidget {
   final double? value;
   final double size;
   final double strokeWidth;
+  final double? minHeight;
+  final Color? color;
+  final Color? backgroundColor;
   final bool linear;
   final String? semanticLabel;
 
@@ -24,12 +30,19 @@ class AppProgressIndicator extends StatelessWidget {
     final normalizedValue = value?.clamp(0.0, 1.0).toDouble();
     final progress =
         linear
-            ? LinearProgressIndicator(value: normalizedValue)
+            ? LinearProgressIndicator(
+              value: normalizedValue,
+              minHeight: minHeight,
+              color: color,
+              backgroundColor: backgroundColor,
+            )
             : SizedBox.square(
               dimension: size,
               child: CircularProgressIndicator(
                 value: normalizedValue,
                 strokeWidth: strokeWidth,
+                color: color,
+                backgroundColor: backgroundColor,
               ),
             );
     if (semanticLabel == null) {

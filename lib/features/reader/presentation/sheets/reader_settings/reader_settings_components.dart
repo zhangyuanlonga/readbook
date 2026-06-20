@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../../app/widgets/foundation/foundation.dart';
+
 class ReaderSettingsSectionCard extends StatelessWidget {
   const ReaderSettingsSectionCard({
     super.key,
@@ -23,21 +25,16 @@ class ReaderSettingsSectionCard extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    return Container(
-      width: double.infinity,
+    return AppSurface(
       margin: EdgeInsets.only(bottom: _scale(8)),
       padding: EdgeInsets.all(_scale(10)),
-      decoration: BoxDecoration(
-        color: _interactiveCardColor(
-          context,
-          colorScheme.surfaceContainerLow,
-          alpha: 0.54,
-        ),
-        borderRadius: BorderRadius.circular(_scale(16)),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.42),
-        ),
+      borderRadius: BorderRadius.circular(_scale(16)),
+      backgroundColor: _interactiveCardColor(
+        context,
+        colorScheme.surfaceContainerLow,
+        alpha: 0.54,
       ),
+      borderColor: colorScheme.outlineVariant.withValues(alpha: 0.42),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -137,80 +134,73 @@ class ReaderSettingsGroupEntryCard extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    return InkWell(
-      borderRadius: BorderRadius.circular(_scale(16)),
+    return AppSurface(
       onTap: onTap,
-      child: Ink(
-        padding: EdgeInsets.fromLTRB(
-          _scale(12),
-          _scale(10),
-          _scale(12),
-          _scale(10),
-        ),
-        decoration: BoxDecoration(
-          color: _interactiveCardColor(
-            context,
-            colorScheme.surfaceContainerLow,
-            alpha: 0.54,
+      padding: EdgeInsets.fromLTRB(
+        _scale(12),
+        _scale(10),
+        _scale(12),
+        _scale(10),
+      ),
+      borderRadius: BorderRadius.circular(_scale(16)),
+      backgroundColor: _interactiveCardColor(
+        context,
+        colorScheme.surfaceContainerLow,
+        alpha: 0.54,
+      ),
+      borderColor: colorScheme.outlineVariant.withValues(alpha: 0.38),
+      child: Row(
+        children: [
+          Container(
+            width: _scale(28),
+            height: _scale(28),
+            decoration: BoxDecoration(
+              color: colorScheme.primaryContainer.withValues(alpha: 0.72),
+              borderRadius: BorderRadius.circular(_scale(10)),
+            ),
+            child: Icon(
+              icon,
+              size: _scale(14),
+              color: colorScheme.onPrimaryContainer,
+            ),
           ),
-          borderRadius: BorderRadius.circular(_scale(16)),
-          border: Border.all(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.38),
+          SizedBox(width: _scale(9)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize:
+                        (textTheme.titleSmall?.fontSize ?? 14) *
+                        compactScale *
+                        0.92,
+                  ),
+                ),
+                SizedBox(height: _scale(2)),
+                Text(
+                  subtitle,
+                  style: textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    height: 1.3,
+                    fontSize:
+                        (textTheme.bodySmall?.fontSize ?? 12) *
+                        compactScale *
+                        0.92,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: _scale(28),
-              height: _scale(28),
-              decoration: BoxDecoration(
-                color: colorScheme.primaryContainer.withValues(alpha: 0.72),
-                borderRadius: BorderRadius.circular(_scale(10)),
-              ),
-              child: Icon(
-                icon,
-                size: _scale(14),
-                color: colorScheme.onPrimaryContainer,
-              ),
-            ),
-            SizedBox(width: _scale(9)),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      fontSize:
-                          (textTheme.titleSmall?.fontSize ?? 14) *
-                          compactScale *
-                          0.92,
-                    ),
-                  ),
-                  SizedBox(height: _scale(2)),
-                  Text(
-                    subtitle,
-                    style: textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      height: 1.3,
-                      fontSize:
-                          (textTheme.bodySmall?.fontSize ?? 12) *
-                          compactScale *
-                          0.92,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(width: _scale(6)),
-            Icon(
-              Icons.chevron_right_rounded,
-              color: colorScheme.onSurfaceVariant,
-              size: _scale(18),
-            ),
-          ],
-        ),
+          SizedBox(width: _scale(6)),
+          Icon(
+            Icons.chevron_right_rounded,
+            color: colorScheme.onSurfaceVariant,
+            size: _scale(18),
+          ),
+        ],
       ),
     );
   }
@@ -247,8 +237,7 @@ class ReaderSettingsOwnershipHintCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
+    return AppSurface(
       margin: EdgeInsets.only(bottom: _scale(8)),
       padding: EdgeInsets.fromLTRB(
         _scale(12),
@@ -256,11 +245,9 @@ class ReaderSettingsOwnershipHintCard extends StatelessWidget {
         _scale(12),
         _scale(10),
       ),
-      decoration: BoxDecoration(
-        color: colorScheme.primaryContainer.withValues(alpha: 0.22),
-        borderRadius: BorderRadius.circular(_scale(16)),
-        border: Border.all(color: colorScheme.primary.withValues(alpha: 0.18)),
-      ),
+      borderRadius: BorderRadius.circular(_scale(16)),
+      backgroundColor: colorScheme.primaryContainer.withValues(alpha: 0.22),
+      borderColor: colorScheme.primary.withValues(alpha: 0.18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -321,12 +308,12 @@ class ReaderSettingsToggleRow extends StatelessWidget {
             ),
           ),
           if (isSaving)
-            const Padding(
-              padding: EdgeInsets.only(right: 8),
-              child: SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
+            Padding(
+              padding: EdgeInsets.only(right: _scale(8)),
+              child: AppProgressIndicator(
+                size: _scale(16),
+                strokeWidth: 2,
+                semanticLabel: '保存设置',
               ),
             ),
           Switch.adaptive(value: value, onChanged: onChanged),
@@ -407,21 +394,16 @@ class ReaderSettingsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
+    return AppSurface(
       margin: EdgeInsets.only(bottom: 8 * compactScale),
       padding: EdgeInsets.all(12 * compactScale),
-      decoration: BoxDecoration(
-        color: _interactiveCardColor(
-          context,
-          colorScheme.surfaceContainerLow,
-          alpha: 0.54,
-        ),
-        borderRadius: BorderRadius.circular(18 * compactScale),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.32),
-        ),
+      borderRadius: BorderRadius.circular(18 * compactScale),
+      backgroundColor: _interactiveCardColor(
+        context,
+        colorScheme.surfaceContainerLow,
+        alpha: 0.54,
       ),
+      borderColor: colorScheme.outlineVariant.withValues(alpha: 0.32),
       child: Column(children: children),
     );
   }

@@ -45,14 +45,26 @@
 | `ImageResourcePill` | 内置/自定义等轻量标签 | 与 `ImageResourceUsageBadge` 搭配使用 |
 | `AdvancedThemeImageSelectionGrid` | 高级主题资源绑定选择 | 保持 `GridView.builder`，支持长按预览 |
 
+## Reader 与 Bookshelf 外围模式
+
+| 模式 | 已接入组件 | 边界 |
+|---|---|---|
+| Bookshelf 分类/标签 picker | `AppSurface`、`AppTextField` | 只统一 picker surface，不改分类/标签数据流 |
+| Bookshelf 初始 loading | `AppBlockingProgressCard` | empty/error 已由状态组件族承载 |
+| Reader overlay loading | `AppProgressIndicator` | 保留 Reader 专用前景色和手势 |
+| Reader overlay 浮动提示 | `AppSurface` | 保留半透明阅读器 overlay 语义 |
+| Reader settings sheet | `AppSurface`、`AppProgressIndicator` | 只迁移设置外围卡片和保存状态 |
+| Reader 章节缓存 sheet | `AppSurface`、`AppProgressIndicator` | 不改章节缓存服务和取消流程 |
+
 ## 迁移优先级
 
 1. 新增代码必须优先使用本索引组件。
 2. 高级主题、启动图集、底栏图集、封面图集、背景资源页优先迁移 `AppSurface` 和 `AppStateView`。
-3. Mine 首页、Bookshelf 外围、Reader chrome 后续分批迁移，避免一次触碰核心业务链路。
+3. Mine 首页、Bookshelf 外围、Reader chrome 已完成第一轮外围迁移；后续只继续收敛 toolbar、setting sheet 和 token 语义，避免一次触碰核心业务链路。
 
 ## 允许业务自定义
 
 - 封面生成色板、阅读器翻页透明层、全屏图片预览遮罩可以保留固定视觉。
 - 业务组件可以传入 icon、title、description、actions，但不应重写 radius、shadow、border token。
 - 需要自定义表面视觉时，优先扩展 App 组件参数，再考虑页面局部实现。
+- Reader/Bookshelf 豁免项见 `docs/ui_ux/reader_bookshelf_ui_exemptions_2026_06_20.md`。

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
+import '../../../app/widgets/foundation/foundation.dart';
 import '../../../domain/entities/chapter.dart';
 import '../application/chapter_cache_service.dart';
 
@@ -197,152 +198,147 @@ class _ChapterCacheRangeSheetState extends State<_ChapterCacheRangeSheet> {
             ),
           ),
           const SizedBox(height: 12),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: colorScheme.outlineVariant),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            final rangeTitle = Text(
-                              '$startLabel - $endLabel',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.titleMedium?.copyWith(
+          AppSurface(
+            tone: AppSurfaceTone.muted,
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+            borderRadius: BorderRadius.circular(16),
+            backgroundColor: colorScheme.surfaceContainerLow,
+            borderColor: colorScheme.outlineVariant,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final rangeTitle = Text(
+                            '$startLabel - $endLabel',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          );
+                          final countChip = Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: colorScheme.secondaryContainer,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              '$selectedCount 章',
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                color: colorScheme.onSecondaryContainer,
                                 fontWeight: FontWeight.w700,
                               ),
-                            );
-                            final countChip = Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: colorScheme.secondaryContainer,
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                              child: Text(
-                                '$selectedCount 章',
-                                style: theme.textTheme.labelMedium?.copyWith(
-                                  color: colorScheme.onSecondaryContainer,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            );
+                            ),
+                          );
 
-                            if (constraints.maxWidth <
-                                AppLayout.compactContentWidth) {
-                              return Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  rangeTitle,
-                                  const SizedBox(height: 8),
-                                  countChip,
-                                ],
-                              );
-                            }
-
-                            return Row(
+                          if (constraints.maxWidth <
+                              AppLayout.compactContentWidth) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Expanded(child: rangeTitle),
-                                const SizedBox(width: 10),
+                                rangeTitle,
+                                const SizedBox(height: 8),
                                 countChip,
                               ],
                             );
-                          },
-                        ),
+                          }
+
+                          return Row(
+                            children: [
+                              Expanded(child: rangeTitle),
+                              const SizedBox(width: 10),
+                              countChip,
+                            ],
+                          );
+                        },
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    '拖动滑块快速选择需要离线缓存的章节范围',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
                     ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  '拖动滑块快速选择需要离线缓存的章节范围',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
                   ),
-                  const SizedBox(height: 8),
-                  RangeSlider(
-                    min: 0,
-                    max: max(0, widget.totalChapters - 1).toDouble(),
-                    values: RangeValues(
-                      _startIndex.toDouble(),
-                      _endIndex.toDouble(),
-                    ),
-                    labels: RangeLabels(startLabel, endLabel),
-                    onChanged: (values) {
-                      setState(() {
-                        final newStart = values.start.round().clamp(
-                          0,
-                          widget.totalChapters - 1,
-                        );
-                        final newEnd = values.end.round().clamp(
-                          0,
-                          widget.totalChapters - 1,
-                        );
-                        _startIndex = min(newStart, newEnd);
-                        _endIndex = max(newStart, newEnd);
-                      });
-                    },
+                ),
+                const SizedBox(height: 8),
+                RangeSlider(
+                  min: 0,
+                  max: max(0, widget.totalChapters - 1).toDouble(),
+                  values: RangeValues(
+                    _startIndex.toDouble(),
+                    _endIndex.toDouble(),
                   ),
-                  const SizedBox(height: 8),
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final startStepper = _buildStepper(
-                        label: '起始',
-                        value: _startIndex,
-                        minValue: 0,
-                        maxValue: _endIndex,
-                        onChanged: (value) {
-                          setState(() {
-                            _startIndex = value;
-                          });
-                        },
+                  labels: RangeLabels(startLabel, endLabel),
+                  onChanged: (values) {
+                    setState(() {
+                      final newStart = values.start.round().clamp(
+                        0,
+                        widget.totalChapters - 1,
                       );
-                      final endStepper = _buildStepper(
-                        label: '结束',
-                        value: _endIndex,
-                        minValue: _startIndex,
-                        maxValue: widget.totalChapters - 1,
-                        onChanged: (value) {
-                          setState(() {
-                            _endIndex = value;
-                          });
-                        },
+                      final newEnd = values.end.round().clamp(
+                        0,
+                        widget.totalChapters - 1,
                       );
+                      _startIndex = min(newStart, newEnd);
+                      _endIndex = max(newStart, newEnd);
+                    });
+                  },
+                ),
+                const SizedBox(height: 8),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final startStepper = _buildStepper(
+                      label: '起始',
+                      value: _startIndex,
+                      minValue: 0,
+                      maxValue: _endIndex,
+                      onChanged: (value) {
+                        setState(() {
+                          _startIndex = value;
+                        });
+                      },
+                    );
+                    final endStepper = _buildStepper(
+                      label: '结束',
+                      value: _endIndex,
+                      minValue: _startIndex,
+                      maxValue: widget.totalChapters - 1,
+                      onChanged: (value) {
+                        setState(() {
+                          _endIndex = value;
+                        });
+                      },
+                    );
 
-                      if (AppLayout.isPhoneSmallWidthFor(
-                        constraints.maxWidth,
-                      )) {
-                        return Column(
-                          children: [
-                            startStepper,
-                            const SizedBox(height: 12),
-                            endStepper,
-                          ],
-                        );
-                      }
-
-                      return Row(
+                    if (AppLayout.isPhoneSmallWidthFor(constraints.maxWidth)) {
+                      return Column(
                         children: [
-                          Expanded(child: startStepper),
-                          const SizedBox(width: 12),
-                          Expanded(child: endStepper),
+                          startStepper,
+                          const SizedBox(height: 12),
+                          endStepper,
                         ],
                       );
-                    },
-                  ),
-                ],
-              ),
+                    }
+
+                    return Row(
+                      children: [
+                        Expanded(child: startStepper),
+                        const SizedBox(width: 12),
+                        Expanded(child: endStepper),
+                      ],
+                    );
+                  },
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 10),
@@ -641,100 +637,95 @@ class _ChapterCacheProgressSheetState
               ),
             ),
             const SizedBox(height: 12),
-            DecoratedBox(
-              decoration: BoxDecoration(
-                color: colorScheme.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: colorScheme.outlineVariant),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            value: canClose ? 1 : ratio,
-                            strokeWidth: 2.4,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            statusText,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    LinearProgressIndicator(
-                      value: canClose ? 1 : ratio,
-                      minHeight: 8,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            '进度: $done/$total',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ),
-                        Text(
-                          canClose ? '可安全关闭' : '可后台继续缓存',
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: colorScheme.primary,
+            AppSurface(
+              tone: AppSurfaceTone.muted,
+              padding: const EdgeInsets.all(14),
+              borderRadius: BorderRadius.circular(16),
+              backgroundColor: colorScheme.surfaceContainerLow,
+              borderColor: colorScheme.outlineVariant,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      AppProgressIndicator(
+                        value: canClose ? 1 : ratio,
+                        size: 18,
+                        strokeWidth: 2.4,
+                        semanticLabel: '章节缓存进度',
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          statusText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w700,
                           ),
                         ),
-                      ],
-                    ),
-                    if (progress?.currentChapterTitle?.trim().isNotEmpty ==
-                        true)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 10),
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                          decoration: BoxDecoration(
-                            color: colorScheme.surface.withValues(alpha: 0.82),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '当前章节',
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: colorScheme.primary,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                progress!.currentChapterTitle!,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.bodySmall,
-                              ),
-                            ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  AppProgressIndicator(
+                    linear: true,
+                    value: canClose ? 1 : ratio,
+                    minHeight: 8,
+                    semanticLabel: '章节缓存进度',
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '进度: $done/$total',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ),
-                  ],
-                ),
+                      Text(
+                        canClose ? '可安全关闭' : '可后台继续缓存',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: colorScheme.primary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (progress?.currentChapterTitle?.trim().isNotEmpty == true)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                        decoration: BoxDecoration(
+                          color: colorScheme.surface.withValues(alpha: 0.82),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '当前章节',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: colorScheme.primary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              progress!.currentChapterTitle!,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
             const SizedBox(height: 14),

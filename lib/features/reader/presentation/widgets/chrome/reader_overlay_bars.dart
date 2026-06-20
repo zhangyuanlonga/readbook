@@ -3,12 +3,16 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 
 import '../../../../../app/motion/app_motion.dart';
+import '../../../../../app/widgets/foundation/foundation.dart';
 import '../../reader_chrome_action_presenter.dart';
 import '../../reader_page_support_models.dart';
 
 typedef ReaderOverlayTransitionBuilder = Widget Function(Widget child);
 typedef ReaderToolbarActionCallback =
     Future<void> Function(BuildContext context);
+
+const double _readerChromeBarBlurSigma = 8;
+const double _readerChromeFloatingBlurSigma = 8;
 
 class ReaderTopOverlayBar extends StatelessWidget {
   const ReaderTopOverlayBar({
@@ -66,7 +70,10 @@ class ReaderTopOverlayBar extends StatelessWidget {
             return transitionBuilder(
               ClipRect(
                 child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                  filter: ImageFilter.blur(
+                    sigmaX: _readerChromeBarBlurSigma,
+                    sigmaY: _readerChromeBarBlurSigma,
+                  ),
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -241,7 +248,10 @@ class ReaderMobileBottomOverlayBar extends StatelessWidget {
             return transitionBuilder(
               ClipRect(
                 child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                  filter: ImageFilter.blur(
+                    sigmaX: _readerChromeBarBlurSigma,
+                    sigmaY: _readerChromeBarBlurSigma,
+                  ),
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -388,7 +398,10 @@ class ReaderDesktopBottomProgressOverlay extends StatelessWidget {
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(999),
                         child: BackdropFilter(
-                          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                          filter: ImageFilter.blur(
+                            sigmaX: _readerChromeFloatingBlurSigma,
+                            sigmaY: _readerChromeFloatingBlurSigma,
+                          ),
                           child: DecoratedBox(
                             decoration: BoxDecoration(
                               color: colors.overlay.withValues(alpha: 0.9),
@@ -474,13 +487,13 @@ class ReaderAutoReadStatusOverlay extends StatelessWidget {
               opacity: indicatorOpacity,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(999),
-                child: LinearProgressIndicator(
+                child: AppProgressIndicator(
+                  linear: true,
                   minHeight: 3,
                   value: progress,
                   backgroundColor: colors.divider.withValues(alpha: 0.28),
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    colorScheme.primary,
-                  ),
+                  color: colorScheme.primary,
+                  semanticLabel: '自动阅读进度',
                 ),
               ),
             ),
@@ -534,45 +547,35 @@ class ReaderAutoReadFloatingHint extends StatelessWidget {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final colorScheme = Theme.of(context).colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.overlay.withValues(alpha: 0.88),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: colors.divider.withValues(alpha: 0.24)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
+    return AppSurface(
+      tone: AppSurfaceTone.elevated,
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      borderRadius: BorderRadius.circular(18),
+      backgroundColor: colors.overlay.withValues(alpha: 0.88),
+      borderColor: colors.divider.withValues(alpha: 0.24),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: colorScheme.primary, size: 24),
+          const SizedBox(width: 10),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: textTheme.bodyMedium?.copyWith(
+                  color: colors.text,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              Text(
+                actionLabel,
+                style: textTheme.bodySmall?.copyWith(color: colors.meta),
+              ),
+            ],
           ),
         ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: colorScheme.primary, size: 24),
-            const SizedBox(width: 10),
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: textTheme.bodyMedium?.copyWith(
-                    color: colors.text,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                Text(
-                  actionLabel,
-                  style: textTheme.bodySmall?.copyWith(color: colors.meta),
-                ),
-              ],
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -680,13 +683,11 @@ class ReaderTopMoreActionSheet extends StatelessWidget {
               enabled: action.enabled,
               trailing:
                   action.loading
-                      ? SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: colorScheme.onSurfaceVariant,
-                        ),
+                      ? AppProgressIndicator(
+                        size: 22,
+                        strokeWidth: 2,
+                        color: colorScheme.onSurfaceVariant,
+                        semanticLabel: '${action.title}处理中',
                       )
                       : null,
               onTap:
@@ -742,13 +743,11 @@ class ReaderTopChromeActionButton extends StatelessWidget {
         ),
         icon:
             loading
-                ? SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: colors.text,
-                  ),
+                ? AppProgressIndicator(
+                  size: 16,
+                  strokeWidth: 2,
+                  color: colors.text,
+                  semanticLabel: tooltip,
                 )
                 : Icon(icon, size: emphasizeHitArea ? 22 : 18),
       ),

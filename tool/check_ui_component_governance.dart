@@ -9,14 +9,8 @@ const _scanRoots = <String>[
 ];
 
 const _docPaths = <String>[
-  'docs/page_ui_component_governance_plan_2026-05-12.md',
-  'docs/page_ui_scaffold_audit_2026-05-12.md',
-  'docs/page_ui_state_component_audit_2026-05-12.md',
-  'docs/page_ui_modal_surface_audit_2026-05-12.md',
-  'docs/adaptive_component_coverage_matrix_2026-05-13.md',
-  'docs/adaptive_ui_antipatterns_2026-05-13.md',
-  'docs/adaptive_legacy_page_migration_inventory_2026-05-13.md',
-  'docs/adaptive_size_typography_tokens_2026-05-13.md',
+  'docs/ui_ux/app_ui_component_governance_2026_06_20.md',
+  'docs/ui_ux/reader_bookshelf_ui_exemptions_2026_06_20.md',
 ];
 
 final class _Finding {
@@ -34,8 +28,10 @@ final class _Finding {
 }
 
 void main(List<String> args) {
+  final strictNew = args.contains('--strict-new');
   final failOnWarning = args.contains('--fail-on-warning');
-  final diffOnly = args.contains('--diff-only') || args.contains('--changed');
+  final diffOnly =
+      args.contains('--diff-only') || args.contains('--changed') || strictNew;
   final verbose = args.contains('--verbose');
   final changedLines = diffOnly ? _changedDartLines() : <String, Set<int>>{};
   final findings = <_Finding>[];
@@ -217,7 +213,13 @@ void main(List<String> args) {
   }
 
   stdout.writeln('==> UI component governance checks');
-  stdout.writeln('Mode: ${diffOnly ? 'diff-only report' : 'full report'}');
+  stdout.writeln(
+    'Mode: ${strictNew
+        ? 'strict-new gate'
+        : diffOnly
+        ? 'diff-only report'
+        : 'full report'}',
+  );
   stdout.writeln('Findings: ${findings.length}');
 
   if (findings.isNotEmpty) {
@@ -247,9 +249,23 @@ void main(List<String> args) {
     }
   }
 
-  if (findings.isNotEmpty && failOnWarning) {
+  final shouldFail =
+      failOnWarning ||
+      (strictNew && findings.any((finding) => _isBlockingFinding(finding)));
+  if (findings.isNotEmpty && shouldFail) {
     exitCode = 1;
   }
+}
+
+bool _isBlockingFinding(_Finding finding) {
+  return switch (finding.kind) {
+    'modal-surface' ||
+    'dialog-surface' ||
+    'capability-wrapper' ||
+    'loading-state' ||
+    'scaffold' => true,
+    _ => false,
+  };
 }
 
 Iterable<File> _dartFiles() sync* {

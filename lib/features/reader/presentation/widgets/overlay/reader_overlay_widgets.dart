@@ -2,6 +2,10 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+import '../../../../../app/widgets/foundation/foundation.dart';
+
+const double _readerOverlayBlurSigma = 8;
+
 class ReaderOverlayPaletteData {
   const ReaderOverlayPaletteData({
     required this.background,
@@ -79,7 +83,10 @@ class ReaderTopOverlayWidget extends StatelessWidget {
         child: transitionBuilder(
           ClipRect(
             child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+              filter: ImageFilter.blur(
+                sigmaX: _readerOverlayBlurSigma,
+                sigmaY: _readerOverlayBlurSigma,
+              ),
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -206,7 +213,10 @@ class ReaderBottomOverlayWidget extends StatelessWidget {
         child: transitionBuilder(
           ClipRect(
             child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+              filter: ImageFilter.blur(
+                sigmaX: _readerOverlayBlurSigma,
+                sigmaY: _readerOverlayBlurSigma,
+              ),
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -352,10 +362,11 @@ class _ReaderOverlayIconButton extends StatelessWidget {
       ),
       icon:
           action.loading
-              ? SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2, color: color),
+              ? AppProgressIndicator(
+                size: 16,
+                strokeWidth: 2,
+                color: color,
+                semanticLabel: action.tooltip,
               )
               : Icon(action.icon, size: 18),
     );
