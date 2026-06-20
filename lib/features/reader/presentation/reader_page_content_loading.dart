@@ -58,10 +58,16 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
     _chapterSourceFilePath =
         sourceFilePath?.trim().isEmpty ?? true ? null : sourceFilePath!.trim();
     _chapterTotalPageCount = totalPageCount;
+    _documentPageCount = totalPageCount;
+    _documentPageIndex = 0;
+    _documentZoomScale = null;
+    _documentPanDx = null;
+    _documentPanDy = null;
+    _pdfViewerController = null;
     _mangaImageRetryNonce.clear();
     _precachedInlineImageUrls.clear();
     _lastInlineImagePrecacheAt = null;
-    _mangaPageIndex = 0;
+    _imagePageIndex = 0;
     _isTextSelectionActive = false;
     _selectionRange = null;
     _selectionStatus = SelectionStatus.none;

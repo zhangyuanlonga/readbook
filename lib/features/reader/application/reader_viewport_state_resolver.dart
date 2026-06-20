@@ -13,6 +13,12 @@ class ReaderViewportStateResolver {
     int? pageCount,
     double? scrollOffset,
     double? maxScrollExtent,
+    double? zoomScale,
+    double? panDx,
+    double? panDy,
+    int? audioPositionMs,
+    int? audioDurationMs,
+    double? audioSpeed,
   }) {
     return ReaderViewportState(
       kind: _resolveKind(mode.viewportKind, contentMode),
@@ -24,6 +30,12 @@ class ReaderViewportStateResolver {
       pageCount: pageCount,
       scrollOffset: scrollOffset,
       maxScrollExtent: maxScrollExtent,
+      zoomScale: zoomScale,
+      panDx: panDx,
+      panDy: panDy,
+      audioPositionMs: audioPositionMs,
+      audioDurationMs: audioDurationMs,
+      audioSpeed: audioSpeed,
       chapterPositionRatio: chapterPositionRatio.clamp(0.0, 1.0),
     );
   }

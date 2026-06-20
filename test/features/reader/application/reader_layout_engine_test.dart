@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shuxiang_reading_next/domain/entities/reader_settings.dart';
 import 'package:shuxiang_reading_next/features/reader/application/reader_layout_engine.dart';
 import 'package:shuxiang_reading_next/features/reader/application/reader_layout_request.dart';
+import 'package:shuxiang_reading_next/features/reader/application/reader_mixed_content_payload.dart';
 import 'package:shuxiang_reading_next/features/reader/domain/entities/reader_layout_models.dart';
 
 void main() {
@@ -63,6 +64,51 @@ void main() {
       );
       expect(line.lineBottom, 80);
     });
+
+    test(
+      'writes mixed content payload for image link footnote and caption',
+      () async {
+        final result = await engine.layout(
+          ReaderLayoutRequest(
+            chapterId: 'chapter-1',
+            chapterIndex: 0,
+            blocks: const <ReaderLayoutBlock>[
+              ReaderLayoutBlock.link(
+                text: '官网',
+                url: 'https://example.com',
+                sourceIndex: 0,
+              ),
+              ReaderLayoutBlock.footnote(text: '脚注内容', sourceIndex: 1),
+              ReaderLayoutBlock.caption(text: '图片说明', sourceIndex: 2),
+              ReaderLayoutBlock.image(
+                imageUrl: 'https://example.com/a.png',
+                estimatedHeight: 24,
+                sourceIndex: 3,
+              ),
+            ],
+            spec: _spec,
+            documentFingerprint: 'doc-mixed',
+          ),
+        );
+
+        final columns = result!.pages.expand(
+          (page) => page.lines.map((line) => line.columns.single),
+        );
+        final payloads = columns
+            .map((column) => ReaderMixedContentPayloads.read(column.payload))
+            .whereType<ReaderMixedContentPayload>()
+            .toList(growable: false);
+
+        expect(payloads.map((payload) => payload.kind), <Object>[
+          ReaderMixedContentPayloadKind.link,
+          ReaderMixedContentPayloadKind.footnote,
+          ReaderMixedContentPayloadKind.caption,
+          ReaderMixedContentPayloadKind.image,
+        ]);
+        expect(payloads.first.url, 'https://example.com');
+        expect(payloads.last.url, 'https://example.com/a.png');
+      },
+    );
 
     test('returns null when cancelled before layout', () async {
       final token = ReaderLayoutCancellationToken()..cancel();

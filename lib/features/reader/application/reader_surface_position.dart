@@ -214,7 +214,10 @@ class ReaderSurfacePositionMapper {
   }) {
     final viewportMode = snapshot?.viewportMode.trim();
     return switch (viewportMode) {
-      'imagePaged' || 'imageScroll' => ReaderSurfacePosition.image(
+      'imagePaged' ||
+      'imageScroll' ||
+      'mangaPaged' ||
+      'mangaContinuous' => ReaderSurfacePosition.image(
         chapterIndex: chapterIndex,
         imageIndex: snapshot?.pageIndex,
         imageCount: snapshot?.pageCount,
@@ -222,7 +225,9 @@ class ReaderSurfacePositionMapper {
         maxScrollExtent: snapshot?.maxScrollExtent,
         progressRatio: chapterPositionRatio,
       ),
-      'hybridPaged' => ReaderSurfacePosition.document(
+      'hybridPaged' ||
+      'documentPaged' ||
+      'pdfPaged' => ReaderSurfacePosition.document(
         chapterIndex: chapterIndex,
         pageIndex: snapshot?.pageIndex,
         pageCount: snapshot?.pageCount,

@@ -112,7 +112,7 @@ void main() {
     test('maps image and document snapshots to distinct surface kinds', () {
       final image = mapper.fromSnapshot(
         snapshot: const ReaderPositionSnapshot(
-          viewportMode: 'imagePaged',
+          viewportMode: 'mangaPaged',
           pageIndex: 3,
           pageCount: 10,
         ),

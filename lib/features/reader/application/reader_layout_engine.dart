@@ -195,7 +195,10 @@ class ReaderLayoutEngine {
     final textWidth = _charAdvance(request.spec) * text.length;
     final column = ReaderLayoutColumn(
       columnIndex: 0,
-      kind: ReaderLayoutColumnKind.text,
+      kind:
+          block.isLink
+              ? ReaderLayoutColumnKind.link
+              : ReaderLayoutColumnKind.text,
       startOffset: absoluteStart,
       endOffset: absoluteEnd,
       rect: ReaderLayoutRect(
@@ -205,8 +208,8 @@ class ReaderLayoutEngine {
         bottom: lineBottom,
       ),
       text: text,
-      styleKey: block.isTitle ? 'title' : 'body',
-      payload: block.payload,
+      styleKey: _styleKeyForBlock(block),
+      payload: block.columnPayload,
     );
 
     return ReaderLayoutLine(
@@ -246,7 +249,7 @@ class ReaderLayoutEngine {
         bottom: y + height,
       ),
       payload: <String, Object?>{
-        ...block.payload,
+        ...block.columnPayload,
         if (block.imageUrl != null) 'imageUrl': block.imageUrl,
       },
     );
@@ -274,6 +277,22 @@ class ReaderLayoutEngine {
       return 0;
     }
     return math.min(spec.contentWidth, spec.fontSize * spec.paragraphIndent);
+  }
+
+  String _styleKeyForBlock(ReaderLayoutBlock block) {
+    if (block.isTitle) {
+      return 'title';
+    }
+    if (block.isCaption) {
+      return 'caption';
+    }
+    if (block.isFootnote) {
+      return 'footnote';
+    }
+    if (block.isLink) {
+      return 'link';
+    }
+    return 'body';
   }
 
   int _maxCharsForLine(ReaderLayoutSpec spec, double lineStartX) {

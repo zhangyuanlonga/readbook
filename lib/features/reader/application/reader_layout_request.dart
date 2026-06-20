@@ -1,7 +1,9 @@
 import '../../../domain/entities/reader_settings.dart';
+import '../../../domain/entities/reader_document.dart';
+import 'reader_mixed_content_payload.dart';
 import 'reader_pagination_spec.dart';
 
-enum ReaderLayoutBlockKind { paragraph, title, image }
+enum ReaderLayoutBlockKind { paragraph, title, image, link, footnote, caption }
 
 class ReaderLayoutBlock {
   const ReaderLayoutBlock._({
@@ -9,6 +11,7 @@ class ReaderLayoutBlock {
     required this.text,
     this.sourceIndex,
     this.imageUrl,
+    this.linkUrl,
     this.estimatedHeight = 0,
     this.payload = const <String, Object?>{},
   }) : assert(estimatedHeight >= 0);
@@ -35,6 +38,41 @@ class ReaderLayoutBlock {
          payload: payload,
        );
 
+  const ReaderLayoutBlock.link({
+    required String text,
+    required String url,
+    int? sourceIndex,
+    Map<String, Object?> payload = const <String, Object?>{},
+  }) : this._(
+         kind: ReaderLayoutBlockKind.link,
+         text: text,
+         linkUrl: url,
+         sourceIndex: sourceIndex,
+         payload: payload,
+       );
+
+  const ReaderLayoutBlock.footnote({
+    required String text,
+    int? sourceIndex,
+    Map<String, Object?> payload = const <String, Object?>{},
+  }) : this._(
+         kind: ReaderLayoutBlockKind.footnote,
+         text: text,
+         sourceIndex: sourceIndex,
+         payload: payload,
+       );
+
+  const ReaderLayoutBlock.caption({
+    required String text,
+    int? sourceIndex,
+    Map<String, Object?> payload = const <String, Object?>{},
+  }) : this._(
+         kind: ReaderLayoutBlockKind.caption,
+         text: text,
+         sourceIndex: sourceIndex,
+         payload: payload,
+       );
+
   const ReaderLayoutBlock.image({
     required String imageUrl,
     double estimatedHeight = 180,
@@ -53,13 +91,51 @@ class ReaderLayoutBlock {
   final String text;
   final int? sourceIndex;
   final String? imageUrl;
+  final String? linkUrl;
   final double estimatedHeight;
   final Map<String, Object?> payload;
 
   bool get isText => kind != ReaderLayoutBlockKind.image;
   bool get isTitle => kind == ReaderLayoutBlockKind.title;
   bool get isImage => kind == ReaderLayoutBlockKind.image;
+  bool get isLink => kind == ReaderLayoutBlockKind.link;
+  bool get isFootnote => kind == ReaderLayoutBlockKind.footnote;
+  bool get isCaption => kind == ReaderLayoutBlockKind.caption;
   int get contentLength => isImage ? 1 : text.length;
+
+  Map<String, Object?> get semanticPayload {
+    return switch (kind) {
+      ReaderLayoutBlockKind.image =>
+        imageUrl == null
+            ? const <String, Object?>{}
+            : ReaderMixedContentPayloads.image(
+              imageUrl: imageUrl!,
+              sourceIndex: sourceIndex,
+            ),
+      ReaderLayoutBlockKind.link =>
+        linkUrl == null
+            ? const <String, Object?>{}
+            : ReaderMixedContentPayloads.link(
+              text: text,
+              url: linkUrl!,
+              sourceIndex: sourceIndex,
+            ),
+      ReaderLayoutBlockKind.footnote => ReaderMixedContentPayloads.footnote(
+        text: text,
+        sourceIndex: sourceIndex,
+      ),
+      ReaderLayoutBlockKind.caption => ReaderMixedContentPayloads.caption(
+        text: text,
+        sourceIndex: sourceIndex,
+      ),
+      ReaderLayoutBlockKind.paragraph ||
+      ReaderLayoutBlockKind.title => const <String, Object?>{},
+    };
+  }
+
+  Map<String, Object?> get columnPayload {
+    return ReaderMixedContentPayloads.merge(payload, semanticPayload);
+  }
 }
 
 class ReaderLayoutSpec {
@@ -231,6 +307,30 @@ class ReaderLayoutRequest {
     );
   }
 
+  factory ReaderLayoutRequest.fromDocument({
+    required String chapterId,
+    required int chapterIndex,
+    required ReaderDocument document,
+    required ReaderLayoutSpec spec,
+    required String documentFingerprint,
+    String parserVersion = 'reader_parser_v1',
+    int paragraphSeparatorLength = 2,
+  }) {
+    return ReaderLayoutRequest(
+      chapterId: chapterId,
+      chapterIndex: chapterIndex,
+      blocks: List<ReaderLayoutBlock>.generate(
+        document.blocks.length,
+        (index) => _blockFromDocument(document.blocks[index], index),
+        growable: false,
+      ),
+      spec: spec,
+      documentFingerprint: documentFingerprint,
+      parserVersion: parserVersion,
+      paragraphSeparatorLength: paragraphSeparatorLength,
+    );
+  }
+
   final String chapterId;
   final int chapterIndex;
   final List<ReaderLayoutBlock> blocks;
@@ -255,6 +355,41 @@ class ReaderLayoutRequest {
       0,
       (total, block) => total + block.contentLength + paragraphSeparatorLength,
     );
+  }
+
+  static ReaderLayoutBlock _blockFromDocument(ReaderBlock block, int index) {
+    if (block is ReaderTitleBlock) {
+      return ReaderLayoutBlock.title(text: block.text, sourceIndex: index);
+    }
+    if (block is ReaderListItemBlock) {
+      return ReaderLayoutBlock.paragraph(
+        text: '• ${block.text}',
+        sourceIndex: index,
+      );
+    }
+    if (block is ReaderQuoteBlock) {
+      return ReaderLayoutBlock.paragraph(
+        text: block.text,
+        sourceIndex: index,
+        payload: const <String, Object?>{'blockKind': 'quote'},
+      );
+    }
+    if (block is ReaderCaptionBlock) {
+      return ReaderLayoutBlock.caption(text: block.text, sourceIndex: index);
+    }
+    if (block is ReaderFootnoteBlock) {
+      return ReaderLayoutBlock.footnote(text: block.text, sourceIndex: index);
+    }
+    if (block is ReaderImageBlock) {
+      return ReaderLayoutBlock.image(
+        imageUrl: block.imageUrl,
+        sourceIndex: index,
+      );
+    }
+    if (block is ReaderTextBlock) {
+      return ReaderLayoutBlock.paragraph(text: block.text, sourceIndex: index);
+    }
+    return const ReaderLayoutBlock.paragraph(text: '');
   }
 }
 

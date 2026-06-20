@@ -104,5 +104,66 @@ void main() {
       expect(progress?.positionSnapshot?.audioDurationMs, 120000);
       expect(progress?.positionSnapshot?.audioSpeed, 1.25);
     });
+
+    test('writes manga and pdf snapshots with separate surface semantics', () {
+      final mangaProgress = controller.buildProgress(
+        ReaderProgressCommitInput(
+          bookId: 'book-a',
+          sourceId: 'source-a',
+          detailUrl: 'https://example.com/book',
+          chapterId: 'chapter-1',
+          chapterUrl: 'https://example.com/chapter',
+          chapterTitle: '第一章',
+          chapterIndex: 0,
+          positionRatio: 0.4,
+          viewportState: const ReaderViewportState(
+            kind: ReaderViewportStateKind.mangaPaged,
+            contentMode: ReaderContentMode.comic,
+            supportsTextSelection: false,
+            supportsZoomGesture: true,
+            supportsAutoRead: false,
+            pageIndex: 4,
+            pageCount: 11,
+          ),
+          contentMode: ReaderContentMode.comic,
+          updatedAt: DateTime(2026, 6, 7),
+        ),
+      );
+      final pdfProgress = controller.buildProgress(
+        ReaderProgressCommitInput(
+          bookId: 'book-a',
+          sourceId: 'source-a',
+          detailUrl: 'https://example.com/book',
+          chapterId: 'chapter-1',
+          chapterUrl: 'https://example.com/chapter',
+          chapterTitle: '第一章',
+          chapterIndex: 0,
+          positionRatio: 0.2,
+          viewportState: const ReaderViewportState(
+            kind: ReaderViewportStateKind.hybridPaged,
+            contentMode: ReaderContentMode.hybrid,
+            supportsTextSelection: false,
+            supportsZoomGesture: true,
+            supportsAutoRead: false,
+            pageIndex: 7,
+            pageCount: 40,
+            zoomScale: 1.6,
+            panDx: 12,
+            panDy: 24,
+          ),
+          contentMode: ReaderContentMode.hybrid,
+          hybridSubMode: ReaderHybridSubMode.pdf,
+          updatedAt: DateTime(2026, 6, 7),
+        ),
+      );
+
+      expect(mangaProgress?.positionSnapshot?.viewportMode, 'imagePaged');
+      expect(mangaProgress?.positionSnapshot?.pageIndex, 4);
+      expect(pdfProgress?.positionSnapshot?.viewportMode, 'hybridPaged');
+      expect(pdfProgress?.positionSnapshot?.pageIndex, 7);
+      expect(pdfProgress?.positionSnapshot?.zoomScale, 1.6);
+      expect(pdfProgress?.positionSnapshot?.panDx, 12);
+      expect(pdfProgress?.positionSnapshot?.panDy, 24);
+    });
   });
 }

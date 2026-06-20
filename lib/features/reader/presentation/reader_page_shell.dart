@@ -162,7 +162,7 @@ extension _ReaderPageShellExtension on _ReaderPageState {
       return;
     }
     final total = _chapterImageUrls.length;
-    final target = forward ? _mangaPageIndex + 1 : _mangaPageIndex - 1;
+    final target = forward ? _imagePageIndex + 1 : _imagePageIndex - 1;
     final isOutOfRange = forward ? target >= total : target < 0;
     if (isOutOfRange) {
       await _dispatchReaderNavigationCommand(
@@ -187,7 +187,7 @@ extension _ReaderPageShellExtension on _ReaderPageState {
       return;
     }
     setState(() {
-      _mangaPageIndex = target;
+      _imagePageIndex = target;
     });
     _syncActiveReadingRecordSessionProgress();
     _scheduleProgressSave();

@@ -20,6 +20,12 @@ class ReaderViewportState {
     this.pageCount,
     this.scrollOffset,
     this.maxScrollExtent,
+    this.zoomScale,
+    this.panDx,
+    this.panDy,
+    this.audioPositionMs,
+    this.audioDurationMs,
+    this.audioSpeed,
     this.chapterPositionRatio = 0,
   });
 
@@ -32,6 +38,12 @@ class ReaderViewportState {
   final int? pageCount;
   final double? scrollOffset;
   final double? maxScrollExtent;
+  final double? zoomScale;
+  final double? panDx;
+  final double? panDy;
+  final int? audioPositionMs;
+  final int? audioDurationMs;
+  final double? audioSpeed;
   final double chapterPositionRatio;
 
   bool get isPaged =>

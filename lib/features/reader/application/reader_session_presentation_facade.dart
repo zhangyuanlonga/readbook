@@ -98,6 +98,12 @@ class ReaderSessionPresentationFacade {
     int? pageCount,
     double? scrollOffset,
     double? maxScrollExtent,
+    double? zoomScale,
+    double? panDx,
+    double? panDy,
+    int? audioPositionMs,
+    int? audioDurationMs,
+    double? audioSpeed,
   }) {
     return viewportStateResolver.resolve(
       contentMode: contentMode,
@@ -107,6 +113,12 @@ class ReaderSessionPresentationFacade {
       pageCount: pageCount,
       scrollOffset: scrollOffset,
       maxScrollExtent: maxScrollExtent,
+      zoomScale: zoomScale,
+      panDx: panDx,
+      panDy: panDy,
+      audioPositionMs: audioPositionMs,
+      audioDurationMs: audioDurationMs,
+      audioSpeed: audioSpeed,
     );
   }
 }

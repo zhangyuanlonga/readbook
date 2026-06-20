@@ -293,7 +293,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
           final total = _chapterImageUrls.length;
           if (total <= 1) {
             setState(() {
-              _mangaPageIndex = 0;
+              _imagePageIndex = 0;
             });
             return;
           }
@@ -303,14 +303,41 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
             _mangaPageController.jumpToPage(target);
           }
           setState(() {
-            _mangaPageIndex = target;
+            _imagePageIndex = target;
           });
           return;
         case ReaderModeViewportKind.hybridPaged:
+          if (_isCurrentHybridDocumentSurface) {
+            final total =
+                _documentPageCount ??
+                _chapterTotalPageCount ??
+                _chapterImageUrls.length;
+            if (total <= 1) {
+              setState(() {
+                _documentPageIndex = 0;
+              });
+              return;
+            }
+            final target = (normalized * (total - 1)).round().clamp(
+              0,
+              total - 1,
+            );
+            setState(() {
+              _documentPageIndex = target;
+            });
+            unawaited(
+              _pdfViewerController?.goToPage(
+                    pageNumber: target + 1,
+                    duration: Duration.zero,
+                  ) ??
+                  Future<void>.value(),
+            );
+            return;
+          }
           final total = _chapterImageUrls.length;
           if (total <= 1) {
             setState(() {
-              _mangaPageIndex = 0;
+              _imagePageIndex = 0;
             });
             return;
           }
@@ -319,7 +346,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
             _mangaPageController.jumpToPage(target);
           }
           setState(() {
-            _mangaPageIndex = target;
+            _imagePageIndex = target;
           });
           return;
         case ReaderModeViewportKind.textScroll:
@@ -1335,12 +1362,27 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       case ReaderModeViewportKind.textPaged:
         return _activeTextRenderer.captureProgress(_currentTextRenderMetrics());
       case ReaderModeViewportKind.imagePaged:
-      case ReaderModeViewportKind.hybridPaged:
         final total = _chapterImageUrls.length;
         if (total <= 1) {
           return 0;
         }
-        return (_mangaPageIndex / (total - 1)).clamp(0.0, 1.0);
+        return (_imagePageIndex / (total - 1)).clamp(0.0, 1.0);
+      case ReaderModeViewportKind.hybridPaged:
+        if (_isCurrentHybridDocumentSurface) {
+          final total =
+              _documentPageCount ??
+              _chapterTotalPageCount ??
+              _chapterImageUrls.length;
+          if (total <= 1) {
+            return 0;
+          }
+          return (_documentPageIndex / (total - 1)).clamp(0.0, 1.0);
+        }
+        final total = _chapterImageUrls.length;
+        if (total <= 1) {
+          return 0;
+        }
+        return (_imagePageIndex / (total - 1)).clamp(0.0, 1.0);
       case ReaderModeViewportKind.textScroll:
       case ReaderModeViewportKind.imageScroll:
         if (_shouldUseContinuousTextFlow) {
@@ -1512,6 +1554,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
         positionRatio: _currentLogicalPositionRatio(),
         viewportState: _currentViewportState(),
         contentMode: _currentContentMode,
+        hybridSubMode: _currentHybridSubMode(),
         logicalPosition: _currentLogicalPosition(),
         audioPlaybackPosition: _audioPlaybackPosition,
         audioPlaybackDuration: _audioPlaybackDuration,

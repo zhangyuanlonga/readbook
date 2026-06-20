@@ -20,6 +20,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image/image.dart' as img;
+import 'package:pdfrx/pdfrx.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../app/layout/app_layout.dart';
@@ -117,6 +118,8 @@ import '../application/reader_pagination_spec.dart';
 import '../application/reader_platform_bridge_service.dart';
 import '../application/reader_platform_facade.dart';
 import '../application/reader_progress_commit_controller.dart';
+import '../application/reader_surface_position.dart';
+import '../application/reader_surface_position_runtime.dart';
 import '../application/reader_settings_groups.dart';
 import '../application/reader_settings_entry_controller.dart';
 import '../application/reader_settings_resolution_service.dart';
@@ -688,6 +691,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const ReaderSourceSwitchService();
   final ReaderProgressCommitController _progressCommitController =
       const ReaderProgressCommitController();
+  final ReaderSurfacePositionRuntime _surfacePositionRuntime =
+      const ReaderSurfacePositionRuntime();
   final ScrollTextReaderRenderer _scrollTextRenderer =
       const ScrollTextReaderRenderer();
   final PagedTextReaderRenderer _pagedTextRenderer =
@@ -780,6 +785,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   double _audioPlaybackSpeed = 1.0;
   String? _chapterSourceFilePath;
   int? _chapterTotalPageCount;
+  int _imagePageIndex = 0;
+  int _documentPageIndex = 0;
+  int? _documentPageCount;
+  double? _documentZoomScale;
+  double? _documentPanDx;
+  double? _documentPanDy;
+  PdfViewerController? _pdfViewerController;
   bool _isEditingBookmarkNote = false;
   ReaderSelectionState _selectionState = const ReaderSelectionState();
   List<Bookmark> _chapterBookmarks = const [];
@@ -787,7 +799,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const <int, List<ReaderBookmarkRange>>{};
   List<ReaderCustomFontEntry> _customFonts = const [];
   final Map<String, int> _mangaImageRetryNonce = <String, int>{};
-  int _mangaPageIndex = 0;
   ReadingProgress? _bootstrapProgress;
   Timer? _progressDebounceTimer;
   Timer? _autoReadResumeTimer;
@@ -1364,6 +1375,31 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
   }
 
+  ReaderHybridSubMode? _currentHybridSubMode() {
+    if (_currentContentMode != ReaderContentMode.hybrid) {
+      return null;
+    }
+    return _contentModeResolver.resolveHybridSubMode(
+      ChapterContentResult(
+        content: _content,
+        fromCache: _isCurrentChapterCached,
+        imageUrls: _chapterImageUrls,
+        imageHeaders: _chapterImageHeaders,
+        contentType: _resolvedContentType,
+        audioUrl: _chapterAudioUrl,
+        audioManifestUrl: _chapterAudioManifestUrl,
+        audioHeaders: _chapterAudioHeaders,
+        executionContext: _chapterExecutionContext,
+        document: _document,
+      ),
+    );
+  }
+
+  bool get _isCurrentHybridDocumentSurface {
+    final subMode = _currentHybridSubMode();
+    return subMode != ReaderHybridSubMode.pictureBook;
+  }
+
   ReaderContentSession _resolvedContentSession() {
     final current = _currentContentSession();
     if (current != null) {
@@ -1451,7 +1487,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           contentMode: _currentContentMode,
           mode: _currentReaderMode,
           chapterPositionRatio: ratio,
-          pageIndex: _mangaPageIndex,
+          pageIndex: _imagePageIndex,
           pageCount: _chapterImageUrls.length,
         );
       case ReaderModeViewportKind.hybridPaged:
@@ -1459,8 +1495,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           contentMode: _currentContentMode,
           mode: _currentReaderMode,
           chapterPositionRatio: ratio,
-          pageIndex: _mangaPageIndex,
-          pageCount: _chapterImageUrls.length,
+          pageIndex:
+              _isCurrentHybridDocumentSurface
+                  ? _documentPageIndex
+                  : _imagePageIndex,
+          pageCount:
+              _isCurrentHybridDocumentSurface
+                  ? (_documentPageCount ?? _chapterTotalPageCount)
+                  : _chapterImageUrls.length,
+          zoomScale:
+              _isCurrentHybridDocumentSurface ? _documentZoomScale : null,
+          panDx: _isCurrentHybridDocumentSurface ? _documentPanDx : null,
+          panDy: _isCurrentHybridDocumentSurface ? _documentPanDy : null,
         );
       case ReaderModeViewportKind.textScroll:
       case ReaderModeViewportKind.imageScroll:
@@ -1480,6 +1526,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           contentMode: _currentContentMode,
           mode: _currentReaderMode,
           chapterPositionRatio: ratio,
+          audioPositionMs: _audioPlaybackPosition.inMilliseconds,
+          audioDurationMs: _audioPlaybackDuration.inMilliseconds,
+          audioSpeed: _audioPlaybackSpeed,
         );
     }
   }

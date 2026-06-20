@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shuxiang_reading_next/domain/entities/reader_document.dart';
 import 'package:shuxiang_reading_next/domain/entities/reader_settings.dart';
 import 'package:shuxiang_reading_next/features/reader/application/reader_layout_request.dart';
+import 'package:shuxiang_reading_next/features/reader/application/reader_mixed_content_payload.dart';
 import 'package:shuxiang_reading_next/features/reader/application/reader_pagination_spec.dart';
 
 void main() {
@@ -62,6 +64,42 @@ void main() {
       expect(request.blocks.first.text, 'abc');
       expect(request.layoutSignature, contains('reader_layout_v2_alpha_1'));
       expect(request.totalContentLength, 10);
+    });
+
+    test('builds document requests with mixed content payload blocks', () {
+      final request = ReaderLayoutRequest.fromDocument(
+        chapterId: 'chapter-1',
+        chapterIndex: 0,
+        document: ReaderDocument(
+          blocks: const <ReaderBlock>[
+            ReaderTitleBlock(text: '标题'),
+            ReaderCaptionBlock(text: '图片说明'),
+            ReaderFootnoteBlock(text: '脚注'),
+            ReaderImageBlock(imageUrl: 'https://example.com/p.png'),
+          ],
+        ),
+        spec: ReaderLayoutSpec.fromPaginationSpec(_paginationSpec),
+        documentFingerprint: 'doc-mixed',
+      );
+
+      expect(request.blocks.map((block) => block.kind), <Object>[
+        ReaderLayoutBlockKind.title,
+        ReaderLayoutBlockKind.caption,
+        ReaderLayoutBlockKind.footnote,
+        ReaderLayoutBlockKind.image,
+      ]);
+      expect(
+        ReaderMixedContentPayloads.read(request.blocks[1].columnPayload)?.kind,
+        ReaderMixedContentPayloadKind.caption,
+      );
+      expect(
+        ReaderMixedContentPayloads.read(request.blocks[2].columnPayload)?.kind,
+        ReaderMixedContentPayloadKind.footnote,
+      );
+      expect(
+        ReaderMixedContentPayloads.read(request.blocks[3].columnPayload)?.url,
+        'https://example.com/p.png',
+      );
     });
   });
 }

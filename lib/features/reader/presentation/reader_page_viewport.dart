@@ -232,19 +232,45 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
     if (session.hybridSubMode == ReaderHybridSubMode.pdf &&
         sourceFilePath != null &&
         sourceFilePath.isNotEmpty) {
+      final restorePlan = _surfacePositionRuntime.restoreFromProgress(
+        _bootstrapProgressForCurrentChapter(),
+      );
+      final documentPosition =
+          restorePlan?.kind == ReaderSurfaceKind.document
+              ? restorePlan!.position
+              : null;
       return ReaderPdfView(
         filePath: sourceFilePath,
-        initialPage: max(
-          1,
-          (_bootstrapProgress?.positionSnapshot?.pageIndex ?? 0) + 1,
-        ),
+        initialPage: max(1, (documentPosition?.documentPageIndex ?? 0) + 1),
+        initialZoomScale: documentPosition?.zoomScale,
+        initialPanDx: documentPosition?.panDx,
+        initialPanDy: documentPosition?.panDy,
+        onViewerReady: (controller, pageCount) {
+          _pdfViewerController = controller;
+          _documentPageCount = pageCount;
+        },
         onPageChanged: (pageNumber) {
           if (!mounted) {
             return;
           }
           _updateReaderState(() {
-            _mangaPageIndex = max(0, pageNumber - 1);
+            _documentPageIndex = max(0, pageNumber - 1);
             _chapterTotalPageCount ??= session.totalPageCount;
+            _documentPageCount ??= session.totalPageCount;
+          });
+          _syncActiveReadingRecordSessionProgress();
+          _scheduleProgressSave();
+        },
+        onViewportChanged: (snapshot) {
+          if (!mounted) {
+            return;
+          }
+          _updateReaderState(() {
+            _documentPageIndex = snapshot.pageIndex ?? _documentPageIndex;
+            _documentPageCount = snapshot.pageCount;
+            _documentZoomScale = snapshot.zoomScale;
+            _documentPanDx = snapshot.panDx;
+            _documentPanDy = snapshot.panDy;
           });
           _syncActiveReadingRecordSessionProgress();
           _scheduleProgressSave();
@@ -268,7 +294,7 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
       surfaceMetrics: surfaceMetrics,
       palette: _presentationPalette(context),
       imageUrls: _chapterImageUrls,
-      currentIndex: _mangaPageIndex,
+      currentIndex: _imagePageIndex,
       continuousPadding: EdgeInsets.fromLTRB(
         _settings.mangaImagePadding,
         12,
@@ -296,7 +322,7 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
           return;
         }
         _updateReaderState(() {
-          _mangaPageIndex = index;
+          _imagePageIndex = index;
         });
         _syncActiveReadingRecordSessionProgress();
         _scheduleProgressSave();
@@ -312,7 +338,7 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
         );
       },
       pagedViewportBuilder: (context, viewport, child) {
-        final overlayIndex = _mangaPageIndex.clamp(
+        final overlayIndex = _imagePageIndex.clamp(
           0,
           _safePageUpperBound(viewport.itemCount),
         );

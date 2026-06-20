@@ -2,6 +2,7 @@ import '../../../domain/entities/reading_progress.dart';
 import 'local/local_reader_identity.dart';
 import 'reader_content_session.dart';
 import 'reader_logical_position.dart';
+import 'reader_surface_position_runtime.dart';
 import 'reader_viewport_state.dart';
 
 class ReaderProgressCommitInput {
@@ -16,6 +17,7 @@ class ReaderProgressCommitInput {
     required this.positionRatio,
     required this.viewportState,
     required this.contentMode,
+    this.hybridSubMode,
     this.logicalPosition,
     this.audioPlaybackPosition = Duration.zero,
     this.audioPlaybackDuration = Duration.zero,
@@ -33,6 +35,7 @@ class ReaderProgressCommitInput {
   final double positionRatio;
   final ReaderViewportState viewportState;
   final ReaderContentMode contentMode;
+  final ReaderHybridSubMode? hybridSubMode;
   final ReaderLogicalPosition? logicalPosition;
   final Duration audioPlaybackPosition;
   final Duration audioPlaybackDuration;
@@ -41,7 +44,11 @@ class ReaderProgressCommitInput {
 }
 
 class ReaderProgressCommitController {
-  const ReaderProgressCommitController();
+  const ReaderProgressCommitController({
+    this.surfacePositionRuntime = const ReaderSurfacePositionRuntime(),
+  });
+
+  final ReaderSurfacePositionRuntime surfacePositionRuntime;
 
   ReadingProgress? buildProgress(ReaderProgressCommitInput input) {
     final sourceId = input.sourceId;
@@ -67,6 +74,16 @@ class ReaderProgressCommitController {
       chapterId: input.chapterId,
       chapterUrl: chapterUrl,
     );
+    final surfacePosition = surfacePositionRuntime.capture(
+      viewportState: input.viewportState,
+      contentMode: input.contentMode,
+      chapterIndex: chapterIndex,
+      hybridSubMode: input.hybridSubMode,
+      logicalPosition: input.logicalPosition,
+      audioPlaybackPosition: input.audioPlaybackPosition,
+      audioPlaybackDuration: input.audioPlaybackDuration,
+      audioPlaybackSpeed: input.audioPlaybackSpeed,
+    );
     return ReadingProgress(
       bookId: input.bookId,
       sourceId: sourceId,
@@ -82,26 +99,11 @@ class ReaderProgressCommitController {
         pageIndex: input.viewportState.pageIndex,
         totalPageCount: input.viewportState.pageCount,
         viewportMode: input.viewportState.kind.name,
+        zoomScale: input.viewportState.zoomScale,
+        panDx: input.viewportState.panDx,
+        panDy: input.viewportState.panDy,
       ),
-      positionSnapshot: ReaderPositionSnapshot(
-        viewportMode: input.viewportState.kind.name,
-        pageIndex: input.viewportState.pageIndex,
-        pageCount: input.viewportState.pageCount,
-        scrollOffset: input.viewportState.scrollOffset,
-        maxScrollExtent: input.viewportState.maxScrollExtent,
-        audioPositionMs:
-            input.contentMode == ReaderContentMode.audio
-                ? input.audioPlaybackPosition.inMilliseconds
-                : null,
-        audioDurationMs:
-            input.contentMode == ReaderContentMode.audio
-                ? input.audioPlaybackDuration.inMilliseconds
-                : null,
-        audioSpeed:
-            input.contentMode == ReaderContentMode.audio
-                ? input.audioPlaybackSpeed
-                : null,
-      ),
+      positionSnapshot: surfacePositionRuntime.toSnapshot(surfacePosition),
     );
   }
 

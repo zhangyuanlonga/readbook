@@ -1,21 +1,46 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:pdfrx/pdfrx.dart';
+
+class ReaderPdfViewportSnapshot {
+  const ReaderPdfViewportSnapshot({
+    required this.pageIndex,
+    required this.pageCount,
+    required this.zoomScale,
+    required this.panDx,
+    required this.panDy,
+  });
+
+  final int? pageIndex;
+  final int pageCount;
+  final double zoomScale;
+  final double panDx;
+  final double panDy;
+}
 
 class ReaderPdfView extends StatefulWidget {
   const ReaderPdfView({
     super.key,
     required this.filePath,
     this.initialPage = 1,
+    this.initialZoomScale,
+    this.initialPanDx,
+    this.initialPanDy,
     this.onPageChanged,
+    this.onViewportChanged,
     this.onViewerReady,
     this.errorBuilder,
   });
 
   final String filePath;
   final int initialPage;
+  final double? initialZoomScale;
+  final double? initialPanDx;
+  final double? initialPanDy;
   final ValueChanged<int>? onPageChanged;
+  final ValueChanged<ReaderPdfViewportSnapshot>? onViewportChanged;
   final void Function(PdfViewerController controller, int pageCount)?
   onViewerReady;
   final Widget Function(BuildContext context, Object error)? errorBuilder;
@@ -31,10 +56,14 @@ class _ReaderPdfViewState extends State<ReaderPdfView> {
   void initState() {
     super.initState();
     _controller = PdfViewerController();
+    _controller.addListener(_handleControllerChanged);
   }
 
   @override
-  void dispose() => super.dispose();
+  void dispose() {
+    _controller.removeListener(_handleControllerChanged);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -60,12 +89,57 @@ class _ReaderPdfViewState extends State<ReaderPdfView> {
         ),
         onViewerReady: (document, controller) {
           widget.onViewerReady?.call(controller, document.pages.length);
+          _restoreInitialDocumentPosition(controller);
+          _emitViewportChanged();
         },
         onPageChanged: (pageNumber) {
           if (pageNumber != null) {
             widget.onPageChanged?.call(pageNumber);
+            _emitViewportChanged();
           }
         },
+      ),
+    );
+  }
+
+  void _handleControllerChanged() {
+    _emitViewportChanged();
+  }
+
+  void _restoreInitialDocumentPosition(PdfViewerController controller) {
+    final zoomScale = widget.initialZoomScale;
+    final panDx = widget.initialPanDx;
+    final panDy = widget.initialPanDy;
+    if (zoomScale == null && panDx == null && panDy == null) {
+      return;
+    }
+    final visibleRect = controller.visibleRect;
+    unawaited(
+      controller.goToPosition(
+        documentOffset: Offset(
+          panDx ?? visibleRect.left,
+          panDy ?? visibleRect.top,
+        ),
+        zoom: zoomScale,
+        duration: Duration.zero,
+      ),
+    );
+  }
+
+  void _emitViewportChanged() {
+    final callback = widget.onViewportChanged;
+    if (callback == null || !_controller.isReady) {
+      return;
+    }
+    final pageNumber = _controller.pageNumber;
+    final visibleRect = _controller.visibleRect;
+    callback(
+      ReaderPdfViewportSnapshot(
+        pageIndex: pageNumber == null ? null : pageNumber - 1,
+        pageCount: _controller.pageCount,
+        zoomScale: _controller.currentZoom,
+        panDx: visibleRect.left,
+        panDy: visibleRect.top,
       ),
     );
   }

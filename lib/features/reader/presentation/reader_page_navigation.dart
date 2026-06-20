@@ -465,7 +465,7 @@ extension _ReaderPageNavigationExtension on _ReaderPageState {
               final progressLabel = '${(draftRatio * 100).round()}%';
               final chapterLabel =
                   isPagedMode
-                      ? '第 ${(_mangaPageIndex + 1).clamp(1, total)} / $total 张'
+                      ? '第 ${(_imagePageIndex + 1).clamp(1, total)} / $total 张'
                       : '长图进度定位';
 
               return Padding(

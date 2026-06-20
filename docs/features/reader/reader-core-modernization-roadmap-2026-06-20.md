@@ -17,8 +17,9 @@
 - [x] V2-P0/P1/P2/P3/P4/P5/P6/P7 已完成 alpha 代码侧落地。
 - [x] V3 已完成新 layout renderer alpha preview：可翻页、可 fallback、可输出 diagnostics。
 - [x] V4 已完成交互锚点 alpha：selection、annotation、bookmark、search、read-aloud 共享 layout position。
+- [x] V5 已完成多 surface 进度语义 alpha：文本、漫画、PDF、音频、EPUB 混排 payload 不再互相顶替。
 - [ ] V1 真实样本手工行为记录仍需补齐。
-- [ ] 新 renderer 默认切换前必须完成 V5 surface 语义和 V6 灰度策略。
+- [ ] 新 renderer 默认切换前必须完成 V6 灰度策略。
 
 ---
 
@@ -30,7 +31,7 @@
 | V2 | `reader-core-modernization-v2-layout-engine-node-2026-06-20.md` | 已完成主体 | 新 layout engine 可运行 |
 | V3 | `reader-core-modernization-v3-renderer-node-2026-06-20.md` | 已完成 alpha | 新文本阅读器 debug/dev 灰度可用 |
 | V4 | `reader-core-modernization-v4-interaction-node-2026-06-20.md` | 已完成 alpha | 选择、标注、书签、搜索、朗读闭环 |
-| V5 | `reader-core-modernization-v5-surface-node-2026-06-20.md` | 未开始 | 文本、漫画、PDF、音频 surface 完整 |
+| V5 | `reader-core-modernization-v5-surface-node-2026-06-20.md` | 已完成 alpha | 文本、漫画、PDF、音频 surface 完整 |
 | V6 | `reader-core-modernization-v6-release-node-2026-06-20.md` | 未开始 | 新阅读器默认上线，旧阅读器 fallback |
 
 ---
