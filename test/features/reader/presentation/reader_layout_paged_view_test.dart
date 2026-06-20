@@ -10,18 +10,27 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: ReaderLayoutPagedView(
-            pages: <ReaderLayoutPage>[_page()],
-            textStyle: const TextStyle(fontSize: 14),
-            imagePlaceholderBuilder: (context, fragment) {
-              return const ColoredBox(color: Colors.red);
-            },
+          body: SizedBox(
+            width: 320,
+            height: 480,
+            child: ReaderLayoutPagedView(
+              pages: <ReaderLayoutPage>[_page(text: '正文')],
+              textStyle: const TextStyle(fontSize: 14),
+              annotationRanges: const <ReaderLayoutTextAnnotationRange>[
+                ReaderLayoutTextAnnotationRange(startOffset: 0, endOffset: 1),
+              ],
+              imagePlaceholderBuilder: (context, fragment) {
+                return const ColoredBox(color: Colors.red);
+              },
+            ),
           ),
         ),
       ),
     );
+    await tester.pumpAndSettle();
 
     expect(find.text('正文'), findsOneWidget);
+    expect(find.byType(ReaderLayoutTextPainter), findsOneWidget);
     expect(
       find.byWidgetPredicate(
         (widget) => widget is ColoredBox && widget.color == Colors.red,
@@ -29,15 +38,51 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('ReaderLayoutPagedView supports page turning', (tester) async {
+    var changedPage = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 320,
+            height: 480,
+            child: ReaderLayoutPagedView(
+              pages: <ReaderLayoutPage>[
+                _page(text: '第一页'),
+                _page(text: '第二页', pageIndex: 1, startOffset: 4),
+              ],
+              textStyle: const TextStyle(fontSize: 14),
+              onPageChanged: (pageIndex) {
+                changedPage = pageIndex;
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.byType(PageView), const Offset(-340, 0));
+    await tester.pumpAndSettle();
+
+    expect(changedPage, 1);
+    expect(find.text('第二页'), findsOneWidget);
+  });
 }
 
-ReaderLayoutPage _page() {
-  return const ReaderLayoutPage(
+ReaderLayoutPage _page({
+  required String text,
+  int pageIndex = 0,
+  int startOffset = 0,
+}) {
+  final endOffset = startOffset + text.length + 1;
+  return ReaderLayoutPage(
     chapterId: 'chapter-1',
     chapterIndex: 0,
-    pageIndex: 0,
-    startOffset: 0,
-    endOffset: 3,
+    pageIndex: pageIndex,
+    startOffset: startOffset,
+    endOffset: endOffset,
     contentWidth: 320,
     contentHeight: 480,
     layoutSignature: 'sig',
@@ -45,8 +90,8 @@ ReaderLayoutPage _page() {
       ReaderLayoutLine(
         lineIndex: 0,
         paragraphIndex: 0,
-        text: '正文',
-        chapterOffset: 0,
+        text: text,
+        chapterOffset: startOffset,
         pageOffset: 0,
         lineTop: 0,
         lineBase: 18,
@@ -55,10 +100,10 @@ ReaderLayoutPage _page() {
           ReaderLayoutColumn(
             columnIndex: 0,
             kind: ReaderLayoutColumnKind.text,
-            startOffset: 0,
-            endOffset: 2,
+            startOffset: startOffset,
+            endOffset: startOffset + text.length,
             rect: ReaderLayoutRect(left: 0, top: 0, right: 80, bottom: 24),
-            text: '正文',
+            text: text,
           ),
         ],
       ),
@@ -66,8 +111,8 @@ ReaderLayoutPage _page() {
         lineIndex: 1,
         paragraphIndex: 1,
         text: '',
-        chapterOffset: 2,
-        pageOffset: 2,
+        chapterOffset: startOffset + text.length,
+        pageOffset: text.length,
         lineTop: 30,
         lineBase: 80,
         lineBottom: 80,
@@ -75,8 +120,8 @@ ReaderLayoutPage _page() {
           ReaderLayoutColumn(
             columnIndex: 0,
             kind: ReaderLayoutColumnKind.image,
-            startOffset: 2,
-            endOffset: 3,
+            startOffset: startOffset + text.length,
+            endOffset: endOffset,
             rect: ReaderLayoutRect(left: 0, top: 30, right: 120, bottom: 80),
           ),
         ],

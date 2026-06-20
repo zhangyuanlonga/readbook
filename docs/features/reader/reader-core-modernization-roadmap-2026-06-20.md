@@ -14,9 +14,10 @@
 - [x] V1 默认不改变现有阅读器 UI 行为。
 - [x] V1 出口报告：`reader-core-modernization-v1-exit-report-2026-06-20.md`。
 - [x] V2 执行计划：`reader-core-modernization-v2-execution-plan-2026-06-20.md`。
-- [x] V2-P0/P1/P2/P3/P4/P5/P6 已完成 alpha 代码侧落地。
+- [x] V2-P0/P1/P2/P3/P4/P5/P6/P7 已完成 alpha 代码侧落地。
+- [x] V3 已完成新 layout renderer alpha preview：可翻页、可 fallback、可输出 diagnostics。
 - [ ] V1 真实样本手工行为记录仍需补齐。
-- [ ] V2 默认切换新 renderer 前必须完成 diagnostics 和 smoke。
+- [ ] 新 renderer 默认切换前必须完成 V4 交互闭环和 V6 灰度策略。
 
 ---
 
@@ -26,7 +27,7 @@
 |---|---|---:|---|
 | V1 | `reader-core-modernization-v1-foundation-node-2026-06-20.md` | 代码侧收尾 | 底座完成，默认 UI 不变 |
 | V2 | `reader-core-modernization-v2-layout-engine-node-2026-06-20.md` | 已完成主体 | 新 layout engine 可运行 |
-| V3 | `reader-core-modernization-v3-renderer-node-2026-06-20.md` | 未开始 | 新文本阅读器 debug/dev 灰度可用 |
+| V3 | `reader-core-modernization-v3-renderer-node-2026-06-20.md` | 已完成 alpha | 新文本阅读器 debug/dev 灰度可用 |
 | V4 | `reader-core-modernization-v4-interaction-node-2026-06-20.md` | 未开始 | 选择、标注、书签、搜索、朗读闭环 |
 | V5 | `reader-core-modernization-v5-surface-node-2026-06-20.md` | 未开始 | 文本、漫画、PDF、音频 surface 完整 |
 | V6 | `reader-core-modernization-v6-release-node-2026-06-20.md` | 未开始 | 新阅读器默认上线，旧阅读器 fallback |
@@ -247,46 +248,47 @@ ReaderLayoutPage
 
 ### 3.1 新 paged view
 
-- [ ] 新建 `ReaderLayoutPagedView`。
-- [ ] 输入 `List<ReaderLayoutPage>` 或 lazy page snapshot。
-- [ ] 每页按 line/column 绘制文本和图片。
+- [x] 新建 `ReaderLayoutPagedView`。
+- [x] 输入 `List<ReaderLayoutPage>` 或 lazy page snapshot。
+- [x] 每页按 line/column 绘制文本和图片占位。
 - [ ] 保留 `SelectableText` fallback，但业务命中使用 layout position。
-- [ ] 支持 page keep-alive 策略。
+- [x] 支持 page keep-alive 策略。
 - [ ] 支持图片 decode budget。
 
 ### 3.2 文本绘制
 
-- [ ] 新建 `ReaderLayoutTextPainter` 或 painter adapter。
-- [ ] 按 layout line 绘制文本。
+- [x] 新建 `ReaderLayoutTextPainter` 或 painter adapter。
+- [x] 按 layout line 绘制文本。
 - [ ] 支持段首缩进。
 - [ ] 支持 full justify。
 - [ ] 支持 bottom justify 后的 lineTop/lineBottom。
-- [ ] 支持 title line 样式。
-- [ ] 支持 annotation underline/highlight/wavy overlay。
+- [x] 支持 title line 样式。
+- [x] 支持 annotation highlight overlay。
+- [ ] 支持 annotation underline/wavy overlay。
 
 ### 3.3 图片和混排绘制
 
-- [ ] 支持 block image。
-- [ ] 支持 inline image placeholder。
+- [x] 支持 block image。
+- [x] 支持 inline image placeholder。
 - [ ] 图片保存真实显示 rect。
 - [ ] 图片加载完成后触发局部 relayout 或更新 aspect ratio。
-- [ ] 图片失败时保留稳定占位高度。
+- [x] 图片失败时保留稳定占位高度。
 - [ ] 图片点击通过 layout hit test 返回 image payload。
 
 ### 3.4 旧 view 兼容
 
-- [ ] `ReaderTextPagedView` 暂时保留。
-- [ ] 新增 feature flag：旧 slice renderer / 新 layout renderer。
-- [ ] 支持按章节或 debug setting 切换。
-- [ ] 遇到新 layout 失败时 fallback 到旧 renderer。
+- [x] `ReaderTextPagedView` 暂时保留。
+- [x] 新增 feature flag：旧 slice renderer / 新 layout renderer。
+- [x] 支持按 debug/dev setting 切换。
+- [x] 遇到新 layout 失败时 fallback 到旧 renderer。
 
 ### 3.5 阶段验收
 
-- [ ] 纯文本章节在新 renderer 下可读。
-- [ ] 旧 renderer 可 fallback。
+- [x] 纯文本章节在新 renderer 下可读。
+- [x] 旧 renderer 可 fallback。
 - [ ] 标注视觉位置和 layout range 一致。
-- [ ] 图片章节不出现明显跳页或重叠。
-- [ ] `flutter analyze` 和核心 widget test 通过。
+- [x] 图片章节不出现明显跳页或重叠。
+- [x] `flutter analyze` 和核心 widget test 通过。
 
 ---
 

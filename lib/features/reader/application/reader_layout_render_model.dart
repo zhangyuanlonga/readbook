@@ -8,6 +8,8 @@ class ReaderLayoutRenderFragment {
     required this.pageIndex,
     required this.lineIndex,
     required this.columnIndex,
+    required this.startOffset,
+    required this.endOffset,
     required this.rect,
     this.text = '',
     this.styleKey,
@@ -18,6 +20,8 @@ class ReaderLayoutRenderFragment {
   final int pageIndex;
   final int lineIndex;
   final int columnIndex;
+  final int startOffset;
+  final int endOffset;
   final ReaderLayoutRect rect;
   final String text;
   final String? styleKey;
@@ -55,6 +59,8 @@ class ReaderLayoutRenderModelBuilder {
             pageIndex: page.pageIndex,
             lineIndex: line.lineIndex,
             columnIndex: column.columnIndex,
+            startOffset: column.startOffset,
+            endOffset: column.endOffset,
             rect: column.rect,
             text: column.text,
             styleKey: column.styleKey,
