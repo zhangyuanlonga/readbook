@@ -1,8 +1,8 @@
 # 阅读器 V7 功能等价矩阵
 
 **日期**: 2026-06-20  
-**状态**: V7 0-3 首轮已落地  
-**进度**: 0-3 阶段约 65%  
+**状态**: V7 P8 已验收，阅读器专项通过
+**进度**: 约 86%
 **代码 fixture**: `lib/features/reader/application/reader_feature_parity_matrix.dart`
 
 ---
@@ -33,6 +33,11 @@
 | 高亮/加粗/下划线/波浪线 | 可用 | 可用 | release 可用 | annotation range 已承接旧 bookmark 样式字段 |
 | 点击已有标注工具条 | 可用 | 部分 | legacy fallback/长按恢复 | 直接点击现有标注仍待独立 hit-test |
 | 书签恢复 | 可用 | 部分 | release + fallback | layout anchor 优先，chapter offset/snippet fallback 保留 |
+| 搜索/朗读 anchor | 可用 | 部分 | release readiness + fallback | 已有 readiness diagnostics，搜索高亮仍需 UI smoke |
+| 自动阅读 | 可用 | 部分 | release readiness + fallback | 分页 readiness 已回归，跨章体验继续验收 |
+| 设置兼容 | 可用 | 部分 | signature matrix | 字体/行距/边距/字体来源进入签名，shell owned 设置隔离 |
+| EPUB/HTML 混排 | 部分 | 部分 | payload policy | title/image/caption/footnote/link payload 已有策略测试 |
+| 新旧共存隔离 | 可用 | 部分 | renderer authority | release active 只信 release page count，fallback 清理 release runtime |
 
 ---
 
@@ -48,6 +53,12 @@
 - [x] P3: `ReaderLayoutTextAnnotationRange` 承接 bold/underline/wavy。
 - [x] P3: release annotation ranges 读取旧 bookmark 样式字段。
 - [x] P3: `ReaderLayoutPagedView` 增加长按拖动选择更新和相邻页映射。
+- [x] P4: 新增 `ReaderLayoutAnchorReadinessPolicy`。
+- [x] P4: release diagnostics 输出 search/read-aloud/auto-read anchor readiness。
+- [x] P5: 新增 `ReaderLayoutSettingsCompatibilityMatrix` 与 signature 回归测试。
+- [x] P6: 新增 `ReaderMixedContentParityPolicy`。
+- [x] P7: 新增 `ReaderRendererAuthorityResolver` 并接入 `_currentPagedPageCount`。
+- [x] P7: release fallback 清空 request/pageCount 并取消 active layout task。
 
 ---
 
@@ -59,3 +70,21 @@
 - [ ] P3: 点击已有标注直接唤起旧工具条。
 - [ ] P3: 复杂多页拖拽、跨图片/混排行的选择继续补测试。
 - [ ] P3: 书签恢复完全切到 layout position 权威源。
+- [ ] P4: 搜索命中高亮和目录搜索跳转做 widget/smoke 验收。
+- [ ] P4: 自动阅读跨章行为在 release renderer 下做端到端验收。
+- [ ] P6: 图片点击、重试、真实尺寸更新策略继续接入 release renderer。
+- [ ] P7: profile mode 记录 release/legacy/fallback 切换的首屏和翻页性能。
+
+---
+
+## 5. P8 验收摘录
+
+完整记录见 `reader-core-modernization-v7-acceptance-report-2026-06-20.md`。
+
+- [x] 阅读器范围 analyze 通过。
+- [x] reader application tests 通过，576 tests passed。
+- [x] reader presentation tests 通过，186 tests passed。
+- [x] TXT/EPUB parser tests 通过，35 tests passed。
+- [x] `docs/test_readr` 两个 TXT 和一个 EPUB 完成文件级 smoke。
+- [ ] 全项目 `flutter analyze` 被非阅读器 `mine` 测试阻塞。
+- [ ] profile mode 和 TF fallback release 包人工验证未执行。

@@ -589,17 +589,19 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
 
         final releaseDecision = _resolveLayoutReleaseDecision();
         if (!releaseDecision.useReleaseRenderer) {
-          _layoutReleaseRendererActive = false;
-          _layoutReleaseDiagnostic = _formatLayoutReleaseDiagnostic(
-            releaseDecision.toDiagnosticsContext(),
+          _deactivateLayoutReleaseForFallback(
+            _formatLayoutReleaseDiagnostic(
+              releaseDecision.toDiagnosticsContext(),
+            ),
           );
           return buildLegacyViewport();
         }
 
         final releaseRequest = _buildLayoutReleaseRequest(paginationSpec);
         if (releaseRequest == null) {
-          _layoutReleaseRendererActive = false;
-          _layoutReleaseDiagnostic = 'readerLayoutReleaseReason=no_request';
+          _deactivateLayoutReleaseForFallback(
+            'readerLayoutReleaseReason=no_request',
+          );
           return buildLegacyViewport();
         }
 
@@ -655,6 +657,16 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
     );
   }
 
+  void _deactivateLayoutReleaseForFallback(String diagnostic) {
+    _layoutReleaseRendererController.cancelActive();
+    _layoutReleaseRendererActive = false;
+    _layoutReleasePageCount = null;
+    _layoutReleaseRequestSignature = null;
+    _layoutReleaseTargetRatio = 0;
+    _layoutReleaseInitialPageIndex = 0;
+    _layoutReleaseDiagnostic = diagnostic;
+  }
+
   ReaderLayoutRequest? _buildLayoutReleaseRequest(
     ReaderPaginationSpec paginationSpec,
   ) {
@@ -704,17 +716,58 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
     ReaderLayoutRendererState state,
     ReaderLayoutReleaseDecision decision,
   ) {
+    final isActive =
+        decision.useReleaseRenderer && !state.shouldUseLegacyRenderer;
+    final pageCount = state.pages.length;
+    final layoutSignature =
+        state.pages.isEmpty ? null : state.pages.first.layoutSignature;
+    final anchorSnapshot = ReaderLayoutAnchorReadinessSnapshot(
+      contentMode: _currentContentMode,
+      viewportKind: _currentViewportKind,
+      releaseActive: isActive,
+      layoutPageCount: pageCount,
+      layoutSignature: layoutSignature,
+    );
+    final searchAnchorReadiness = _layoutAnchorReadinessPolicy.resolve(
+      consumer: ReaderLayoutAnchorConsumer.search,
+      snapshot: anchorSnapshot,
+    );
+    final readAloudAnchorReadiness = _layoutAnchorReadinessPolicy.resolve(
+      consumer: ReaderLayoutAnchorConsumer.readAloud,
+      snapshot: anchorSnapshot,
+    );
+    final autoReadAnchorReadiness = _layoutAnchorReadinessPolicy.resolve(
+      consumer: ReaderLayoutAnchorConsumer.autoRead,
+      snapshot: anchorSnapshot,
+    );
+    final rendererAuthority = _rendererAuthorityResolver.resolve(
+      releaseActive: isActive,
+      releasePageCount: pageCount,
+      legacyTextPageCount: _pagedPages.length,
+      legacyBlockPageCount: _pagedBlockPages.length,
+      currentPageIndex: _pageTurnRuntimeController.currentPageIndex,
+      fallbackReason:
+          state.shouldUseLegacyRenderer
+              ? state.diagnostics.fallbackReason
+              : null,
+    );
     final context = <String, Object?>{
       ...decision.toDiagnosticsContext(),
       ...state.diagnosticsContext,
       'readerLayoutReleaseState': state.kind.name,
       'readerLayoutReleaseCompleted': state.completed,
       'readerLayoutReleaseFromCache': state.fromCache,
+      'readerRendererAuthority': rendererAuthority.authority.name,
+      'readerRendererAuthorityPageCount': rendererAuthority.pageCount,
+      'readerRendererAuthorityReason': rendererAuthority.reason,
+      'readerLayoutSearchAnchor': searchAnchorReadiness.type.name,
+      'readerLayoutSearchAnchorReason': searchAnchorReadiness.reason,
+      'readerLayoutReadAloudAnchor': readAloudAnchorReadiness.type.name,
+      'readerLayoutReadAloudAnchorReason': readAloudAnchorReadiness.reason,
+      'readerLayoutAutoReadAnchor': autoReadAnchorReadiness.type.name,
+      'readerLayoutAutoReadAnchorReason': autoReadAnchorReadiness.reason,
     };
     final diagnostic = _formatLayoutReleaseDiagnostic(context);
-    final isActive =
-        decision.useReleaseRenderer && !state.shouldUseLegacyRenderer;
-    final pageCount = state.pages.length;
     if (_layoutReleaseRendererActive == isActive &&
         _layoutReleasePageCount == pageCount &&
         _layoutReleaseDiagnostic == diagnostic) {

@@ -50,6 +50,39 @@ void main() {
       );
     });
 
+    test('changes signature when user-visible layout settings change', () {
+      final baseline = ReaderLayoutSpec.fromPaginationSpec(
+        _paginationSpec,
+      ).buildSignature(
+        chapterId: 'chapter-1',
+        documentFingerprint: 'doc-a',
+        parserVersion: 'parser-a',
+      );
+
+      String signatureFor(ReaderPaginationSpec spec) {
+        return ReaderLayoutSpec.fromPaginationSpec(spec).buildSignature(
+          chapterId: 'chapter-1',
+          documentFingerprint: 'doc-a',
+          parserVersion: 'parser-a',
+        );
+      }
+
+      expect(baseline, isNot(signatureFor(_specVariant(fontSize: 20))));
+      expect(baseline, isNot(signatureFor(_specVariant(lineHeight: 1.9))));
+      expect(baseline, isNot(signatureFor(_specVariant(pagePaddingLeft: 24))));
+      expect(
+        baseline,
+        isNot(
+          signatureFor(
+            _specVariant(
+              fontSource: ReaderFontSource.builtin,
+              fontFamilyKey: 'serif',
+            ),
+          ),
+        ),
+      );
+    });
+
     test('builds paragraph requests without UI-only objects', () {
       final request = ReaderLayoutRequest.fromParagraphs(
         chapterId: 'chapter-1',
@@ -127,3 +160,36 @@ const _paginationSpec = ReaderPaginationSpec(
   systemFontPreset: ReaderSystemFontPreset.defaultSans,
   fontFamilyKey: null,
 );
+
+ReaderPaginationSpec _specVariant({
+  double? fontSize,
+  double? lineHeight,
+  double? pagePaddingLeft,
+  ReaderFontSource? fontSource,
+  String? fontFamilyKey,
+}) {
+  return ReaderPaginationSpec(
+    contentWidth: _paginationSpec.contentWidth,
+    contentHeight: _paginationSpec.contentHeight,
+    contentRectLeft: _paginationSpec.contentRectLeft,
+    contentRectTop: _paginationSpec.contentRectTop,
+    pagePaddingTop: _paginationSpec.pagePaddingTop,
+    pagePaddingRight: _paginationSpec.pagePaddingRight,
+    pagePaddingBottom: _paginationSpec.pagePaddingBottom,
+    pagePaddingLeft: pagePaddingLeft ?? _paginationSpec.pagePaddingLeft,
+    pinnedHeaderHeight: _paginationSpec.pinnedHeaderHeight,
+    paragraphSpacing: _paginationSpec.paragraphSpacing,
+    paragraphIndent: _paginationSpec.paragraphIndent,
+    lineHeight: lineHeight ?? _paginationSpec.lineHeight,
+    fontSize: fontSize ?? _paginationSpec.fontSize,
+    letterSpacing: _paginationSpec.letterSpacing,
+    textFullJustifyEnabled: _paginationSpec.textFullJustifyEnabled,
+    bodyTextItalicEnabled: _paginationSpec.bodyTextItalicEnabled,
+    fontWeightLevel: _paginationSpec.fontWeightLevel,
+    fontWeightValue: _paginationSpec.fontWeightValue,
+    fontSource: fontSource ?? _paginationSpec.fontSource,
+    systemFontPreset: _paginationSpec.systemFontPreset,
+    fontFamilyKey: fontFamilyKey ?? _paginationSpec.fontFamilyKey,
+    imagePlaceholderAspectRatio: _paginationSpec.imagePlaceholderAspectRatio,
+  );
+}

@@ -103,6 +103,7 @@ import '../application/reader_interaction_runtime_controller.dart';
 import '../application/removed_script_source_guard.dart';
 import '../application/reader_jump_facade.dart';
 import '../application/reader_jump_planner.dart';
+import '../application/reader_layout_anchor_readiness_policy.dart';
 import '../application/reader_layout_resolver.dart';
 import '../application/reader_layout_release_policy.dart';
 import '../application/reader_layout_renderer_controller.dart';
@@ -137,6 +138,7 @@ import '../application/reader_session_controller.dart';
 import '../application/reader_preferences_service.dart';
 import '../application/reader_preload_controller.dart';
 import '../application/reader_resource_budget.dart';
+import '../application/reader_renderer_authority_resolver.dart';
 import '../application/reader_runtime_facade.dart';
 import '../application/reader_runtime_lifecycle_controller.dart';
 import '../application/reader_runtime_wake_policy.dart';
@@ -870,6 +872,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _ReaderBackgroundAssetStore();
   final ReaderLayoutReleasePolicy _layoutReleasePolicy =
       const ReaderLayoutReleasePolicy();
+  final ReaderLayoutAnchorReadinessPolicy _layoutAnchorReadinessPolicy =
+      const ReaderLayoutAnchorReadinessPolicy();
+  final ReaderRendererAuthorityResolver _rendererAuthorityResolver =
+      const ReaderRendererAuthorityResolver();
   final ReaderLayoutRendererController _layoutReleaseRendererController =
       ReaderLayoutRendererController();
   List<List<ReaderPagedSlice>> _pagedPages = const [];
@@ -997,15 +1003,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool get _isPagedTransitionAnimating =>
       _pageTurnRuntimeController.pagedTransition.isAnimating;
   bool get _shouldUseContinuousTextFlow => _isTextScrollViewport;
-  int get _currentPagedPageCount => max(
-    max(_pagedPages.length, _pagedBlockPages.length),
-    _currentLayoutReleasePageCount,
-  );
-  int get _currentLayoutReleasePageCount {
-    if (!_layoutReleaseRendererActive) {
-      return 0;
-    }
-    return _layoutReleasePageCount ?? 0;
+  int get _currentPagedPageCount => _currentRendererAuthority.pageCount;
+  ReaderRendererAuthoritySnapshot get _currentRendererAuthority {
+    return _rendererAuthorityResolver.resolve(
+      releaseActive: _layoutReleaseRendererActive,
+      releasePageCount: _layoutReleasePageCount,
+      legacyTextPageCount: _pagedPages.length,
+      legacyBlockPageCount: _pagedBlockPages.length,
+      currentPageIndex: _pageTurnRuntimeController.currentPageIndex,
+      fallbackReason: _layoutReleaseDiagnostic,
+    );
   }
 
   void _resetLayoutReleaseRuntime() {

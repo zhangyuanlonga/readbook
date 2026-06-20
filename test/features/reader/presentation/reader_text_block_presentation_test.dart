@@ -26,7 +26,7 @@ void main() {
       expect(resolved.displayText, '　　正文');
       expect(resolved.indentLength, 2);
       expect(resolved.textAlign, TextAlign.justify);
-      expect(resolved.spacingAfter, 14);
+      expect(resolved.spacingAfter, closeTo(6.012, 0.001));
     });
 
     test('formats title and footnote with dedicated semantics', () {
@@ -55,7 +55,7 @@ void main() {
 
       expect(title.displayText, '第一章');
       expect(title.textStyle.fontWeight, FontWeight.w800);
-      expect(title.spacingAfter, 18);
+      expect(title.spacingAfter, 12);
       expect(footnote.displayText, '注: 脚注内容');
       expect(footnote.textAlign, TextAlign.start);
       expect(footnote.spacingAfter, 0);

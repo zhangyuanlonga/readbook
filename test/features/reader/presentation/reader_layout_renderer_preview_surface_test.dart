@@ -68,7 +68,7 @@ void main() {
 
     expect(find.byType(ReaderLayoutPagedView), findsOneWidget);
     expect(find.byKey(const ValueKey<String>('ready-wrapper')), findsOneWidget);
-    expect(find.text('正文内容'), findsOneWidget);
+    expect(find.text('正文内容', findRichText: true), findsOneWidget);
     expect(diagnostics.last.kind, ReaderLayoutRendererStateKind.ready);
     expect(diagnostics.last.completed, isTrue);
   });

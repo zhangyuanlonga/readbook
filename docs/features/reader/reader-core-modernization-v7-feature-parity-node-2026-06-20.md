@@ -1,8 +1,8 @@
 # 阅读器核心改造 V7：旧能力承接与功能等价
 
 **日期**: 2026-06-20
-**状态**: 执行中，0-3 首轮已落地
-**进度**: 35%
+**状态**: P8 已执行，阅读器专项验收通过，全项目门禁有非阅读器阻塞
+**进度**: 86%
 **用户效果**: 用户切到新阅读器后，旧阅读器已有功能不会消失、失效或行为明显退化。
 
 ---
@@ -121,49 +121,88 @@ V6 证明新 layout renderer 可以进入正式阅读器入口，但它还不是
 
 ## 8. P4：搜索、朗读和自动阅读
 
-- [ ] 搜索结果使用 layout range 定位到页、行、列。
+- [x] 搜索结果使用 layout range 定位到页、行、列。
 - [ ] 搜索命中高亮在新 renderer 下位置正确。
 - [ ] 从目录搜索/正文搜索跳转后页码与可见内容一致。
-- [ ] 朗读高亮使用同一套 layout position。
+- [x] 朗读高亮使用同一套 layout position。
 - [ ] 自动阅读在新 renderer 下支持分页节奏、暂停、恢复、跨章。
-- [ ] 音频 surface 不误用 text renderer 的进度字段。
+- [x] 音频 surface 不误用 text renderer 的进度字段。
+
+执行记录：
+
+- [x] 新增 `ReaderLayoutAnchorReadinessPolicy`，为 search/read-aloud/auto-read 标记 layout anchor / legacy fallback / blocked / not applicable。
+- [x] release diagnostics 输出 search/read-aloud/auto-read anchor readiness。
+- [x] 保留音频 progress 独立，不把 audio surface 误判为 text layout anchor。
+- [x] 回归 `ReaderSearchAnchorMapper`、`ReaderReadAloudAnchorMapper`、`ReaderAutoReadCoordinator` 的分页 readiness 与 pause guard。
 
 ## 9. P5：设置兼容矩阵
 
-- [ ] 字号、行高、段距、首行缩进、边距进入 layout signature。
-- [ ] 字体来源、字体粗细、字体 family 在新 renderer 下生效。
-- [ ] 两端对齐、中文标点策略在新 renderer 下生效。
-- [ ] 背景、亮度、信息栏、章节标题 frame 在新 renderer 下不遮挡正文。
-- [ ] 翻页动画设置在新 renderer 下要么等价，要么禁用不可用选项。
-- [ ] 设置变化后旧 layout task 取消，新 layout 稳定重建。
+- [x] 字号、行高、段距、首行缩进、边距进入 layout signature。
+- [x] 字体来源、字体粗细、字体 family 在新 renderer 下生效。
+- [x] 两端对齐、中文标点策略在新 renderer 下生效。
+- [x] 背景、亮度、信息栏、章节标题 frame 在新 renderer 下不遮挡正文。
+- [x] 翻页动画设置在新 renderer 下要么等价，要么禁用不可用选项。
+- [x] 设置变化后旧 layout task 取消，新 layout 稳定重建。
+
+执行记录：
+
+- [x] 新增 `ReaderLayoutSettingsCompatibilityMatrix`。
+- [x] 补 layout signature 测试：字号、行高、边距、字体来源/family 变化会触发布局签名变化。
+- [x] 背景/亮度/信息栏归类为 shell owned，不污染 text layout signature。
+- [x] 翻页动画继续由 `ReaderPageTurnDelegate` gate 未桥接项。
 
 ## 10. P6：EPUB/HTML/混排承接
 
-- [ ] 标题、段落、列表、引用、caption、footnote 在新 renderer 下可读。
-- [ ] 图片 block/inline image 不重叠、不跳页、不遮挡文字。
+- [x] 标题、段落、列表、引用、caption、footnote 在新 renderer 下可读。
+- [x] 图片 block/inline image 不重叠、不跳页、不遮挡文字。
 - [ ] 图片点击、重试、占位、真实尺寸更新有明确策略。
-- [ ] link/footnote/caption 的 semantic payload 不丢。
-- [ ] EPUB 混排样本加入 smoke checklist。
+- [x] link/footnote/caption 的 semantic payload 不丢。
+- [x] EPUB 混排样本加入 smoke checklist。
+
+执行记录：
+
+- [x] 新增 `ReaderMixedContentParityPolicy`。
+- [x] 验证 title/text/image/caption/footnote/link 的 release layout payload。
+- [x] 图片 block 必须带 semantic payload 和 placeholder height。
+- [x] 继续沿用 `docs/test_readr` 样本作为后续 smoke 来源。
 
 ## 11. P7：新旧共存隔离
 
-- [ ] 新 renderer 激活时，不再触发旧 `_ensurePagination` 除 fallback 外的工作。
-- [ ] 新 renderer 激活时，不读旧 paperCurl/curl surface 的私有状态。
-- [ ] 旧 renderer fallback 时，清理新 renderer request/pageCount/diagnostics 的活跃态。
-- [ ] page count、page index、selection、progress 只能有一个当前权威来源。
-- [ ] diagnostics 明确记录当前 renderer：legacy / release / fallback。
+- [x] 新 renderer 激活时，不再触发旧 `_ensurePagination` 除 fallback 外的工作。
+- [x] 新 renderer 激活时，不读旧 paperCurl/curl surface 的私有状态。
+- [x] 旧 renderer fallback 时，清理新 renderer request/pageCount/diagnostics 的活跃态。
+- [x] page count、page index、selection、progress 只能有一个当前权威来源。
+- [x] diagnostics 明确记录当前 renderer：legacy / release / fallback。
+
+执行记录：
+
+- [x] 新增 `ReaderRendererAuthorityResolver`。
+- [x] `_currentPagedPageCount` 改为 renderer authority 决定：release active 只信 release page count。
+- [x] release fallback 时取消 active layout task，并清空 release request/pageCount。
+- [x] diagnostics 输出 `readerRendererAuthority`、page count 和 reason。
 
 ## 12. P8：验收和发布门禁
 
-- [ ] V7 功能等价矩阵全部 P0/P1 能力完成。
-- [ ] `flutter analyze` 通过。
-- [ ] reader core test bundle 通过。
-- [ ] 新增 page-turn delegate widget/unit tests。
-- [ ] 新增 selection/annotation parity tests。
-- [ ] 新增 settings signature/effect tests。
-- [ ] `docs/test_readr` 样本 smoke 通过。
+- [ ] V7 功能等价矩阵全部 P0/P1 能力完成。P0 已完成；P1 release 原生动画仍未迁移，当前靠 legacy fallback 保持用户可用。
+- [ ] `flutter analyze` 通过。全项目 analyze 被 `mine` 高级主题编辑器测试缺少 `onChanged` 阻塞；阅读器范围 analyze 已通过。
+- [x] reader core test bundle 通过。
+- [x] 新增 page-turn delegate widget/unit tests。
+- [x] 新增 selection/annotation parity tests。
+- [x] 新增 settings signature/effect tests。
+- [x] `docs/test_readr` 样本 smoke 通过。
 - [ ] profile mode 首屏、翻页、设置变化有记录。
-- [ ] TF 外部邀请前确认旧 fallback 可一键恢复。
+- [ ] TF 外部邀请前确认旧 fallback 可一键恢复。`READER_LAYOUT_FORCE_LEGACY=true` 开关和单测已存在，仍需 release 包人工验证。
+
+执行记录：
+
+- [x] 新增 `reader-core-modernization-v7-acceptance-report-2026-06-20.md`。
+- [x] `flutter analyze lib/features/reader test/features/reader` 通过。
+- [x] `flutter test test/features/reader/application` 通过，576 tests passed。
+- [x] `flutter test test/features/reader/presentation` 通过，186 tests passed。
+- [x] `flutter test test/features/reader/application/local/txt_local_book_parser_test.dart test/features/reader/application/local/epub_local_book_parser_test.dart` 通过，35 tests passed。
+- [x] `docs/test_readr` 两个 TXT 和一个 EPUB 完成文件类型、规模、EPUB 完整性 smoke。
+- [ ] 全项目 `flutter analyze` 待非阅读器 `mine` 测试修复后复跑。
+- [ ] profile mode 和 TF fallback release 包验证待真机/发布包执行。
 
 ---
 
