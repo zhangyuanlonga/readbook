@@ -3113,6 +3113,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   ReaderPageAnimationStyle _currentPagedAnimationStyle() {
+    if (_layoutReleaseRendererActive) {
+      return ReaderPageAnimationStyle.none;
+    }
     return _currentReaderMode.pageAnimationStyle ??
         ReaderPageAnimationStyle.none;
   }
