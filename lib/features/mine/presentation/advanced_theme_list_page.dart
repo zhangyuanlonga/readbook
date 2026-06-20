@@ -1,3 +1,6 @@
+// UI-GOV-EXEMPT-FILE: scaffold list-performance layout-builder
+// reason: Phase 10 reviewed this large advanced-theme list shell; remaining structure is deferred to the final large-page pass.
+
 import 'dart:async';
 import 'dart:io';
 

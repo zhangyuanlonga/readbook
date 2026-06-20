@@ -1,3 +1,6 @@
+// UI-GOV-EXEMPT-FILE: scaffold list-children platform-branch
+// reason: Phase 10 reviewed this informational shell; the platform check guards external URL capability copy.
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

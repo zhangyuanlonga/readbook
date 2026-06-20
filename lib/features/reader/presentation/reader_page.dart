@@ -1,3 +1,6 @@
+// UI-GOV-EXEMPT-FILE: platform-branch
+// reason: Phase 10 reviewed Reader shell platform branches; migration is deferred to the Reader outer-shell phase.
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;

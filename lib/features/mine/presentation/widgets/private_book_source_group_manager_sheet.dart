@@ -130,12 +130,11 @@ class PrivateBookSourceGroupManagerSheetState
                       ),
                       child:
                           _saving
-                              ? SizedBox.square(
-                                dimension: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: colorScheme.primary,
-                                ),
+                              ? AppProgressIndicator(
+                                size: 18,
+                                strokeWidth: 2,
+                                color: colorScheme.primary,
+                                semanticLabel: '保存私人分组',
                               )
                               : const Icon(Icons.add_rounded, size: 26),
                     ),
@@ -279,7 +278,10 @@ class PrivateBookSourceGroupManagerSheetState
                 },
                 loading:
                     () => const Center(
-                      child: CircularProgressIndicator(strokeWidth: 2.4),
+                      child: AppProgressIndicator(
+                        strokeWidth: 2.4,
+                        semanticLabel: '读取私人分组',
+                      ),
                     ),
                 error:
                     (error, _) => AppEmptyStateCard(

@@ -21,6 +21,7 @@ import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/adaptive_fullscreen_preview.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/foundation/app_feedback.dart';
+import '../../../app/widgets/foundation/app_progress.dart';
 import '../../../app/widgets/import_export_task_overlay.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../app/widgets/adaptive_overflow_toolbar.dart';
@@ -367,13 +368,11 @@ class _FontFamilyPickerDialogState
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 if (loading)
-                  SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: colorScheme.primary,
-                    ),
+                  AppProgressIndicator(
+                    size: 14,
+                    strokeWidth: 2,
+                    color: colorScheme.primary,
+                    semanticLabel: '应用中',
                   )
                 else if (icon != null)
                   Icon(

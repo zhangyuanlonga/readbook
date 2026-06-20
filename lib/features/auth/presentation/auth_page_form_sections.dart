@@ -714,13 +714,11 @@ extension _AuthPageFormSections on _AuthPageState {
                       key: const ValueKey<String>('auth_submitting'),
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
+                        AppProgressIndicator(
+                          size: 18,
+                          strokeWidth: 2,
+                          color: Theme.of(context).colorScheme.onPrimary,
+                          semanticLabel: _isRegister ? '正在注册' : '正在登录',
                         ),
                         const SizedBox(width: 10),
                         Text(

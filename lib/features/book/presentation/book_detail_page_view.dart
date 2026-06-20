@@ -1,3 +1,6 @@
+// UI-GOV-EXEMPT-FILE: scaffold list-children
+// reason: Phase 10 reviewed book detail page shell; custom chrome and short action sections are intentional.
+
 part of 'book_detail_page.dart';
 
 extension on _BookDetailPageState {

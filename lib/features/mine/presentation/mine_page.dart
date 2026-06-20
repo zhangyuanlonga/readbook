@@ -16,6 +16,7 @@ import '../../../app/navigation/app_navigation_style_provider.dart';
 import '../../../app/platform/app_platform_capabilities.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/theme/app_border_tokens.dart';
+import '../../../app/theme/app_component_theme_tokens.dart';
 import '../../../app/theme/app_official_theme_presets.dart';
 import '../../../app/theme/app_theme_palette.dart';
 import '../../../app/theme/app_theme_provider.dart';

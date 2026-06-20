@@ -296,13 +296,11 @@ Future<SwitchSourceCandidate?> showSwitchSourceCandidateSheet({
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: colorScheme.primary,
-                      ),
+                    AppProgressIndicator(
+                      size: 14,
+                      strokeWidth: 2,
+                      color: colorScheme.primary,
+                      semanticLabel: '继续检索书源',
                     ),
                     const SizedBox(width: 8),
                     Expanded(

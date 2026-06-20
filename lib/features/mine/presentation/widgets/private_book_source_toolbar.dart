@@ -1,3 +1,6 @@
+// UI-GOV-EXEMPT-FILE: list-performance
+// reason: Phase 10 reviewed this toolbar; shrinkWrap is limited to a bounded filter chip section.
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -5,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../app/layout/app_adaptive.dart';
 import '../../../../app/widgets/adaptive_bottom_sheet.dart';
+import '../../../../app/widgets/foundation/app_progress.dart';
 import '../../application/private_book_source_service.dart';
 import '../private_book_source_filter_presenter.dart';
 import 'image_resource_collection_widgets.dart';
@@ -225,10 +229,10 @@ class _GroupMenuPill extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
               if (loading) ...<Widget>[
-                const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                const AppProgressIndicator(
+                  size: 16,
+                  strokeWidth: 2,
+                  semanticLabel: '加载私人书源筛选',
                 ),
                 const SizedBox(width: 7),
               ],

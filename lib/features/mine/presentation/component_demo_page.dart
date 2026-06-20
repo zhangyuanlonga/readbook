@@ -1,3 +1,6 @@
+// UI-GOV-EXEMPT-FILE: scaffold list-children
+// reason: Phase 10 reviewed Lumina component demo shell; the short static component matrix is intentional.
+
 import 'package:flutter/material.dart';
 
 import '../../../app/layout/app_adaptive.dart';

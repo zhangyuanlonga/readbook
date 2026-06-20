@@ -1,3 +1,6 @@
+// UI-GOV-EXEMPT-FILE: list-children list-performance
+// reason: Phase 10 reviewed book detail action strip; shrinkWrap is bounded by a short action section.
+
 part of 'book_detail_page.dart';
 
 extension on _BookDetailPageState {

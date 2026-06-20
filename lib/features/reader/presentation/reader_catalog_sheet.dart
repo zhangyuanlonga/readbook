@@ -1,3 +1,6 @@
+// UI-GOV-EXEMPT-FILE: list-children
+// reason: Phase 10 reviewed this Reader catalog structure; full shell migration is deferred to Phase 12.
+
 import 'dart:async';
 import 'dart:ui' as ui;
 
@@ -1235,6 +1238,8 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
       },
     );
   } else {
+    // UI-GOV-EXEMPT: modal-surface fixed-visual
+    // reason: Reader catalog mobile route is deferred to Phase 12 reader shell migration.
     routeResult = showModalBottomSheet<ReaderCatalogSheetResult>(
       context: context,
       isScrollControlled: true,

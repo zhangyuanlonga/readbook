@@ -1,3 +1,6 @@
+// UI-GOV-EXEMPT-FILE: scaffold list-children
+// reason: Phase 10 reviewed this feedback workflow shell; the short static page sections are intentional.
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -196,10 +199,10 @@ class _FeedbackPageState extends ConsumerState<FeedbackPage>
                         const Padding(
                           padding: EdgeInsets.symmetric(vertical: 12),
                           child: Center(
-                            child: SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                            child: AppProgressIndicator(
+                              size: 18,
+                              strokeWidth: 2,
+                              semanticLabel: '加载更多反馈',
                             ),
                           ),
                         ),
@@ -360,10 +363,10 @@ class _FeedbackPageState extends ConsumerState<FeedbackPage>
       padding: EdgeInsets.symmetric(vertical: 18),
       child: Row(
         children: [
-          SizedBox(
-            width: 18,
-            height: 18,
-            child: CircularProgressIndicator(strokeWidth: 2),
+          AppProgressIndicator(
+            size: 18,
+            strokeWidth: 2,
+            semanticLabel: '加载反馈列表',
           ),
           SizedBox(width: 12),
           Expanded(child: Text('正在加载反馈列表...')),
@@ -626,7 +629,11 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
                           if (_isLoading)
                             const Padding(
                               padding: EdgeInsets.symmetric(vertical: 48),
-                              child: Center(child: CircularProgressIndicator()),
+                              child: Center(
+                                child: AppProgressIndicator(
+                                  semanticLabel: '加载反馈页面',
+                                ),
+                              ),
                             ),
                           if (!_isLoading && _errorText != null)
                             _FeedbackStateCard(
@@ -1020,13 +1027,12 @@ class _FeedbackComposePageState extends State<FeedbackComposePage> {
                           onPressed: _isSubmitting ? null : _submit,
                           icon:
                               _isSubmitting
-                                  ? const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
+                                  ? AppProgressIndicator(
+                                    size: 16,
+                                    strokeWidth: 2,
+                                    color:
+                                        Theme.of(context).colorScheme.onPrimary,
+                                    semanticLabel: '提交反馈中',
                                   )
                                   : const Icon(Icons.send_rounded),
                           label: AppAnimatedSwitcher(

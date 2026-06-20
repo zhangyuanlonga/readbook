@@ -1,3 +1,6 @@
+// UI-GOV-EXEMPT-FILE: scaffold list-children layout-builder
+// reason: Phase 10 reviewed this profile page shell; the short static list and pure layout builder are intentional.
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -10,6 +13,7 @@ import '../../../app/layout/app_layout.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/foundation/app_feedback.dart';
+import '../../../app/widgets/foundation/app_progress.dart';
 import '../../../app/widgets/foundation/app_refresh_indicator.dart';
 import '../../../core/auth/auth_event_bus.dart';
 import '../../../core/auth/auth_service.dart';
@@ -396,7 +400,7 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
         AppFadeSlideTransition(
           child: const Center(
             key: ValueKey('user_profile_loading'),
-            child: CircularProgressIndicator(),
+            child: AppProgressIndicator(semanticLabel: '加载用户资料'),
           ),
         ),
       ];
@@ -556,10 +560,10 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
                     onPressed: _isClearingCache ? null : _handleClearCache,
                     icon:
                         _isClearingCache
-                            ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ? const AppProgressIndicator(
+                              size: 16,
+                              strokeWidth: 2,
+                              semanticLabel: '清除缓存',
                             )
                             : const Icon(Icons.cleaning_services_outlined),
                     label: Text(_isClearingCache ? '清除中...' : '清除缓存'),
@@ -568,13 +572,11 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
                     onPressed: _isLoggingOut ? null : _handleLogout,
                     icon:
                         _isLoggingOut
-                            ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
+                            ? AppProgressIndicator(
+                              size: 16,
+                              strokeWidth: 2,
+                              color: Theme.of(context).colorScheme.onPrimary,
+                              semanticLabel: '退出登录',
                             )
                             : const Icon(Icons.logout_rounded),
                     label: Text(_isLoggingOut ? '退出中...' : '退出登录'),
@@ -605,10 +607,7 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
                         ],
                       ),
                       SizedBox(height: metrics.contentGap),
-                      SizedBox(
-                        width: double.infinity,
-                        child: logoutButton,
-                      ),
+                      SizedBox(width: double.infinity, child: logoutButton),
                     ],
                   );
                 },

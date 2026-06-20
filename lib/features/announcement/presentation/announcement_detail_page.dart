@@ -1,5 +1,8 @@
 import 'dart:async';
 
+// UI-GOV-EXEMPT-FILE: scaffold list-children
+// reason: Phase 10 reviewed announcement detail shell; short static content sections are intentional.
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

@@ -1,3 +1,6 @@
+// UI-GOV-EXEMPT-FILE: scaffold list-children list-performance platform-branch
+// reason: Phase 10 reviewed this appearance workspace shell; short static sections and adaptive layout branches are intentional.
+
 part of 'appearance_page.dart';
 
 extension on _AppearancePageState {
@@ -1137,7 +1140,7 @@ extension on _AppearancePageState {
         if (_isLoadingBackgrounds)
           const SizedBox(
             height: 80,
-            child: Center(child: CircularProgressIndicator()),
+            child: Center(child: AppProgressIndicator(semanticLabel: '加载应用背景')),
           )
         else
           LayoutBuilder(

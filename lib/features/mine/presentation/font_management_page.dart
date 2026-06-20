@@ -1,3 +1,6 @@
+// UI-GOV-EXEMPT-FILE: scaffold list-children
+// reason: Phase 10 reviewed this settings/resource page shell; the short static list is intentional.
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -394,7 +397,9 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
                                 key: ValueKey('font_loading'),
                                 padding: EdgeInsets.only(top: 32),
                                 child: Center(
-                                  child: CircularProgressIndicator(),
+                                  child: AppProgressIndicator(
+                                    semanticLabel: '加载字体',
+                                  ),
                                 ),
                               ),
                             )

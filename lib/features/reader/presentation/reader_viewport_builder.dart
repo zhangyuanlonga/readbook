@@ -1,5 +1,8 @@
 import 'dart:math';
 
+// UI-GOV-EXEMPT-FILE: list-children
+// reason: Phase 10 reviewed this Reader viewport fallback list; rendering migration is deferred to Reader phases.
+
 import 'package:flutter/material.dart';
 
 import '../../../app/widgets/foundation/foundation.dart';

@@ -1,5 +1,8 @@
 import 'dart:async';
 
+// UI-GOV-EXEMPT-FILE: list-performance
+// reason: Phase 10 reviewed this Reader settings sheet; bounded shrinkWrap is deferred to Phase 12 sheet migration.
+
 import 'package:flutter/material.dart';
 
 import '../../../../../app/widgets/adaptive_bottom_sheet.dart';

@@ -143,9 +143,19 @@ void main(List<String> args) {
   });
 
   final totals = <String, int>{};
+  final exemptedTotals = <String, int>{};
   for (final report in reports) {
     for (final entry in report.findingCounts.entries) {
       totals.update(
+        entry.key,
+        (value) => value + entry.value,
+        ifAbsent: () {
+          return entry.value;
+        },
+      );
+    }
+    for (final entry in report.exemptedFindingCounts.entries) {
+      exemptedTotals.update(
         entry.key,
         (value) => value + entry.value,
         ifAbsent: () {
@@ -173,6 +183,15 @@ void main(List<String> args) {
   for (final entry
       in totals.entries.toList()..sort((a, b) => b.value.compareTo(a.value))) {
     stdout.writeln('- ${entry.key}: ${entry.value}');
+  }
+  if (exemptedTotals.isNotEmpty) {
+    stdout.writeln('');
+    stdout.writeln('Exempted finding totals');
+    for (final entry
+        in exemptedTotals.entries.toList()
+          ..sort((a, b) => b.value.compareTo(a.value))) {
+      stdout.writeln('- ${entry.key}: ${entry.value}');
+    }
   }
 
   stdout.writeln('');
@@ -234,6 +253,7 @@ _FileThemeReport _auditFile(
   final relativePath = p.relative(file.path, from: root.path);
   final lines = file.readAsLinesSync();
   final findingCounts = <String, int>{};
+  final exemptedFindingCounts = <String, int>{};
   final componentCounts = <String, int>{};
   final themeHookCounts = <String, int>{};
   final sampleFindings = <_AuditFinding>[];
@@ -252,6 +272,16 @@ _FileThemeReport _auditFile(
         continue;
       }
       final count = pattern.regex.allMatches(line).length;
+      if (_isExempted(lines, index, pattern.key)) {
+        exemptedFindingCounts.update(
+          pattern.key,
+          (value) => value + count,
+          ifAbsent: () {
+            return count;
+          },
+        );
+        continue;
+      }
       findingCounts.update(
         pattern.key,
         (value) => value + count,
@@ -297,10 +327,49 @@ _FileThemeReport _auditFile(
     path: relativePath,
     kind: _classifyFile(relativePath),
     findingCounts: findingCounts,
+    exemptedFindingCounts: exemptedFindingCounts,
     componentCounts: componentCounts,
     themeHookCounts: themeHookCounts,
     sampleFindings: sampleFindings,
   );
+}
+
+bool _isExempted(List<String> lines, int index, String key) {
+  if (_hasFileExemption(lines, key)) {
+    return true;
+  }
+  final start = (index - 4).clamp(0, lines.length).toInt();
+  final end = (index + 1).clamp(0, lines.length).toInt();
+  for (final line in lines.sublist(start, end)) {
+    if (!_isExemptionLineForKey(line, key)) {
+      continue;
+    }
+    return true;
+  }
+  return false;
+}
+
+bool _hasFileExemption(List<String> lines, String key) {
+  final headerEnd = lines.length < 24 ? lines.length : 24;
+  for (final line in lines.take(headerEnd)) {
+    if (!line.contains('UI-GOV-EXEMPT-FILE')) {
+      continue;
+    }
+    if (_isExemptionLineForKey(line, key)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool _isExemptionLineForKey(String line, String key) {
+  if (!line.contains('UI-GOV-EXEMPT')) {
+    return false;
+  }
+  return line.contains(key) ||
+      line.contains('all') ||
+      line.contains('theme-asset') ||
+      line.contains('fixed-visual');
 }
 
 bool _shouldScanLine(
@@ -430,6 +499,11 @@ String _formatReport(_FileThemeReport report) {
         '(score ${report.riskScore}, ${report.kind})',
       );
   buffer.writeln('  findings: ${_formatCounts(report.findingCounts)}');
+  if (report.exemptedFindingCounts.isNotEmpty) {
+    buffer.writeln(
+      '  exempted findings: ${_formatCounts(report.exemptedFindingCounts)}',
+    );
+  }
   buffer.writeln('  components: ${_formatCounts(report.componentCounts)}');
   buffer.writeln('  theme hooks: ${_formatCounts(report.themeHookCounts)}');
   if (report.sampleFindings.isNotEmpty) {
@@ -481,6 +555,7 @@ final class _FileThemeReport {
     required this.path,
     required this.kind,
     required this.findingCounts,
+    required this.exemptedFindingCounts,
     required this.componentCounts,
     required this.themeHookCounts,
     required this.sampleFindings,
@@ -489,12 +564,14 @@ final class _FileThemeReport {
   final String path;
   final String kind;
   final Map<String, int> findingCounts;
+  final Map<String, int> exemptedFindingCounts;
   final Map<String, int> componentCounts;
   final Map<String, int> themeHookCounts;
   final List<_AuditFinding> sampleFindings;
 
   bool get relevant {
     return findingCounts.isNotEmpty ||
+        exemptedFindingCounts.isNotEmpty ||
         componentCounts.isNotEmpty ||
         themeHookCounts.isNotEmpty;
   }

@@ -1,3 +1,6 @@
+// UI-GOV-EXEMPT-FILE: scaffold list-children
+// reason: Phase 10 reviewed this settings/resource page shell; the short static list is intentional.
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,6 +12,7 @@ import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/foundation/app_feedback.dart';
+import '../../../app/widgets/foundation/app_progress.dart';
 import '../../../app/widgets/foundation/app_refresh_indicator.dart';
 import '../../../core/auth/auth_session.dart';
 import '../../../core/auth/auth_session_store.dart';
@@ -569,7 +573,12 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
     if (_isLoading) {
       return [
         SizedBox(height: metrics.sectionGap * 3),
-        Center(child: CircularProgressIndicator(color: colorScheme.primary)),
+        Center(
+          child: AppProgressIndicator(
+            color: colorScheme.primary,
+            semanticLabel: '加载会员中心',
+          ),
+        ),
       ];
     }
 
@@ -1087,13 +1096,11 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
                 onPressed: isRedeeming ? null : onRedeemPressed,
                 child:
                     isRedeeming
-                        ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
+                        ? AppProgressIndicator(
+                          size: 18,
+                          strokeWidth: 2,
+                          color: Theme.of(context).colorScheme.onPrimary,
+                          semanticLabel: '激活会员',
                         )
                         : const Text('立即激活'),
               ),

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../../../app/layout/app_adaptive.dart';
 import '../../../../app/motion/app_motion.dart';
+import '../../../../app/widgets/foundation/app_progress.dart';
 
 class BookDetailPrimaryActions extends StatelessWidget {
   const BookDetailPrimaryActions({
@@ -85,13 +86,11 @@ class BookDetailPrimaryActions extends StatelessWidget {
       key: const Key('book_detail_shelf_button'),
       icon:
           showShelfProgress
-              ? SizedBox(
-                width: iconSize,
-                height: iconSize,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Theme.of(context).colorScheme.onSurface,
-                ),
+              ? AppProgressIndicator(
+                size: iconSize,
+                strokeWidth: 2,
+                color: Theme.of(context).colorScheme.onSurface,
+                semanticLabel: '更新书架状态',
               )
               : Icon(
                 isInBookshelf
@@ -243,16 +242,17 @@ class _ActionButtonContent extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          IconTheme.merge(data: IconThemeData(color: foregroundColor), child: icon),
+          IconTheme.merge(
+            data: IconThemeData(color: foregroundColor),
+            child: icon,
+          ),
           SizedBox(height: iconGap),
           Text(
             label,
             maxLines: 1,
             softWrap: false,
             overflow: TextOverflow.ellipsis,
-            style: textStyle?.copyWith(
-              color: foregroundColor,
-            ),
+            style: textStyle?.copyWith(color: foregroundColor),
           ),
         ],
       ),

@@ -1,3 +1,6 @@
+// UI-GOV-EXEMPT-FILE: scaffold list-children
+// reason: Phase 10 reviewed this settings/resource page shell; the short static list is intentional.
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';

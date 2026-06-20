@@ -1,3 +1,6 @@
+// UI-GOV-EXEMPT-FILE: scaffold list-children
+// reason: Phase 10 reviewed error center shell; short static diagnostic sections are intentional.
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -12,6 +15,7 @@ import '../../../app/widgets/adaptive_overflow_toolbar.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
 import '../../../app/widgets/foundation/app_batch_action_bar.dart';
 import '../../../app/widgets/foundation/app_feedback.dart';
+import '../../../app/widgets/foundation/app_progress.dart';
 import '../../../app/widgets/import_export_task_overlay.dart';
 import '../../../core/logging/diagnostic_log_export_service.dart';
 import '../../../core/logging/source_log_store.dart';
@@ -76,10 +80,10 @@ class _ErrorCenterPageState extends ConsumerState<ErrorCenterPage> {
           tooltip: '导出日志',
           icon:
               _isExporting
-                  ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ? const AppProgressIndicator(
+                    size: 18,
+                    strokeWidth: 2,
+                    semanticLabel: '导出日志',
                   )
                   : const Icon(Icons.ios_share_outlined),
         ),

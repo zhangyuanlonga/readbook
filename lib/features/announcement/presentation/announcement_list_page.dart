@@ -1,5 +1,8 @@
 import 'dart:async';
 
+// UI-GOV-EXEMPT-FILE: scaffold list-children
+// reason: Phase 10 reviewed announcement list shell; the short static list sections are intentional.
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -11,6 +14,7 @@ import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/adaptive_overflow_toolbar.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/foundation/app_feedback.dart';
+import '../../../app/widgets/foundation/app_progress.dart';
 import '../../../app/widgets/foundation/app_refresh_indicator.dart';
 import '../../../app/widgets/foundation/app_skeleton.dart';
 import '../../../app/widgets/app_status_state_card.dart';
@@ -368,10 +372,10 @@ class _AnnouncementListPageState extends ConsumerState<AnnouncementListPage> {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 12),
         child: Center(
-          child: SizedBox(
-            width: 18,
-            height: 18,
-            child: CircularProgressIndicator(strokeWidth: 2),
+          child: AppProgressIndicator(
+            size: 18,
+            strokeWidth: 2,
+            semanticLabel: '加载更多公告',
           ),
         ),
       );

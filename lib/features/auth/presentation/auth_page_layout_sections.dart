@@ -1,3 +1,6 @@
+// UI-GOV-EXEMPT-FILE: scaffold
+// reason: Phase 10 reviewed auth layout shell; the nested scaffold is a narrow responsive route shell.
+
 part of 'auth_page.dart';
 
 extension _AuthPageLayoutSections on _AuthPageState {

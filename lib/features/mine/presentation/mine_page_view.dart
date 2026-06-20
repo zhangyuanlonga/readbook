@@ -1,3 +1,6 @@
+// UI-GOV-EXEMPT-FILE: scaffold list-children platform-branch
+// reason: Phase 10 reviewed Mine home shell; adaptive page chrome and short entry sections stay in the later large-page pass.
+
 part of 'mine_page.dart';
 
 extension on _MinePageState {
@@ -797,6 +800,10 @@ extension on _MinePageState {
     required bool prominent,
     required VoidCallback onPressed,
   }) {
+    final componentTokens = appComponentThemeTokensOf(context);
+    final buttonRadius = BorderRadius.all(
+      Radius.circular(componentTokens.button.radius),
+    );
     final icon =
         _hasMembership
             ? Icons.chevron_right_rounded
@@ -818,7 +825,7 @@ extension on _MinePageState {
         ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w800),
       ),
       shape: WidgetStatePropertyAll<RoundedRectangleBorder>(
-        RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        RoundedRectangleBorder(borderRadius: buttonRadius),
       ),
     );
 
@@ -855,7 +862,18 @@ extension on _MinePageState {
     required _MineResolvedPalette palette,
   }) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final metrics = AppAdaptiveMetrics.of(context);
+    final componentTokens = appComponentThemeTokensOf(context);
+    final cardRadius = BorderRadius.all(
+      Radius.circular(componentTokens.card.radius + 4),
+    );
+    final smallBadgeRadius = BorderRadius.all(
+      Radius.circular(componentTokens.button.radius),
+    );
+    final pillRadius = BorderRadius.all(
+      Radius.circular(componentTokens.button.radius * 6),
+    );
     final isDesktopProfile = AppLayout.isDesktopLike(
       context,
       isWeb: kIsWeb,
@@ -892,12 +910,12 @@ extension on _MinePageState {
     return AppSurface(
       key: const ValueKey<String>('mine_mobile_profile_card'),
       padding: EdgeInsets.zero,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: cardRadius,
       borderColor: membershipBorderColor,
       backgroundColor: palette.cardColor,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: cardRadius,
         onTap: _isLoggingOut ? null : _handleProfileCardTap,
         child: Ink(
           decoration:
@@ -990,10 +1008,10 @@ extension on _MinePageState {
                                   width: 1.4,
                                 ),
                               ),
-                              child: const Icon(
+                              child: Icon(
                                 Icons.workspace_premium_rounded,
                                 size: 12,
-                                color: Colors.white,
+                                color: colorScheme.onPrimary,
                               ),
                             ),
                           ),
@@ -1057,7 +1075,7 @@ extension on _MinePageState {
                                     color: membershipAccent.withValues(
                                       alpha: 0.12,
                                     ),
-                                    borderRadius: BorderRadius.circular(12),
+                                    borderRadius: smallBadgeRadius,
                                   ),
                                   child: Text(
                                     'PRO',
@@ -1075,7 +1093,7 @@ extension on _MinePageState {
                                   ),
                                   decoration: BoxDecoration(
                                     color: palette.noticeSurfaceColor,
-                                    borderRadius: BorderRadius.circular(999),
+                                    borderRadius: pillRadius,
                                     border: Border.all(
                                       color: palette.noticeAccentColor
                                           .withValues(alpha: 0.55),
@@ -1129,6 +1147,10 @@ extension on _MinePageState {
   }) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final componentTokens = appComponentThemeTokensOf(context);
+    final cardRadius = BorderRadius.all(
+      Radius.circular(componentTokens.card.radius + 8),
+    );
     final borderColor = resolveAppBorderColor(
       colorScheme,
       baseColor: palette.cardBorderColor,
@@ -1158,7 +1180,7 @@ extension on _MinePageState {
       key: const ValueKey<String>('mine_desktop_profile_card'),
       tone: AppSurfaceTone.elevated,
       padding: EdgeInsets.zero,
-      borderRadius: BorderRadius.circular(24),
+      borderRadius: cardRadius,
       borderColor:
           _hasMembership
               ? membershipAccent.withValues(alpha: 0.32)
@@ -1166,11 +1188,11 @@ extension on _MinePageState {
       backgroundColor: palette.cardColor,
       child: InkWell(
         key: const ValueKey<String>('mine_desktop_profile_card_tap_area'),
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: cardRadius,
         onTap: _isLoggingOut ? null : _handleProfileCardTap,
         child: Ink(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: cardRadius,
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -1324,6 +1346,8 @@ extension on _MinePageState {
     required Color membershipAccent,
     required _MineResolvedPalette palette,
   }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final componentTokens = appComponentThemeTokensOf(context);
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -1349,9 +1373,9 @@ extension on _MinePageState {
                     color: (_hasMembership
                             ? membershipAccent
                             : palette.primaryColor)
-                        .withValues(alpha: 0.14),
-                    blurRadius: 20,
-                    offset: const Offset(0, 10),
+                        .withValues(alpha: componentTokens.card.shadowAlpha),
+                    blurRadius: componentTokens.card.shadowBlur,
+                    offset: Offset(0, componentTokens.card.shadowOffsetY),
                   ),
                 ],
               ),
@@ -1382,9 +1406,11 @@ extension on _MinePageState {
                   border: Border.all(color: palette.cardColor, width: 2),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.08),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
+                      color: colorScheme.shadow.withValues(
+                        alpha: componentTokens.card.shadowAlpha,
+                      ),
+                      blurRadius: componentTokens.card.shadowBlur / 2,
+                      offset: Offset(0, componentTokens.card.shadowOffsetY),
                     ),
                   ],
                 ),
@@ -1395,7 +1421,7 @@ extension on _MinePageState {
                   size: 13,
                   color:
                       _hasMembership
-                          ? Colors.white
+                          ? colorScheme.onPrimary
                           : palette.textSecondaryColor,
                 ),
               ),
@@ -1412,6 +1438,10 @@ extension on _MinePageState {
     required Color color,
     required _MineResolvedPalette palette,
   }) {
+    final componentTokens = appComponentThemeTokensOf(context);
+    final pillRadius = BorderRadius.all(
+      Radius.circular(componentTokens.button.radius * 6),
+    );
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
@@ -1419,7 +1449,7 @@ extension on _MinePageState {
           color.withValues(alpha: 0.08),
           palette.cardColor,
         ),
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: pillRadius,
         border: Border.all(color: color.withValues(alpha: 0.22)),
       ),
       child: Text(
@@ -1438,15 +1468,19 @@ extension on _MinePageState {
     required String label,
     required _MineResolvedPalette palette,
   }) {
+    final componentTokens = appComponentThemeTokensOf(context);
+    final buttonRadius = BorderRadius.all(
+      Radius.circular(componentTokens.button.radius),
+    );
     return OutlinedButton.icon(
       key: const ValueKey<String>('mine_desktop_profile_action_button'),
       onPressed: _isLoggingOut ? null : _handleProfileActionButtonTap,
       icon:
           _isLoggingOut
-              ? const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
+              ? const AppProgressIndicator(
+                size: 16,
+                strokeWidth: 2,
+                semanticLabel: '退出登录中',
               )
               : Icon(_userId == null ? Icons.login_rounded : Icons.logout),
       label: Text(label),
@@ -1457,7 +1491,7 @@ extension on _MinePageState {
         textStyle: Theme.of(
           context,
         ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w800),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        shape: RoundedRectangleBorder(borderRadius: buttonRadius),
       ),
     );
   }

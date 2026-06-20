@@ -1,3 +1,6 @@
+// UI-GOV-EXEMPT-FILE: scaffold list-children
+// reason: Phase 10 reviewed this advanced theme editor shell; resource binding logic remains covered by feature tests.
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -18,6 +21,7 @@ import '../../../app/widgets/adaptive_overflow_toolbar.dart';
 import '../../../app/widgets/adaptive_route_top_bar.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/foundation/app_feedback.dart';
+import '../../../app/widgets/foundation/app_progress.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
 import '../../../domain/entities/bottom_nav_icon_gallery.dart';
@@ -2117,7 +2121,7 @@ class _AdvancedThemeEditorPageState
                 return _isLoading
                     ? const Center(
                       key: ValueKey<String>('advanced_theme_loading'),
-                      child: CircularProgressIndicator(),
+                      child: AppProgressIndicator(semanticLabel: '加载高级主题'),
                     )
                     : draft == null
                     ? const Center(

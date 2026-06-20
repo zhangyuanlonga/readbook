@@ -1,5 +1,8 @@
 import 'dart:async';
 
+// UI-GOV-EXEMPT-FILE: scaffold
+// reason: Phase 10 reviewed discover shell; custom scaffold preserves existing route chrome.
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:circular_theme_reveal/circular_theme_reveal.dart';
@@ -11,6 +14,7 @@ import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
+import '../../../app/widgets/foundation/app_progress.dart';
 import '../../../app/widgets/foundation/app_refresh_indicator.dart';
 import '../../../app/widgets/foundation/app_skeleton.dart';
 import '../../../core/network/api_client.dart';
@@ -651,13 +655,11 @@ class _LoadMoreFooter extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: colorScheme.primary,
-                ),
+              AppProgressIndicator(
+                size: 16,
+                strokeWidth: 2,
+                color: colorScheme.primary,
+                semanticLabel: '加载更多书源',
               ),
               const SizedBox(width: 8),
               Text('正在加载更多书源...', style: textStyle),

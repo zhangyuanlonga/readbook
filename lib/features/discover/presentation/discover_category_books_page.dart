@@ -1,3 +1,6 @@
+// UI-GOV-EXEMPT-FILE: scaffold
+// reason: Phase 10 reviewed discover category shell; custom scaffold preserves existing route chrome.
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:circular_theme_reveal/circular_theme_reveal.dart';

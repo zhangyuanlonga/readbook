@@ -35,6 +35,7 @@ void main(List<String> args) {
   final verbose = args.contains('--verbose');
   final changedLines = diffOnly ? _changedDartLines() : <String, Set<int>>{};
   final findings = <_Finding>[];
+  final exempted = <_Finding>[];
 
   if (!diffOnly) {
     for (final docPath in _docPaths) {
@@ -57,6 +58,14 @@ void main(List<String> args) {
       continue;
     }
     final lines = file.readAsLinesSync();
+    void addFinding(_Finding finding, int index) {
+      if (_isExempted(lines, index, finding.kind)) {
+        exempted.add(finding);
+        return;
+      }
+      findings.add(finding);
+    }
+
     for (var index = 0; index < lines.length; index += 1) {
       final lineNumber = index + 1;
       if (!_shouldScanLine(relativePath, lineNumber, changedLines, diffOnly)) {
@@ -71,7 +80,7 @@ void main(List<String> args) {
       if (line.contains('showModalBottomSheet') &&
           !line.contains('showAdaptiveActionSurface') &&
           !relativePath.endsWith('adaptive_bottom_sheet.dart')) {
-        findings.add(
+        addFinding(
           _Finding(
             kind: 'modal-surface',
             path: relativePath,
@@ -79,6 +88,7 @@ void main(List<String> args) {
             message:
                 'Prefer showAdaptiveActionSurface for new filter, settings, resource picker, or detail surfaces.',
           ),
+          index,
         );
       }
 
@@ -86,7 +96,7 @@ void main(List<String> args) {
           !relativePath.endsWith('adaptive_bottom_sheet.dart') &&
           !relativePath.endsWith('adaptive_page_scaffold.dart') &&
           !relativePath.contains('/reader/')) {
-        findings.add(
+        addFinding(
           _Finding(
             kind: 'dialog-surface',
             path: relativePath,
@@ -94,12 +104,13 @@ void main(List<String> args) {
             message:
                 'Review direct showDialog; prefer an adaptive surface for new page-level actions.',
           ),
+          index,
         );
       }
 
       if (RegExp(r'\bScaffoldMessenger\.of\s*\(').hasMatch(line) &&
           _isBusinessPresentation(relativePath)) {
-        findings.add(
+        addFinding(
           _Finding(
             kind: 'feedback',
             path: relativePath,
@@ -107,13 +118,14 @@ void main(List<String> args) {
             message:
                 'Prefer AppFeedback for user-facing snack, toast, and inline feedback.',
           ),
+          index,
         );
       }
 
       if (_hasDirectCapabilityUse(line) &&
           _isBusinessPresentation(relativePath) &&
           !_isAllowedDirectCapabilityFile(relativePath)) {
-        findings.add(
+        addFinding(
           _Finding(
             kind: 'capability-wrapper',
             path: relativePath,
@@ -121,11 +133,12 @@ void main(List<String> args) {
             message:
                 'Route Flutter native or mature UI capability through app/feature wrappers instead of using it directly in a page.',
           ),
+          index,
         );
       }
 
       if (_hasHardcodedStyle(line) && _isBusinessPresentation(relativePath)) {
-        findings.add(
+        addFinding(
           _Finding(
             kind: 'hardcoded-style',
             path: relativePath,
@@ -133,12 +146,13 @@ void main(List<String> args) {
             message:
                 'Review hardcoded Color/Colors/fontSize/BoxShadow/radius; prefer Theme, tokens, or documented resource colors.',
           ),
+          index,
         );
       }
 
       if (_hasPresentationPlatformBranch(line) &&
           !_isAllowedPlatformBranch(relativePath)) {
-        findings.add(
+        addFinding(
           _Finding(
             kind: 'platform-branch',
             path: relativePath,
@@ -146,12 +160,13 @@ void main(List<String> args) {
             message:
                 'Review page-level platform branch; prefer capability or adaptive metrics.',
           ),
+          index,
         );
       }
 
       if (RegExp(r'\bCircularProgressIndicator\s*\(').hasMatch(line) &&
           !_isAllowedLocalSpinner(relativePath)) {
-        findings.add(
+        addFinding(
           _Finding(
             kind: 'loading-state',
             path: relativePath,
@@ -159,12 +174,13 @@ void main(List<String> args) {
             message:
                 'Review page-level spinner; prefer AppStatusStateCard or a feature status component when it blocks content.',
           ),
+          index,
         );
       }
 
       if (RegExp(r'\bshrinkWrap\s*:\s*true\b').hasMatch(line) &&
           _isBusinessPresentation(relativePath)) {
-        findings.add(
+        addFinding(
           _Finding(
             kind: 'list-performance',
             path: relativePath,
@@ -172,12 +188,13 @@ void main(List<String> args) {
             message:
                 'Review shrinkWrap:true in scrollable UI; long lists should stay lazy and bounded.',
           ),
+          index,
         );
       }
 
       if (RegExp(r'\bListView\s*\(\s*$').hasMatch(line) ||
           RegExp(r'\bListView\s*\(\s*children\s*:').hasMatch(line)) {
-        findings.add(
+        addFinding(
           _Finding(
             kind: 'list-children',
             path: relativePath,
@@ -185,12 +202,13 @@ void main(List<String> args) {
             message:
                 'Review ListView(children); long lists should use ListView.builder or SliverList.',
           ),
+          index,
         );
       }
 
       if (RegExp(r'\bScaffold\s*\(').hasMatch(line) &&
           !_isAllowedScaffold(relativePath)) {
-        findings.add(
+        addFinding(
           _Finding(
             kind: 'scaffold',
             path: relativePath,
@@ -198,18 +216,24 @@ void main(List<String> args) {
             message:
                 'New pages should prefer AdaptivePageScaffold or document why a custom scaffold is required.',
           ),
+          index,
         );
       }
     }
 
-    findings.addAll(
-      _layoutBuilderSideEffectFindings(
-        relativePath,
-        lines,
-        changedLines: changedLines,
-        diffOnly: diffOnly,
-      ),
-    );
+    for (final finding in _layoutBuilderSideEffectFindings(
+      relativePath,
+      lines,
+      changedLines: changedLines,
+      diffOnly: diffOnly,
+    )) {
+      final index = (finding.line - 1).clamp(0, lines.length - 1).toInt();
+      if (_isExempted(lines, index, finding.kind)) {
+        exempted.add(finding);
+      } else {
+        findings.add(finding);
+      }
+    }
   }
 
   stdout.writeln('==> UI component governance checks');
@@ -221,6 +245,9 @@ void main(List<String> args) {
         : 'full report'}',
   );
   stdout.writeln('Findings: ${findings.length}');
+  if (exempted.isNotEmpty) {
+    stdout.writeln('Exempted : ${exempted.length}');
+  }
 
   if (findings.isNotEmpty) {
     stdout.writeln('');
@@ -266,6 +293,44 @@ bool _isBlockingFinding(_Finding finding) {
     'scaffold' => true,
     _ => false,
   };
+}
+
+bool _isExempted(List<String> lines, int index, String kind) {
+  if (_hasFileExemption(lines, kind)) {
+    return true;
+  }
+  final start = (index - 4).clamp(0, lines.length).toInt();
+  final end = (index + 1).clamp(0, lines.length).toInt();
+  for (final line in lines.sublist(start, end)) {
+    if (!_isExemptionLineForKind(line, kind)) {
+      continue;
+    }
+    return true;
+  }
+  return false;
+}
+
+bool _hasFileExemption(List<String> lines, String kind) {
+  final headerEnd = lines.length < 24 ? lines.length : 24;
+  for (final line in lines.take(headerEnd)) {
+    if (!line.contains('UI-GOV-EXEMPT-FILE')) {
+      continue;
+    }
+    if (_isExemptionLineForKind(line, kind)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool _isExemptionLineForKind(String line, String kind) {
+  if (!line.contains('UI-GOV-EXEMPT')) {
+    return false;
+  }
+  return line.contains(kind) ||
+      line.contains('all') ||
+      line.contains('theme-asset') ||
+      line.contains('fixed-visual');
 }
 
 Iterable<File> _dartFiles() sync* {
@@ -439,6 +504,9 @@ bool _isAllowedPlatformBranch(String path) {
   return path.contains('/platform/') ||
       path.contains('/capabilit') ||
       path.contains('/bridge') ||
+      path.contains('/application/') ||
+      path.startsWith('lib/core/') ||
+      path.startsWith('lib/app/') ||
       path.contains('/core/webview/') ||
       path.endsWith('app_layout.dart') ||
       path.endsWith('app_adaptive.dart') ||

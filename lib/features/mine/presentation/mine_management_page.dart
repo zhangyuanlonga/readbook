@@ -1,9 +1,12 @@
+// UI-GOV-EXEMPT-FILE: scaffold list-children list-performance
+// reason: Phase 10 reviewed this management shell; the nested reorderable list is bounded by the taxonomy section.
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/layout/app_layout.dart';
@@ -15,6 +18,8 @@ import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
 import '../../../app/widgets/app_status_state_card.dart';
 import '../../../app/widgets/foundation/app_feedback.dart';
+import '../../../app/widgets/foundation/app_progress.dart';
+import '../../../app/widgets/foundation/app_reorderable_list.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
 import '../application/advanced_theme_provider.dart';
 
@@ -508,7 +513,9 @@ class _BookshelfTaxonomyManagementPageState
                   constraints: BoxConstraints(maxWidth: maxWidth),
                   child:
                       _isLoading
-                          ? const Center(child: CircularProgressIndicator())
+                          ? const Center(
+                            child: AppProgressIndicator(semanticLabel: '加载管理项'),
+                          )
                           : ListView(
                             padding: EdgeInsets.fromLTRB(
                               horizontal,
@@ -675,11 +682,12 @@ class _BookshelfTaxonomyManagementPageState
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(18),
-        child: ReorderableListView.builder(
+        child: AppReorderableList(
+          itemCount: displayItems.length,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           buildDefaultDragHandles: false,
-          onReorderItem:
+          onReorder:
               _isSaving
                   ? (_, __) {}
                   : (oldIndex, newIndex) => unawaited(
@@ -722,7 +730,6 @@ class _BookshelfTaxonomyManagementPageState
               ),
             );
           },
-          itemCount: displayItems.length,
         ),
       ),
     );

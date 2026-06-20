@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../app/widgets/app_empty_state_card.dart';
+import '../../../../app/widgets/foundation/app_progress.dart';
 
 class OnlineSearchGateCard extends StatelessWidget {
   const OnlineSearchGateCard({
@@ -19,13 +20,11 @@ class OnlineSearchGateCard extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     if (isChecking) {
       return Center(
-        child: SizedBox(
-          width: 28,
-          height: 28,
-          child: CircularProgressIndicator(
-            strokeWidth: 2.4,
-            color: colorScheme.primary,
-          ),
+        child: AppProgressIndicator(
+          size: 28,
+          strokeWidth: 2.4,
+          color: colorScheme.primary,
+          semanticLabel: '检查在线搜索状态',
         ),
       );
     }

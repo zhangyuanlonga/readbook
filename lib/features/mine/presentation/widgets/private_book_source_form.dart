@@ -1,3 +1,6 @@
+// UI-GOV-EXEMPT-FILE: list-performance layout-builder
+// reason: Phase 10 reviewed this form; shrinkWrap and LayoutBuilder are bounded form-layout helpers.
+
 import 'dart:async';
 
 import 'package:dio/dio.dart';
@@ -273,11 +276,10 @@ class PrivateBookSourceFormState extends ConsumerState<PrivateBookSourceForm> {
                       ),
                       icon:
                           _saving
-                              ? const SizedBox.square(
-                                dimension: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
+                              ? const AppProgressIndicator(
+                                size: 18,
+                                strokeWidth: 2,
+                                semanticLabel: '保存私人书源',
                               )
                               : const Icon(Icons.check_rounded),
                     ),

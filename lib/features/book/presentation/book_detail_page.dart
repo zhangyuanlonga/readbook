@@ -1907,9 +1907,10 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
                 onPressed: _isSavingMetadata ? null : () => unawaited(onSave()),
                 icon:
                     _isSavingMetadata
-                        ? const SizedBox.square(
-                          dimension: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ? const AppProgressIndicator(
+                          size: 16,
+                          strokeWidth: 2,
+                          semanticLabel: '保存图书信息',
                         )
                         : const Icon(Icons.save_outlined, size: 18),
                 label: Text(_isSavingMetadata ? '保存中' : '保存'),
@@ -2193,7 +2194,7 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
       return;
     }
     _lastReadActionAt = now;
-    unawaited(HapticFeedback.lightImpact());
+    unawaited(AppHaptics.success());
 
     if (chapter != null) {
       _openChapter(chapter);

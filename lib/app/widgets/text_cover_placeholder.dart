@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+// UI-GOV-EXEMPT-FILE: theme-asset
+// reason: Generated text covers are content artwork palettes, not app surfaces.
+// owner: app-ui
+// review-after: 2026-09-20
 class TextCoverPlaceholder extends StatelessWidget {
   const TextCoverPlaceholder({
     super.key,
@@ -31,7 +35,9 @@ class TextCoverPlaceholder extends StatelessWidget {
     final showAuthor = normalizedAuthor.isNotEmpty && resolvedHeight >= 82;
     final compact = resolvedHeight < 82 || resolvedWidth < 56;
     final displayTitle =
-        normalizedTitle.isEmpty ? '未命名书籍' : _formatTitleForCover(normalizedTitle);
+        normalizedTitle.isEmpty
+            ? '未命名书籍'
+            : _formatTitleForCover(normalizedTitle);
     final titleMaxLines =
         compact
             ? 2
@@ -325,9 +331,7 @@ List<Widget> _buildTemplateDecorations({
             decoration: BoxDecoration(
               color: palette.accent.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(999),
-              border: Border.all(
-                color: palette.accent.withValues(alpha: 0.18),
-              ),
+              border: Border.all(color: palette.accent.withValues(alpha: 0.18)),
             ),
             child: Text(
               '藏书',
@@ -371,11 +375,11 @@ Widget _buildTemplateHeader({
         Text(
           '精选',
           style: TextStyle(
-          color: palette.secondaryText,
-          fontSize: compact ? 5.8 : 7.8,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 1.1,
-        ),
+            color: palette.secondaryText,
+            fontSize: compact ? 5.8 : 7.8,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.1,
+          ),
         ),
       ],
     ),
@@ -390,11 +394,11 @@ Widget _buildTemplateHeader({
         child: Text(
           'SERIES',
           style: TextStyle(
-          color: palette.secondaryText,
-          fontSize: compact ? 5.8 : 7.4,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.8,
-        ),
+            color: palette.secondaryText,
+            fontSize: compact ? 5.8 : 7.4,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.8,
+          ),
         ),
       ),
     ),

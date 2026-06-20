@@ -2963,7 +2963,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       openingOrBusy: !_isSelectionMode && (isOpening || _isBatchDeleting),
       onTapDown: () {
         _setPressedBookKey(bookKey);
-        unawaited(HapticFeedback.lightImpact());
+        unawaited(AppHaptics.success());
       },
       onTapCancel: () => _setPressedBookKey(null),
       onTapUp: () => _setPressedBookKey(null),
@@ -3366,7 +3366,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       openingOrBusy: !_isSelectionMode && (isOpening || _isBatchDeleting),
       onTapDown: () {
         _setPressedBookKey(bookKey);
-        unawaited(HapticFeedback.lightImpact());
+        unawaited(AppHaptics.success());
       },
       onTapCancel: () => _setPressedBookKey(null),
       onTapUp: () => _setPressedBookKey(null),
@@ -6162,7 +6162,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     if (key.isNotEmpty) {
       _setPressedBookKey(key);
     }
-    unawaited(HapticFeedback.lightImpact());
+    unawaited(AppHaptics.success());
     await Future<void>.delayed(const Duration(milliseconds: 90));
     if (!mounted) {
       return;

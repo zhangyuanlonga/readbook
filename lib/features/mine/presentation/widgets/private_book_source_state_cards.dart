@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../app/widgets/app_empty_state_card.dart';
+import '../../../../app/widgets/foundation/app_progress.dart';
 
 class PrivateBookSourceEmptySourcesCard extends StatelessWidget {
   const PrivateBookSourceEmptySourcesCard({super.key, required this.onCreate});
@@ -79,10 +80,10 @@ class PrivateBookSourceLoadingCard extends StatelessWidget {
         padding: const EdgeInsets.all(18),
         child: Row(
           children: <Widget>[
-            const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
+            const AppProgressIndicator(
+              size: 20,
+              strokeWidth: 2,
+              semanticLabel: '加载私人书源',
             ),
             const SizedBox(width: 12),
             Text(message),

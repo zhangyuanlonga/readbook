@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../app/layout/app_adaptive.dart';
+import '../../../../app/widgets/foundation/app_progress.dart';
 import '../../../../app/widgets/runtime_feedback_card.dart';
 import '../../../../domain/entities/local_book.dart';
 import '../../../reader/application/local/local_book_workflow_policy.dart';
@@ -332,13 +333,11 @@ class BookDetailInlineRefreshNotice extends StatelessWidget {
       ),
       child: Row(
         children: [
-          SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: colorScheme.primary,
-            ),
+          AppProgressIndicator(
+            size: 16,
+            strokeWidth: 2,
+            color: colorScheme.primary,
+            semanticLabel: '解析本地图书',
           ),
           const SizedBox(width: 10),
           Expanded(

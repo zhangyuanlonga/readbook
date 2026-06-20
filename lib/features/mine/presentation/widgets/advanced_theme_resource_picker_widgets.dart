@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../app/layout/app_layout.dart';
 import '../../../../app/navigation/bottom_nav_icon_gallery_tab_mapper.dart';
 import '../../../../app/navigation/bottom_nav_icon_resolver.dart';
+import '../../../../app/theme/app_component_theme_tokens.dart';
 import '../../../../app/widgets/bottom_nav_icon_view.dart';
 import '../../../../app/widgets/foundation/foundation.dart';
 import '../../../../app/widgets/text_cover_placeholder.dart';
@@ -162,9 +163,13 @@ class _AdvancedThemeSelectableImageTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final componentTokens = appComponentThemeTokensOf(context);
+    final tileRadius = BorderRadius.all(
+      Radius.circular(componentTokens.card.radius),
+    );
     return AppSurface(
       padding: EdgeInsets.zero,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: tileRadius,
       clipBehavior: Clip.antiAlias,
       backgroundColor: colorScheme.surface,
       borderColor:
@@ -182,17 +187,13 @@ class _AdvancedThemeSelectableImageTile extends StatelessWidget {
             Positioned(
               top: 8,
               right: 8,
-              child: Container(
-                width: 24,
-                height: 24,
-                decoration: BoxDecoration(
-                  color: colorScheme.primary,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
+              child: CircleAvatar(
+                radius: 12,
+                backgroundColor: colorScheme.primary,
+                child: Icon(
                   Icons.check_rounded,
                   size: 16,
-                  color: Colors.white,
+                  color: colorScheme.onPrimary,
                 ),
               ),
             ),
@@ -229,23 +230,31 @@ class AdvancedThemeGalleryPreviewThumb extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final componentTokens = appComponentThemeTokensOf(context);
+    final previewRadius = BorderRadius.all(
+      Radius.circular(
+        borderRadius == 8 ? componentTokens.button.radius : borderRadius,
+      ),
+    );
+    final previewBorderColor = colorScheme.outlineVariant.withValues(
+      alpha: 0.4,
+    );
     late final Widget child;
     if (previewPath == null || previewPath!.isEmpty) {
       if (useAddPlaceholder) {
-        child = Container(
+        child = SizedBox(
           width: width,
           height: height,
-          decoration: BoxDecoration(
-            color: colorScheme.surface,
-            borderRadius: BorderRadius.circular(borderRadius),
-            border: Border.all(
-              color: colorScheme.outlineVariant.withValues(alpha: 0.4),
+          child: AppSurface(
+            padding: EdgeInsets.zero,
+            borderRadius: previewRadius,
+            backgroundColor: colorScheme.surface,
+            borderColor: previewBorderColor,
+            child: Icon(
+              Icons.add_rounded,
+              size: width >= 40 ? 22 : 18,
+              color: colorScheme.onSurfaceVariant,
             ),
-          ),
-          child: Icon(
-            Icons.add_rounded,
-            size: width >= 40 ? 22 : 18,
-            color: colorScheme.onSurfaceVariant,
           ),
         );
       } else {
@@ -253,29 +262,26 @@ class AdvancedThemeGalleryPreviewThumb extends StatelessWidget {
           width: width,
           height: height,
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(borderRadius),
+            borderRadius: previewRadius,
             child: TextCoverPlaceholder(
               title: title,
               width: width,
               height: height,
-              borderRadius: BorderRadius.circular(borderRadius),
+              borderRadius: previewRadius,
             ),
           ),
         );
       }
     } else {
-      child = Container(
+      child = SizedBox(
         width: width,
         height: height,
-        decoration: BoxDecoration(
-          color: colorScheme.surface,
-          borderRadius: BorderRadius.circular(borderRadius),
-          border: Border.all(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.4),
-          ),
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(borderRadius),
+        child: AppSurface(
+          padding: EdgeInsets.zero,
+          borderRadius: previewRadius,
+          backgroundColor: colorScheme.surface,
+          borderColor: previewBorderColor,
+          clipBehavior: Clip.antiAlias,
           child: imageBuilder(context, previewPath!, BoxFit.cover),
         ),
       );
@@ -287,7 +293,7 @@ class AdvancedThemeGalleryPreviewThumb extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(borderRadius),
+        borderRadius: previewRadius,
         onTap: onTap,
         onLongPress: onLongPress,
         child: child,
@@ -307,49 +313,54 @@ class AdvancedThemeBottomNavGalleryPreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final componentTokens = appComponentThemeTokensOf(context);
+    final previewRadius = BorderRadius.all(
+      Radius.circular(componentTokens.card.radius),
+    );
+    final previewBorderColor = colorScheme.outlineVariant.withValues(
+      alpha: 0.4,
+    );
     final gallery = this.gallery;
     if (gallery == null) {
-      return Container(
+      return SizedBox(
         width: 168,
         height: 62,
-        decoration: BoxDecoration(
-          color: colorScheme.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.4),
+        child: AppSurface(
+          padding: EdgeInsets.zero,
+          borderRadius: previewRadius,
+          backgroundColor: colorScheme.surface,
+          borderColor: previewBorderColor,
+          child: Center(
+            child: Icon(
+              Icons.add_rounded,
+              size: 24,
+              color: colorScheme.onSurfaceVariant,
+            ),
           ),
-        ),
-        alignment: Alignment.center,
-        child: Icon(
-          Icons.add_rounded,
-          size: 24,
-          color: colorScheme.onSurfaceVariant,
         ),
       );
     }
-    return Container(
+    return SizedBox(
       width: 190,
-      padding: const EdgeInsets.all(6),
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.4),
+      child: AppSurface(
+        padding: const EdgeInsets.all(6),
+        borderRadius: previewRadius,
+        backgroundColor: colorScheme.surface,
+        borderColor: previewBorderColor,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _AdvancedThemeBottomNavGalleryPreviewRow(
+              gallery: gallery,
+              brightness: Brightness.light,
+            ),
+            const SizedBox(height: 5),
+            _AdvancedThemeBottomNavGalleryPreviewRow(
+              gallery: gallery,
+              brightness: Brightness.dark,
+            ),
+          ],
         ),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _AdvancedThemeBottomNavGalleryPreviewRow(
-            gallery: gallery,
-            brightness: Brightness.light,
-          ),
-          const SizedBox(height: 5),
-          _AdvancedThemeBottomNavGalleryPreviewRow(
-            gallery: gallery,
-            brightness: Brightness.dark,
-          ),
-        ],
       ),
     );
   }
@@ -367,16 +378,17 @@ class _AdvancedThemeBottomNavGalleryPreviewRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final componentTokens = appComponentThemeTokensOf(context);
     final isDark = brightness == Brightness.dark;
-    return Container(
+    final rowRadius = BorderRadius.all(
+      Radius.circular(componentTokens.button.radius),
+    );
+    return AppSurface(
       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
-      decoration: BoxDecoration(
-        color:
-            isDark
-                ? Colors.black.withValues(alpha: 0.78)
-                : colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(8),
-      ),
+      borderRadius: rowRadius,
+      backgroundColor:
+          isDark ? colorScheme.inverseSurface : colorScheme.surfaceContainerLow,
+      borderColor: colorScheme.outlineVariant.withValues(alpha: 0.24),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -395,7 +407,9 @@ class _AdvancedThemeBottomNavGalleryPreviewRow extends StatelessWidget {
                   fallbackColor:
                       selected
                           ? colorScheme.primary
-                          : (isDark ? Colors.white70 : colorScheme.outline),
+                          : (isDark
+                              ? colorScheme.onInverseSurface
+                              : colorScheme.outline),
                 ),
               ),
         ],

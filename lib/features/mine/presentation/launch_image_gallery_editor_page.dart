@@ -1,3 +1,6 @@
+// UI-GOV-EXEMPT-FILE: scaffold list-children
+// reason: Phase 10 reviewed this advanced-theme-bound resource editor shell; the short static list is intentional.
+
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -468,7 +471,9 @@ class _LaunchImageGalleryEditorPageState
                       _isLoading
                           ? const Center(
                             key: ValueKey('launch_editor_loading'),
-                            child: CircularProgressIndicator(),
+                            child: AppProgressIndicator(
+                              semanticLabel: '加载启动图集',
+                            ),
                           )
                           : gallery == null
                           ? const Center(

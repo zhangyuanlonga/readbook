@@ -1,5 +1,8 @@
 import 'dart:math';
 
+// UI-GOV-EXEMPT-FILE: list-children
+// reason: Phase 10 reviewed this Reader settings frame; short static sections are deferred to Phase 12 sheet migration.
+
 import 'package:flutter/material.dart';
 
 import '../../../../../app/layout/app_adaptive.dart';

@@ -1,3 +1,6 @@
+// UI-GOV-EXEMPT-FILE: layout-builder
+// reason: Phase 10 reviewed these cache sheets; LayoutBuilder blocks are layout-only and deferred to Reader sheet cleanup.
+
 import 'dart:async';
 import 'dart:math';
 

@@ -1,3 +1,6 @@
+// UI-GOV-EXEMPT-FILE: scaffold list-children
+// reason: Phase 10 reviewed this settings page shell; the short static list is intentional.
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -513,10 +516,10 @@ class _StorageManagementPageState extends State<StorageManagementPage> {
                         : null,
                 icon:
                     isClearing
-                        ? const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ? const AppProgressIndicator(
+                          size: 14,
+                          strokeWidth: 2,
+                          semanticLabel: '清理缓存中',
                         )
                         : const Icon(Icons.delete_sweep_outlined),
                 label: const Text('清理'),
@@ -557,10 +560,10 @@ class _StorageManagementPageState extends State<StorageManagementPage> {
             onPressed: _isClearingCaches ? null : _clearCaches,
             icon:
                 _isClearingCaches
-                    ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ? const AppProgressIndicator(
+                      size: 16,
+                      strokeWidth: 2,
+                      semanticLabel: '清理所有缓存中',
                     )
                     : const Icon(Icons.cleaning_services_outlined),
             label: const Text('清理所有缓存'),
@@ -569,10 +572,10 @@ class _StorageManagementPageState extends State<StorageManagementPage> {
             onPressed: _isCleaningOrphans ? null : _cleanOrphans,
             icon:
                 _isCleaningOrphans
-                    ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ? const AppProgressIndicator(
+                      size: 16,
+                      strokeWidth: 2,
+                      semanticLabel: '清理孤立数据中',
                     )
                     : const Icon(Icons.auto_fix_high_outlined),
             label: const Text('清理孤立数据'),

@@ -507,7 +507,9 @@ class _SearchSourceFilterSheetState extends State<SearchSourceFilterSheet>
       );
     }
     if (_isLoadingGroups && _groups.isEmpty) {
-      return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+      return const Center(
+        child: AppProgressIndicator(strokeWidth: 2, semanticLabel: '加载书源分组'),
+      );
     }
     return _SearchPanelFrame(
       child: ListView.builder(
@@ -521,10 +523,10 @@ class _SearchSourceFilterSheetState extends State<SearchSourceFilterSheet>
               return const Padding(
                 padding: EdgeInsets.symmetric(vertical: 18),
                 child: Center(
-                  child: SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                  child: AppProgressIndicator(
+                    size: 20,
+                    strokeWidth: 2,
+                    semanticLabel: '加载更多分组',
                   ),
                 ),
               );
@@ -600,10 +602,10 @@ class _SearchSourceFilterSheetState extends State<SearchSourceFilterSheet>
         return const Padding(
           padding: EdgeInsets.symmetric(vertical: 18),
           child: Center(
-            child: SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
+            child: AppProgressIndicator(
+              size: 20,
+              strokeWidth: 2,
+              semanticLabel: '加载更多书源',
             ),
           ),
         );
@@ -780,10 +782,10 @@ class _SearchSourceCountPill extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
             if (loading) ...<Widget>[
-              const SizedBox(
-                width: 13,
-                height: 13,
-                child: CircularProgressIndicator(strokeWidth: 2),
+              const AppProgressIndicator(
+                size: 13,
+                strokeWidth: 2,
+                semanticLabel: '刷新数量',
               ),
               const SizedBox(width: 6),
             ],

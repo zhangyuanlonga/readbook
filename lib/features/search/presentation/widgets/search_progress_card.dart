@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/widgets/foundation/app_progress.dart';
 import '../../application/search_service.dart';
 
 class SearchProgressCard extends StatelessWidget {
@@ -36,13 +37,11 @@ class SearchProgressCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: colorScheme.primary,
-                    ),
+                  AppProgressIndicator(
+                    size: 16,
+                    strokeWidth: 2,
+                    color: colorScheme.primary,
+                    semanticLabel: '搜索中',
                   ),
                   const SizedBox(width: 8),
                   Expanded(
