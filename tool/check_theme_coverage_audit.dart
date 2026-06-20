@@ -14,48 +14,84 @@ const _ignoredPathFragments = <String>[
   '/app/theme/',
 ];
 
+const _keyLabels = <String, String>{
+  'hardcoded-color': '硬编码颜色',
+  'material-color': 'Material 固定色',
+  'local-alpha': '本地透明度',
+  'border-radius': '本地圆角',
+  'rounded-shape': '圆角形状',
+  'box-shadow': '本地阴影',
+  'box-decoration': '本地装饰容器',
+  'shape-property': '本地形状属性',
+  'card': '卡片组件',
+  'button': '按钮组件',
+  'input': '输入/搜索组件',
+  'surface': '弹层/表面组件',
+  'selection': '选择控件',
+  'navigation': '导航组件',
+  'theme-of': '读取 Theme',
+  'color-scheme': '颜色体系',
+  'component-tokens': '组件 token',
+  'border-tokens': '边框 token',
+  'advanced-backdrop': '高级主题背景',
+  'advanced-theme': '高级主题',
+};
+
+const _kindLabels = <String, String>{
+  'page': '页面',
+  'widget': '组件',
+  'shell': '应用壳',
+  'presentation': '展示层',
+};
+
+const _riskLabels = <String, String>{
+  'high': '高风险',
+  'medium': '中风险',
+  'low': '低风险',
+};
+
 final _patterns = <_AuditPattern>[
   _AuditPattern(
     key: 'hardcoded-color',
     regex: RegExp(r'\b(?:const\s+)?Color\s*\(\s*0x[0-9A-Fa-f]{6,8}\s*\)'),
-    message: 'Direct Color(0x...) usage; verify it should not come from theme.',
+    message: '直接 Color(0x...)；确认是否应来自主题或资源色板。',
   ),
   _AuditPattern(
     key: 'material-color',
     regex: RegExp(r'\bColors\.(?!transparent\b)[A-Za-z0-9_]+'),
-    message: 'Colors.* usage; verify it is semantic or intentionally fixed.',
+    message: '直接 Colors.*；确认是否为语义色或固定视觉。',
   ),
   _AuditPattern(
     key: 'local-alpha',
     regex: RegExp(r'\.withValues\s*\(\s*alpha\s*:'),
-    message: 'Local alpha adjustment; verify it is driven by semantic tokens.',
+    message: '本地透明度调整；确认是否应由语义 token 驱动。',
   ),
   _AuditPattern(
     key: 'border-radius',
     regex: RegExp(
       r'\bBorderRadius\.(?:circular|only|vertical|horizontal)\s*\(',
     ),
-    message: 'Local BorderRadius usage; consider AppComponentThemeTokens.',
+    message: '本地 BorderRadius；优先考虑 AppComponentThemeTokens。',
   ),
   _AuditPattern(
     key: 'rounded-shape',
     regex: RegExp(r'\bRoundedRectangleBorder\s*\('),
-    message: 'Local rounded shape; consider AppComponentThemeTokens.',
+    message: '本地圆角形状；优先考虑组件 token。',
   ),
   _AuditPattern(
     key: 'box-shadow',
     regex: RegExp(r'\bBoxShadow\s*\('),
-    message: 'Local BoxShadow; consider component shadow tokens.',
+    message: '本地 BoxShadow；优先考虑组件阴影 token 或固定视觉豁免。',
   ),
   _AuditPattern(
     key: 'box-decoration',
     regex: RegExp(r'\bBoxDecoration\s*\('),
-    message: 'Local BoxDecoration; verify color, border, radius and shadow.',
+    message: '本地 BoxDecoration；检查背景、边框、圆角、阴影是否应组件化。',
   ),
   _AuditPattern(
     key: 'shape-property',
     regex: RegExp(r'\bshape\s*:'),
-    message: 'Local shape property; verify token coverage.',
+    message: '本地 shape 属性；确认是否已有 token 覆盖。',
   ),
 ];
 
@@ -179,23 +215,25 @@ void main(List<String> args) {
   stdout.writeln('Files      : ${reports.length}');
   stdout.writeln('High risk  : ${highRiskReports.length}');
   stdout.writeln('');
-  stdout.writeln('Finding totals');
+  stdout.writeln('Finding totals (问题汇总)');
   for (final entry
       in totals.entries.toList()..sort((a, b) => b.value.compareTo(a.value))) {
-    stdout.writeln('- ${entry.key}: ${entry.value}');
+    stdout.writeln('- ${_formatKey(entry.key)}: ${entry.value}');
   }
   if (exemptedTotals.isNotEmpty) {
     stdout.writeln('');
-    stdout.writeln('Exempted finding totals');
+    stdout.writeln('Exempted finding totals (已豁免问题汇总)');
     for (final entry
         in exemptedTotals.entries.toList()
           ..sort((a, b) => b.value.compareTo(a.value))) {
-      stdout.writeln('- ${entry.key}: ${entry.value}');
+      stdout.writeln('- ${_formatKey(entry.key)}: ${entry.value}');
     }
   }
 
   stdout.writeln('');
-  stdout.writeln(verbose ? 'All audited files' : 'Top risk files');
+  stdout.writeln(
+    verbose ? 'All audited files (全部文件)' : 'Top risk files (高风险优先)',
+  );
   final visibleReports = verbose ? reports : reports.take(top);
   for (final report in visibleReports) {
     stdout.writeln(_formatReport(report));
@@ -493,24 +531,32 @@ String _classifyFile(String path) {
 }
 
 String _formatReport(_FileThemeReport report) {
+  final risk = _formatRisk(report.riskLevel);
+  final kind = _formatKind(report.kind);
   final buffer =
       StringBuffer()..writeln(
-        '- [${report.riskLevel}] ${report.path} '
-        '(score ${report.riskScore}, ${report.kind})',
+        '- [$risk] ${report.path} '
+        '(score ${report.riskScore}, $kind)',
       );
-  buffer.writeln('  findings: ${_formatCounts(report.findingCounts)}');
+  buffer.writeln('  findings (未处理): ${_formatCounts(report.findingCounts)}');
   if (report.exemptedFindingCounts.isNotEmpty) {
     buffer.writeln(
-      '  exempted findings: ${_formatCounts(report.exemptedFindingCounts)}',
+      '  exempted findings (已豁免): '
+      '${_formatCounts(report.exemptedFindingCounts)}',
     );
   }
-  buffer.writeln('  components: ${_formatCounts(report.componentCounts)}');
-  buffer.writeln('  theme hooks: ${_formatCounts(report.themeHookCounts)}');
+  buffer.writeln(
+    '  components (涉及组件): ${_formatCounts(report.componentCounts)}',
+  );
+  buffer.writeln(
+    '  theme hooks (主题接入): ${_formatCounts(report.themeHookCounts)}',
+  );
   if (report.sampleFindings.isNotEmpty) {
-    buffer.writeln('  samples:');
+    buffer.writeln('  samples (样例):');
     for (final finding in report.sampleFindings.take(4)) {
       buffer.writeln(
-        '    - ${finding.line}: [${finding.key}] ${finding.message}',
+        '    - ${finding.line}: [${_formatKey(finding.key)}] '
+        '${finding.message}',
       );
     }
   }
@@ -523,7 +569,24 @@ String _formatCounts(Map<String, int> counts) {
   }
   final entries =
       counts.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
-  return entries.map((entry) => '${entry.key}=${entry.value}').join(', ');
+  return entries
+      .map((entry) => '${_formatKey(entry.key)}=${entry.value}')
+      .join(', ');
+}
+
+String _formatKey(String key) {
+  final label = _keyLabels[key];
+  return label == null ? key : '$key($label)';
+}
+
+String _formatKind(String kind) {
+  final label = _kindLabels[kind];
+  return label == null ? kind : '$kind/$label';
+}
+
+String _formatRisk(String risk) {
+  final label = _riskLabels[risk];
+  return label == null ? risk : '$risk/$label';
 }
 
 final class _AuditPattern {

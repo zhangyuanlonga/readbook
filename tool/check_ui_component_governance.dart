@@ -13,6 +13,21 @@ const _docPaths = <String>[
   'docs/ui_ux/reader_bookshelf_ui_exemptions_2026_06_20.md',
 ];
 
+const _kindLabels = <String, String>{
+  'missing-doc': '缺少治理文档',
+  'modal-surface': '弹层表面',
+  'dialog-surface': '对话框表面',
+  'feedback': '反馈提示',
+  'capability-wrapper': '能力封装',
+  'hardcoded-style': '硬编码样式',
+  'platform-branch': '平台分支',
+  'loading-state': '加载状态',
+  'list-performance': '列表性能',
+  'list-children': '静态列表 children',
+  'scaffold': '页面脚手架',
+  'layout-builder': '布局计算',
+};
+
 final class _Finding {
   const _Finding({
     required this.kind,
@@ -45,7 +60,7 @@ void main(List<String> args) {
             kind: 'missing-doc',
             path: docPath,
             line: 1,
-            message: 'UI component governance document is missing.',
+            message: '缺少 UI 组件治理文档。',
           ),
         );
       }
@@ -85,8 +100,7 @@ void main(List<String> args) {
             kind: 'modal-surface',
             path: relativePath,
             line: lineNumber,
-            message:
-                'Prefer showAdaptiveActionSurface for new filter, settings, resource picker, or detail surfaces.',
+            message: '新增筛选、设置、资源选择、详情弹层优先使用 showAdaptiveActionSurface。',
           ),
           index,
         );
@@ -101,8 +115,7 @@ void main(List<String> args) {
             kind: 'dialog-surface',
             path: relativePath,
             line: lineNumber,
-            message:
-                'Review direct showDialog; prefer an adaptive surface for new page-level actions.',
+            message: '检查直接 showDialog；新增页面级操作优先使用自适应表面。',
           ),
           index,
         );
@@ -115,8 +128,7 @@ void main(List<String> args) {
             kind: 'feedback',
             path: relativePath,
             line: lineNumber,
-            message:
-                'Prefer AppFeedback for user-facing snack, toast, and inline feedback.',
+            message: '面向用户的 snack、toast、行内反馈优先使用 AppFeedback。',
           ),
           index,
         );
@@ -130,8 +142,7 @@ void main(List<String> args) {
             kind: 'capability-wrapper',
             path: relativePath,
             line: lineNumber,
-            message:
-                'Route Flutter native or mature UI capability through app/feature wrappers instead of using it directly in a page.',
+            message: 'Flutter 原生或成熟 UI 能力应通过 app/feature wrapper 使用，避免页面直接依赖。',
           ),
           index,
         );
@@ -144,7 +155,7 @@ void main(List<String> args) {
             path: relativePath,
             line: lineNumber,
             message:
-                'Review hardcoded Color/Colors/fontSize/BoxShadow/radius; prefer Theme, tokens, or documented resource colors.',
+                '检查硬编码 Color/Colors/fontSize/BoxShadow/radius；优先使用 Theme、token 或已记录资源色。',
           ),
           index,
         );
@@ -157,8 +168,7 @@ void main(List<String> args) {
             kind: 'platform-branch',
             path: relativePath,
             line: lineNumber,
-            message:
-                'Review page-level platform branch; prefer capability or adaptive metrics.',
+            message: '检查页面级平台分支；优先使用能力封装或自适应指标。',
           ),
           index,
         );
@@ -171,8 +181,7 @@ void main(List<String> args) {
             kind: 'loading-state',
             path: relativePath,
             line: lineNumber,
-            message:
-                'Review page-level spinner; prefer AppStatusStateCard or a feature status component when it blocks content.',
+            message: '检查页面级 spinner；阻塞内容时优先使用 AppStatusStateCard 或业务状态组件。',
           ),
           index,
         );
@@ -185,8 +194,7 @@ void main(List<String> args) {
             kind: 'list-performance',
             path: relativePath,
             line: lineNumber,
-            message:
-                'Review shrinkWrap:true in scrollable UI; long lists should stay lazy and bounded.',
+            message: '检查滚动 UI 中的 shrinkWrap:true；长列表应保持懒加载和边界约束。',
           ),
           index,
         );
@@ -200,7 +208,7 @@ void main(List<String> args) {
             path: relativePath,
             line: lineNumber,
             message:
-                'Review ListView(children); long lists should use ListView.builder or SliverList.',
+                '检查 ListView(children)；长列表应使用 ListView.builder 或 SliverList。',
           ),
           index,
         );
@@ -213,8 +221,7 @@ void main(List<String> args) {
             kind: 'scaffold',
             path: relativePath,
             line: lineNumber,
-            message:
-                'New pages should prefer AdaptivePageScaffold or document why a custom scaffold is required.',
+            message: '新增页面优先使用 AdaptivePageScaffold，或记录自定义 Scaffold 的原因。',
           ),
           index,
         );
@@ -255,20 +262,21 @@ void main(List<String> args) {
     for (final finding in findings) {
       byKind.update(finding.kind, (value) => value + 1, ifAbsent: () => 1);
     }
-    stdout.writeln('Summary');
+    stdout.writeln('Summary (问题汇总)');
     for (final entry
         in byKind.entries.toList()..sort((a, b) => a.key.compareTo(b.key))) {
-      stdout.writeln('- ${entry.key}: ${entry.value}');
+      stdout.writeln('- ${_formatKind(entry.key)}: ${entry.value}');
     }
 
     stdout.writeln('');
     stdout.writeln(
-      verbose ? 'Details' : 'Sample details (use --verbose for all)',
+      verbose ? 'Details (全部详情)' : 'Sample details (样例，使用 --verbose 查看全部)',
     );
     final visibleFindings = verbose ? findings : findings.take(40);
     for (final finding in visibleFindings) {
       stdout.writeln(
-        '- [${finding.kind}] ${finding.path}:${finding.line}: ${finding.message}',
+        '- [${_formatKind(finding.kind)}] '
+        '${finding.path}:${finding.line}: ${finding.message}',
       );
     }
     if (!verbose && findings.length > 40) {
@@ -376,8 +384,7 @@ List<_Finding> _layoutBuilderSideEffectFindings(
           kind: 'layout-builder',
           path: relativePath,
           line: lineNumber,
-          message:
-              'Review LayoutBuilder body for side effects or heavy work; it should stay layout-only.',
+          message: '检查 LayoutBuilder body 是否包含副作用或重计算；这里应只做布局计算。',
         ),
       );
     }
@@ -540,4 +547,9 @@ String _relativePath(File file) {
   return file.path.startsWith(prefix)
       ? file.path.substring(prefix.length)
       : file.path;
+}
+
+String _formatKind(String kind) {
+  final label = _kindLabels[kind];
+  return label == null ? kind : '$kind($label)';
 }
