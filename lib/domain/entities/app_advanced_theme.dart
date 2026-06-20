@@ -21,6 +21,8 @@ enum AppAdvancedThemeNavigationStyle { soft, floating, compact }
 
 enum AppAdvancedThemeSwitchStyle { soft, contrast }
 
+enum AppAdvancedThemeEffect { none, rain, snow, leaf, sakura, firefly }
+
 @JsonSerializable(createFactory: false, createToJson: false)
 class AppAdvancedThemeComponentStyle {
   const AppAdvancedThemeComponentStyle({
@@ -809,6 +811,7 @@ class AppAdvancedTheme {
     this.lightCoverGalleryId,
     this.darkCoverGalleryId,
     this.launchImageGalleryId,
+    this.themeEffect = AppAdvancedThemeEffect.none,
     this.appInterfaceFontFamilyKey,
     this.readerFontFamilyKey,
     this.importFingerprint,
@@ -827,6 +830,7 @@ class AppAdvancedTheme {
   final String? lightCoverGalleryId;
   final String? darkCoverGalleryId;
   final String? launchImageGalleryId;
+  final AppAdvancedThemeEffect themeEffect;
   final String? appInterfaceFontFamilyKey;
   final String? readerFontFamilyKey;
   final String? importFingerprint;
@@ -851,6 +855,8 @@ class AppAdvancedTheme {
       if (launchImageGalleryId != null &&
           launchImageGalleryId!.trim().isNotEmpty)
         'launchImageGalleryId': launchImageGalleryId,
+      if (themeEffect != AppAdvancedThemeEffect.none)
+        'themeEffect': themeEffect.name,
       if (appInterfaceFontFamilyKey != null &&
           appInterfaceFontFamilyKey!.trim().isNotEmpty)
         'appInterfaceFontFamilyKey': appInterfaceFontFamilyKey,
@@ -898,6 +904,7 @@ class AppAdvancedTheme {
       lightCoverGalleryId: _readNullableString(json, 'lightCoverGalleryId'),
       darkCoverGalleryId: _readNullableString(json, 'darkCoverGalleryId'),
       launchImageGalleryId: _readNullableString(json, 'launchImageGalleryId'),
+      themeEffect: _readThemeEffect(json['themeEffect']?.toString().trim()),
       appInterfaceFontFamilyKey: _readNullableString(
         json,
         'appInterfaceFontFamilyKey',
@@ -926,6 +933,7 @@ class AppAdvancedTheme {
     bool clearDarkCoverGalleryId = false,
     String? launchImageGalleryId,
     bool clearLaunchImageGalleryId = false,
+    AppAdvancedThemeEffect? themeEffect,
     String? appInterfaceFontFamilyKey,
     bool clearAppInterfaceFontFamilyKey = false,
     String? readerFontFamilyKey,
@@ -959,6 +967,7 @@ class AppAdvancedTheme {
           clearLaunchImageGalleryId
               ? null
               : (launchImageGalleryId ?? this.launchImageGalleryId),
+      themeEffect: themeEffect ?? this.themeEffect,
       appInterfaceFontFamilyKey:
           clearAppInterfaceFontFamilyKey
               ? null
@@ -972,6 +981,17 @@ class AppAdvancedTheme {
               ? null
               : (importFingerprint ?? this.importFingerprint),
     );
+  }
+
+  static AppAdvancedThemeEffect _readThemeEffect(String? raw) {
+    return switch (raw) {
+      'rain' => AppAdvancedThemeEffect.rain,
+      'snow' => AppAdvancedThemeEffect.snow,
+      'leaf' => AppAdvancedThemeEffect.leaf,
+      'sakura' => AppAdvancedThemeEffect.sakura,
+      'firefly' => AppAdvancedThemeEffect.firefly,
+      _ => AppAdvancedThemeEffect.none,
+    };
   }
 
   String? coverGalleryIdFor(AppAdvancedThemeMode mode) {

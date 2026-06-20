@@ -12,12 +12,16 @@ void main() {
         darkConfig: AppAdvancedThemeModeConfig(
           colors: const AppAdvancedThemeColors(primaryColorValue: 0xFF112233),
         ),
+        themeEffect: AppAdvancedThemeEffect.firefly,
         appInterfaceFontFamilyKey: ' font_ui_snapshot ',
       );
 
-      final restored = ActiveThemeAppearanceSnapshot.fromJson(snapshot.toJson());
+      final restored = ActiveThemeAppearanceSnapshot.fromJson(
+        snapshot.toJson(),
+      );
 
       expect(restored.appInterfaceFontFamilyKey, 'font_ui_snapshot');
+      expect(restored.themeEffect, AppAdvancedThemeEffect.firefly);
       expect(restored.lightConfig?.colors.primaryColorValue, 0xFF336699);
       expect(restored.darkConfig?.colors.primaryColorValue, 0xFF112233);
     });
@@ -34,12 +38,14 @@ void main() {
         darkConfig: AppAdvancedThemeModeConfig(
           colors: const AppAdvancedThemeColors(primaryColorValue: 0xFF223344),
         ),
+        themeEffect: AppAdvancedThemeEffect.rain,
         appInterfaceFontFamilyKey: 'font_ui_a',
       );
 
       final snapshot = ActiveThemeAppearanceSnapshot.fromTheme(theme);
 
       expect(snapshot.appInterfaceFontFamilyKey, 'font_ui_a');
+      expect(snapshot.themeEffect, AppAdvancedThemeEffect.rain);
       expect(snapshot.lightConfig?.colors.primaryColorValue, 0xFF445566);
       expect(snapshot.darkConfig?.colors.primaryColorValue, 0xFF223344);
     });

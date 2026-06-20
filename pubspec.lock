@@ -9,6 +9,14 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "96.0.0"
+  ambient_effects_container:
+    dependency: "direct main"
+    description:
+      name: ambient_effects_container
+      sha256: "344b0640cb212e300d997ed388c16e99dac83216466a63823a649dd42d5da9d5"
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "0.2.0"
   analyzer:
     dependency: transitive
     description:
@@ -369,6 +377,14 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "2.34.0"
+  dynamic_app_icon_flutter_plus:
+    dependency: "direct main"
+    description:
+      name: dynamic_app_icon_flutter_plus
+      sha256: "4846689bf57f6e7cb280bc42fcf25f147b5c304316662b191dcbb1eba7d582b4"
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "1.0.0"
   epub_pro:
     dependency: "direct main"
     description:
@@ -1102,6 +1118,14 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "1.9.1"
+  path_drawing:
+    dependency: transitive
+    description:
+      name: path_drawing
+      sha256: bbb1934c0cbb03091af082a6389ca2080345291ef07a5fa6d6e078ba8682f977
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "1.0.1"
   path_parsing:
     dependency: transitive
     description:

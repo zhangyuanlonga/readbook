@@ -11,6 +11,7 @@ ActiveThemeAppearanceSnapshot _$ActiveThemeAppearanceSnapshotFromJson(
 ) => ActiveThemeAppearanceSnapshot(
   lightConfig: _modeConfigFromJson(json['lightConfig']),
   darkConfig: _modeConfigFromJson(json['darkConfig']),
+  themeEffect: _themeEffectFromJson(json['themeEffect']),
   appInterfaceFontFamilyKey: _fontFamilyKeyFromJson(
     json['appInterfaceFontFamilyKey'],
   ),
@@ -21,6 +22,7 @@ Map<String, dynamic> _$ActiveThemeAppearanceSnapshotToJson(
 ) => <String, dynamic>{
   'lightConfig': _modeConfigToJson(instance.lightConfig),
   'darkConfig': _modeConfigToJson(instance.darkConfig),
+  'themeEffect': _themeEffectToJson(instance.themeEffect),
   'appInterfaceFontFamilyKey': _fontFamilyKeyToJson(
     instance.appInterfaceFontFamilyKey,
   ),

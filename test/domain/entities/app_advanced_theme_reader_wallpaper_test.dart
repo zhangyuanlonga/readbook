@@ -112,6 +112,34 @@ void main() {
     },
   );
 
+  test('theme effect serializes only when configured and restores safely', () {
+    final theme = AppAdvancedTheme(
+      id: 'theme_effect',
+      name: '特效主题',
+      createdAt: DateTime.parse('2026-06-20T00:00:00.000Z'),
+      updatedAt: DateTime.parse('2026-06-20T00:00:00.000Z'),
+      lightConfig: AppAdvancedThemeModeConfig(),
+      darkConfig: AppAdvancedThemeModeConfig(),
+      themeEffect: AppAdvancedThemeEffect.sakura,
+    );
+
+    final json = theme.toJson();
+    expect(json['themeEffect'], 'sakura');
+
+    final restored = AppAdvancedTheme.fromJson(json);
+    expect(restored.themeEffect, AppAdvancedThemeEffect.sakura);
+
+    final cleared = restored.copyWith(themeEffect: AppAdvancedThemeEffect.none);
+    expect(cleared.toJson().containsKey('themeEffect'), isFalse);
+    expect(
+      AppAdvancedTheme.fromJson(<String, dynamic>{
+        ...json,
+        'themeEffect': 'unknown',
+      }).themeEffect,
+      AppAdvancedThemeEffect.none,
+    );
+  });
+
   test('mode config serializes and restores component style fields', () {
     final config = AppAdvancedThemeModeConfig(
       componentStyle: const AppAdvancedThemeComponentStyle(

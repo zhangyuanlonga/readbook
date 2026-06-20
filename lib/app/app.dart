@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:ambient_effects_container/ambient_effects_container.dart';
 import 'package:circular_theme_reveal/circular_theme_reveal.dart';
 import 'package:responsive_framework/responsive_framework.dart';
 import 'composition/app_providers.dart' as app_providers;
@@ -16,6 +17,7 @@ import '../core/auth/auth_event_bus.dart';
 import '../core/auth/startup_auth_session_validator.dart';
 import '../core/logging/app_logger.dart';
 import '../domain/entities/announcement.dart';
+import '../domain/entities/app_advanced_theme.dart';
 import '../features/mine/application/advanced_theme_provider.dart';
 import '../features/source/application/external_import_catalog.dart';
 import '../features/source/application/external_import_diagnostics.dart';
@@ -35,6 +37,7 @@ import 'startup/app_startup_coordinator.dart';
 import 'startup_artwork_store.dart';
 import 'theme/app_advanced_theme_tokens.dart';
 import 'theme/app_theme.dart';
+import 'theme/app_theme_effects.dart';
 import 'theme/app_interface_typography_provider.dart';
 import 'theme/app_theme_provider.dart';
 import 'theme/app_theme_source_provider.dart';
@@ -115,7 +118,10 @@ class App extends ConsumerWidget {
         );
         final desktopChromeChild = DesktopWindowFrame(
           child: DesktopWindowChromeInsets(
-            child: CircularThemeRevealOverlay(child: responsiveChild),
+            child: _AdvancedThemeEffectLayer(
+              effect: activeThemeAppearanceSnapshot?.themeEffect,
+              child: CircularThemeRevealOverlay(child: responsiveChild),
+            ),
           ),
         );
 
@@ -124,6 +130,29 @@ class App extends ConsumerWidget {
           child: desktopChromeChild,
         );
       },
+    );
+  }
+}
+
+class _AdvancedThemeEffectLayer extends StatelessWidget {
+  const _AdvancedThemeEffectLayer({required this.effect, required this.child});
+
+  final AppAdvancedThemeEffect? effect;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final config = appAmbientEffectConfigFor(
+      effect ?? AppAdvancedThemeEffect.none,
+    );
+    if (config == null) {
+      return child;
+    }
+    return AmbientEffectsContainer(
+      foregroundEffect: config,
+      performanceMode: PerformanceMode.balanced,
+      renderStyle: EffectRenderStyle.layered,
+      child: child,
     );
   }
 }

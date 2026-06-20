@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
+import 'package:ambient_effects_container/ambient_effects_container.dart';
 import 'package:circular_theme_reveal/circular_theme_reveal.dart';
 import 'package:go_router/go_router.dart';
 
@@ -14,6 +15,8 @@ import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
+import '../../../app/theme/app_component_theme_tokens.dart';
+import '../../../app/theme/app_theme_effects.dart';
 import '../../../app/theme/app_theme_source_provider.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/adaptive_fullscreen_preview.dart';
@@ -1078,6 +1081,103 @@ class _AdvancedThemeEditorPageState
     });
   }
 
+  Future<void> _pickThemeEffect() async {
+    if (_isSaving) {
+      return;
+    }
+
+    var selectedEffect = _draft?.themeEffect ?? AppAdvancedThemeEffect.none;
+    final result = await showAdaptiveActionSurface<AppAdvancedThemeEffect>(
+      context: context,
+      maxWidth: 560,
+      maxHeightFactor: 0.56,
+      padding: EdgeInsets.zero,
+      builder: (context) {
+        final colorScheme = Theme.of(context).colorScheme;
+        final componentTokens = appComponentThemeTokensOf(context);
+        final itemRadius = BorderRadius.all(
+          Radius.circular(componentTokens.button.radius),
+        );
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return _buildResourcePickerSheet(
+              context,
+              title: '选择主题特效',
+              helperText: '特效跟随高级主题生效，会叠加在应用界面上，不影响点击和滚动。',
+              content: ListView.separated(
+                itemCount: appAdvancedThemeEffectOptions.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final effect = appAdvancedThemeEffectOptions[index];
+                  final selected = effect == selectedEffect;
+                  return InkWell(
+                    borderRadius: itemRadius,
+                    onTap: () {
+                      setSheetState(() {
+                        selectedEffect = effect;
+                      });
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 10,
+                      ),
+                      child: Row(
+                        children: [
+                          _buildThemeEffectPreviewThumb(
+                            context,
+                            effect: effect,
+                            size: 44,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              appAdvancedThemeEffectLabel(effect),
+                              style: Theme.of(context).textTheme.labelLarge
+                                  ?.copyWith(fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                          if (selected)
+                            Icon(
+                              Icons.check_rounded,
+                              color: colorScheme.primary,
+                              size: 18,
+                            ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+              actions: [
+                AppButton(
+                  variant: AppButtonVariant.text,
+                  onPressed: () => Navigator.of(context).pop(),
+                  label: '取消',
+                ),
+                const Spacer(),
+                AppButton(
+                  onPressed: () => Navigator.of(context).pop(selectedEffect),
+                  label: '应用',
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    if (result == null || !mounted) {
+      return;
+    }
+    final draft = _draft;
+    if (draft == null) {
+      return;
+    }
+    setState(() {
+      _draft = draft.copyWith(themeEffect: result);
+    });
+  }
+
   String _resolvedBottomNavGalleryName() {
     final selectedId = _draft?.bottomNavGalleryId?.trim();
     if (selectedId != null && selectedId.isNotEmpty) {
@@ -1583,6 +1683,55 @@ class _AdvancedThemeEditorPageState
     required BottomNavIconGallery? gallery,
   }) {
     return AdvancedThemeBottomNavGalleryPreview(gallery: gallery);
+  }
+
+  Widget _buildThemeEffectPreviewThumb(
+    BuildContext context, {
+    required AppAdvancedThemeEffect effect,
+    double size = 72,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final componentTokens = appComponentThemeTokensOf(context);
+    final radius = BorderRadius.all(
+      Radius.circular(componentTokens.card.radius),
+    );
+    final config = appAmbientEffectConfigFor(effect, preview: true);
+    final base = AppSurface(
+      padding: EdgeInsets.zero,
+      borderRadius: radius,
+      backgroundColor: colorScheme.surfaceContainerHighest,
+      borderColor: colorScheme.outlineVariant,
+      clipBehavior: Clip.antiAlias,
+      child: Center(
+        child: Icon(
+          config == null
+              ? Icons.motion_photos_off_outlined
+              : Icons.auto_awesome_rounded,
+          size: size >= 60 ? 22 : 18,
+          color:
+              config == null
+                  ? colorScheme.onSurfaceVariant
+                  : colorScheme.primary,
+        ),
+      ),
+    );
+    final preview = SizedBox(width: size, height: size, child: base);
+    if (config == null) {
+      return preview;
+    }
+    return SizedBox(
+      width: size,
+      height: size,
+      child: ClipRRect(
+        borderRadius: radius,
+        child: AmbientEffectsContainer(
+          foregroundEffect: config,
+          performanceMode: PerformanceMode.low,
+          renderStyle: EffectRenderStyle.layered,
+          child: base,
+        ),
+      ),
+    );
   }
 
   void _setWallpaperOverlayOpacity(double value) {
@@ -2400,17 +2549,17 @@ class _AdvancedThemeEditorPageState
                   ),
                   AdvancedThemeWallpaperResourceCard(
                     title: '主题特效',
-                    subtitle: '后续接入',
-                    preview: _buildGalleryPreviewThumb(
-                      context,
-                      previewPath: null,
-                      title: '主题特效',
-                      width: 72,
-                      height: 72,
-                      borderRadius: 12,
-                      useAddPlaceholder: true,
+                    subtitle: appAdvancedThemeEffectStatus(draft.themeEffect),
+                    badges: _visualResourceBadges(
+                      draft,
+                      hasResource:
+                          draft.themeEffect != AppAdvancedThemeEffect.none,
                     ),
-                    onTap: () => _showMessage('主题特效后续接入'),
+                    preview: _buildThemeEffectPreviewThumb(
+                      context,
+                      effect: draft.themeEffect,
+                    ),
+                    onTap: _isSaving ? () {} : _pickThemeEffect,
                   ),
                 ],
               );
