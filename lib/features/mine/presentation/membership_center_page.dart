@@ -11,6 +11,7 @@ import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/foundation/app_button.dart';
 import '../../../app/widgets/foundation/app_feedback.dart';
 import '../../../app/widgets/foundation/app_progress.dart';
 import '../../../app/widgets/foundation/app_refresh_indicator.dart';
@@ -425,14 +426,17 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(
+                AppButton(
+                  label: '取消',
+                  variant: AppButtonVariant.text,
+                  size: AppButtonSize.compact,
                   onPressed: () => Navigator.of(surfaceContext).pop(false),
-                  child: const Text('取消'),
                 ),
                 const SizedBox(width: 8),
-                FilledButton(
+                AppButton(
+                  label: '释放',
+                  size: AppButtonSize.compact,
                   onPressed: () => Navigator.of(surfaceContext).pop(true),
-                  child: const Text('释放'),
                 ),
               ],
             ),
@@ -525,14 +529,17 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(
+                AppButton(
+                  label: '取消',
+                  variant: AppButtonVariant.text,
+                  size: AppButtonSize.compact,
                   onPressed: () => Navigator.of(surfaceContext).pop(false),
-                  child: const Text('取消'),
                 ),
                 const SizedBox(width: 8),
-                FilledButton(
+                AppButton(
+                  label: '立即领取',
+                  size: AppButtonSize.compact,
                   onPressed: () => Navigator.of(surfaceContext).pop(true),
-                  child: const Text('立即领取'),
                 ),
               ],
             ),
@@ -637,7 +644,6 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
             : _hasActiveMembership
             ? '管理许可证'
             : '激活许可证';
-    final primaryColor = Theme.of(context).colorScheme.primary;
     return Container(
       padding: EdgeInsets.fromLTRB(
         metrics.pagePadding,
@@ -654,27 +660,18 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              style: FilledButton.styleFrom(
-                minimumSize: const Size.fromHeight(48),
-                backgroundColor: primaryColor,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              onPressed:
-                  _isActing
-                      ? null
-                      : _session == null
-                      ? _handleLoginAction
-                      : _hasActiveMembership
-                      ? _handleManageAction
-                      : _handleActivateAction,
-              child: Text(primaryLabel),
-            ),
+          AppButton(
+            label: primaryLabel,
+            expanded: true,
+            onPressed:
+                _isActing
+                    ? null
+                    : _session == null
+                    ? _handleLoginAction
+                    : _hasActiveMembership
+                    ? _handleManageAction
+                    : _handleActivateAction,
+            isLoading: _isActing,
           ),
           SizedBox(height: metrics.contentGap / 2),
           Wrap(
@@ -1087,23 +1084,11 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
               ),
             ),
             const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(46),
-                ),
-                onPressed: isRedeeming ? null : onRedeemPressed,
-                child:
-                    isRedeeming
-                        ? AppProgressIndicator(
-                          size: 18,
-                          strokeWidth: 2,
-                          color: Theme.of(context).colorScheme.onPrimary,
-                          semanticLabel: '激活会员',
-                        )
-                        : const Text('立即激活'),
-              ),
+            AppButton(
+              label: isRedeeming ? '激活中' : '立即激活',
+              expanded: true,
+              onPressed: isRedeeming ? null : onRedeemPressed,
+              isLoading: isRedeeming,
             ),
           ],
         ),
@@ -1367,10 +1352,12 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
             ),
           if (seat.isActive) ...[
             const SizedBox(height: 10),
-            TextButton.icon(
+            AppButton(
+              label: '释放席位',
+              variant: AppButtonVariant.text,
+              size: AppButtonSize.compact,
               onPressed: onRelease,
               icon: const Icon(Icons.link_off_outlined),
-              label: const Text('释放席位'),
             ),
           ],
         ],

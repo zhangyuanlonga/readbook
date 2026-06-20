@@ -1586,13 +1586,15 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
                   : () => unawaited(_showEditableCoverActionSheet(result)),
         ),
         const SizedBox(height: 10),
-        TextButton.icon(
+        AppButton(
+          label: '点击封面更换',
+          variant: AppButtonVariant.text,
+          size: AppButtonSize.compact,
           onPressed:
               _isSavingMetadata
                   ? null
                   : () => unawaited(_showEditableCoverActionSheet(result)),
           icon: const Icon(Icons.photo_library_outlined, size: 18),
-          label: const Text('点击封面更换'),
         ),
       ],
     );
@@ -1891,29 +1893,28 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
                 ),
               ),
               const SizedBox(width: 16),
-              TextButton(
+              AppButton(
+                label: '取消',
+                variant: AppButtonVariant.text,
+                size: AppButtonSize.compact,
                 onPressed: _isSavingMetadata ? null : onCancel,
-                child: const Text('取消'),
               ),
               const SizedBox(width: 8),
-              OutlinedButton.icon(
+              AppButton(
+                label: '恢复默认',
+                variant: AppButtonVariant.secondary,
+                size: AppButtonSize.compact,
                 onPressed:
                     _isSavingMetadata ? null : () => unawaited(onReset()),
                 icon: const Icon(Icons.restart_alt_rounded, size: 18),
-                label: const Text('恢复默认'),
               ),
               const SizedBox(width: 8),
-              FilledButton.icon(
+              AppButton(
+                label: _isSavingMetadata ? '保存中' : '保存',
+                size: AppButtonSize.compact,
                 onPressed: _isSavingMetadata ? null : () => unawaited(onSave()),
-                icon:
-                    _isSavingMetadata
-                        ? const AppProgressIndicator(
-                          size: 16,
-                          strokeWidth: 2,
-                          semanticLabel: '保存图书信息',
-                        )
-                        : const Icon(Icons.save_outlined, size: 18),
-                label: Text(_isSavingMetadata ? '保存中' : '保存'),
+                icon: const Icon(Icons.save_outlined, size: 18),
+                isLoading: _isSavingMetadata,
               ),
             ],
           ),
@@ -1971,7 +1972,10 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
                       },
             ),
             const SizedBox(height: 12),
-            TextButton.icon(
+            AppButton(
+              label: '点击封面更换',
+              variant: AppButtonVariant.text,
+              size: AppButtonSize.compact,
               onPressed:
                   _isSavingMetadata
                       ? null
@@ -1980,7 +1984,6 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
                         refreshSurface();
                       },
               icon: const Icon(Icons.photo_library_outlined, size: 18),
-              label: const Text('点击封面更换'),
             ),
           ],
         );

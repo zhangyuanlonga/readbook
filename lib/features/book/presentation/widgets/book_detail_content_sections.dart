@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../app/layout/app_adaptive.dart';
+import '../../../../app/widgets/foundation/app_button.dart';
 import '../../../../app/widgets/foundation/app_progress.dart';
 import '../../../../app/widgets/runtime_feedback_card.dart';
 import '../../../../domain/entities/local_book.dart';
@@ -52,18 +53,23 @@ class BookDetailErrorPresenter extends StatelessWidget {
       message: message,
       tone: RuntimeFeedbackTone.error,
       actions: <Widget>[
-        FilledButton.tonal(onPressed: onRetry, child: const Text('重试')),
+        AppButton(
+          label: '重试',
+          variant: AppButtonVariant.tonal,
+          onPressed: onRetry,
+        ),
         if (onSwitchSource != null)
-          FilledButton.icon(
+          AppButton(
+            label: '换源',
             onPressed: onSwitchSource,
             icon: const Icon(Icons.swap_horiz_rounded, size: 16),
-            label: const Text('换源'),
           ),
         if (onCopyDiagnostics != null)
-          OutlinedButton.icon(
+          AppButton(
+            label: '复制诊断信息',
+            variant: AppButtonVariant.secondary,
             onPressed: onCopyDiagnostics,
             icon: const Icon(Icons.copy_rounded, size: 16),
-            label: const Text('复制诊断信息'),
           ),
       ],
     );
@@ -498,10 +504,15 @@ class BookDetailLocalIndexStatusCard extends StatelessWidget {
               localBook.indexStatus == LocalBookIndexStatus.stale)
             Padding(
               padding: const EdgeInsets.only(left: 8),
-              child: TextButton.icon(
+              child: AppButton(
+                label: '重建',
+                variant: AppButtonVariant.text,
+                size: AppButtonSize.compact,
                 onPressed: isLoading ? null : onRebuild,
                 icon: Icon(Icons.refresh_rounded, color: foreground, size: 16),
-                label: Text('重建', style: TextStyle(color: foreground)),
+                style: ButtonStyle(
+                  foregroundColor: WidgetStatePropertyAll(foreground),
+                ),
               ),
             ),
         ],
@@ -578,10 +589,11 @@ class BookDetailTocWarningPresenter extends StatelessWidget {
           onCopyDiagnostics == null
               ? const <Widget>[]
               : <Widget>[
-                OutlinedButton.icon(
+                AppButton(
+                  label: '复制诊断信息',
+                  variant: AppButtonVariant.secondary,
                   onPressed: onCopyDiagnostics,
                   icon: const Icon(Icons.copy_rounded, size: 16),
-                  label: const Text('复制诊断信息'),
                 ),
               ],
     );

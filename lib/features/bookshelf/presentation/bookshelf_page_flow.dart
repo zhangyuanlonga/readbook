@@ -661,16 +661,23 @@ extension on _BookshelfPageState {
             Widget buildResetDefaultsButton({required VoidCallback onPressed}) {
               return Padding(
                 padding: const EdgeInsets.fromLTRB(12, 12, 12, 2),
-                child: OutlinedButton.icon(
+                child: AppButton(
+                  label: '恢复当前视图默认设置',
+                  variant: AppButtonVariant.secondary,
                   onPressed: onPressed,
                   icon: const Icon(Icons.restart_alt_rounded, size: 18),
-                  label: const Text('恢复当前视图默认设置'),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(42),
+                  expanded: true,
+                  style: ButtonStyle(
                     alignment: Alignment.centerLeft,
-                    foregroundColor: colorScheme.onSurface,
-                    side: BorderSide(
-                      color: colorScheme.outlineVariant.withValues(alpha: 0.8),
+                    foregroundColor: WidgetStatePropertyAll(
+                      colorScheme.onSurface,
+                    ),
+                    side: WidgetStatePropertyAll(
+                      BorderSide(
+                        color: colorScheme.outlineVariant.withValues(
+                          alpha: 0.8,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -1548,15 +1555,12 @@ extension on _BookshelfPageState {
                     ),
                   ),
                   if (onManage != null)
-                    TextButton.icon(
+                    AppButton(
+                      label: '管理',
+                      variant: AppButtonVariant.text,
+                      size: AppButtonSize.compact,
                       onPressed: onManage,
                       icon: const Icon(Icons.tune_rounded, size: 16),
-                      label: const Text('管理'),
-                      style: TextButton.styleFrom(
-                        minimumSize: const Size(0, 30),
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
                     ),
                 ],
               );
@@ -1653,19 +1657,16 @@ extension on _BookshelfPageState {
               required String collapseLabel,
               required VoidCallback onPressed,
             }) {
-              return TextButton.icon(
+              return AppButton(
+                label: expanded ? collapseLabel : expandLabel,
+                variant: AppButtonVariant.text,
+                size: AppButtonSize.compact,
                 onPressed: onPressed,
                 icon: Icon(
                   expanded
                       ? Icons.expand_less_rounded
                       : Icons.expand_more_rounded,
                   size: 18,
-                ),
-                label: Text(expanded ? collapseLabel : expandLabel),
-                style: TextButton.styleFrom(
-                  minimumSize: const Size(0, 30),
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
               );
             }
@@ -2127,7 +2128,12 @@ class _BookshelfTaxonomyEditorDialogState
                     tooltip: '删除',
                     icon: const Icon(Icons.delete_outline_rounded),
                   ),
-                FilledButton.tonal(onPressed: _save, child: const Text('保存')),
+                AppButton(
+                  label: '保存',
+                  variant: AppButtonVariant.tonal,
+                  size: AppButtonSize.compact,
+                  onPressed: _save,
+                ),
               ],
             ),
             const SizedBox(height: 18),

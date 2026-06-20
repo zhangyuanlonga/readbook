@@ -14,8 +14,8 @@ import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/adaptive_setting_tile.dart';
+import '../../../app/widgets/foundation/app_button.dart';
 import '../../../app/widgets/foundation/app_feedback.dart';
-import '../../../app/widgets/foundation/app_progress.dart';
 import '../../../domain/entities/reader_settings.dart';
 import '../../bookshelf/application/bookshelf_system_settings_service.dart';
 import '../application/app_reset_service.dart';
@@ -587,17 +587,12 @@ class _AppResetPanelState extends State<_AppResetPanel> {
             loading: _isResetting,
           ),
           SizedBox(height: metrics.contentGap),
-          FilledButton.tonalIcon(
+          AppButton(
+            label: _isResetting ? '重置中' : '开始重置',
+            variant: AppButtonVariant.tonal,
             onPressed: _isResetting ? null : _confirmReset,
-            icon:
-                _isResetting
-                    ? const AppProgressIndicator(
-                      size: 16,
-                      strokeWidth: 2,
-                      semanticLabel: '重置中',
-                    )
-                    : const Icon(Icons.warning_amber_rounded),
-            label: const Text('开始重置'),
+            icon: const Icon(Icons.warning_amber_rounded),
+            isLoading: _isResetting,
           ),
           if (_errorText case final message?) ...[
             SizedBox(height: metrics.contentGap),
@@ -815,23 +810,25 @@ class _ReaderSettingsResetPanelState extends State<_ReaderSettingsResetPanel> {
             spacing: metrics.contentGap,
             runSpacing: metrics.contentGap,
             children: [
-              OutlinedButton.icon(
+              AppButton(
+                label: '恢复界面默认',
+                variant: AppButtonVariant.secondary,
                 onPressed:
                     _isSaving
                         ? null
                         : () =>
                             _reset(_ReaderSettingsResetScope.interfaceSettings),
                 icon: const Icon(Icons.palette_outlined),
-                label: const Text('恢复界面默认'),
               ),
-              OutlinedButton.icon(
+              AppButton(
+                label: '恢复阅读默认',
+                variant: AppButtonVariant.secondary,
                 onPressed:
                     _isSaving
                         ? null
                         : () =>
                             _reset(_ReaderSettingsResetScope.readingSettings),
                 icon: const Icon(Icons.menu_book_outlined),
-                label: const Text('恢复阅读默认'),
               ),
             ],
           ),

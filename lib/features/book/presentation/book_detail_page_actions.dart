@@ -555,7 +555,10 @@ extension on _BookDetailPageState {
                                               ),
                                         ),
                                       ),
-                                      FilledButton.tonalIcon(
+                                      AppButton(
+                                        label: '完成',
+                                        variant: AppButtonVariant.tonal,
+                                        size: AppButtonSize.compact,
                                         onPressed: () {
                                           final name =
                                               nameController.text.trim();
@@ -571,13 +574,6 @@ extension on _BookDetailPageState {
                                           ));
                                         },
                                         icon: const Icon(Icons.check_rounded),
-                                        label: const Text('完成'),
-                                        style: FilledButton.styleFrom(
-                                          minimumSize: const Size(0, 36),
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 12,
-                                          ),
-                                        ),
                                       ),
                                     ],
                                   ),
@@ -891,17 +887,12 @@ extension on _BookDetailPageState {
                         buildSectionCard(
                           icon: Icons.folder_rounded,
                           title: '分类（单选）',
-                          trailing: TextButton.icon(
+                          trailing: AppButton(
+                            label: '管理分类',
+                            variant: AppButtonVariant.text,
+                            size: AppButtonSize.compact,
                             onPressed: () => unawaited(openManageCategory()),
                             icon: const Icon(Icons.tune_rounded, size: 18),
-                            label: const Text('管理分类'),
-                            style: TextButton.styleFrom(
-                              minimumSize: const Size(0, 32),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                              ),
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -939,17 +930,12 @@ extension on _BookDetailPageState {
                         buildSectionCard(
                           icon: Icons.sell_rounded,
                           title: '标签（多选）',
-                          trailing: TextButton.icon(
+                          trailing: AppButton(
+                            label: '管理标签',
+                            variant: AppButtonVariant.text,
+                            size: AppButtonSize.compact,
                             onPressed: () => unawaited(openManageTag()),
                             icon: const Icon(Icons.tune_rounded, size: 18),
-                            label: const Text('管理标签'),
-                            style: TextButton.styleFrom(
-                              minimumSize: const Size(0, 32),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                              ),
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1055,25 +1041,22 @@ extension on _BookDetailPageState {
                         Row(
                           children: [
                             Expanded(
-                              child: OutlinedButton(
+                              child: AppButton(
+                                label: '取消',
+                                variant: AppButtonVariant.secondary,
                                 onPressed:
                                     () => Navigator.of(context).pop(false),
-                                style: OutlinedButton.styleFrom(
-                                  minimumSize: const Size(0, 38),
-                                ),
-                                child: const Text('取消'),
+                                expanded: true,
                               ),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
-                              child: FilledButton.icon(
+                              child: AppButton(
+                                label: '保存',
                                 onPressed:
                                     () => Navigator.of(context).pop(true),
                                 icon: const Icon(Icons.check_rounded),
-                                label: const Text('保存'),
-                                style: FilledButton.styleFrom(
-                                  minimumSize: const Size(0, 38),
-                                ),
+                                expanded: true,
                               ),
                             ),
                           ],

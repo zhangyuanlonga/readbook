@@ -2260,7 +2260,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
       maxWidth: 460,
       builder: (dialogContext) {
         final theme = Theme.of(dialogContext);
-        final colorScheme = theme.colorScheme;
         final mediaQuery = MediaQuery.of(dialogContext);
         final safeBottom = math.max(
           mediaQuery.viewPadding.bottom,
@@ -2284,18 +2283,18 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  TextButton(
+                  AppButton(
+                    label: '取消',
+                    variant: AppButtonVariant.text,
+                    size: AppButtonSize.compact,
                     onPressed: () => Navigator.of(dialogContext).pop(false),
-                    child: const Text('取消'),
                   ),
                   const SizedBox(width: 8),
-                  FilledButton(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: colorScheme.error,
-                      foregroundColor: colorScheme.onError,
-                    ),
+                  AppButton(
+                    label: '删除',
+                    variant: AppButtonVariant.danger,
+                    size: AppButtonSize.compact,
                     onPressed: () => Navigator.of(dialogContext).pop(true),
-                    child: const Text('删除'),
                   ),
                 ],
               ),

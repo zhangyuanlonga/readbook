@@ -800,10 +800,6 @@ extension on _MinePageState {
     required bool prominent,
     required VoidCallback onPressed,
   }) {
-    final componentTokens = appComponentThemeTokensOf(context);
-    final buttonRadius = BorderRadius.all(
-      Radius.circular(componentTokens.button.radius),
-    );
     final icon =
         _hasMembership
             ? Icons.chevron_right_rounded
@@ -812,42 +808,29 @@ extension on _MinePageState {
         ThemeData.estimateBrightnessForColor(accent) == Brightness.dark
             ? Colors.white
             : Colors.black;
-    final baseStyle = ButtonStyle(
-      minimumSize: const WidgetStatePropertyAll<Size>(Size(0, 34)),
-      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      visualDensity: VisualDensity.compact,
-      padding: const WidgetStatePropertyAll<EdgeInsetsGeometry>(
-        EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      ),
-      textStyle: WidgetStatePropertyAll<TextStyle?>(
-        Theme.of(
-          context,
-        ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w800),
-      ),
-      shape: WidgetStatePropertyAll<RoundedRectangleBorder>(
-        RoundedRectangleBorder(borderRadius: buttonRadius),
-      ),
-    );
 
     if (prominent) {
-      return FilledButton.icon(
+      return AppButton(
         key: const ValueKey<String>('mine_profile_membership_action_button'),
+        label: label,
+        size: AppButtonSize.compact,
         onPressed: _isLoggingOut ? null : onPressed,
         icon: Icon(icon, size: 16),
-        label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
-        style: baseStyle.copyWith(
+        style: ButtonStyle(
           backgroundColor: WidgetStatePropertyAll<Color>(accent),
           foregroundColor: WidgetStatePropertyAll<Color>(foreground),
         ),
       );
     }
 
-    return OutlinedButton.icon(
+    return AppButton(
       key: const ValueKey<String>('mine_profile_membership_action_button'),
+      label: label,
+      variant: AppButtonVariant.secondary,
+      size: AppButtonSize.compact,
       onPressed: _isLoggingOut ? null : onPressed,
       icon: Icon(_userId == null ? Icons.login_rounded : icon, size: 16),
-      label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
-      style: baseStyle.copyWith(
+      style: ButtonStyle(
         foregroundColor: WidgetStatePropertyAll<Color>(accent),
         backgroundColor: WidgetStatePropertyAll<Color>(palette.cardColor),
         side: WidgetStatePropertyAll<BorderSide>(
@@ -1471,30 +1454,23 @@ extension on _MinePageState {
     required String label,
     required _MineResolvedPalette palette,
   }) {
-    final componentTokens = appComponentThemeTokensOf(context);
-    final buttonRadius = BorderRadius.all(
-      Radius.circular(componentTokens.button.radius),
-    );
-    return OutlinedButton.icon(
+    return AppButton(
       key: const ValueKey<String>('mine_desktop_profile_action_button'),
+      label: label,
+      variant: AppButtonVariant.secondary,
+      size: AppButtonSize.compact,
       onPressed: _isLoggingOut ? null : _handleProfileActionButtonTap,
       icon:
           _isLoggingOut
-              ? const AppProgressIndicator(
-                size: 16,
-                strokeWidth: 2,
-                semanticLabel: '退出登录中',
-              )
+              ? null
               : Icon(_userId == null ? Icons.login_rounded : Icons.logout),
-      label: Text(label),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: palette.primaryColor,
-        side: BorderSide(color: palette.primaryColor.withValues(alpha: 0.28)),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        textStyle: Theme.of(
-          context,
-        ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w800),
-        shape: RoundedRectangleBorder(borderRadius: buttonRadius),
+      isLoading: _isLoggingOut,
+      style: ButtonStyle(
+        foregroundColor: WidgetStatePropertyAll(palette.primaryColor),
+        side: WidgetStatePropertyAll(
+          // UI-GOV-EXEMPT: local-alpha advanced-theme-button-border
+          BorderSide(color: palette.primaryColor.withValues(alpha: 0.28)),
+        ),
       ),
     );
   }

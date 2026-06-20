@@ -509,20 +509,16 @@ class _StorageManagementPageState extends State<StorageManagementPage> {
                 ),
               ),
               const SizedBox(width: 8),
-              TextButton.icon(
+              AppButton(
+                label: isClearing ? '清理中' : '清理',
+                variant: AppButtonVariant.text,
+                size: AppButtonSize.compact,
                 onPressed:
                     entry.deletable && !isClearing
                         ? () => _clearCacheScope(entry)
                         : null,
-                icon:
-                    isClearing
-                        ? const AppProgressIndicator(
-                          size: 14,
-                          strokeWidth: 2,
-                          semanticLabel: '清理缓存中',
-                        )
-                        : const Icon(Icons.delete_sweep_outlined),
-                label: const Text('清理'),
+                icon: const Icon(Icons.delete_sweep_outlined),
+                isLoading: isClearing,
               ),
             ],
           ),
@@ -556,34 +552,25 @@ class _StorageManagementPageState extends State<StorageManagementPage> {
         spacing: 12,
         runSpacing: 12,
         children: [
-          OutlinedButton.icon(
+          AppButton(
+            label: _isClearingCaches ? '清理中' : '清理所有缓存',
+            variant: AppButtonVariant.secondary,
             onPressed: _isClearingCaches ? null : _clearCaches,
-            icon:
-                _isClearingCaches
-                    ? const AppProgressIndicator(
-                      size: 16,
-                      strokeWidth: 2,
-                      semanticLabel: '清理所有缓存中',
-                    )
-                    : const Icon(Icons.cleaning_services_outlined),
-            label: const Text('清理所有缓存'),
+            icon: const Icon(Icons.cleaning_services_outlined),
+            isLoading: _isClearingCaches,
           ),
-          OutlinedButton.icon(
+          AppButton(
+            label: _isCleaningOrphans ? '清理中' : '清理孤立数据',
+            variant: AppButtonVariant.secondary,
             onPressed: _isCleaningOrphans ? null : _cleanOrphans,
-            icon:
-                _isCleaningOrphans
-                    ? const AppProgressIndicator(
-                      size: 16,
-                      strokeWidth: 2,
-                      semanticLabel: '清理孤立数据中',
-                    )
-                    : const Icon(Icons.auto_fix_high_outlined),
-            label: const Text('清理孤立数据'),
+            icon: const Icon(Icons.auto_fix_high_outlined),
+            isLoading: _isCleaningOrphans,
           ),
-          OutlinedButton.icon(
+          AppButton(
+            label: '刷新统计',
+            variant: AppButtonVariant.secondary,
             onPressed: _isLoading ? null : _load,
             icon: const Icon(Icons.refresh_rounded),
-            label: const Text('刷新统计'),
           ),
         ],
       ),
