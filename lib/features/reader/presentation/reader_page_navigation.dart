@@ -656,6 +656,12 @@ extension _ReaderPageNavigationExtension on _ReaderPageState {
       chapterDocument: _document,
       isPagedTextReaderEnabled: _isPagedTextReaderEnabled(),
       currentPageIndex: _pageTurnRuntimeController.currentPageIndex,
+      chapterLayoutPages:
+          _layoutReleaseRendererActive && _layoutReleaseCompleted
+              ? _layoutReleasePages
+              : const <ReaderLayoutPage>[],
+      chapterLayoutSignature: _layoutReleaseLayoutSignature,
+      searchAnchorMapper: _layoutSearchAnchorMapper,
     );
     _catalogSearchCacheFingerprint = result.state.fingerprint;
     _catalogSearchEntriesCache = result.state.entriesCache;

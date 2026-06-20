@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:shuxiang_reading_next/domain/entities/bookmark.dart';
 import 'package:shuxiang_reading_next/domain/entities/chapter.dart';
+import 'package:shuxiang_reading_next/domain/entities/reader_logical_position.dart';
 import 'package:shuxiang_reading_next/features/reader/application/reader_navigation_entry_resolver.dart';
 
 void main() {
@@ -53,6 +54,35 @@ void main() {
       expect(request, isNotNull);
       expect(request!.type, ReaderNavigationRequestType.jumpChapter);
       expect(request.targetChapterIndex, 1);
+    });
+
+    test('keeps content search logical position in jump request', () {
+      const logicalPosition = ReaderLogicalPosition(
+        chapterIndex: 1,
+        blockIndex: 2,
+        offsetInBlock: 4,
+        chapterPositionRatio: 0.42,
+        pageIndex: 3,
+        totalPageCount: 8,
+        viewportMode: 'layout',
+      );
+
+      final request = resolver.resolveCatalogSearchEntry(
+        entry: const ReaderCatalogSearchEntryAdapter(
+          chapterIndex: 1,
+          targetChapterIndex: null,
+          isVolume: false,
+          isContent: true,
+          scrollRatio: 0.42,
+          logicalPosition: logicalPosition,
+        ),
+        chapters: chapters,
+      );
+
+      expect(request, isNotNull);
+      expect(request!.targetChapterIndex, 1);
+      expect(request.initialScrollRatio, 0.42);
+      expect(request.initialLogicalPosition, logicalPosition);
     });
 
     test('resolves bookmark chapter index through readable chapter lookup', () {

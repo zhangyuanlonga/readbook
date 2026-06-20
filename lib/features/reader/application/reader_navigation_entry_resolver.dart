@@ -119,7 +119,11 @@ class ReaderNavigationEntryResolver {
     if (targetIndex == null) {
       return null;
     }
-    return ReaderNavigationRequest.jumpChapter(targetChapterIndex: targetIndex);
+    return ReaderNavigationRequest.jumpChapter(
+      targetChapterIndex: targetIndex,
+      initialScrollRatio: entry.isContent ? entry.scrollRatio : null,
+      initialLogicalPosition: entry.isContent ? entry.logicalPosition : null,
+    );
   }
 
   int? resolveBookmarkChapterIndex({
@@ -156,10 +160,14 @@ class ReaderCatalogSearchEntryAdapter {
     required this.targetChapterIndex,
     required this.isVolume,
     required this.isContent,
+    this.scrollRatio,
+    this.logicalPosition,
   });
 
   final int? chapterIndex;
   final int? targetChapterIndex;
   final bool isVolume;
   final bool isContent;
+  final double? scrollRatio;
+  final ReaderLogicalPosition? logicalPosition;
 }

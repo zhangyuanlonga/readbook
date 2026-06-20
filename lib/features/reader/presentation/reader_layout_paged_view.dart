@@ -68,7 +68,6 @@ class ReaderLayoutPagedView extends StatefulWidget {
 class _ReaderLayoutPagedViewState extends State<ReaderLayoutPagedView> {
   PageController? _ownedPageController;
   int? _pendingJumpPage;
-  ({int pageIndex, double dx, double dy})? _selectionDragStart;
 
   @override
   void initState() {
@@ -160,45 +159,19 @@ class _ReaderLayoutPagedViewState extends State<ReaderLayoutPagedView> {
       onPageChanged: widget.onPageChanged,
       itemBuilder: (context, index) {
         final layoutPage = pages[index];
-        final renderPage =
-            const ReaderLayoutRenderModelBuilder().buildPages(
-              <ReaderLayoutPage>[layoutPage],
-            ).single;
-        Widget pageChild = Align(
-          alignment: Alignment.topLeft,
-          child: ReaderLayoutPageView(
-            page: renderPage,
+        return RepaintBoundary(
+          key: ValueKey<String>('reader_layout_page_$index'),
+          child: ReaderLayoutPageSurface(
+            pages: pages,
+            page: layoutPage,
             textStyle: widget.textStyle,
             titleStyle: widget.titleStyle,
             imagePlaceholderBuilder: widget.imagePlaceholderBuilder,
             annotationRanges: widget.annotationRanges,
             highlightColor: widget.highlightColor,
+            selectionRuntime: widget.selectionRuntime,
+            onSelectionChanged: widget.onSelectionChanged,
           ),
-        );
-        if (widget.onSelectionChanged != null) {
-          pageChild = GestureDetector(
-            behavior: HitTestBehavior.translucent,
-            onLongPressStart:
-                (details) => _handleLongPressStart(
-                  pages: pages,
-                  page: layoutPage,
-                  details: details,
-                ),
-            onLongPressMoveUpdate:
-                (details) => _handleLongPressMoveUpdate(
-                  pages: pages,
-                  page: layoutPage,
-                  details: details,
-                ),
-            onLongPressEnd: (_) {
-              _selectionDragStart = null;
-            },
-            child: pageChild,
-          );
-        }
-        return RepaintBoundary(
-          key: ValueKey<String>('reader_layout_page_$index'),
-          child: pageChild,
         );
       },
     );
@@ -214,6 +187,80 @@ class _ReaderLayoutPagedViewState extends State<ReaderLayoutPagedView> {
           child: IgnorePointer(child: widget.diagnosticsOverlay),
         ),
       ],
+    );
+  }
+}
+
+class ReaderLayoutPageSurface extends StatefulWidget {
+  const ReaderLayoutPageSurface({
+    super.key,
+    required this.pages,
+    required this.page,
+    this.textStyle,
+    this.titleStyle,
+    this.imagePlaceholderBuilder,
+    this.annotationRanges = const <ReaderLayoutTextAnnotationRange>[],
+    this.highlightColor,
+    this.selectionRuntime = const ReaderSelectionRuntime(),
+    this.onSelectionChanged,
+  });
+
+  final List<ReaderLayoutPage> pages;
+  final ReaderLayoutPage page;
+  final TextStyle? textStyle;
+  final TextStyle? titleStyle;
+  final ReaderLayoutImagePlaceholderBuilder? imagePlaceholderBuilder;
+  final List<ReaderLayoutTextAnnotationRange> annotationRanges;
+  final Color? highlightColor;
+  final ReaderSelectionRuntime selectionRuntime;
+  final ValueChanged<ReaderLayoutSelectionSnapshot>? onSelectionChanged;
+
+  @override
+  State<ReaderLayoutPageSurface> createState() =>
+      _ReaderLayoutPageSurfaceState();
+}
+
+class _ReaderLayoutPageSurfaceState extends State<ReaderLayoutPageSurface> {
+  ({int pageIndex, double dx, double dy})? _selectionDragStart;
+
+  @override
+  Widget build(BuildContext context) {
+    final renderPage =
+        const ReaderLayoutRenderModelBuilder().buildPages(<ReaderLayoutPage>[
+          widget.page,
+        ]).single;
+    Widget pageChild = Align(
+      alignment: Alignment.topLeft,
+      child: ReaderLayoutPageView(
+        page: renderPage,
+        textStyle: widget.textStyle,
+        titleStyle: widget.titleStyle,
+        imagePlaceholderBuilder: widget.imagePlaceholderBuilder,
+        annotationRanges: widget.annotationRanges,
+        highlightColor: widget.highlightColor,
+      ),
+    );
+    if (widget.onSelectionChanged == null) {
+      return pageChild;
+    }
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onLongPressStart:
+          (details) => _handleLongPressStart(
+            pages: widget.pages,
+            page: widget.page,
+            details: details,
+          ),
+      onLongPressMoveUpdate:
+          (details) => _handleLongPressMoveUpdate(
+            pages: widget.pages,
+            page: widget.page,
+            details: details,
+          ),
+      onLongPressEnd: (_) {
+        _selectionDragStart = null;
+      },
+      child: pageChild,
     );
   }
 

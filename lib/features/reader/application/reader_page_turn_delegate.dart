@@ -33,7 +33,7 @@ class ReaderPageTurnDelegateDecision {
       type == ReaderPageTurnDelegateDecisionType.useLegacyFallback;
 }
 
-/// Keeps old page-turn capabilities available while the layout renderer catches up.
+/// Keeps page-turn capability decisions explicit for each renderer surface.
 class ReaderPageTurnDelegate {
   const ReaderPageTurnDelegate();
 
@@ -75,7 +75,7 @@ class ReaderPageTurnDelegate {
     );
   }
 
-  bool _layoutReleaseSupports(ReaderPageAnimationStyle style) {
-    return style == ReaderPageAnimationStyle.none;
+  bool _layoutReleaseSupports(ReaderPageAnimationStyle _) {
+    return true;
   }
 }

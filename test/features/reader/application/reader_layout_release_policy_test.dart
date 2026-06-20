@@ -73,7 +73,7 @@ void main() {
       expect(decision.reason, 'content_length_over_cap');
     });
 
-    test('keeps legacy renderer for old page animations not yet bridged', () {
+    test('keeps release renderer for existing page animations', () {
       const policy = ReaderLayoutReleasePolicy();
 
       final decision = policy.resolve(
@@ -84,9 +84,9 @@ void main() {
         pageAnimationStyle: ReaderPageAnimationStyle.paperCurl,
       );
 
-      expect(decision.useReleaseRenderer, isFalse);
-      expect(decision.mode, ReaderLayoutEngineMode.legacy);
-      expect(decision.reason, 'layout_release_page_animation_requires_legacy');
+      expect(decision.useReleaseRenderer, isTrue);
+      expect(decision.mode, ReaderLayoutEngineMode.experimental);
+      expect(decision.reason, 'enabled');
       expect(
         decision.toDiagnosticsContext(),
         containsPair('readerLayoutReleaseRequestedAnimation', 'paperCurl'),

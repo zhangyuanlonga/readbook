@@ -133,10 +133,12 @@ import '../application/reader_session_presentation_facade.dart';
 import '../application/reader_surface_policy_resolver.dart';
 import '../application/reader_surface_metrics.dart';
 import '../application/reader_logical_position.dart';
+import '../application/reader_search_anchor_mapper.dart';
 import '../application/local/local_chapter_content_service.dart';
 import '../application/reader_session_controller.dart';
 import '../application/reader_preferences_service.dart';
 import '../application/reader_preload_controller.dart';
+import '../application/reader_read_aloud_anchor_mapper.dart';
 import '../application/reader_resource_budget.dart';
 import '../application/reader_renderer_authority_resolver.dart';
 import '../application/reader_runtime_facade.dart';
@@ -162,6 +164,7 @@ import '../application/text_reader_renderer.dart';
 import '../application/reader_volume_key_page_bridge.dart';
 import '../application/source_switch_score_service.dart';
 import '../application/switch_source_shared.dart';
+import '../domain/entities/reader_layout_models.dart';
 import '../application/local/local_book_storage_service.dart';
 import '../application/reader_cached_chapter_store.dart';
 import '../application/reader_dependencies_provider.dart';
@@ -878,10 +881,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const ReaderRendererAuthorityResolver();
   final ReaderLayoutRendererController _layoutReleaseRendererController =
       ReaderLayoutRendererController();
+  final ReaderSearchAnchorMapper _layoutSearchAnchorMapper =
+      const ReaderSearchAnchorMapper();
+  final ReaderReadAloudAnchorMapper _layoutReadAloudAnchorMapper =
+      const ReaderReadAloudAnchorMapper();
   List<List<ReaderPagedSlice>> _pagedPages = const [];
   List<List<ReaderPagedBlock>> _pagedBlockPages = const [];
   String? _textPaginationFallbackDiagnostic;
+  List<ReaderLayoutPage> _layoutReleasePages = const <ReaderLayoutPage>[];
   int? _layoutReleasePageCount;
+  bool _layoutReleaseCompleted = false;
+  String? _layoutReleaseLayoutSignature;
   String? _layoutReleaseRequestSignature;
   String? _layoutReleaseDiagnostic;
   double _layoutReleaseTargetRatio = 0;
@@ -1017,7 +1027,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   void _resetLayoutReleaseRuntime() {
     _layoutReleaseRendererActive = false;
+    _layoutReleasePages = const <ReaderLayoutPage>[];
     _layoutReleasePageCount = null;
+    _layoutReleaseCompleted = false;
+    _layoutReleaseLayoutSignature = null;
     _layoutReleaseRequestSignature = null;
     _layoutReleaseDiagnostic = null;
     _layoutReleaseTargetRatio = 0;
@@ -1035,7 +1048,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
     _layoutReleaseRequestSignature = request.layoutSignature;
     _layoutReleaseRendererActive = true;
+    _layoutReleasePages = const <ReaderLayoutPage>[];
     _layoutReleasePageCount = null;
+    _layoutReleaseCompleted = false;
+    _layoutReleaseLayoutSignature = null;
     _layoutReleaseDiagnostic = null;
     _layoutReleaseTargetRatio = targetRatio.clamp(0.0, 1.0).toDouble();
     _layoutReleaseInitialPageIndex = max(0, initialPageIndex);
@@ -3120,9 +3136,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   ReaderPageAnimationStyle _currentPagedAnimationStyle() {
-    if (_layoutReleaseRendererActive) {
-      return ReaderPageAnimationStyle.none;
-    }
     return _currentReaderMode.pageAnimationStyle ??
         ReaderPageAnimationStyle.none;
   }
@@ -5016,6 +5029,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           _readerModeCapabilities.supportsCatalogContentSearch,
       chapterContent: _content,
       chapterParagraphCount: _paragraphs.length,
+      chapterLayoutPageCount:
+          _layoutReleaseRendererActive && _layoutReleaseCompleted
+              ? _layoutReleasePages.length
+              : 0,
+      chapterLayoutSignature: _layoutReleaseLayoutSignature,
     );
     if (_catalogSearchCacheFingerprint != fingerprint) {
       _resetCatalogSearchCache();
@@ -5031,6 +5049,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         targetChapterIndex: entry.targetChapterIndex,
         isVolume: entry.isVolume,
         isContent: entry.isContent,
+        scrollRatio: entry.scrollRatio,
+        logicalPosition: entry.logicalPosition,
       ),
       chapters: _chapters,
     );

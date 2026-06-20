@@ -1,6 +1,7 @@
 import 'package:shuxiang_reading_next/domain/entities/chapter.dart';
 import 'package:shuxiang_reading_next/domain/entities/reader_document.dart';
 import 'package:shuxiang_reading_next/features/reader/application/reader_catalog_search_service.dart';
+import 'package:shuxiang_reading_next/features/reader/domain/entities/reader_layout_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -88,6 +89,32 @@ void main() {
       expect(first.entries, isNotEmpty);
       expect(identical(first.entries, second.entries), isTrue);
       expect(second.state.entriesCache[keyword], isNotNull);
+    });
+
+    test('buildFullTextSearchEntries uses layout anchors for paged hits', () {
+      final entries = service.buildFullTextSearchEntries(
+        keyword: 'foo',
+        chapters: chapters,
+        currentChapterIndex: 0,
+        supportsContentSearch: true,
+        chapterContent: 'hello world\n\nfoo bar',
+        chapterParagraphs: const <String>['hello world', 'foo bar'],
+        chapterDocument: ReaderDocument(
+          blocks: const <ReaderBlock>[
+            ReaderTextBlock(text: 'hello world'),
+            ReaderTextBlock(text: 'foo bar'),
+          ],
+        ),
+        isPagedTextReaderEnabled: true,
+        currentPageIndex: 0,
+        chapterLayoutPages: _layoutPages(),
+      );
+
+      final contentEntry = entries.singleWhere((entry) => entry.isContent);
+      expect(contentEntry.logicalPosition, isNotNull);
+      expect(contentEntry.logicalPosition!.pageIndex, 1);
+      expect(contentEntry.logicalPosition!.offsetInBlock, 0);
+      expect(contentEntry.scrollRatio, greaterThan(0));
     });
 
     test('lookup invalidates stale cache when fingerprint changes', () {
@@ -213,4 +240,73 @@ void main() {
       expect(entries.where((entry) => entry.isContent), isEmpty);
     });
   });
+}
+
+List<ReaderLayoutPage> _layoutPages() {
+  return const <ReaderLayoutPage>[
+    ReaderLayoutPage(
+      chapterId: 'chapter_1',
+      chapterIndex: 0,
+      pageIndex: 0,
+      startOffset: 0,
+      endOffset: 11,
+      contentWidth: 320,
+      contentHeight: 480,
+      layoutSignature: 'layout-search',
+      lines: <ReaderLayoutLine>[
+        ReaderLayoutLine(
+          lineIndex: 0,
+          paragraphIndex: 0,
+          text: 'hello world',
+          chapterOffset: 0,
+          pageOffset: 0,
+          lineTop: 0,
+          lineBase: 18,
+          lineBottom: 24,
+          columns: <ReaderLayoutColumn>[
+            ReaderLayoutColumn(
+              columnIndex: 0,
+              kind: ReaderLayoutColumnKind.text,
+              startOffset: 0,
+              endOffset: 11,
+              rect: ReaderLayoutRect(left: 0, top: 0, right: 110, bottom: 24),
+              text: 'hello world',
+            ),
+          ],
+        ),
+      ],
+    ),
+    ReaderLayoutPage(
+      chapterId: 'chapter_1',
+      chapterIndex: 0,
+      pageIndex: 1,
+      startOffset: 13,
+      endOffset: 20,
+      contentWidth: 320,
+      contentHeight: 480,
+      layoutSignature: 'layout-search',
+      lines: <ReaderLayoutLine>[
+        ReaderLayoutLine(
+          lineIndex: 0,
+          paragraphIndex: 1,
+          text: 'foo bar',
+          chapterOffset: 13,
+          pageOffset: 0,
+          lineTop: 0,
+          lineBase: 18,
+          lineBottom: 24,
+          columns: <ReaderLayoutColumn>[
+            ReaderLayoutColumn(
+              columnIndex: 0,
+              kind: ReaderLayoutColumnKind.text,
+              startOffset: 13,
+              endOffset: 20,
+              rect: ReaderLayoutRect(left: 0, top: 0, right: 70, bottom: 24),
+              text: 'foo bar',
+            ),
+          ],
+        ),
+      ],
+    ),
+  ];
 }

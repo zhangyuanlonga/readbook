@@ -193,6 +193,8 @@ class ReaderNavigationPresenter {
         targetChapterIndex: entry.targetChapterIndex,
         isVolume: entry.isVolume,
         isContent: entry.isContent,
+        scrollRatio: entry.scrollRatio,
+        logicalPosition: entry.logicalPosition,
       ),
       chapters: chapters,
     );

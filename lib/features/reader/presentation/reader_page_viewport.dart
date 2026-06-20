@@ -543,14 +543,16 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
           );
         }
 
-        Widget buildReleaseFrame(
-          ReaderLayoutRendererState state,
-          Widget child,
-        ) {
-          final pageCount = max(1, state.pages.length);
-          final pageIndex = state.pageIndex.clamp(0, pageCount - 1);
+        Widget buildReleaseFrame({
+          required int pageIndex,
+          required int pageCount,
+          required Widget child,
+          bool includeBackgroundDecoration = false,
+        }) {
+          final safePageIndex = pageIndex.clamp(0, pageCount - 1).toInt();
           return ReaderPagedPageFrame(
             pageSize: pageSize,
+            includeBackgroundDecoration: includeBackgroundDecoration,
             pinnedHeader:
                 _showsPagedPinnedChapterHeaderFor(_currentViewportKind)
                     ? SelectionContainer.disabled(
@@ -579,11 +581,135 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
             footer: SelectionContainer.disabled(
               child: _buildPagedFooterSection(
                 colors: colors,
-                index: pageIndex,
+                index: safePageIndex,
                 total: pageCount,
                 layoutMetrics: layoutMetrics,
               ),
             ),
+          );
+        }
+
+        Widget buildReleasePageContent(
+          ReaderLayoutRendererState state,
+          int pageIndex,
+        ) {
+          if (state.pages.isEmpty) {
+            return const ReaderViewportLoadingPlaceholder();
+          }
+          final safePageIndex =
+              pageIndex.clamp(0, state.pages.length - 1).toInt();
+          return ReaderLayoutPageSurface(
+            pages: state.pages,
+            page: state.pages[safePageIndex],
+            textStyle: _paragraphTextStyle(colors),
+            titleStyle: _paragraphTextStyle(
+              colors,
+            ).copyWith(fontWeight: FontWeight.w700),
+            annotationRanges: _buildLayoutReleaseAnnotationRanges(),
+            highlightColor: colors.text.withValues(alpha: 0.16),
+            onSelectionChanged: _handleLayoutReleaseSelectionChanged,
+          );
+        }
+
+        Widget buildReleaseAnimatedViewport(
+          ReaderLayoutRendererState state,
+          Widget staticChild,
+        ) {
+          final pageCount = max(1, state.pages.length);
+          final animationStyle = _currentPagedAnimationStyle();
+          final motion = _pagedTextRenderer.motionSpecForStyle(animationStyle);
+          final curlState = ReaderPagedViewportCurlState(
+            isAnimating: _isCurlAutoTurning,
+            isPreview: _isCurlPreviewActive,
+            direction: _curlAutoDirection,
+            fromIndex: _curlAnimationFromIndex,
+            toIndex: _curlAnimationToIndex,
+            previewProgress: _curlPreviewProgress,
+            commitOnAnimationEnd: _curlCommitOnAnimationEnd,
+            isCrossChapter: _isCurlCrossChapterTurn,
+          );
+          final transitionPlan = _pagedViewportTransitionResolver.resolve(
+            requestedAnimationStyle: animationStyle,
+            pageCount: pageCount,
+            currentPageIndex: _pageTurnRuntimeController.currentPageIndex,
+            pagedTransition: _pageTurnRuntimeController.pagedTransition,
+            curlState: curlState,
+          );
+          if (transitionPlan.renderMode ==
+              ReaderPagedViewportRenderMode.staticPage) {
+            final pageIndex =
+                _pageTurnRuntimeController.currentPageIndex
+                    .clamp(0, pageCount - 1)
+                    .toInt();
+            return buildReleaseFrame(
+              pageIndex: pageIndex,
+              pageCount: pageCount,
+              child: staticChild,
+            );
+          }
+
+          final viewportInput = ReaderPagedViewportInput(
+            chapterId: _chapterId,
+            pageIndex: _pageTurnRuntimeController.currentPageIndex,
+            pageCount: pageCount,
+            pageSize: pageSize,
+            animationStyle: animationStyle,
+            viewportMetricsHash: Object.hash(
+              _layoutReleaseRequestSignature,
+              state.pages.isEmpty ? null : state.pages.first.layoutSignature,
+              paginationSpec.contentWidth,
+              paginationSpec.contentHeight,
+            ),
+          );
+          return ReaderPagedAnimationSurface(
+            model: pagedViewModel,
+            plan: transitionPlan,
+            pageBuilder:
+                ({
+                  required int pageIndex,
+                  required bool includeBackgroundDecoration,
+                }) => buildReleaseFrame(
+                  pageIndex: pageIndex,
+                  pageCount: pageCount,
+                  includeBackgroundDecoration: includeBackgroundDecoration,
+                  child: buildReleasePageContent(state, pageIndex),
+                ),
+            pagedTransitionAnimation: _pagedTransitionController,
+            curlAnimation: _curlAutoTurnController,
+            switchInCurve: motion.switchInCurve,
+            paperCurlKey: _paperCurlViewKey,
+            paperCurlSurface: ReaderPaperCurlPagedSurface(
+              surfaceToken: viewportInput,
+              pageCount: pageCount,
+              currentPageIndex: _pageTurnRuntimeController.currentPageIndex,
+              pageBuilder:
+                  (context, pageIndex) => buildReleaseFrame(
+                    pageIndex: pageIndex,
+                    pageCount: pageCount,
+                    includeBackgroundDecoration: true,
+                    child: buildReleasePageContent(state, pageIndex),
+                  ),
+            ),
+            onPaperCurlTurnStarted: (_) {
+              _markReaderInteractionBusy(
+                ReaderInteractionRuntimeState.animating,
+              );
+              _recordFirstPageTurnCompleted(mode: 'paper_curl');
+            },
+            onPaperCurlTurnRejected: (_) {
+              _scheduleReaderInteractionSettle();
+            },
+            onPaperCurlTurnResult: _handlePaperCurlTurnResult,
+            onPaperCurlPageCommitted: _commitPaperCurlPage,
+            curlState: curlState,
+            curlColors: CurlRendererColors(
+              backgroundColor: colors.background,
+              dividerColor: colors.divider,
+              overlayColor: colors.overlay,
+            ),
+            selectionWrapper: (child) => _wrapSelectionArea(child: child),
+            disabledSelectionWrapper:
+                (child) => SelectionContainer.disabled(child: child),
           );
         }
 
@@ -623,7 +749,8 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
               (context, state) =>
                   buildLoadingViewport(total: _currentPagedPageCount),
           readyBuilder:
-              (context, state, child) => buildReleaseFrame(state, child),
+              (context, state, child) =>
+                  buildReleaseAnimatedViewport(state, child),
           showDiagnosticsOverlay: releaseDecision.showDiagnosticsOverlay,
           onDiagnostics:
               (state) =>
@@ -660,7 +787,10 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
   void _deactivateLayoutReleaseForFallback(String diagnostic) {
     _layoutReleaseRendererController.cancelActive();
     _layoutReleaseRendererActive = false;
+    _layoutReleasePages = const <ReaderLayoutPage>[];
     _layoutReleasePageCount = null;
+    _layoutReleaseCompleted = false;
+    _layoutReleaseLayoutSignature = null;
     _layoutReleaseRequestSignature = null;
     _layoutReleaseTargetRatio = 0;
     _layoutReleaseInitialPageIndex = 0;
@@ -768,14 +898,26 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
       'readerLayoutAutoReadAnchorReason': autoReadAnchorReadiness.reason,
     };
     final diagnostic = _formatLayoutReleaseDiagnostic(context);
+    final layoutPages =
+        isActive && state.canRenderLayout
+            ? state.pages
+            : const <ReaderLayoutPage>[];
+    final layoutPagesChanged =
+        !identical(_layoutReleasePages, layoutPages) ||
+        _layoutReleaseCompleted != (isActive && state.completed) ||
+        _layoutReleaseLayoutSignature != layoutSignature;
     if (_layoutReleaseRendererActive == isActive &&
         _layoutReleasePageCount == pageCount &&
-        _layoutReleaseDiagnostic == diagnostic) {
+        _layoutReleaseDiagnostic == diagnostic &&
+        !layoutPagesChanged) {
       return;
     }
     _updateReaderState(() {
       _layoutReleaseRendererActive = isActive;
+      _layoutReleasePages = layoutPages;
       _layoutReleasePageCount = pageCount;
+      _layoutReleaseCompleted = isActive && state.completed;
+      _layoutReleaseLayoutSignature = layoutSignature;
       _layoutReleaseDiagnostic = diagnostic;
     });
   }
@@ -878,6 +1020,10 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
         ),
       );
     }
+    final readAloudRange = _buildLayoutReleaseReadAloudRange(totalLength);
+    if (readAloudRange != null) {
+      ranges.add(readAloudRange);
+    }
     if (_isTextSelectionActive && _selectionEndOffset > _selectionStartOffset) {
       ranges.add(
         ReaderLayoutTextAnnotationRange(
@@ -887,6 +1033,56 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
       );
     }
     return List<ReaderLayoutTextAnnotationRange>.unmodifiable(ranges);
+  }
+
+  ReaderLayoutTextAnnotationRange? _buildLayoutReleaseReadAloudRange(
+    int totalLength,
+  ) {
+    if (!_layoutReleaseRendererActive ||
+        !_layoutReleaseCompleted ||
+        _layoutReleasePages.isEmpty ||
+        _autoReadSessionState != ReaderAutoReadSessionState.running ||
+        totalLength <= 0) {
+      return null;
+    }
+    final page = _layoutReleasePageForIndex(
+      _pageTurnRuntimeController.currentPageIndex,
+    );
+    if (page == null || page.lines.isEmpty) {
+      return null;
+    }
+    final step = _layoutReadAloudAnchorMapper.resolveStep(
+      layoutPages: _layoutReleasePages,
+      chapterOffset: page.lines.first.chapterOffset,
+      unit:
+          _settings.autoReadPauseMode == ReaderAutoReadPauseMode.paragraphEnd
+              ? ReaderReadAloudAdvanceUnit.block
+              : ReaderReadAloudAdvanceUnit.line,
+    );
+    final anchor = step?.current;
+    if (anchor == null || anchor.isCollapsed) {
+      return null;
+    }
+    final start =
+        min(anchor.startOffset, anchor.endOffset).clamp(0, totalLength).toInt();
+    final end =
+        max(anchor.startOffset, anchor.endOffset).clamp(0, totalLength).toInt();
+    if (end <= start) {
+      return null;
+    }
+    return ReaderLayoutTextAnnotationRange(startOffset: start, endOffset: end);
+  }
+
+  ReaderLayoutPage? _layoutReleasePageForIndex(int pageIndex) {
+    for (final page in _layoutReleasePages) {
+      if (page.pageIndex == pageIndex) {
+        return page;
+      }
+    }
+    if (pageIndex >= 0 && pageIndex < _layoutReleasePages.length) {
+      return _layoutReleasePages[pageIndex];
+    }
+    return null;
   }
 
   Color? _layoutReleaseBookmarkColor(Bookmark bookmark) {

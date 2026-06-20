@@ -1,6 +1,8 @@
 import '../../../domain/entities/chapter.dart';
 import '../../../domain/entities/reader_document.dart';
+import '../domain/entities/reader_layout_models.dart';
 import 'reader_logical_position.dart';
+import 'reader_search_anchor_mapper.dart';
 
 class ReaderCatalogSearchEntry {
   const ReaderCatalogSearchEntry({
@@ -60,6 +62,10 @@ class ReaderCatalogSearchService {
     required ReaderDocument chapterDocument,
     required bool isPagedTextReaderEnabled,
     required int currentPageIndex,
+    List<ReaderLayoutPage> chapterLayoutPages = const <ReaderLayoutPage>[],
+    String? chapterLayoutSignature,
+    ReaderSearchAnchorMapper searchAnchorMapper =
+        const ReaderSearchAnchorMapper(),
   }) {
     final normalizedKeyword = keyword.trim().toLowerCase();
     final fingerprint = buildCacheFingerprint(
@@ -70,6 +76,8 @@ class ReaderCatalogSearchService {
       supportsContentSearch: supportsContentSearch,
       chapterContent: chapterContent,
       chapterParagraphCount: chapterParagraphs.length,
+      chapterLayoutPageCount: chapterLayoutPages.length,
+      chapterLayoutSignature: chapterLayoutSignature,
     );
 
     var cache = state.entriesCache;
@@ -104,6 +112,8 @@ class ReaderCatalogSearchService {
         chapterDocument: chapterDocument,
         isPagedTextReaderEnabled: isPagedTextReaderEnabled,
         currentPageIndex: currentPageIndex,
+        chapterLayoutPages: chapterLayoutPages,
+        searchAnchorMapper: searchAnchorMapper,
       ),
     );
     final mergedCache = <String, List<ReaderCatalogSearchEntry>>{
@@ -129,6 +139,9 @@ class ReaderCatalogSearchService {
     required ReaderDocument chapterDocument,
     required bool isPagedTextReaderEnabled,
     required int currentPageIndex,
+    List<ReaderLayoutPage> chapterLayoutPages = const <ReaderLayoutPage>[],
+    ReaderSearchAnchorMapper searchAnchorMapper =
+        const ReaderSearchAnchorMapper(),
     int maxEntries = 60,
   }) {
     if (keyword.isEmpty) {
@@ -173,6 +186,33 @@ class ReaderCatalogSearchService {
         chapterParagraphs.isEmpty
             ? chapterDocument.paragraphs
             : chapterParagraphs;
+    if (isPagedTextReaderEnabled &&
+        chapterLayoutPages.isNotEmpty &&
+        paragraphs.isNotEmpty) {
+      final hits = searchAnchorMapper.resolveKeywordHits(
+        keyword: keyword,
+        paragraphs: paragraphs,
+        layoutPages: chapterLayoutPages,
+        chapterIndex: currentChapterIndex,
+        maxHits: maxEntries - entries.length,
+      );
+      for (final hit in hits) {
+        entries.add(
+          ReaderCatalogSearchEntry(
+            title: '第 ${currentChapterIndex + 1} 章正文命中',
+            subtitle: _buildSearchSnippet(hit.anchor.selectedText, keyword),
+            chapterIndex: currentChapterIndex,
+            scrollRatio: hit.scrollRatio,
+            logicalPosition: hit.logicalPosition,
+            isContent: true,
+          ),
+        );
+        if (entries.length >= maxEntries) {
+          break;
+        }
+      }
+      return entries;
+    }
     if (paragraphs.isEmpty) {
       if (_containsKeyword(chapterContent, keyword, normalizedKeyword)) {
         final logicalPosition = ReaderLogicalPosition.fromDocument(
@@ -235,6 +275,8 @@ class ReaderCatalogSearchService {
     required bool supportsContentSearch,
     required String chapterContent,
     required int chapterParagraphCount,
+    int chapterLayoutPageCount = 0,
+    String? chapterLayoutSignature,
   }) {
     final firstChapterId = chapters.isEmpty ? '' : chapters.first.id;
     final lastChapterId = chapters.isEmpty ? '' : chapters.last.id;
@@ -248,6 +290,8 @@ class ReaderCatalogSearchService {
       lastChapterId,
       chapterContent.hashCode.toString(),
       chapterParagraphCount.toString(),
+      chapterLayoutPageCount.toString(),
+      chapterLayoutSignature ?? '',
     ].join('|');
   }
 

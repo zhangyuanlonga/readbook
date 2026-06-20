@@ -18,27 +18,8 @@ void main() {
       expect(decision.effectiveStyle, ReaderPageAnimationStyle.paperCurl);
     });
 
-    test('allows layout release only for explicitly supported animation', () {
-      final decision = delegate.resolve(
-        const ReaderPageTurnDelegateRequest(
-          surface: ReaderPageTurnRendererSurface.layoutRelease,
-          requestedStyle: ReaderPageAnimationStyle.none,
-        ),
-      );
-
-      expect(decision.usesLegacyFallback, isFalse);
-      expect(decision.reason, 'layout_release_supported');
-    });
-
-    test('falls back to legacy for unbridged layout release animations', () {
-      for (final style in <ReaderPageAnimationStyle>[
-        ReaderPageAnimationStyle.paperCurl,
-        ReaderPageAnimationStyle.curl,
-        ReaderPageAnimationStyle.cover,
-        ReaderPageAnimationStyle.translate,
-        ReaderPageAnimationStyle.vertical,
-        ReaderPageAnimationStyle.fade,
-      ]) {
+    test('allows layout release to keep every existing page animation', () {
+      for (final style in ReaderPageAnimationStyle.values) {
         final decision = delegate.resolve(
           ReaderPageTurnDelegateRequest(
             surface: ReaderPageTurnRendererSurface.layoutRelease,
@@ -46,8 +27,9 @@ void main() {
           ),
         );
 
-        expect(decision.usesLegacyFallback, isTrue, reason: style.name);
+        expect(decision.usesLegacyFallback, isFalse, reason: style.name);
         expect(decision.effectiveStyle, style);
+        expect(decision.reason, 'layout_release_supported');
       }
     });
   });
