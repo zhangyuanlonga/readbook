@@ -79,11 +79,33 @@ class _MinePageState extends ConsumerState<MinePage> {
     }
     _openingRoute = route;
     try {
-      await context.push(route);
-    } finally {
+      final navigation = context.push(route);
+      unawaited(
+        navigation.then<void>(
+          (_) {
+            if (_openingRoute == route) {
+              _openingRoute = null;
+            }
+          },
+          onError: (Object _, StackTrace __) {
+            if (_openingRoute == route) {
+              _openingRoute = null;
+            }
+          },
+        ),
+      );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _openingRoute != route) {
+          return;
+        }
+        _openingRoute = null;
+      });
+      await navigation;
+    } catch (_) {
       if (_openingRoute == route) {
         _openingRoute = null;
       }
+      rethrow;
     }
   }
 
@@ -540,8 +562,8 @@ class _MinePageState extends ConsumerState<MinePage> {
     );
   }
 
-  Future<void> _handleAdvancedThemeTap() async {
-    await _pushMineRoute('/appearance/advanced-themes');
+  void _handleAdvancedThemeTap() {
+    unawaited(_pushMineRoute('/appearance/advanced-themes'));
   }
 
   Future<void> _openMembershipCenter() async {

@@ -20,6 +20,10 @@ void main() {
   testWidgets(
     'BookshelfPage can render from database-backed bookshelf snapshot',
     (tester) async {
+      tester.view.physicalSize = const Size(430, 932);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
       SharedPreferences.setMockInitialValues(<String, Object>{});
       final prefs = await SharedPreferences.getInstance();
       final database = AppDatabase(executor: NativeDatabase.memory());
@@ -79,6 +83,16 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(await database.listBookshelfBooks(), hasLength(1));
       expect((await database.listBookshelfBooks()).single.title, '凡人修仙传');
+
+      await tester.tap(find.byTooltip('更多功能'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('选择书籍'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('已选择 0 项'), findsOneWidget);
+      expect(find.text('封面'), findsOneWidget);
+      expect(find.text('删除'), findsOneWidget);
+      expect(tester.takeException(), isNull);
 
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump(const Duration(seconds: 9));

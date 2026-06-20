@@ -165,6 +165,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
   static const Duration _kBookshelfPressAnimDuration = Duration(
     milliseconds: 90,
   );
+  static const double _kSelectionActionBarReservedHeight = 88;
   static const List<_BookshelfFilter> _kDefaultBaseFilters = <_BookshelfFilter>[
     _BookshelfFilter.all,
     _BookshelfFilter.local,
@@ -620,6 +621,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
         continueReadingVisible
             ? _kContinueReadingCardHeight + continueReadingBottomInset
             : navigationBottomInset + navigationComfortInset;
+    final selectionActionBarBottomInset =
+        navigationBottomInset + navigationComfortInset;
+    final selectionActionBarReservedSpace =
+        _isSelectionMode ? _kSelectionActionBarReservedHeight : 0.0;
     final contentTopPadding =
         _shouldShowBookshelfSearchSliver ? 12.0 : topInset + 12;
     final contentMaxWidth = AppLayout.pageContentMaxWidth(
@@ -725,10 +730,6 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                     ],
                   ],
                 ),
-        bottomNavigationBar:
-            _isSelectionMode
-                ? _buildSelectionActionBar(filteredBooks: filteredBooks)
-                : null,
         body: Stack(
           children: [
             _buildBookshelfBackdrop(
@@ -756,7 +757,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                                 : metrics.contentGap)
                             : contentTopPadding,
                         contentHorizontal,
-                        16 + continueReadingReservedSpace,
+                        16 +
+                            continueReadingReservedSpace +
+                            selectionActionBarReservedSpace,
                       ),
                       sliver: _buildBooksContentSliver(filteredBooks),
                     ),
@@ -779,6 +782,13 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
                       (buttonContext) =>
                           _buildDesktopOnlineSearchButton(buttonContext),
                 ),
+              ),
+            if (_isSelectionMode)
+              Positioned(
+                left: contentHorizontal,
+                right: contentHorizontal,
+                bottom: selectionActionBarBottomInset,
+                child: _buildSelectionActionBar(filteredBooks: filteredBooks),
               ),
           ],
         ),
@@ -2692,38 +2702,35 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage>
     final selectedCount = _selectedBookKeys.length;
     final isSelectionActionBusy = _isBatchDeleting || _isBatchUpdatingCovers;
 
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
-        child: AppBatchActionBar(
-          selectedCount: selectedCount,
-          totalCount: filteredBooks.length,
-          enabled: !isSelectionActionBusy,
-          showWhenEmpty: true,
-          onSelectAll: filteredBooks.isEmpty ? null : _selectAllBooks,
-          onClearSelection: _exitSelectionMode,
-          actions: [
-            AppBatchAction(
-              label: '封面',
-              icon: Icons.image_outlined,
-              enabled: selectedCount > 0,
-              onPressed: _editSelectedBooksCover,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
+      child: AppBatchActionBar(
+        selectedCount: selectedCount,
+        totalCount: filteredBooks.length,
+        enabled: !isSelectionActionBusy,
+        showWhenEmpty: true,
+        onSelectAll: filteredBooks.isEmpty ? null : _selectAllBooks,
+        onClearSelection: _exitSelectionMode,
+        actions: [
+          AppBatchAction(
+            label: '封面',
+            icon: Icons.image_outlined,
+            enabled: selectedCount > 0,
+            onPressed: _editSelectedBooksCover,
+          ),
+          AppBatchAction(
+            label: '删除',
+            icon: Icons.delete_outline_rounded,
+            tone: AppBatchActionTone.destructive,
+            enabled: selectedCount > 0,
+            confirmation: AppBatchActionConfirmation(
+              title: '删除书籍',
+              message: '确定从书架删除选中的 $selectedCount 本书吗？此操作不可撤销。',
+              confirmLabel: '删除',
             ),
-            AppBatchAction(
-              label: '删除',
-              icon: Icons.delete_outline_rounded,
-              tone: AppBatchActionTone.destructive,
-              enabled: selectedCount > 0,
-              confirmation: AppBatchActionConfirmation(
-                title: '删除书籍',
-                message: '确定从书架删除选中的 $selectedCount 本书吗？此操作不可撤销。',
-                confirmLabel: '删除',
-              ),
-              onPressed: _deleteSelectedBooks,
-            ),
-          ],
-        ),
+            onPressed: _deleteSelectedBooks,
+          ),
+        ],
       ),
     );
   }

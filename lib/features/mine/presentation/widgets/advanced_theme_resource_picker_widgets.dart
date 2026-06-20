@@ -389,30 +389,34 @@ class _AdvancedThemeBottomNavGalleryPreviewRow extends StatelessWidget {
       backgroundColor:
           isDark ? colorScheme.inverseSurface : colorScheme.surfaceContainerLow,
       borderColor: colorScheme.outlineVariant.withValues(alpha: 0.24),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (final tab in bottomNavIconGalleryTabs)
-            for (final selected in const <bool>[false, true])
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 2.5),
-                child: BottomNavIconView(
-                  icon: resolveCupertinoBottomNavIcon(
-                    tab: appShellTabForBottomNavIconGalleryTab(tab),
-                    selected: selected,
-                    brightness: brightness,
-                    gallery: gallery,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.center,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final tab in bottomNavIconGalleryTabs)
+              for (final selected in const <bool>[false, true])
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2.5),
+                  child: BottomNavIconView(
+                    icon: resolveCupertinoBottomNavIcon(
+                      tab: appShellTabForBottomNavIconGalleryTab(tab),
+                      selected: selected,
+                      brightness: brightness,
+                      gallery: gallery,
+                    ),
+                    size: 14,
+                    fallbackColor:
+                        selected
+                            ? colorScheme.primary
+                            : (isDark
+                                ? colorScheme.onInverseSurface
+                                : colorScheme.outline),
                   ),
-                  size: 14,
-                  fallbackColor:
-                      selected
-                          ? colorScheme.primary
-                          : (isDark
-                              ? colorScheme.onInverseSurface
-                              : colorScheme.outline),
                 ),
-              ),
-        ],
+          ],
+        ),
       ),
     );
   }
