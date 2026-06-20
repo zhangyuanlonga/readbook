@@ -36,6 +36,13 @@
 - [ ] 文本 layout 内核可以先启动，不需要等漫画、PDF、音频全部重构完。
 - [ ] 漫画/PDF/音频需要定义和新内核的边界：它们可以不共享文本排版，但要共享阅读进度、章节窗口、缓存、输入 intent 和状态治理。
 
+### 1.1 V7 约束
+
+- [ ] V7 的目标不是把漫画/PDF/音频塞进文本 layout renderer。
+- [ ] V7 必须保证新文本 renderer 不影响漫画/PDF/音频已有功能。
+- [ ] V7 必须把输入 intent、progress、diagnostics、fallback 的边界定义清楚，避免 surface 之间共享错误状态。
+- [ ] V7 功能等价验收时，漫画/PDF/音频至少要通过“不误切、不退化、不污染进度”的 smoke。
+
 ---
 
 ## 2. Surface Inventory
@@ -570,4 +577,3 @@ fixed EPUB、picture book、document image 目前都走 `_buildMangaReader`。�
 - [ ] 再做 `ReaderLayoutPage/Line/Column`。
 - [ ] 同时设计 `ReaderSurfacePosition`，给漫画/PDF/音频留位置。
 - [ ] 文本 layout 稳定后，再逐步把 selection/annotation/read-aloud/source-switch migration 切到新 anchor。
-

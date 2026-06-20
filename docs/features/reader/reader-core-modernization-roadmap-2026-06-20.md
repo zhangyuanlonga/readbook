@@ -2,7 +2,7 @@
 
 **日期**: 2026-06-20
 **来源**: `reader-core-code-review-legado-gap-2026-06-20.md`
-**目标**: 在不推翻现有阅读器的前提下，逐步补齐主流阅读器需要的排版内核、交互锚点、翻页委托、混排语义和性能保护。
+**目标**: 在不推翻现有阅读器的前提下，逐步补齐主流阅读器需要的排版内核、交互锚点、翻页委托、混排语义和性能保护，并最终让新阅读器承接旧阅读器已有用户能力。
 
 ---
 
@@ -18,9 +18,11 @@
 - [x] V3 已完成新 layout renderer alpha preview：可翻页、可 fallback、可输出 diagnostics。
 - [x] V4 已完成交互锚点 alpha：selection、annotation、bookmark、search、read-aloud 共享 layout position。
 - [x] V5 已完成多 surface 进度语义 alpha：文本、漫画、PDF、音频、EPUB 混排 payload 不再互相顶替。
-- [x] V6 已完成正式入口默认切换代码 alpha：text+paged 默认新 renderer，旧 renderer fallback。
+- [x] V6 已完成正式入口代码 alpha：text+paged 可进入新 renderer，旧 renderer fallback。
+- [ ] V7 已新增为功能等价门：旧阅读器已有能力必须接入或重构到新阅读器。
 - [ ] V1 真实样本手工行为记录仍需补齐。
 - [ ] V6 TF 样本 smoke、profile 性能和外部反馈记录仍需补齐。
+- [ ] 新阅读器高级翻页动画、跨章动画、选择/标注视觉、搜索/朗读高亮、输入 intent 等仍未完全追平旧阅读器。
 
 ---
 
@@ -33,7 +35,8 @@
 | V3 | `reader-core-modernization-v3-renderer-node-2026-06-20.md` | 已完成 alpha | 新文本阅读器 debug/dev 灰度可用 |
 | V4 | `reader-core-modernization-v4-interaction-node-2026-06-20.md` | 已完成 alpha | 选择、标注、书签、搜索、朗读闭环 |
 | V5 | `reader-core-modernization-v5-surface-node-2026-06-20.md` | 已完成 alpha | 文本、漫画、PDF、音频 surface 完整 |
-| V6 | `reader-core-modernization-v6-release-node-2026-06-20.md` | 代码 alpha 完成 | 新阅读器默认上线，旧阅读器 fallback |
+| V6 | `reader-core-modernization-v6-release-node-2026-06-20.md` | 代码 alpha 完成 | 新阅读器正式入口与 fallback |
+| V7 | `reader-core-modernization-v7-feature-parity-node-2026-06-20.md` | 已规划 | 旧能力承接，用户功能等价 |
 
 ---
 
@@ -42,6 +45,8 @@
 - [ ] 保持用户可见行为渐进变化，避免一次性重写阅读器。
 - [ ] 每个阶段只移动一个核心边界，阶段结束必须可独立回归。
 - [ ] 新内核先通过 adapter 兼容旧 UI，再逐步替换旧模型。
+- [ ] 新阅读器上线前必须通过旧能力功能等价清单，不能只完成新 layout renderer。
+- [ ] 新旧阅读器共存期间必须减少共享运行时隐式耦合，能隔离就隔离，能统一就统一。
 - [ ] 分页、选择、标注、朗读、搜索必须最终共享同一套 layout position。
 - [ ] 重计算任务默认不放在 UI isolate。
 - [ ] 不以文件行数作为唯一目标，以职责边界、可测试性和性能预算作为验收。
@@ -86,7 +91,24 @@ ReaderLayoutPage
 
 ---
 
-## 4. Phase 0：基线冻结和样本库
+## 4. 初始 Code Review 结果映射
+
+以下来自 `reader-core-code-review-legado-gap-2026-06-20.md` 和 `reader-surface-special-audit-2026-06-20.md`，用于约束 V7 之后不能只做新内核，而要把旧能力接到新阅读器。
+
+| 审查发现 | 影响 | 已覆盖节点 | V7 处理方式 |
+|---|---|---:|---|
+| God State 仍集中在 `ReaderPage`/part | 新旧 renderer 容易共享隐式状态，产生隐藏 bug | V1-V6 部分覆盖 | 拆 `ReaderPageTurnRuntime`、`ReaderSelectionRuntime`、`ReaderLayoutRuntime` 的边界，减少直接读 `_ReaderPageState` |
+| 旧分页模型过薄，新 layout 模型未完全承接旧 UI 能力 | 页数、页码、选择、动画存在两套来源 | V1-V3 | 统一 page snapshot/page factory，让新 renderer 可以被旧功能消费 |
+| 分页和布局仍有 UI 侧测量/主 isolate 压力 | 长章节和复杂设置变化仍有 jank 风险 | V2 | V7 保留性能门禁，功能接入不能牺牲首屏和翻页流畅度 |
+| 选择/标注/朗读从 display offset 反推 | 跨页、混排、标题/图片场景容易错位 | V4 alpha | V7 将旧 selection toolbar、bookmark、search、read aloud 高亮接到 layout position |
+| 翻页动画与 UI 快照、主状态强耦合 | 新 renderer 走旧 paperCurl 时会出现 unavailable/reject | V6 暴露问题 | V7 新增 page-turn delegate/page snapshot，承接 paper curl/curl/cover/fade/cross-chapter |
+| EPUB/HTML/混排语义被过早拍平 | 图片、链接、脚注、caption 点击和恢复不稳 | V5 alpha | V7 对 EPUB 混排用户能力做等价验收，复杂语义进入 V8+ |
+| 设置面广但未全部进入新内核 | 旧设置在新 renderer 下可能看似可调但无效果 | V6 暴露风险 | V7 建立设置兼容矩阵：每个旧设置标注新 renderer 是否生效 |
+| 漫画/PDF/音频 surface 和主 ReaderPage 状态仍有耦合 | 多 surface progress/intent/cache 互相污染 | V5 alpha | V7 只要求不误切 text renderer，并统一 intent/progress 边界 |
+
+---
+
+## 5. Phase 0：基线冻结和样本库
 
 **目标**: 在动内核前固定当前行为、性能和样本，避免改造期间无法判断是否退化。
 
@@ -129,7 +151,7 @@ ReaderLayoutPage
 
 ---
 
-## 5. Phase 1：建立 ReaderLayout 核心模型
+## 6. Phase 1：建立 ReaderLayout 核心模型
 
 **目标**: 先建模型和 adapter，不大改 UI。让项目拥有“页、行、列、位置、范围”的通用语言。
 
@@ -173,7 +195,7 @@ ReaderLayoutPage
 
 ---
 
-## 6. Phase 2：重建分页/排版引擎
+## 7. Phase 2：重建分页/排版引擎
 
 **目标**: 从 paragraph slice engine 升级为 layout engine，支持增量、可取消、缓存和中文排版基础。
 
@@ -245,7 +267,7 @@ ReaderLayoutPage
 
 ---
 
-## 7. Phase 3：渲染层适配 ReaderLayoutPage
+## 8. Phase 3：渲染层适配 ReaderLayoutPage
 
 **目标**: UI 不再直接渲染 paragraph slice，而是渲染 layout page。旧 renderer 保留 fallback。
 
@@ -295,7 +317,7 @@ ReaderLayoutPage
 
 ---
 
-## 8. Phase 4：选择、标注、搜索、朗读锚点统一
+## 9. Phase 4：选择、标注、搜索、朗读锚点统一
 
 **目标**: 把业务语义从 display offset 迁到 layout position，解决跨页和混排漂移。
 
@@ -341,7 +363,7 @@ ReaderLayoutPage
 
 ---
 
-## 9. Phase 5：PageFactory 和 PageTurnDelegate
+## 10. Phase 5：PageFactory 和 PageTurnDelegate
 
 **目标**: 翻页从 UI 状态操作变成“页面源 + 动画委托”的组合，降低跨章节和多动画模式风险。
 
@@ -389,7 +411,7 @@ ReaderLayoutPage
 
 ---
 
-## 10. Phase 6：ReaderDocument 语义升级
+## 11. Phase 6：ReaderDocument 语义升级
 
 **目标**: 支持 EPUB/HTML/混排内容，不再把复杂内容过早拍平成纯段落。
 
@@ -434,7 +456,7 @@ ReaderLayoutPage
 
 ---
 
-## 11. Phase 7：成熟阅读器设置和交互补齐
+## 12. Phase 7：成熟阅读器设置和交互补齐
 
 **目标**: 在内核稳定后补齐主流阅读器体验项，避免设置先行但无法真正生效。
 
@@ -486,7 +508,7 @@ ReaderLayoutPage
 
 ---
 
-## 12. Phase 8：测试、性能和发布治理
+## 13. Phase 8：测试、性能和发布治理
 
 **目标**: 把阅读器从“功能可用”推进到“可长期维护、可发版验证”。
 

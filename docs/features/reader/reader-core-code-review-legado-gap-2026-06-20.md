@@ -25,6 +25,19 @@
 - [ ] 将翻页动画和跨章节切换从 `_ReaderPageState` 中解耦成独立委托。
 - [ ] 补齐中文排版、混排、HTML/EPUB 语义和成熟设置项。
 
+### 1.1 V 节点落地追踪
+
+本审查的目标不是只做文档结论，而是持续约束后续 V 节点。当前映射如下：
+
+- [x] V1 已覆盖布局实体、旧分页 adapter、hit-test/range service 的底座。
+- [x] V2 已覆盖 layout request/spec、stream controller、cache、中文策略 alpha。
+- [x] V3 已覆盖新 layout renderer preview/ready/fallback alpha。
+- [x] V4 已覆盖 selection、annotation、bookmark、search、read-aloud anchor alpha。
+- [x] V5 已覆盖漫画、PDF、音频、EPUB 混排 surface 语义 alpha。
+- [x] V6 已覆盖正式入口、release policy、diagnostics 和 fallback alpha。
+- [ ] V7 新增为旧能力承接与功能等价节点，专门处理“新 renderer 已有，但旧阅读器能力未接全”的问题。
+- [ ] V7 前，不应把新 renderer 视为旧阅读器的完整替代。
+
 ---
 
 ## 2. 当前代码基线
@@ -306,4 +319,3 @@
 - [ ] 补齐中文排版开关、标题分段、双页、硬件输入、TTS 等成熟阅读器设置。
 - [ ] 针对 EPUB/HTML 复杂书籍做兼容矩阵。
 - [ ] 建立真机性能基线和发版前 smoke。
-

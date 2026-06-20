@@ -1,18 +1,19 @@
 # 阅读器核心改造 V6：正式替换与质量打磨
 
 **日期**: 2026-06-20
-**状态**: 已完成代码 alpha，待 TF 样本/性能验收
+**状态**: 已完成代码 alpha，待 V7 功能等价和 TF 样本/性能验收
 **进度**: 78%
-**用户效果**: 文本分页阅读默认进入新 layout renderer；旧阅读器保留为 fallback，可通过打包参数一键回滚。
+**用户效果**: 文本分页阅读具备进入新 layout renderer 的正式入口；旧阅读器保留为 fallback。完整上线前必须完成 V7 旧能力承接。
 
 ---
 
 ## 1. 目标效果
 
-V6 是默认切换节点。当前代码已把 text+paged 正式入口切到新 renderer，并保留旧 `ReaderPagedAnimationSurface` 作为 fallback。
+V6 是正式入口和 fallback 节点，不等于新阅读器已经完成用户功能等价。当前代码已把 text+paged 正式入口接到新 renderer，并保留旧 `ReaderPagedAnimationSurface` 作为 fallback；但旧阅读器的翻页动画、跨页选择、标注视觉、搜索/朗读高亮、设置兼容等必须进入 V7 继续承接。
 
-- [x] 新文本分页阅读器默认开启。
+- [x] 新文本分页阅读器入口已接入。
 - [x] 旧阅读器保留 fallback。
+- [ ] V7 完成前，不把新 renderer 视为完整替代旧阅读器。
 - [x] release/TF 回滚开关明确。
 - [x] 新 renderer diagnostics 写入阅读器诊断上下文。
 - [x] 长按选择最小闭环接入现有灵感/复制工具条。
@@ -48,13 +49,13 @@ V6 是默认切换节点。当前代码已把 text+paged 正式入口切到新 r
 打包参数：
 
 - [x] 强制回旧阅读器：`--dart-define=READER_LAYOUT_FORCE_LEGACY=true`
-- [x] 关闭 V6 默认切换：`--dart-define=READER_LAYOUT_ENABLE_RELEASE=false`
+- [x] 关闭 V6 新 renderer release path：`--dart-define=READER_LAYOUT_ENABLE_RELEASE=false`
 - [x] 显示 layout diagnostics overlay：`--dart-define=READER_LAYOUT_SHOW_DIAGNOSTICS=true`
 - [x] 设置内容长度保护阈值：`--dart-define=READER_LAYOUT_MAX_CONTENT_LENGTH=300000`
 
 建议 TF 外部邀请首包：
 
-- [x] 默认启用新 renderer。
+- [x] 可启用新 renderer 进行小范围灰度。
 - [x] 保留紧急回滚包：`READER_LAYOUT_FORCE_LEGACY=true`。
 - [ ] 样本 smoke 和 profile 数据补齐后再扩大外部用户范围。
 
@@ -79,7 +80,7 @@ V6 是默认切换节点。当前代码已把 text+paged 正式入口切到新 r
 
 - [x] 不删除旧阅读器。
 - [x] 不让漫画/PDF/音频误走文本 layout renderer。
-- [x] 不在没有 dart-define fallback 的情况下默认上线。
+- [x] 不在没有 dart-define fallback 的情况下扩大灰度。
 - [x] 不把复杂纸张卷页动画强行并入 V6；新 renderer 先使用稳定 PageView，旧 renderer 继续承担完整动画 fallback。
 
 ---
@@ -95,7 +96,7 @@ V6 是默认切换节点。当前代码已把 text+paged 正式入口切到新 r
 - [ ] 进度恢复稳定。
 - [ ] 标注/书签/搜索/朗读核心闭环稳定。
 - [x] fallback 可关闭新阅读器。
-- [x] 正式默认切换有灰度和回滚方案。
+- [x] 正式入口有灰度和回滚方案。
 
 ---
 
@@ -105,13 +106,24 @@ V6 是默认切换节点。当前代码已把 text+paged 正式入口切到新 r
 - [ ] 新 layout selection 已接入长按选中和工具条，但跨页拖拽选择仍需后续追平。
 - [ ] EPUB 图片真实 aspect ratio、点击 payload 和局部 relayout 仍需后续增强。
 - [ ] profile mode 性能基线还未在当前提交内完成。
+- [ ] 新旧 renderer 共存期间仍可能出现隐式耦合，V7 必须把旧能力接入或隔离到新 renderer。
 
 ---
 
-## 8. 最终完成定义
+## 8. V7 前置门禁
 
-- [x] 新阅读器成为 text+paged 默认路径。
-- [x] 旧阅读器只作为 fallback。
+- [ ] `reader-core-modernization-v7-feature-parity-node-2026-06-20.md` 的 P0/P1 能力完成前，不删除旧阅读器。
+- [ ] 旧阅读器已有的翻页动画、点击分区、键盘/音量键、选择、标注、书签、搜索、朗读、自动阅读、设置兼容必须逐项确认。
+- [ ] 对无法在 V7 内追平的能力，必须在 UI/设置里显式降级或隐藏，不允许静默失效。
+- [ ] V7 通过后，才允许讨论旧 renderer 的隐藏、删除或长期 fallback 策略。
+
+---
+
+## 9. 最终完成定义
+
+- [x] 新 renderer 已接入 text+paged 正式入口。
+- [x] 旧阅读器保留 fallback。
 - [x] V6 文档更新完成。
 - [ ] 样本、性能、异常、回滚都有记录。
+- [ ] V7 旧能力功能等价门通过。
 - [ ] TF 外部邀请反馈无 P0/P1 阻塞问题。
