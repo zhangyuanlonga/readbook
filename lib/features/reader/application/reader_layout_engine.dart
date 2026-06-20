@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import '../domain/entities/reader_layout_models.dart';
 import 'reader_layout_request.dart';
+import 'reader_zh_layout_policy.dart';
 
 class ReaderLayoutResult {
   const ReaderLayoutResult({
@@ -22,7 +23,11 @@ class ReaderLayoutResult {
 }
 
 class ReaderLayoutEngine {
-  const ReaderLayoutEngine();
+  const ReaderLayoutEngine({
+    this.zhLayoutPolicy = const ReaderZhLayoutPolicy(),
+  });
+
+  final ReaderZhLayoutPolicy zhLayoutPolicy;
 
   Future<ReaderLayoutResult?> layout(
     ReaderLayoutRequest request, {
@@ -113,7 +118,15 @@ class ReaderLayoutEngine {
 
         final lineStartX = _lineStartX(request.spec, block, isFirstLineInBlock);
         final maxChars = _maxCharsForLine(request.spec, lineStartX);
-        final endOffset = math.min(text.length, localOffset + maxChars);
+        final proposedEndOffset = math.min(text.length, localOffset + maxChars);
+        final endOffset =
+            request.spec.useZhLayout
+                ? zhLayoutPolicy.adjustBreakOffset(
+                  text: text,
+                  start: localOffset,
+                  proposedEnd: proposedEndOffset,
+                )
+                : proposedEndOffset;
         final segment = text.substring(localOffset, endOffset);
         final absoluteStart = chapterOffset + localOffset;
         final absoluteEnd = chapterOffset + endOffset;

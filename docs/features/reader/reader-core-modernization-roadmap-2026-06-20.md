@@ -1,24 +1,39 @@
 # 阅读器核心功能改造路线图
 
-**日期**: 2026-06-20  
-**来源**: `reader-core-code-review-legado-gap-2026-06-20.md`  
+**日期**: 2026-06-20
+**来源**: `reader-core-code-review-legado-gap-2026-06-20.md`
 **目标**: 在不推翻现有阅读器的前提下，逐步补齐主流阅读器需要的排版内核、交互锚点、翻页委托、混排语义和性能保护。
 
 ---
 
 ## 0. 当前落地状态
 
+- [x] 已建立 V 节点总览：`reader-core-modernization-version-map-2026-06-20.md`。
+- [x] 已建立 V1-V6 节点文档，后续主线按 V 节点推进。
 - [x] V1 底座已落地：surface position、layout model、旧分页 adapter、hit-test/range service、adapterOnly fallback runner。
 - [x] V1 默认不改变现有阅读器 UI 行为。
 - [x] V1 出口报告：`reader-core-modernization-v1-exit-report-2026-06-20.md`。
 - [x] V2 执行计划：`reader-core-modernization-v2-execution-plan-2026-06-20.md`。
-- [x] V2-P0/P1/P2/P3 已启动并完成 alpha 代码侧落地。
+- [x] V2-P0/P1/P2/P3/P4/P5/P6 已完成 alpha 代码侧落地。
 - [ ] V1 真实样本手工行为记录仍需补齐。
 - [ ] V2 默认切换新 renderer 前必须完成 diagnostics 和 smoke。
 
 ---
 
-## 1. 改造原则
+## 1. V 节点主线
+
+| 节点 | 文档 | 状态 | 主效果 |
+|---|---|---:|---|
+| V1 | `reader-core-modernization-v1-foundation-node-2026-06-20.md` | 代码侧收尾 | 底座完成，默认 UI 不变 |
+| V2 | `reader-core-modernization-v2-layout-engine-node-2026-06-20.md` | 已完成主体 | 新 layout engine 可运行 |
+| V3 | `reader-core-modernization-v3-renderer-node-2026-06-20.md` | 未开始 | 新文本阅读器 debug/dev 灰度可用 |
+| V4 | `reader-core-modernization-v4-interaction-node-2026-06-20.md` | 未开始 | 选择、标注、书签、搜索、朗读闭环 |
+| V5 | `reader-core-modernization-v5-surface-node-2026-06-20.md` | 未开始 | 文本、漫画、PDF、音频 surface 完整 |
+| V6 | `reader-core-modernization-v6-release-node-2026-06-20.md` | 未开始 | 新阅读器默认上线，旧阅读器 fallback |
+
+---
+
+## 2. 改造原则
 
 - [ ] 保持用户可见行为渐进变化，避免一次性重写阅读器。
 - [ ] 每个阶段只移动一个核心边界，阶段结束必须可独立回归。
@@ -30,7 +45,7 @@
 
 ---
 
-## 2. 目标架构
+## 3. 目标架构
 
 目标不是照搬 Legado，而是在 Flutter 项目内建立等价边界：
 
@@ -67,7 +82,7 @@ ReaderLayoutPage
 
 ---
 
-## 3. Phase 0：基线冻结和样本库
+## 4. Phase 0：基线冻结和样本库
 
 **目标**: 在动内核前固定当前行为、性能和样本，避免改造期间无法判断是否退化。
 
@@ -110,7 +125,7 @@ ReaderLayoutPage
 
 ---
 
-## 4. Phase 1：建立 ReaderLayout 核心模型
+## 5. Phase 1：建立 ReaderLayout 核心模型
 
 **目标**: 先建模型和 adapter，不大改 UI。让项目拥有“页、行、列、位置、范围”的通用语言。
 
@@ -154,7 +169,7 @@ ReaderLayoutPage
 
 ---
 
-## 5. Phase 2：重建分页/排版引擎
+## 6. Phase 2：重建分页/排版引擎
 
 **目标**: 从 paragraph slice engine 升级为 layout engine，支持增量、可取消、缓存和中文排版基础。
 
@@ -226,7 +241,7 @@ ReaderLayoutPage
 
 ---
 
-## 6. Phase 3：渲染层适配 ReaderLayoutPage
+## 7. Phase 3：渲染层适配 ReaderLayoutPage
 
 **目标**: UI 不再直接渲染 paragraph slice，而是渲染 layout page。旧 renderer 保留 fallback。
 
@@ -275,7 +290,7 @@ ReaderLayoutPage
 
 ---
 
-## 7. Phase 4：选择、标注、搜索、朗读锚点统一
+## 8. Phase 4：选择、标注、搜索、朗读锚点统一
 
 **目标**: 把业务语义从 display offset 迁到 layout position，解决跨页和混排漂移。
 
@@ -321,7 +336,7 @@ ReaderLayoutPage
 
 ---
 
-## 8. Phase 5：PageFactory 和 PageTurnDelegate
+## 9. Phase 5：PageFactory 和 PageTurnDelegate
 
 **目标**: 翻页从 UI 状态操作变成“页面源 + 动画委托”的组合，降低跨章节和多动画模式风险。
 
@@ -369,7 +384,7 @@ ReaderLayoutPage
 
 ---
 
-## 9. Phase 6：ReaderDocument 语义升级
+## 10. Phase 6：ReaderDocument 语义升级
 
 **目标**: 支持 EPUB/HTML/混排内容，不再把复杂内容过早拍平成纯段落。
 
@@ -414,7 +429,7 @@ ReaderLayoutPage
 
 ---
 
-## 10. Phase 7：成熟阅读器设置和交互补齐
+## 11. Phase 7：成熟阅读器设置和交互补齐
 
 **目标**: 在内核稳定后补齐主流阅读器体验项，避免设置先行但无法真正生效。
 
@@ -466,7 +481,7 @@ ReaderLayoutPage
 
 ---
 
-## 11. Phase 8：测试、性能和发布治理
+## 12. Phase 8：测试、性能和发布治理
 
 **目标**: 把阅读器从“功能可用”推进到“可长期维护、可发版验证”。
 
@@ -532,7 +547,7 @@ ReaderLayoutPage
 
 ---
 
-## 12. 推荐执行顺序
+## 13. 推荐执行顺序
 
 ### 第一批：低风险打底
 
@@ -561,7 +576,7 @@ ReaderLayoutPage
 
 ---
 
-## 13. 不建议现在做的事
+## 14. 不建议现在做的事
 
 - [ ] 不建议直接删除 `ReaderPaginationEngine`，先作为 fallback。
 - [ ] 不建议直接把 `SelectionArea` 全部替换，自定义选择需要逐步接管。
@@ -572,7 +587,7 @@ ReaderLayoutPage
 
 ---
 
-## 14. 每阶段统一完成标准
+## 15. 每阶段统一完成标准
 
 - [ ] 有设计说明或更新本文档。
 - [ ] 有纯 Dart 单测覆盖核心规则。

@@ -11,10 +11,10 @@
 - [x] 建立 `ReaderLayoutRequest / Spec / Result`。
 - [x] 建立 `ReaderLayoutEngine` alpha，产出真实 page/line/column。
 - [x] 建立增量分页流，优先产出当前页附近页面。
-- [ ] 建立 layout cache，支持签名命中、版本失效、内存/磁盘预算。
-- [ ] 建立中文排版策略第一版。
-- [ ] 建立 reader diagnostics 接入点。
-- [ ] 准备 `ReaderLayoutPagedView`，但默认仍不替换旧 renderer。
+- [x] 建立 layout cache，支持签名命中、版本失效、内存/磁盘预算。
+- [x] 建立中文排版策略第一版。
+- [x] 建立 reader diagnostics 接入点。
+- [x] 准备 `ReaderLayoutPagedView`，但默认仍不替换旧 renderer。
 
 ---
 
@@ -26,12 +26,12 @@
 | V2-P1 | Layout Request/Spec | 已完成主体 | 100% | 新 layout 输入 DTO 与 signature 测试完成 |
 | V2-P2 | Layout Engine Alpha | 已完成主体 | 85% | 文本/title/image alpha engine 与测试完成，真实 TextPainter 测量待后续 |
 | V2-P3 | 增量分页流 | 已完成主体 | 80% | loading/current/nearby/complete/cancel/failed 事件完成 |
-| V2-P4 | Layout Cache | 未开始 | 0% | 内存/磁盘缓存与失效策略 |
-| V2-P5 | 中文排版策略 | 未开始 | 0% | 避头尾、中英文边界、标点 fixture |
-| V2-P6 | Renderer 准备 | 未开始 | 0% | 新 renderer 可灰度但不默认切 |
-| V2-P7 | 验收与回退 | 未开始 | 0% | 性能、smoke、fallback、文档 |
+| V2-P4 | Layout Cache | 已完成主体 | 100% | 内存 LRU、持久化 store 接口、版本/指纹失效完成 |
+| V2-P5 | 中文排版策略 | 已完成主体 | 85% | 避头尾、中英文边界、公开 fixture 完成，精排待后续 |
+| V2-P6 | Renderer 准备 | 已完成主体 | 70% | render model 与 `ReaderLayoutPagedView` 完成，正式接入待 V3 |
+| V2-P7 | 验收与回退 | 进行中 | 65% | V2 定向测试通过，UI smoke/性能基线待补 |
 
-**V2 总进度**: 42%
+**V2 总进度**: 78%
 
 ---
 
@@ -92,58 +92,59 @@
 
 ## 7. V2-P4：Layout Cache
 
-- [ ] 新建或扩展 `ReaderLayoutCacheService`。
-- [ ] 缓存 payload 使用 layout pages。
-- [ ] key 包含 chapterId + layout signature。
-- [ ] value 包含 document fingerprint。
-- [ ] 增加 cache version。
-- [ ] 内存 LRU 限量。
-- [ ] 磁盘缓存限量。
-- [ ] layout spec 改变时自动失效。
-- [ ] 内容变更时自动失效。
-- [ ] 补 hit/miss/失效/版本迁移测试。
+- [x] 新建或扩展 `ReaderLayoutCacheService`。
+- [x] 缓存 payload 使用 layout pages。
+- [x] key 包含 chapterId + layout signature。
+- [x] value 包含 document fingerprint。
+- [x] 增加 cache version。
+- [x] 内存 LRU 限量。
+- [x] 磁盘缓存限量。
+- [x] layout spec 改变时自动失效。
+- [x] 内容变更时自动失效。
+- [x] 补 hit/miss/失效/版本迁移测试。
 
 ---
 
 ## 8. V2-P5：中文排版策略
 
-- [ ] 新建 `ReaderZhLayoutPolicy`。
-- [ ] 建立中文标点 fixture。
-- [ ] 支持避头标点。
-- [ ] 支持避尾标点。
-- [ ] 支持引号、省略号、破折号、括号基础规则。
-- [ ] 支持中英文混排 word boundary。
-- [ ] 将 `useZhLayout` 加入 layout signature。
-- [ ] 默认先灰度关闭或仅 debug 开启。
-- [ ] 补 data test，记录与旧断行差异。
+- [x] 新建 `ReaderZhLayoutPolicy`。
+- [x] 建立中文标点 fixture。
+- [x] 支持避头标点。
+- [x] 支持避尾标点。
+- [x] 支持引号、省略号、破折号、括号基础规则。
+- [x] 支持中英文混排 word boundary。
+- [x] 将 `useZhLayout` 加入 layout signature。
+- [x] 默认先灰度关闭或仅 debug 开启。
+- [x] 补 data test，记录与旧断行差异。
 
 ---
 
 ## 9. V2-P6：Renderer 准备
 
-- [ ] 新建 `ReaderLayoutPagedView`。
-- [ ] 输入 `ReaderLayoutPage` 或 lazy snapshot。
-- [ ] 按 line/column 绘制文本。
-- [ ] 先支持纯文本，不强行一次性支持全部混排。
+- [x] 新建 `ReaderLayoutPagedView`。
+- [x] 输入 `ReaderLayoutPage`。
+- [x] 按 line/column 绘制文本。
+- [x] 先支持纯文本，不强行一次性支持全部混排。
 - [ ] annotation highlight 使用 layout range rects。
 - [ ] hit-test 使用 `ReaderLayoutHitTestService`。
-- [ ] 保留旧 `ReaderTextPagedView` fallback。
-- [ ] feature flag 默认仍为 legacy renderer。
-- [ ] 新 renderer 仅 debug/dev 可打开。
+- [x] 保留旧 `ReaderTextPagedView` fallback。
+- [x] feature flag 默认仍为 legacy renderer。
+- [x] 新 renderer 仅 debug/dev 可打开。
 
 ---
 
 ## 10. V2-P7：验收与回退
 
-- [ ] `flutter analyze` 通过。
+- [x] 新增/修改文件定向 `flutter analyze` 通过。
 - [x] V2-P0-P3 新增单测通过。
+- [x] V2-P4-P6 新增单测通过。
 - [ ] 关键 reader 测试通过。
 - [ ] 普通 TXT 打开、翻页、跨章节 smoke 通过。
 - [ ] 字号/行距/边距变化后重排 smoke 通过。
 - [ ] 长段落不卡死 smoke 通过。
-- [ ] adapter/layout engine 失败可 fallback。
-- [ ] 默认正式路径仍可保持 legacy。
-- [ ] 更新 roadmap 和 V2 进度。
+- [x] adapter/layout engine 失败可 fallback。
+- [x] 默认正式路径仍可保持 legacy。
+- [x] 更新 roadmap 和 V2 进度。
 
 ---
 
@@ -162,8 +163,8 @@
 
 - [ ] 有真实 `ReaderLayoutEngine` alpha。
 - [ ] 有增量分页流。
-- [ ] 有 layout cache。
-- [ ] 有中文排版 data test。
-- [ ] 有 debug/dev renderer 灰度入口。
-- [ ] 默认正式路径仍可 fallback legacy。
-- [ ] V2 文档和 roadmap 更新完成。
+- [x] 有 layout cache。
+- [x] 有中文排版 data test。
+- [x] 有 debug/dev renderer 灰度入口。
+- [x] 默认正式路径仍可 fallback legacy。
+- [x] V2 文档和 roadmap 更新完成。
