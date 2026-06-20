@@ -2,46 +2,61 @@ part of 'advanced_theme_editor_page.dart';
 
 extension on _AdvancedThemeEditorPageState {
   Future<void> _initializeDraftImpl() async {
-    final themeId = widget.themeId?.trim() ?? '';
-    if (themeId.isEmpty) {
-      final draft = _stateService.createDraftFromModeConfigs(
-        lightConfig: _defaultModeConfigForMode(AppAdvancedThemeMode.light),
-        darkConfig: _defaultModeConfigForMode(AppAdvancedThemeMode.dark),
-      );
+    try {
+      final themeId = widget.themeId?.trim() ?? '';
+      if (themeId.isEmpty) {
+        final draft = _stateService.createDraftFromModeConfigs(
+          lightConfig: _defaultModeConfigForMode(AppAdvancedThemeMode.light),
+          darkConfig: _defaultModeConfigForMode(AppAdvancedThemeMode.dark),
+        );
+        if (!mounted) {
+          return;
+        }
+        _updateAdvancedThemeEditorState(() {
+          _draft = draft;
+          _isLoading = false;
+        });
+        _syncControllersFromDraft(draft);
+        return;
+      }
+
+      final target = await _stateService.loadDraft(themeId);
       if (!mounted) {
         return;
       }
       _updateAdvancedThemeEditorState(() {
-        _draft = draft;
+        _draft = target;
         _isLoading = false;
       });
-      _syncControllersFromDraft(draft);
-      return;
-    }
-
-    final target = await _stateService.loadDraft(themeId);
-    if (!mounted) {
-      return;
-    }
-    _updateAdvancedThemeEditorState(() {
-      _draft = target;
-      _isLoading = false;
-    });
-    if (target != null) {
-      _syncControllersFromDraft(target);
+      if (target != null) {
+        _syncControllersFromDraft(target);
+      }
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      _updateAdvancedThemeEditorState(() {
+        _draft = null;
+        _isLoading = false;
+      });
+      _showMessage('加载高级主题失败');
     }
   }
 
   Future<void> _loadAppearanceLinksImpl() async {
-    final links = await _stateService.loadAppearanceLinks();
-    if (!mounted) {
-      return;
-    }
-    _pageStateNotifier.update(
-      (state) => _editorController.applyAppearanceLinks(state, links),
-    );
-    if (mounted) {
+    try {
+      final links = await _stateService.loadAppearanceLinks();
+      if (!mounted) {
+        return;
+      }
+      _pageStateNotifier.update(
+        (state) => _editorController.applyAppearanceLinks(state, links),
+      );
       _refreshAdvancedThemeEditorState();
+    } catch (_) {
+      if (mounted) {
+        _showMessage('加载主题资源失败');
+      }
     }
   }
 
@@ -54,6 +69,7 @@ extension on _AdvancedThemeEditorPageState {
       return;
     }
     final normalizedName = _nameController.text.trim();
+    _commitNameToDraft(normalizedName);
     final parsedLightColors = _parseColorsForMode(AppAdvancedThemeMode.light);
     if (parsedLightColors == null) {
       return;

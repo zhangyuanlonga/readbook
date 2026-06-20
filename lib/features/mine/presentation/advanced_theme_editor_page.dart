@@ -184,8 +184,16 @@ class _AdvancedThemeEditorPageState
     _didInitialize = true;
     _service = ref.read(advancedThemeServiceProvider);
     _stateService = ref.read(advancedThemeEditorStateServiceProvider);
-    unawaited(_initializeDraft());
-    unawaited(_loadAppearanceLinks());
+    unawaited(
+      Future<void>(() async {
+        await _initializeDraft();
+      }),
+    );
+    unawaited(
+      Future<void>(() async {
+        await _loadAppearanceLinks();
+      }),
+    );
   }
 
   @override
@@ -249,6 +257,27 @@ class _AdvancedThemeEditorPageState
         );
       }
     }
+  }
+
+  void _commitNameToDraft(String rawName, {bool finishEditing = false}) {
+    final normalized = rawName.trim();
+    final draft = _draft;
+    if (draft == null) {
+      return;
+    }
+    if (normalized.isEmpty) {
+      if (finishEditing) {
+        _showMessage('请先填写主题名称');
+      }
+      return;
+    }
+    _updateAdvancedThemeEditorState(() {
+      _draft =
+          draft.name == normalized ? draft : draft.copyWith(name: normalized);
+      if (finishEditing) {
+        _isEditingName = false;
+      }
+    });
   }
 
   Future<void> _saveTheme(BuildContext sourceContext) {
@@ -1753,13 +1782,7 @@ class _AdvancedThemeEditorPageState
       _showMessage('请先填写主题名称');
       return;
     }
-    final draft = _draft;
-    setState(() {
-      _isEditingName = false;
-      if (draft != null) {
-        _draft = draft.copyWith(name: normalized);
-      }
-    });
+    _commitNameToDraft(normalized, finishEditing: true);
   }
 
   Future<void> _pickColorForSlot(AdvancedThemeColorSlot slot) async {
@@ -1968,6 +1991,14 @@ class _AdvancedThemeEditorPageState
     return AdaptiveRouteTopBar(
       title: title,
       subtitle: _modeLabel(_selectedMode),
+      titleWidget: AdvancedThemeEditorTitle(
+        isEditing: _isEditingName,
+        nameController: _nameController,
+        title: title,
+        onStartEditing: _startEditingName,
+        onChanged: _commitNameToDraft,
+        onSubmitted: (_) => _finishEditingName(),
+      ),
       leading: Builder(
         builder:
             (leadingContext) => IconButton(
@@ -1975,13 +2006,6 @@ class _AdvancedThemeEditorPageState
               onPressed: () => unawaited(_closeWithReveal(leadingContext)),
               icon: const Icon(Icons.arrow_back_ios_new_rounded),
             ),
-      ),
-      middle: AdvancedThemeEditorTitle(
-        isEditing: _isEditingName,
-        nameController: _nameController,
-        title: title,
-        onStartEditing: _startEditingName,
-        onSubmitted: (_) => _finishEditingName(),
       ),
       actions: _buildDesktopTopBarActions(),
       mobileActions: _buildMobileTopBarActions(),

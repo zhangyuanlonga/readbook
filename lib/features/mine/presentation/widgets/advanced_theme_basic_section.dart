@@ -10,6 +10,7 @@ class AdvancedThemeEditorTitle extends StatelessWidget {
     required this.nameController,
     required this.title,
     required this.onStartEditing,
+    required this.onChanged,
     required this.onSubmitted,
   });
 
@@ -17,6 +18,7 @@ class AdvancedThemeEditorTitle extends StatelessWidget {
   final TextEditingController nameController;
   final String title;
   final VoidCallback onStartEditing;
+  final ValueChanged<String> onChanged;
   final ValueChanged<String> onSubmitted;
 
   @override
@@ -25,9 +27,11 @@ class AdvancedThemeEditorTitle extends StatelessWidget {
       return ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 220),
         child: AppTextField(
+          key: const ValueKey<String>('advanced_theme_name_field'),
           controller: nameController,
           autofocus: appEnableAutoFocusForTextInput,
           textInputAction: TextInputAction.done,
+          onChanged: onChanged,
           onSubmitted: onSubmitted,
         ),
       );

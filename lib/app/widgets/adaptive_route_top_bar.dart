@@ -15,6 +15,7 @@ class AdaptiveRouteTopBar extends StatelessWidget
     super.key,
     required this.title,
     this.subtitle,
+    this.titleWidget,
     this.leading,
     this.middle,
     this.bottom,
@@ -36,6 +37,7 @@ class AdaptiveRouteTopBar extends StatelessWidget
 
   final String title;
   final String? subtitle;
+  final Widget? titleWidget;
   final Widget? leading;
   final Widget? middle;
   final PreferredSizeWidget? bottom;
@@ -64,6 +66,7 @@ class AdaptiveRouteTopBar extends StatelessWidget
     if (!metrics.isMediumUpWindow) {
       return _MobileRouteTopBar(
         title: title,
+        titleWidget: titleWidget,
         leading: leading,
         bottom: bottom,
         actions: mobileActions,
@@ -79,6 +82,7 @@ class AdaptiveRouteTopBar extends StatelessWidget
     return _DesktopRouteTopBar(
       title: title,
       subtitle: subtitle,
+      titleWidget: titleWidget,
       leading: leading,
       middle: middle,
       bottom: bottom,
@@ -102,6 +106,7 @@ class AdaptiveRouteTopBar extends StatelessWidget
 class _MobileRouteTopBar extends StatelessWidget {
   const _MobileRouteTopBar({
     required this.title,
+    required this.titleWidget,
     required this.leading,
     required this.bottom,
     required this.actions,
@@ -113,6 +118,7 @@ class _MobileRouteTopBar extends StatelessWidget {
   });
 
   final String title;
+  final Widget? titleWidget;
   final Widget? leading;
   final PreferredSizeWidget? bottom;
   final List<Widget> actions;
@@ -126,7 +132,7 @@ class _MobileRouteTopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return AppBar(
       toolbarHeight: height,
-      title: Text(title),
+      title: titleWidget ?? Text(title),
       leading: leading,
       actions: actions,
       bottom: bottom,
@@ -142,6 +148,7 @@ class _DesktopRouteTopBar extends StatelessWidget {
   const _DesktopRouteTopBar({
     required this.title,
     required this.subtitle,
+    required this.titleWidget,
     required this.leading,
     required this.middle,
     required this.bottom,
@@ -162,6 +169,7 @@ class _DesktopRouteTopBar extends StatelessWidget {
 
   final String title;
   final String? subtitle;
+  final Widget? titleWidget;
   final Widget? leading;
   final Widget? middle;
   final PreferredSizeWidget? bottom;
@@ -233,11 +241,13 @@ class _DesktopRouteTopBar extends StatelessWidget {
                                 constraints: BoxConstraints(
                                   maxWidth: titleMaxWidth,
                                 ),
-                                child: _DesktopRouteTitle(
-                                  title: title,
-                                  subtitle: subtitle,
-                                  foregroundColor: resolvedForeground,
-                                ),
+                                child:
+                                    titleWidget ??
+                                    _DesktopRouteTitle(
+                                      title: title,
+                                      subtitle: subtitle,
+                                      foregroundColor: resolvedForeground,
+                                    ),
                               ),
                             if (showMiddle) ...[
                               const SizedBox(width: 18),
