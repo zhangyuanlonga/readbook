@@ -967,14 +967,15 @@ extension _ReaderPageSourceSwitchExtension on _ReaderPageState {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(
+                AppButton(
+                  variant: AppButtonVariant.text,
                   onPressed: () => Navigator.of(context).pop(false),
-                  child: const Text('取消'),
+                  label: '取消',
                 ),
                 const SizedBox(width: 8),
-                FilledButton(
+                AppButton(
                   onPressed: () => Navigator.of(context).pop(true),
-                  child: const Text('继续切换'),
+                  label: '继续切换',
                 ),
               ],
             ),

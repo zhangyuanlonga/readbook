@@ -394,13 +394,17 @@ class PrivateBookSourceFormState extends ConsumerState<PrivateBookSourceForm> {
       children: <Widget>[
         _PrivateSourceSectionHeader(
           title: '书源 JSON',
-          trailing: TextButton.icon(
+          trailing: AppButton(
+            variant: AppButtonVariant.text,
+            size: AppButtonSize.compact,
             onPressed: _saving || _loadingSource ? null : _changeImportMethod,
             icon: const Icon(Icons.swap_horiz_rounded, size: 18),
-            label: Text(_importMethodLabel(_selectedImportMethod)),
-            style: TextButton.styleFrom(
+            label: _importMethodLabel(_selectedImportMethod),
+            style: const ButtonStyle(
               visualDensity: VisualDensity.compact,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
+              padding: WidgetStatePropertyAll(
+                EdgeInsets.symmetric(horizontal: 8),
+              ),
             ),
           ),
         ),

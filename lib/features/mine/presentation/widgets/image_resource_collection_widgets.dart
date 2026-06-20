@@ -43,12 +43,13 @@ Future<String?> showImageResourceNameSurface({
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(
+                AppButton(
+                  variant: AppButtonVariant.text,
                   onPressed: () => Navigator.of(surfaceContext).pop(),
-                  child: const Text('取消'),
+                  label: '取消',
                 ),
                 const SizedBox(width: 8),
-                FilledButton(onPressed: submit, child: const Text('确定')),
+                AppButton(onPressed: submit, label: '确定'),
               ],
             ),
           ],
@@ -93,21 +94,19 @@ Future<bool> showImageResourceConfirmSurface({
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              TextButton(
+              AppButton(
+                variant: AppButtonVariant.text,
                 onPressed: () => Navigator.of(surfaceContext).pop(false),
-                child: const Text('取消'),
+                label: '取消',
               ),
               const SizedBox(width: 8),
-              FilledButton(
-                style:
+              AppButton(
+                variant:
                     destructive
-                        ? FilledButton.styleFrom(
-                          backgroundColor: colorScheme.error,
-                          foregroundColor: colorScheme.onError,
-                        )
-                        : null,
+                        ? AppButtonVariant.danger
+                        : AppButtonVariant.primary,
                 onPressed: () => Navigator.of(surfaceContext).pop(true),
-                child: Text(confirmLabel),
+                label: confirmLabel,
               ),
             ],
           ),

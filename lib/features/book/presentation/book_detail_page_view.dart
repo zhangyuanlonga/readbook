@@ -130,19 +130,22 @@ extension on _BookDetailPageState {
   }) {
     if (usesInlineMetadataEditor) {
       return <Widget>[
-        TextButton(
+        AppButton(
+          variant: AppButtonVariant.text,
           onPressed: _isSavingMetadata ? null : _cancelEditingMode,
-          child: const Text('取消'),
+          label: '取消',
         ),
-        TextButton(
+        AppButton(
+          variant: AppButtonVariant.text,
           onPressed: _isSavingMetadata ? null : _handleResetMetadataEditing,
-          child: const Text('恢复默认'),
+          label: '恢复默认',
         ),
         Padding(
           padding: const EdgeInsets.only(right: 8),
-          child: FilledButton(
+          child: AppButton(
             onPressed: _isSavingMetadata ? null : _handleSaveMetadataEditing,
-            child: Text(_isSavingMetadata ? '保存中' : '保存'),
+            isLoading: _isSavingMetadata,
+            label: _isSavingMetadata ? '保存中' : '保存',
           ),
         ),
       ];

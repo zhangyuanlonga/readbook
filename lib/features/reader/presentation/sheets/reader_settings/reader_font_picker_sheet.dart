@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../../app/layout/app_adaptive.dart';
 import '../../../../../app/widgets/adaptive_bottom_sheet.dart';
+import '../../../../../app/widgets/foundation/app_button.dart';
 import '../../../../../app/widgets/import_export_task_overlay.dart';
 import '../../../../../domain/entities/reader_settings.dart';
 import '../../../application/reader_font_registry_service.dart';
@@ -255,10 +256,12 @@ class _ReaderFontPickerSheetContentState
             ],
             Align(
               alignment: Alignment.centerRight,
-              child: TextButton.icon(
+              child: AppButton(
+                variant: AppButtonVariant.text,
+                size: AppButtonSize.compact,
                 onPressed: () => unawaited(widget.onManageFonts()),
                 icon: const Icon(Icons.open_in_new_rounded, size: 16),
-                label: const Text('去我的管理字体'),
+                label: '去我的管理字体',
               ),
             ),
             const SizedBox(height: 12),

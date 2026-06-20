@@ -354,11 +354,12 @@ class _ChapterCacheRangeSheetState extends State<_ChapterCacheRangeSheet> {
           const SizedBox(height: 14),
           LayoutBuilder(
             builder: (context, constraints) {
-              final cancelButton = OutlinedButton(
+              final cancelButton = AppButton(
+                variant: AppButtonVariant.secondary,
                 onPressed: () => Navigator.of(context).pop(),
-                child: const Text('取消'),
+                label: '取消',
               );
-              final startButton = FilledButton(
+              final startButton = AppButton(
                 onPressed: () {
                   Navigator.of(context).pop(
                     _ChapterCacheRange(
@@ -367,7 +368,7 @@ class _ChapterCacheRangeSheetState extends State<_ChapterCacheRangeSheet> {
                     ),
                   );
                 },
-                child: const Text('开始缓存'),
+                label: '开始缓存',
               );
 
               if (AppLayout.isPhoneSmallWidthFor(constraints.maxWidth)) {
@@ -734,7 +735,8 @@ class _ChapterCacheProgressSheetState
             const SizedBox(height: 14),
             LayoutBuilder(
               builder: (context, constraints) {
-                final stopButton = OutlinedButton.icon(
+                final stopButton = AppButton(
+                  variant: AppButtonVariant.secondary,
                   onPressed:
                       canClose
                           ? null
@@ -744,9 +746,9 @@ class _ChapterCacheProgressSheetState
                             });
                           },
                   icon: const Icon(Icons.stop_circle_outlined),
-                  label: const Text('停止'),
+                  label: '停止',
                 );
-                final doneButton = FilledButton(
+                final doneButton = AppButton(
                   onPressed:
                       canClose && !_closing
                           ? () {
@@ -756,7 +758,8 @@ class _ChapterCacheProgressSheetState
                             Navigator.of(context).pop();
                           }
                           : null,
-                  child: Text(canClose ? '完成' : '缓存中...'),
+                  isLoading: !canClose,
+                  label: canClose ? '完成' : '缓存中...',
                 );
 
                 if (AppLayout.isPhoneSmallWidthFor(constraints.maxWidth)) {

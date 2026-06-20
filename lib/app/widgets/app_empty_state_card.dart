@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../motion/app_motion.dart';
+import 'foundation/app_button.dart';
 
 const double _kEmptyStateHorizontalPadding = 18;
 const double _kEmptyStateVerticalPadding = 24;
@@ -109,15 +110,14 @@ class AppEmptyStateCard extends StatelessWidget {
           ),
           if (actionLabel != null && onAction != null) ...[
             const SizedBox(height: _kEmptyStateSectionGap),
-            TextButton.icon(
+            AppButton(
+              variant: AppButtonVariant.text,
+              size: AppButtonSize.compact,
               onPressed: onAction,
               icon: const Icon(Icons.arrow_forward_rounded, size: 16),
-              label: Text(actionLabel!),
-              style: TextButton.styleFrom(
-                visualDensity: const VisualDensity(
-                  horizontal: -1,
-                  vertical: -1,
-                ),
+              label: actionLabel!,
+              style: const ButtonStyle(
+                visualDensity: VisualDensity(horizontal: -1, vertical: -1),
               ),
             ),
           ],

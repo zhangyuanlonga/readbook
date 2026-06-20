@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../app/layout/app_adaptive.dart';
+import '../../../../app/widgets/foundation/app_button.dart';
 
 class BookDetailMetaChip extends StatelessWidget {
   const BookDetailMetaChip({
@@ -747,8 +748,10 @@ class _BookDetailIntroCardState extends State<BookDetailIntroCard> {
             SizedBox(height: metrics.isCompactDensity ? 4 : 6),
             Align(
               alignment: Alignment.centerRight,
-              child: TextButton(
-                style: TextButton.styleFrom(
+              child: AppButton(
+                variant: AppButtonVariant.text,
+                size: AppButtonSize.compact,
+                style: const ButtonStyle(
                   visualDensity: VisualDensity.compact,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
@@ -757,7 +760,7 @@ class _BookDetailIntroCardState extends State<BookDetailIntroCard> {
                     _expanded = !_expanded;
                   });
                 },
-                child: Text(_expanded ? '收起全文' : '展开全文'),
+                label: _expanded ? '收起全文' : '展开全文',
               ),
             ),
           ],

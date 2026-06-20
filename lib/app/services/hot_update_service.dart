@@ -6,6 +6,7 @@ import 'package:shorebird_code_push/shorebird_code_push.dart';
 import '../../core/logging/app_logger.dart';
 import '../../core/navigation/global_navigator.dart';
 import '../widgets/adaptive_bottom_sheet.dart';
+import '../widgets/foundation/app_button.dart';
 import '../widgets/foundation/app_feedback.dart';
 
 /// 热更新检查服务 - 启动时检查并显示 UI 提示
@@ -245,17 +246,20 @@ class _HotUpdateActionSurface extends StatelessWidget {
                 children: [
                   if (secondaryLabel != null && onSecondary != null) ...[
                     Expanded(
-                      child: OutlinedButton(
+                      child: AppButton(
+                        variant: AppButtonVariant.secondary,
+                        expanded: true,
                         onPressed: onSecondary,
-                        child: Text(secondaryLabel!),
+                        label: secondaryLabel!,
                       ),
                     ),
                     const SizedBox(width: 12),
                   ],
                   Expanded(
-                    child: FilledButton(
+                    child: AppButton(
+                      expanded: true,
                       onPressed: onPrimary,
-                      child: Text(primaryLabel),
+                      label: primaryLabel,
                     ),
                   ),
                 ],

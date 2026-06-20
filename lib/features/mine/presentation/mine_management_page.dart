@@ -17,6 +17,7 @@ import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
 import '../../../app/widgets/app_status_state_card.dart';
+import '../../../app/widgets/foundation/app_button.dart';
 import '../../../app/widgets/foundation/app_feedback.dart';
 import '../../../app/widgets/foundation/app_progress.dart';
 import '../../../app/widgets/foundation/app_reorderable_list.dart';
@@ -345,20 +346,18 @@ class _BookshelfTaxonomyManagementPageState
               Row(
                 children: [
                   Expanded(
-                    child: TextButton(
+                    child: AppButton(
+                      variant: AppButtonVariant.text,
                       onPressed: () => Navigator.pop(context, false),
-                      child: const Text('取消'),
+                      label: '取消',
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: FilledButton(
+                    child: AppButton(
+                      variant: AppButtonVariant.danger,
                       onPressed: () => Navigator.pop(context, true),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: colorScheme.error,
-                        foregroundColor: colorScheme.onError,
-                      ),
-                      child: const Text('删除'),
+                      label: '删除',
                     ),
                   ),
                 ],
@@ -1042,7 +1041,11 @@ class _TaxonomyEditorPanelState extends State<_TaxonomyEditorPanel> {
                     },
                     icon: const Icon(Icons.delete_outline_rounded),
                   ),
-                FilledButton.tonal(onPressed: _save, child: const Text('保存')),
+                AppButton(
+                  variant: AppButtonVariant.tonal,
+                  onPressed: _save,
+                  label: '保存',
+                ),
               ],
             ),
             const SizedBox(height: 14),
@@ -1139,9 +1142,10 @@ class _TaxonomyEditorPanelState extends State<_TaxonomyEditorPanel> {
                     ),
                   ),
                 ),
-                TextButton(
+                AppButton(
+                  variant: AppButtonVariant.text,
                   onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('取消'),
+                  label: '取消',
                 ),
               ],
             ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../app/layout/app_adaptive.dart';
+import '../../../../app/widgets/foundation/app_button.dart';
 import '../../application/private_book_source_service.dart';
 import '../private_book_source_presentation.dart';
 
@@ -197,28 +198,30 @@ class PrivateBookSourceDetailSheet extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: <Widget>[
-                  TextButton(
+                  AppButton(
+                    variant: AppButtonVariant.text,
                     onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('关闭'),
+                    label: '关闭',
                   ),
                   const SizedBox(width: 8),
-                  OutlinedButton.icon(
+                  AppButton(
+                    variant: AppButtonVariant.secondary,
                     onPressed:
                         () => Navigator.of(
                           context,
                         ).pop(PrivateBookSourceDetailAction.test),
                     icon: const Icon(Icons.science_outlined),
-                    label: const Text('检测'),
+                    label: '检测',
                   ),
                   if (item.visibility != 'shared') ...<Widget>[
                     const SizedBox(width: 8),
-                    FilledButton.icon(
+                    AppButton(
                       onPressed:
                           () => Navigator.of(
                             context,
                           ).pop(PrivateBookSourceDetailAction.edit),
                       icon: const Icon(Icons.edit_outlined),
-                      label: const Text('编辑'),
+                      label: '编辑',
                     ),
                   ],
                 ],

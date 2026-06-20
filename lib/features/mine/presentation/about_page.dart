@@ -12,6 +12,7 @@ import '../../../app/layout/app_layout.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/foundation/app_button.dart';
 import '../../../app/widgets/foundation/app_feedback.dart';
 import '../../../core/app_update/app_update_dialog.dart';
 import '../../../core/app_update/app_update_service.dart';
@@ -382,13 +383,11 @@ class _AboutPageState extends ConsumerState<AboutPage> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                FilledButton(
-                  onPressed: _openOfficialSite,
-                  child: const Text('打开官网'),
-                ),
-                OutlinedButton(
+                AppButton(onPressed: _openOfficialSite, label: '打开官网'),
+                AppButton(
+                  variant: AppButtonVariant.secondary,
                   onPressed: _openUpdatesPage,
-                  child: const Text('更新日志'),
+                  label: '更新日志',
                 ),
               ],
             ),

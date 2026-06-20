@@ -502,15 +502,16 @@ extension _ReaderPageNavigationExtension on _ReaderPageState {
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        TextButton(
+                        AppButton(
+                          variant: AppButtonVariant.text,
                           onPressed: () => Navigator.of(context).pop(),
-                          child: const Text('取消'),
+                          label: '取消',
                         ),
                         const Spacer(),
-                        FilledButton(
+                        AppButton(
                           onPressed:
                               () => Navigator.of(context).pop(draftRatio),
-                          child: const Text('跳转'),
+                          label: '跳转',
                         ),
                       ],
                     ),

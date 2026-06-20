@@ -20,6 +20,7 @@ import '../../../app/widgets/adaptive_fullscreen_preview.dart';
 import '../../../app/widgets/adaptive_overflow_toolbar.dart';
 import '../../../app/widgets/adaptive_route_top_bar.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/foundation/app_button.dart';
 import '../../../app/widgets/foundation/app_feedback.dart';
 import '../../../app/widgets/foundation/app_progress.dart';
 import '../../../core/media/image_selection_service.dart';
@@ -410,12 +411,14 @@ class _AdvancedThemeEditorPageState
                     ],
                   ),
                   actions: [
-                    TextButton(
+                    AppButton(
+                      variant: AppButtonVariant.text,
                       onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('取消'),
+                      label: '取消',
                     ),
                     const Spacer(),
-                    TextButton(
+                    AppButton(
+                      variant: AppButtonVariant.text,
                       onPressed:
                           () => unawaited(
                             _openRouteFromSheet(
@@ -423,10 +426,11 @@ class _AdvancedThemeEditorPageState
                               '/appearance?section=background',
                             ),
                           ),
-                      child: const Text('去管理'),
+                      label: '去管理',
                     ),
                     const SizedBox(width: 8),
-                    TextButton(
+                    AppButton(
+                      variant: AppButtonVariant.text,
                       onPressed:
                           selectedPath == null
                               ? null
@@ -435,10 +439,10 @@ class _AdvancedThemeEditorPageState
                                   path: null,
                                 ),
                               ),
-                      child: const Text('取消绑定'),
+                      label: '取消绑定',
                     ),
                     const SizedBox(width: 8),
-                    FilledButton(
+                    AppButton(
                       onPressed:
                           selectedPath == null
                               ? null
@@ -448,7 +452,7 @@ class _AdvancedThemeEditorPageState
                                   fit: selectedFit,
                                 ),
                               ),
-                      child: const Text('应用'),
+                      label: '应用',
                     ),
                   ],
                 );
@@ -552,7 +556,8 @@ class _AdvancedThemeEditorPageState
                     ],
                   ),
                   actions: [
-                    TextButton(
+                    AppButton(
+                      variant: AppButtonVariant.text,
                       onPressed:
                           () => unawaited(
                             _openRouteFromSheet(
@@ -560,15 +565,17 @@ class _AdvancedThemeEditorPageState
                               '/appearance/reader-background',
                             ),
                           ),
-                      child: const Text('去管理'),
+                      label: '去管理',
                     ),
                     const Spacer(),
-                    OutlinedButton(
+                    AppButton(
+                      variant: AppButtonVariant.secondary,
                       onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('取消'),
+                      label: '取消',
                     ),
                     const SizedBox(width: 10),
-                    TextButton(
+                    AppButton(
+                      variant: AppButtonVariant.text,
                       onPressed:
                           selectedPath == null
                               ? null
@@ -577,10 +584,10 @@ class _AdvancedThemeEditorPageState
                                   path: null,
                                 ),
                               ),
-                      child: const Text('取消绑定'),
+                      label: '取消绑定',
                     ),
                     const SizedBox(width: 10),
-                    FilledButton(
+                    AppButton(
                       onPressed:
                           selectedPath == null
                               ? null
@@ -590,7 +597,7 @@ class _AdvancedThemeEditorPageState
                                   fit: selectedFit,
                                 ),
                               ),
-                      child: const Text('应用'),
+                      label: '应用',
                     ),
                   ],
                 );
@@ -712,17 +719,18 @@ class _AdvancedThemeEditorPageState
                 },
               ),
               actions: [
-                TextButton(
+                AppButton(
+                  variant: AppButtonVariant.text,
                   onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('取消'),
+                  label: '取消',
                 ),
                 const Spacer(),
-                FilledButton(
+                AppButton(
                   onPressed:
                       selectedId == null
                           ? null
                           : () => Navigator.of(context).pop(selectedId),
-                  child: const Text('应用'),
+                  label: '应用',
                 ),
               ],
             );
@@ -840,20 +848,23 @@ class _AdvancedThemeEditorPageState
                         },
                       ),
               actions: [
-                TextButton(
+                AppButton(
+                  variant: AppButtonVariant.text,
                   onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('取消'),
+                  label: '取消',
                 ),
                 const Spacer(),
-                TextButton(
+                AppButton(
+                  variant: AppButtonVariant.text,
                   onPressed:
                       () => unawaited(
                         _openRouteFromSheet(context, '/cover-galleries'),
                       ),
-                  child: const Text('去管理'),
+                  label: '去管理',
                 ),
                 const SizedBox(width: 8),
-                TextButton(
+                AppButton(
+                  variant: AppButtonVariant.text,
                   onPressed:
                       selectedId == null
                           ? null
@@ -863,10 +874,10 @@ class _AdvancedThemeEditorPageState
                               galleryId: null,
                             ),
                           ),
-                  child: const Text('取消绑定'),
+                  label: '取消绑定',
                 ),
                 const SizedBox(width: 8),
-                FilledButton(
+                AppButton(
                   onPressed:
                       selectedId == null
                           ? null
@@ -876,7 +887,7 @@ class _AdvancedThemeEditorPageState
                               galleryId: selectedId,
                             ),
                           ),
-                  child: const Text('应用'),
+                  label: '应用',
                 ),
               ],
             );
@@ -980,12 +991,14 @@ class _AdvancedThemeEditorPageState
                         },
                       ),
               actions: [
-                TextButton(
+                AppButton(
+                  variant: AppButtonVariant.text,
                   onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('取消'),
+                  label: '取消',
                 ),
                 const Spacer(),
-                TextButton(
+                AppButton(
+                  variant: AppButtonVariant.text,
                   onPressed:
                       () => unawaited(
                         _openRouteFromSheet(
@@ -993,10 +1006,11 @@ class _AdvancedThemeEditorPageState
                           '/appearance/launch-image',
                         ),
                       ),
-                  child: const Text('去管理'),
+                  label: '去管理',
                 ),
                 const SizedBox(width: 8),
-                TextButton(
+                AppButton(
+                  variant: AppButtonVariant.text,
                   onPressed:
                       selectedId == null
                           ? null
@@ -1006,10 +1020,10 @@ class _AdvancedThemeEditorPageState
                               galleryId: null,
                             ),
                           ),
-                  child: const Text('取消绑定'),
+                  label: '取消绑定',
                 ),
                 const SizedBox(width: 8),
-                FilledButton(
+                AppButton(
                   onPressed:
                       selectedId == null
                           ? null
@@ -1019,7 +1033,7 @@ class _AdvancedThemeEditorPageState
                               galleryId: selectedId,
                             ),
                           ),
-                  child: const Text('应用'),
+                  label: '应用',
                 ),
               ],
             );
@@ -1270,20 +1284,23 @@ class _AdvancedThemeEditorPageState
                         },
                       ),
               actions: [
-                TextButton(
+                AppButton(
+                  variant: AppButtonVariant.text,
                   onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('取消'),
+                  label: '取消',
                 ),
                 const Spacer(),
-                TextButton(
+                AppButton(
+                  variant: AppButtonVariant.text,
                   onPressed:
                       () => unawaited(
                         _openRouteFromSheet(context, '/font-management'),
                       ),
-                  child: const Text('去管理'),
+                  label: '去管理',
                 ),
                 const SizedBox(width: 8),
-                TextButton(
+                AppButton(
+                  variant: AppButtonVariant.text,
                   onPressed:
                       selectedId == null
                           ? null
@@ -1293,10 +1310,10 @@ class _AdvancedThemeEditorPageState
                               familyKey: null,
                             ),
                           ),
-                  child: const Text('取消绑定'),
+                  label: '取消绑定',
                 ),
                 const SizedBox(width: 8),
-                FilledButton(
+                AppButton(
                   onPressed:
                       selectedId == null
                           ? null
@@ -1306,7 +1323,7 @@ class _AdvancedThemeEditorPageState
                               familyKey: selectedId,
                             ),
                           ),
-                  child: const Text('应用'),
+                  label: '应用',
                 ),
               ],
             );
@@ -1820,12 +1837,13 @@ class _AdvancedThemeEditorPageState
                           tooltip: '吸管取色',
                           icon: const Icon(Icons.colorize_rounded),
                         ),
-                        FilledButton.tonal(
+                        AppButton(
+                          variant: AppButtonVariant.tonal,
                           onPressed:
                               () => Navigator.of(
                                 dialogContext,
                               ).pop(draftColor.toARGB32()),
-                          child: const Text('保存'),
+                          label: '保存',
                         ),
                       ],
                     ),
@@ -1906,9 +1924,10 @@ class _AdvancedThemeEditorPageState
                             ),
                           ),
                         ),
-                        TextButton(
+                        AppButton(
+                          variant: AppButtonVariant.text,
                           onPressed: () => Navigator.of(dialogContext).pop(),
-                          child: const Text('取消'),
+                          label: '取消',
                         ),
                       ],
                     ),
@@ -2991,32 +3010,41 @@ class _AdvancedThemeEditorPageState
   }) {
     return SizedBox(
       height: 28,
-      child: OutlinedButton(
+      child: AppButton(
+        variant: AppButtonVariant.secondary,
+        size: AppButtonSize.compact,
         onPressed: onPressed,
-        style: OutlinedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          backgroundColor:
-              selected ? colorScheme.primaryContainer : colorScheme.surface,
-          foregroundColor:
-              selected
-                  ? colorScheme.onPrimaryContainer
-                  : colorScheme.onSurfaceVariant,
-          side: BorderSide(
-            color:
-                selected
-                    ? colorScheme.primary.withValues(alpha: 0.6)
-                    : colorScheme.outlineVariant.withValues(alpha: 0.5),
+        style: ButtonStyle(
+          padding: const WidgetStatePropertyAll(
+            EdgeInsets.symmetric(horizontal: 10),
           ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+          backgroundColor: WidgetStatePropertyAll(
+            selected ? colorScheme.primaryContainer : colorScheme.surface,
+          ),
+          foregroundColor: WidgetStatePropertyAll(
+            selected
+                ? colorScheme.onPrimaryContainer
+                : colorScheme.onSurfaceVariant,
+          ),
+          side: WidgetStatePropertyAll(
+            BorderSide(
+              color:
+                  selected
+                      ? colorScheme.primary.withValues(alpha: 0.6)
+                      : colorScheme.outlineVariant.withValues(alpha: 0.5),
+            ),
+          ),
+          shape: WidgetStatePropertyAll(
+            // UI-GOV-EXEMPT: hardcoded-style resource fit chips use a compact fixed shape inside image controls.
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+          textStyle: WidgetStatePropertyAll(
+            Theme.of(
+              context,
+            ).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w700),
           ),
         ),
-        child: Text(
-          label,
-          style: Theme.of(
-            context,
-          ).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w700),
-        ),
+        label: label,
       ),
     );
   }

@@ -463,10 +463,12 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
                       ),
                     ),
                   ),
-                  TextButton(
+                  AppButton(
+                    variant: AppButtonVariant.text,
+                    size: AppButtonSize.compact,
                     onPressed:
                         () => unawaited(loadBookmarks(setModalState, context)),
-                    child: const Text('重试'),
+                    label: '重试',
                   ),
                 ],
               );
@@ -849,12 +851,14 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
                         ),
                       ),
                       const SizedBox(width: 8),
-                      TextButton(
+                      AppButton(
+                        variant: AppButtonVariant.text,
+                        size: AppButtonSize.compact,
                         onPressed:
                             () => unawaited(
                               loadBookmarks(setModalState, context),
                             ),
-                        child: const Text('重试'),
+                        label: '重试',
                       ),
                     ],
                   ),

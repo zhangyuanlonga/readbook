@@ -557,12 +557,13 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(
+                AppButton(
+                  variant: AppButtonVariant.text,
                   onPressed: () => Navigator.of(surfaceContext).pop(),
-                  child: const Text('取消'),
+                  label: '取消',
                 ),
                 const SizedBox(width: 8),
-                FilledButton(onPressed: submit, child: const Text('搜索')),
+                AppButton(onPressed: submit, label: '搜索'),
               ],
             ),
           ],
@@ -917,14 +918,18 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
                         ),
                       ),
                       if (!isReaderDefault && !isInterfaceDefault)
-                        TextButton(
+                        AppButton(
+                          variant: AppButtonVariant.text,
+                          size: AppButtonSize.compact,
                           onPressed: () => _setReaderDefaultCustomFont(font),
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                            minimumSize: Size.zero,
+                          style: const ButtonStyle(
+                            padding: WidgetStatePropertyAll(
+                              EdgeInsets.symmetric(horizontal: 8),
+                            ),
+                            minimumSize: WidgetStatePropertyAll(Size.zero),
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ),
-                          child: const Text('设为阅读默认'),
+                          label: '设为阅读默认',
                         ),
                       AppMenuButton<String>(
                         onSelected: (value) {
@@ -1191,10 +1196,10 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
                           const SizedBox(height: 18),
                           Align(
                             alignment: Alignment.centerRight,
-                            child: FilledButton(
+                            child: AppButton(
                               onPressed:
                                   () => Navigator.of(surfaceContext).pop(),
-                              child: const Text('知道了'),
+                              label: '知道了',
                             ),
                           ),
                         ],
@@ -1352,17 +1357,18 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(
+                AppButton(
+                  variant: AppButtonVariant.text,
                   onPressed: () => Navigator.of(surfaceContext).pop(),
-                  child: const Text('取消'),
+                  label: '取消',
                 ),
                 const SizedBox(width: 8),
-                FilledButton(
+                AppButton(
                   onPressed:
                       () => Navigator.of(
                         surfaceContext,
                       ).pop(controller.text.trim()),
-                  child: const Text('保存'),
+                  label: '保存',
                 ),
               ],
             ),

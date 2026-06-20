@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../app/widgets/app_status_state_card.dart';
+import '../../../../app/widgets/foundation/app_button.dart';
 
 class SearchGroupedEmptyFallbackCard extends StatelessWidget {
   const SearchGroupedEmptyFallbackCard({
@@ -38,16 +39,18 @@ class SearchGroupedEmptyFallbackCard extends StatelessWidget {
                 runSpacing: 8,
                 children: [
                   if (canDisablePrecise)
-                    FilledButton.tonalIcon(
+                    AppButton(
+                      variant: AppButtonVariant.tonal,
                       onPressed: onDisablePreciseMatch,
                       icon: const Icon(Icons.filter_alt_off_rounded, size: 18),
-                      label: const Text('关闭精准匹配'),
+                      label: '关闭精准匹配',
                     ),
                   if (canSwitchAllSources)
-                    OutlinedButton.icon(
+                    AppButton(
+                      variant: AppButtonVariant.secondary,
                       onPressed: onSwitchAllSources,
                       icon: const Icon(Icons.travel_explore_rounded, size: 18),
-                      label: const Text('切换全部书源'),
+                      label: '切换全部书源',
                     ),
                 ],
               )

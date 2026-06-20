@@ -34,14 +34,16 @@ extension _AuthPageFormSections on _AuthPageState {
           ),
         ),
         const Spacer(),
-        TextButton(
+        AppButton(
+          variant: AppButtonVariant.text,
+          size: AppButtonSize.compact,
           onPressed: _isSubmitting ? null : () => _showMessage('请联系管理员重置密码。'),
-          style: TextButton.styleFrom(
-            minimumSize: Size.zero,
-            padding: EdgeInsets.zero,
+          style: const ButtonStyle(
+            minimumSize: WidgetStatePropertyAll(Size.zero),
+            padding: WidgetStatePropertyAll(EdgeInsets.zero),
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
-          child: const Text('忘记密码？'),
+          label: '忘记密码？',
         ),
       ],
     );
@@ -661,84 +663,71 @@ extension _AuthPageFormSections on _AuthPageState {
   }) {
     final resolvedLabel = label ?? (_isRegister ? '注册并登录' : '登录');
     final colorScheme = Theme.of(context).colorScheme;
-    final forceLightForeground = desktopStyled || immersiveStyled;
+    final componentTokens = appComponentThemeTokensOf(context);
+    final submitStyle =
+        desktopStyled
+            ? ButtonStyle(
+              backgroundColor: WidgetStatePropertyAll(colorScheme.primary),
+              foregroundColor: WidgetStateProperty.resolveWith(
+                (states) =>
+                    states.contains(WidgetState.disabled)
+                        ? colorScheme.onPrimary.withValues(alpha: 0.82)
+                        : colorScheme.onPrimary,
+              ),
+              // UI-GOV-EXEMPT: hardcoded-style auth-desktop-control shape keeps the existing login form geometry.
+              shape: WidgetStatePropertyAll(
+                RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(
+                    _authDesktopControlRadius,
+                  ),
+                ),
+              ),
+              elevation: const WidgetStatePropertyAll(0),
+            )
+            : immersiveStyled
+            ? ButtonStyle(
+              backgroundColor: WidgetStateProperty.resolveWith(
+                (states) =>
+                    states.contains(WidgetState.disabled)
+                        ? colorScheme.primary.withValues(alpha: 0.46)
+                        : colorScheme.primary,
+              ),
+              foregroundColor: WidgetStateProperty.resolveWith(
+                (states) =>
+                    states.contains(WidgetState.disabled)
+                        ? colorScheme.onPrimary.withValues(alpha: 0.82)
+                        : colorScheme.onPrimary,
+              ),
+              textStyle: WidgetStatePropertyAll(
+                Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0,
+                ),
+              ),
+              shape: WidgetStatePropertyAll(
+                RoundedRectangleBorder(
+                  // UI-GOV-EXEMPT: hardcoded-style auth-immersive submit keeps the rounded login affordance.
+                  borderRadius: BorderRadius.circular(
+                    componentTokens.button.radius * 3,
+                  ),
+                ),
+              ),
+              elevation: const WidgetStatePropertyAll(0),
+            )
+            : null;
     return AnimatedScale(
       duration: _authModeTransitionDuration,
       curve: Curves.easeOutCubic,
       scale: _isSubmitting ? 0.985 : 1,
       child: SizedBox(
         height: immersiveStyled ? 50 : 46,
-        child: FilledButton(
+        child: AppButton(
+          expanded: true,
           onPressed: _isSubmitting ? null : _submit,
-          style:
-              desktopStyled
-                  ? FilledButton.styleFrom(
-                    backgroundColor: colorScheme.primary,
-                    foregroundColor: Colors.white,
-                    disabledForegroundColor: Colors.white.withValues(
-                      alpha: 0.82,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(
-                        _authDesktopControlRadius,
-                      ),
-                    ),
-                    elevation: 0,
-                  )
-                  : immersiveStyled
-                  ? FilledButton.styleFrom(
-                    backgroundColor: colorScheme.primary,
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: colorScheme.primary.withValues(
-                      alpha: 0.46,
-                    ),
-                    disabledForegroundColor: Colors.white.withValues(
-                      alpha: 0.82,
-                    ),
-                    textStyle: Theme.of(
-                      context,
-                    ).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    elevation: 0,
-                  )
-                  : null,
-          child: AppAnimatedSwitcher(
-            child:
-                _isSubmitting
-                    ? Row(
-                      key: const ValueKey<String>('auth_submitting'),
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        AppProgressIndicator(
-                          size: 18,
-                          strokeWidth: 2,
-                          color: Theme.of(context).colorScheme.onPrimary,
-                          semanticLabel: _isRegister ? '正在注册' : '正在登录',
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          _isRegister ? '正在注册' : '正在登录',
-                          style:
-                              forceLightForeground
-                                  ? const TextStyle(color: Colors.white)
-                                  : null,
-                        ),
-                      ],
-                    )
-                    : Text(
-                      resolvedLabel,
-                      key: ValueKey<String>(resolvedLabel),
-                      style:
-                          forceLightForeground
-                              ? const TextStyle(color: Colors.white)
-                              : null,
-                    ),
-          ),
+          style: submitStyle,
+          isLoading: _isSubmitting,
+          label:
+              _isSubmitting ? (_isRegister ? '正在注册' : '正在登录') : resolvedLabel,
         ),
       ),
     );
@@ -747,24 +736,37 @@ extension _AuthPageFormSections on _AuthPageState {
   Widget _buildModeSwitchButton(BuildContext context, ColorScheme colorScheme) {
     return SizedBox(
       height: 48,
-      child: OutlinedButton(
+      child: AppButton(
+        variant: AppButtonVariant.secondary,
+        expanded: true,
         onPressed: _isSubmitting ? null : () => _setMode(!_isRegister),
-        style: OutlinedButton.styleFrom(
-          backgroundColor: _authQuietSurfaceColor(colorScheme),
-          foregroundColor: colorScheme.onSurface,
-          disabledForegroundColor: colorScheme.onSurface.withValues(
-            alpha: 0.45,
+        style: ButtonStyle(
+          backgroundColor: WidgetStatePropertyAll(
+            _authQuietSurfaceColor(colorScheme),
           ),
-          side: BorderSide.none,
-          textStyle: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0,
+          foregroundColor: WidgetStateProperty.resolveWith(
+            (states) =>
+                states.contains(WidgetState.disabled)
+                    ? colorScheme.onSurface.withValues(alpha: 0.45)
+                    : colorScheme.onSurface,
           ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(999),
+          side: const WidgetStatePropertyAll(BorderSide.none),
+          textStyle: WidgetStatePropertyAll(
+            Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0,
+            ),
+          ),
+          // UI-GOV-EXEMPT: hardcoded-style auth-mode-switch pill keeps the existing login mode affordance.
+          shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(
+                appComponentThemeTokensOf(context).button.radius * 3,
+              ),
+            ),
           ),
         ),
-        child: Text(_isRegister ? '返回登录' : '注册'),
+        label: _isRegister ? '返回登录' : '注册',
       ),
     );
   }

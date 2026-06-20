@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/widgets/foundation/app_button.dart';
 import '../../application/private_book_source_service.dart';
 
 enum BookSourceImportMethod { url, file, paste }
@@ -152,21 +153,19 @@ class ConfirmActionSurface extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: <Widget>[
-            TextButton(
+            AppButton(
+              variant: AppButtonVariant.text,
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('取消'),
+              label: '取消',
             ),
             const SizedBox(width: 8),
-            FilledButton(
+            AppButton(
               onPressed: () => Navigator.of(context).pop(true),
-              style:
+              variant:
                   destructive
-                      ? FilledButton.styleFrom(
-                        backgroundColor: colorScheme.error,
-                        foregroundColor: colorScheme.onError,
-                      )
-                      : null,
-              child: Text(confirmLabel),
+                      ? AppButtonVariant.danger
+                      : AppButtonVariant.primary,
+              label: confirmLabel,
             ),
           ],
         ),
@@ -203,15 +202,16 @@ class RenameGroupSurface extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: <Widget>[
-            TextButton(
+            AppButton(
+              variant: AppButtonVariant.text,
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('取消'),
+              label: '取消',
             ),
             const SizedBox(width: 8),
-            FilledButton(
+            AppButton(
               onPressed:
                   () => Navigator.of(context).pop(controller.text.trim()),
-              child: const Text('保存'),
+              label: '保存',
             ),
           ],
         ),
@@ -252,15 +252,16 @@ class SubmitSourceReviewSurface extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: <Widget>[
-            TextButton(
+            AppButton(
+              variant: AppButtonVariant.text,
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('取消'),
+              label: '取消',
             ),
             const SizedBox(width: 8),
-            FilledButton(
+            AppButton(
               onPressed:
                   () => Navigator.of(context).pop(controller.text.trim()),
-              child: const Text('提交'),
+              label: '提交',
             ),
           ],
         ),

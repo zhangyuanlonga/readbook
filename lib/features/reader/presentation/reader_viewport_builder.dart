@@ -126,36 +126,31 @@ class ReaderViewportBuilder {
               runSpacing: 8,
               alignment: WrapAlignment.center,
               children: [
-                FilledButton.tonal(
+                AppButton(
+                  variant: AppButtonVariant.tonal,
                   onPressed:
                       state.isSwitchSourceLoading
                           ? null
                           : (state.hasPrimaryErrorAction
                               ? onPrimaryErrorAction ?? onRetry
                               : onRetry),
-                  child: Text(resolvedPrimaryActionLabel),
+                  label: resolvedPrimaryActionLabel,
                 ),
                 if (isLocalContent || state.errorText != null)
-                  OutlinedButton.icon(
+                  AppButton(
+                    variant: AppButtonVariant.secondary,
                     onPressed: onCopyDiagnostics,
                     icon: const Icon(Icons.copy_rounded, size: 16),
-                    label: const Text('复制诊断信息'),
+                    label: '复制诊断信息',
                   ),
                 if (state.canSwitchSource)
-                  OutlinedButton.icon(
+                  AppButton(
+                    variant: AppButtonVariant.secondary,
                     onPressed:
                         state.isSwitchSourceLoading ? null : onSwitchSource,
-                    icon:
-                        state.isSwitchSourceLoading
-                            ? const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                            : const Icon(Icons.swap_horiz_rounded),
-                    label: Text(
-                      state.isSwitchSourceLoading ? '换源中...' : '切换书源',
-                    ),
+                    icon: const Icon(Icons.swap_horiz_rounded),
+                    isLoading: state.isSwitchSourceLoading,
+                    label: state.isSwitchSourceLoading ? '换源中...' : '切换书源',
                   ),
               ],
             ),

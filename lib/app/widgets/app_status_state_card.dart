@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'foundation/app_button.dart';
+
 enum AppStatusStateTone { neutral, error, warning }
 
 const double _kStatusStatePadding = 18;
@@ -98,15 +100,14 @@ class AppStatusStateCard extends StatelessWidget {
             const SizedBox(height: _kStatusStateSectionGap),
             Align(
               alignment: Alignment.centerLeft,
-              child: FilledButton.tonal(
+              child: AppButton(
+                variant: AppButtonVariant.tonal,
+                size: AppButtonSize.compact,
                 onPressed: onAction,
-                style: FilledButton.styleFrom(
-                  visualDensity: const VisualDensity(
-                    horizontal: -1,
-                    vertical: -1,
-                  ),
+                style: const ButtonStyle(
+                  visualDensity: VisualDensity(horizontal: -1, vertical: -1),
                 ),
-                child: Text(actionLabel!),
+                label: actionLabel!,
               ),
             ),
           ],

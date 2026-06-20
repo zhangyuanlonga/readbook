@@ -604,17 +604,18 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(
+                AppButton(
+                  variant: AppButtonVariant.text,
                   onPressed: () => Navigator.of(dialogContext).pop(),
-                  child: const Text('取消'),
+                  label: '取消',
                 ),
                 const SizedBox(width: 8),
-                FilledButton(
+                AppButton(
                   onPressed: () {
                     Navigator.of(dialogContext).pop();
                     unawaited(_openEditor(themeId));
                   },
-                  child: const Text('编辑'),
+                  label: '编辑',
                 ),
               ],
             ),
@@ -1344,14 +1345,16 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(
+                AppButton(
+                  variant: AppButtonVariant.text,
                   onPressed: () => Navigator.of(dialogContext).pop(false),
-                  child: const Text('取消'),
+                  label: '取消',
                 ),
                 const SizedBox(width: 8),
-                FilledButton(
+                AppButton(
+                  variant: AppButtonVariant.danger,
                   onPressed: () => Navigator.of(dialogContext).pop(true),
-                  child: const Text('删除'),
+                  label: '删除',
                 ),
               ],
             ),
@@ -1477,15 +1480,17 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    TextButton(
+                    AppButton(
+                      variant: AppButtonVariant.text,
                       onPressed: () => Navigator.of(dialogContext).pop(),
-                      child: const Text('取消'),
+                      label: '取消',
                     ),
-                    TextButton(
+                    AppButton(
+                      variant: AppButtonVariant.text,
                       onPressed: () => Navigator.of(dialogContext).pop(''),
-                      child: const Text('清空分类'),
+                      label: '清空分类',
                     ),
-                    FilledButton(onPressed: submit, child: const Text('确定')),
+                    AppButton(onPressed: submit, label: '确定'),
                   ],
                 ),
               ],
@@ -1545,9 +1550,10 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
             const SizedBox(height: 20),
             Align(
               alignment: Alignment.centerRight,
-              child: TextButton(
+              child: AppButton(
+                variant: AppButtonVariant.text,
                 onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('知道了'),
+                label: '知道了',
               ),
             ),
           ],
@@ -2220,9 +2226,9 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
             height: 1.4,
           ),
         );
-        final button = FilledButton(
+        final button = AppButton(
           onPressed: () => context.push('/membership'),
-          child: const Text('开通会员'),
+          label: '开通会员',
         );
         return AppSurface(
           borderRadius: BorderRadius.circular(18),
@@ -3153,17 +3159,15 @@ class _AdvancedThemeBatchImportSheetState
               Expanded(child: _buildImportQueue(context)),
             if (_items.isNotEmpty && !_isImporting) ...[
               const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: summary == null ? _startImport : _resetQueue,
-                  icon: Icon(
-                    summary == null
-                        ? Icons.file_upload_outlined
-                        : Icons.restart_alt_rounded,
-                  ),
-                  label: Text(summary == null ? '开始导入' : '再导入一批'),
+              AppButton(
+                expanded: true,
+                onPressed: summary == null ? _startImport : _resetQueue,
+                icon: Icon(
+                  summary == null
+                      ? Icons.file_upload_outlined
+                      : Icons.restart_alt_rounded,
                 ),
+                label: summary == null ? '开始导入' : '再导入一批',
               ),
             ],
           ],
@@ -3435,9 +3439,10 @@ class _AdvancedThemeSingleTaskSheetState
                   const SizedBox(height: 20),
                   Align(
                     alignment: Alignment.centerRight,
-                    child: TextButton(
+                    child: AppButton(
+                      variant: AppButtonVariant.text,
                       onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('知道了'),
+                      label: '知道了',
                     ),
                   ),
                 ],

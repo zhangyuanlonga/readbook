@@ -217,14 +217,16 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold>
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  TextButton(
+                  AppButton(
+                    variant: AppButtonVariant.text,
                     onPressed: () => Navigator.of(surfaceContext).pop(false),
-                    child: const Text('取消'),
+                    label: '取消',
                   ),
                   const SizedBox(width: 8),
-                  FilledButton(
+                  AppButton(
+                    variant: AppButtonVariant.danger,
                     onPressed: () => Navigator.of(surfaceContext).pop(true),
-                    child: const Text('退出'),
+                    label: '退出',
                   ),
                 ],
               ),

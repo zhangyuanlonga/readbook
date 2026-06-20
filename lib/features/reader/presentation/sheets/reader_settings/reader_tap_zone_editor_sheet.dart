@@ -6,6 +6,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../../../app/widgets/adaptive_bottom_sheet.dart';
+import '../../../../../app/widgets/foundation/app_button.dart';
 import '../../../../../domain/entities/reader_settings.dart';
 
 Future<void> showReaderTapZoneEditorSheet({
@@ -201,14 +202,15 @@ class _ReaderTapZoneEditorContentState
             const SizedBox(height: 12),
             Row(
               children: [
-                OutlinedButton(
+                AppButton(
+                  variant: AppButtonVariant.secondary,
                   onPressed: _restoreDefaults,
-                  child: const Text('恢复默认'),
+                  label: '恢复默认',
                 ),
                 const Spacer(),
-                FilledButton(
+                AppButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('完成'),
+                  label: '完成',
                 ),
               ],
             ),

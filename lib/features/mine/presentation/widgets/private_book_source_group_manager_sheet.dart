@@ -105,39 +105,47 @@ class PrivateBookSourceGroupManagerSheetState
                   ),
                 ),
                 const SizedBox(width: 10),
-                Tooltip(
-                  message: _saving ? '保存中' : '新增分组',
-                  child: SizedBox.square(
-                    dimension: 48,
-                    child: OutlinedButton(
-                      onPressed:
-                          _saving ? null : () => unawaited(_createGroup()),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: colorScheme.primary,
-                        backgroundColor: Colors.transparent,
-                        fixedSize: const Size.square(48),
-                        minimumSize: const Size.square(48),
-                        padding: EdgeInsets.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        side: BorderSide(
+                SizedBox.square(
+                  dimension: 48,
+                  child: IconButton.outlined(
+                    tooltip: _saving ? '保存中' : '新增分组',
+                    onPressed: _saving ? null : () => unawaited(_createGroup()),
+                    style: ButtonStyle(
+                      foregroundColor: WidgetStatePropertyAll(
+                        colorScheme.primary,
+                      ),
+                      // UI-GOV-EXEMPT: hardcoded-style transparent icon-only button keeps the outlined add affordance.
+                      backgroundColor: const WidgetStatePropertyAll(
+                        Colors.transparent,
+                      ),
+                      fixedSize: const WidgetStatePropertyAll(Size.square(48)),
+                      minimumSize: const WidgetStatePropertyAll(
+                        Size.square(48),
+                      ),
+                      padding: const WidgetStatePropertyAll(EdgeInsets.zero),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      side: WidgetStatePropertyAll(
+                        BorderSide(
                           color: colorScheme.outlineVariant.withValues(
                             alpha: 0.62,
                           ),
                         ),
-                        shape: RoundedRectangleBorder(
+                      ),
+                      shape: WidgetStatePropertyAll(
+                        RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
                         ),
                       ),
-                      child:
-                          _saving
-                              ? AppProgressIndicator(
-                                size: 18,
-                                strokeWidth: 2,
-                                color: colorScheme.primary,
-                                semanticLabel: '保存私人分组',
-                              )
-                              : const Icon(Icons.add_rounded, size: 26),
                     ),
+                    icon:
+                        _saving
+                            ? AppProgressIndicator(
+                              size: 18,
+                              strokeWidth: 2,
+                              color: colorScheme.primary,
+                              semanticLabel: '保存私人分组',
+                            )
+                            : const Icon(Icons.add_rounded, size: 26),
                   ),
                 ),
               ],

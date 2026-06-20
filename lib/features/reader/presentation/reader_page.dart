@@ -4080,12 +4080,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                             ),
                           ),
                         ),
-                        FilledButton.tonal(
+                        AppButton(
+                          variant: AppButtonVariant.tonal,
                           onPressed:
                               () => Navigator.of(
                                 dialogContext,
                               ).pop(draftColor.toARGB32()),
-                          child: const Text('保存'),
+                          label: '保存',
                         ),
                       ],
                     ),
@@ -4217,9 +4218,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                             ),
                           ),
                         ),
-                        TextButton(
+                        AppButton(
+                          variant: AppButtonVariant.text,
                           onPressed: () => Navigator.of(dialogContext).pop(),
-                          child: const Text('取消'),
+                          label: '取消',
                         ),
                       ],
                     ),

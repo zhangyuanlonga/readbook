@@ -12,6 +12,7 @@ import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
 import '../../../app/widgets/app_status_state_card.dart';
+import '../../../app/widgets/foundation/app_button.dart';
 import '../../../app/widgets/foundation/app_feedback.dart';
 import '../../../app/widgets/foundation/app_refresh_indicator.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
@@ -135,23 +136,23 @@ class _BookmarksPageState extends ConsumerState<BookmarksPage> {
                 icon: const Icon(Icons.edit_outlined),
               ),
             if (_isSelectionMode) ...[
-              TextButton(
+              AppButton(
+                variant: AppButtonVariant.danger,
                 onPressed:
                     _selectedBookmarkIds.isEmpty
                         ? null
                         : _deleteSelectedBookmarks,
-                child: Text(
-                  '删除${_selectedBookmarkIds.isEmpty ? '' : ' (${_selectedBookmarkIds.length})'}',
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
+                label:
+                    '删除${_selectedBookmarkIds.isEmpty ? '' : ' (${_selectedBookmarkIds.length})'}',
               ),
-              TextButton(
+              AppButton(
+                variant: AppButtonVariant.text,
                 onPressed:
                     () => setState(() {
                       _isSelectionMode = false;
                       _selectedBookmarkIds.clear();
                     }),
-                child: const Text('取消'),
+                label: '取消',
               ),
             ],
           ],
@@ -992,17 +993,16 @@ Future<bool?> showBookmarkDeleteConfirmSurface({
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(
+                AppButton(
+                  variant: AppButtonVariant.text,
                   onPressed: () => Navigator.of(surfaceContext).pop(false),
-                  child: const Text('取消'),
+                  label: '取消',
                 ),
                 const SizedBox(width: 8),
-                FilledButton.tonal(
+                AppButton(
+                  variant: AppButtonVariant.danger,
                   onPressed: () => Navigator.of(surfaceContext).pop(true),
-                  style: FilledButton.styleFrom(
-                    foregroundColor: colorScheme.error,
-                  ),
-                  child: const Text('删除'),
+                  label: '删除',
                 ),
               ],
             ),

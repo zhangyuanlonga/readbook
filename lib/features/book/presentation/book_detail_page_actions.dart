@@ -692,13 +692,15 @@ extension on _BookDetailPageState {
                                               ),
                                         ),
                                       ),
-                                      TextButton(
+                                      AppButton(
+                                        variant: AppButtonVariant.text,
+                                        size: AppButtonSize.compact,
                                         onPressed:
                                             () =>
                                                 Navigator.of(
                                                   dialogContext,
                                                 ).pop(),
-                                        child: const Text('取消'),
+                                        label: '取消',
                                       ),
                                     ],
                                   ),

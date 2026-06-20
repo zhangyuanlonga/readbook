@@ -822,7 +822,11 @@ class _FeedbackStateCard extends StatelessWidget {
           ),
           if (actionLabel != null && onAction != null) ...[
             const SizedBox(height: 10),
-            FilledButton.tonal(onPressed: onAction, child: Text(actionLabel!)),
+            AppButton(
+              variant: AppButtonVariant.tonal,
+              onPressed: onAction,
+              label: actionLabel!,
+            ),
           ],
         ],
       ),
@@ -1023,24 +1027,12 @@ class _FeedbackComposePageState extends State<FeedbackComposePage> {
                           ),
                         ),
                         const SizedBox(height: 18),
-                        FilledButton.icon(
+                        AppButton(
+                          expanded: true,
                           onPressed: _isSubmitting ? null : _submit,
-                          icon:
-                              _isSubmitting
-                                  ? AppProgressIndicator(
-                                    size: 16,
-                                    strokeWidth: 2,
-                                    color:
-                                        Theme.of(context).colorScheme.onPrimary,
-                                    semanticLabel: '提交反馈中',
-                                  )
-                                  : const Icon(Icons.send_rounded),
-                          label: AppAnimatedSwitcher(
-                            child: Text(
-                              _isSubmitting ? '提交中...' : '提交反馈',
-                              key: ValueKey<bool>(_isSubmitting),
-                            ),
-                          ),
+                          icon: const Icon(Icons.send_rounded),
+                          isLoading: _isSubmitting,
+                          label: _isSubmitting ? '提交中...' : '提交反馈',
                         ),
                       ],
                     ),
@@ -1170,14 +1162,15 @@ class _FeedbackComposePageState extends State<FeedbackComposePage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(
+                AppButton(
+                  variant: AppButtonVariant.text,
                   onPressed: () => Navigator.of(surfaceContext).pop(false),
-                  child: const Text('取消'),
+                  label: '取消',
                 ),
                 const SizedBox(width: 8),
-                FilledButton(
+                AppButton(
                   onPressed: () => Navigator.of(surfaceContext).pop(true),
-                  child: const Text('仍然提交'),
+                  label: '仍然提交',
                 ),
               ],
             ),

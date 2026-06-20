@@ -121,7 +121,9 @@ Future<AdvancedThemeDeleteDecision?> showAdvancedThemeDeleteDecisionSurface({
                   Row(
                     children: [
                       Expanded(
-                        child: OutlinedButton(
+                        child: AppButton(
+                          variant: AppButtonVariant.secondary,
+                          expanded: true,
                           onPressed:
                               () => Navigator.of(sheetContext).pop(
                                 const AdvancedThemeDeleteDecision(
@@ -130,12 +132,14 @@ Future<AdvancedThemeDeleteDecision?> showAdvancedThemeDeleteDecisionSurface({
                                       AdvancedThemeDeleteOptions.none(),
                                 ),
                               ),
-                          child: const Text('取消'),
+                          label: '取消',
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: FilledButton(
+                        child: AppButton(
+                          variant: AppButtonVariant.danger,
+                          expanded: true,
                           onPressed: () {
                             Navigator.of(sheetContext).pop(
                               AdvancedThemeDeleteDecision(
@@ -169,7 +173,7 @@ Future<AdvancedThemeDeleteDecision?> showAdvancedThemeDeleteDecisionSurface({
                               ),
                             );
                           },
-                          child: const Text('删除'),
+                          label: '删除',
                         ),
                       ),
                     ],

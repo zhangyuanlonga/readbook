@@ -197,16 +197,12 @@ class _SourceWebViewLoginPageState
             onPressed: _isSubmitting ? null : controller.reload,
             icon: const Icon(Icons.refresh_rounded),
           ),
-          TextButton(
+          AppButton(
+            variant: AppButtonVariant.text,
+            size: AppButtonSize.compact,
             onPressed: _isSubmitting ? null : _submitSession,
-            child:
-                _isSubmitting
-                    ? const AppProgressIndicator(
-                      size: 18,
-                      strokeWidth: 2,
-                      semanticLabel: '提交会话中',
-                    )
-                    : const Text('提交会话'),
+            isLoading: _isSubmitting,
+            label: _isSubmitting ? '提交中' : '提交会话',
           ),
         ],
       ),

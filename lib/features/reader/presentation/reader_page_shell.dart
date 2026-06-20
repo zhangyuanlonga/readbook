@@ -549,26 +549,40 @@ extension _ReaderPageShellExtension on _ReaderPageState {
     final colorScheme = Theme.of(context).colorScheme;
     final foreground =
         destructive ? colorScheme.error : colorScheme.onSurfaceVariant;
-    return OutlinedButton(
-      style: OutlinedButton.styleFrom(
-        foregroundColor: foreground,
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+    // UI-GOV-EXEMPT: hardcoded-style auto-read control is a square icon+label control, not a standard text button.
+    final borderRadius = BorderRadius.circular(16);
+    return Material(
+      // UI-GOV-EXEMPT: hardcoded-style transparent material is required for InkWell ripple over the custom control.
+      color: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: borderRadius,
         side: BorderSide(
           color:
               destructive
                   ? colorScheme.error.withValues(alpha: 0.45)
                   : colorScheme.outlineVariant,
         ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
-      onPressed: () => Navigator.of(context).pop(action),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 20),
-          const SizedBox(height: 4),
-          Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
-        ],
+      child: InkWell(
+        borderRadius: borderRadius,
+        onTap: () => Navigator.of(context).pop(action),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+          child: IconTheme.merge(
+            data: IconThemeData(color: foreground),
+            child: DefaultTextStyle.merge(
+              style: TextStyle(color: foreground),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, size: 20),
+                  const SizedBox(height: 4),
+                  Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

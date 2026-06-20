@@ -3,6 +3,7 @@
 
 import 'package:flutter/material.dart';
 
+import '../../../../../app/widgets/foundation/app_button.dart';
 import '../../../../../domain/entities/reader_settings.dart';
 import '../../../application/reader_mode_model.dart';
 import 'reader_settings_components.dart';
@@ -158,10 +159,11 @@ class ReaderPageTurnInteractionSettingsPanel extends StatelessWidget {
         ReaderSettingsDivider(compactScale: compactScale),
         ReaderSettingsCompactTitle(title: '正文点击分区', compactScale: compactScale),
         const SizedBox(height: 10),
-        OutlinedButton.icon(
+        AppButton(
+          variant: AppButtonVariant.secondary,
           onPressed: onOpenTapZoneEditor,
           icon: const Icon(Icons.grid_view_rounded, size: 16),
-          label: const Text('编辑 3×3 分区'),
+          label: '编辑 3×3 分区',
         ),
         const SizedBox(height: 8),
         _TapZonePreviewGrid(actions: settings.tapZoneActions),

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
+import '../../../../../app/widgets/foundation/app_button.dart';
 import '../../../../../domain/entities/reader_settings.dart';
 import '../../../application/reader_content_session.dart';
 import '../../widgets/reader_typography_slider_row.dart';
@@ -162,7 +163,9 @@ class ReaderThemeBackgroundSettingsPanel extends StatelessWidget {
         SizedBox(width: _scale(6)),
         SizedBox(
           height: 40,
-          child: TextButton.icon(
+          child: AppButton(
+            variant: AppButtonVariant.text,
+            size: AppButtonSize.compact,
             onPressed: () {
               final selected = settings.themeMode != ReaderThemeMode.sepia;
               onChanged(
@@ -180,29 +183,24 @@ class ReaderThemeBackgroundSettingsPanel extends StatelessWidget {
                 ),
               );
             },
-            style: TextButton.styleFrom(
+            style: ButtonStyle(
               visualDensity: VisualDensity.compact,
-              padding: EdgeInsets.symmetric(horizontal: _scale(6)),
+              padding: WidgetStatePropertyAll(
+                EdgeInsets.symmetric(horizontal: _scale(6)),
+              ),
+              foregroundColor: WidgetStatePropertyAll(
+                settings.themeMode == ReaderThemeMode.sepia
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
             icon: Icon(
               settings.themeMode == ReaderThemeMode.sepia
                   ? Icons.visibility_rounded
                   : Icons.visibility_outlined,
               size: _scale(16),
-              color:
-                  settings.themeMode == ReaderThemeMode.sepia
-                      ? Theme.of(context).colorScheme.primary
-                      : Theme.of(context).colorScheme.onSurfaceVariant,
             ),
-            label: Text(
-              '护眼',
-              style: TextStyle(
-                color:
-                    settings.themeMode == ReaderThemeMode.sepia
-                        ? Theme.of(context).colorScheme.primary
-                        : null,
-              ),
-            ),
+            label: '护眼',
           ),
         ),
       ],
@@ -309,16 +307,18 @@ class ReaderThemeBackgroundSettingsPanel extends StatelessWidget {
               onTap: onApplyCustomBackgroundImage,
             ),
             SizedBox(width: _scale(8)),
-            OutlinedButton.icon(
+            AppButton(
+              variant: AppButtonVariant.secondary,
               onPressed: onOpenBackgroundManagement,
               icon: const Icon(Icons.open_in_new_rounded, size: 16),
-              label: const Text('去我的管理'),
+              label: '去我的管理',
             ),
             if (hasBackgroundImage && onRemoveActiveBackground != null) ...[
               SizedBox(width: _scale(8)),
-              OutlinedButton(
+              AppButton(
+                variant: AppButtonVariant.secondary,
                 onPressed: onRemoveActiveBackground,
-                child: const Text('移除'),
+                label: '移除',
               ),
             ],
           ],

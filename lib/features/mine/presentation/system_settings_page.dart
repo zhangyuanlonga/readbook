@@ -526,17 +526,18 @@ class _AppResetPanelState extends State<_AppResetPanel> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    TextButton(
+                    AppButton(
+                      variant: AppButtonVariant.text,
                       onPressed: () => Navigator.of(surfaceContext).pop(false),
-                      child: const Text('取消'),
+                      label: '取消',
                     ),
                     const SizedBox(width: 8),
-                    FilledButton(
+                    AppButton(
                       onPressed:
                           canConfirm
                               ? () => Navigator.of(surfaceContext).pop(true)
                               : null,
-                      child: const Text('确认重置'),
+                      label: '确认重置',
                     ),
                   ],
                 ),
@@ -727,14 +728,15 @@ class _ReaderSettingsResetPanelState extends State<_ReaderSettingsResetPanel> {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(
+                AppButton(
+                  variant: AppButtonVariant.text,
                   onPressed: () => Navigator.of(surfaceContext).pop(false),
-                  child: const Text('取消'),
+                  label: '取消',
                 ),
                 const SizedBox(width: 8),
-                FilledButton(
+                AppButton(
                   onPressed: () => Navigator.of(surfaceContext).pop(true),
-                  child: const Text('确认恢复'),
+                  label: '确认恢复',
                 ),
               ],
             ),

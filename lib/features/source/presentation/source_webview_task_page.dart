@@ -271,16 +271,12 @@ class _SourceWebViewTaskPageState extends ConsumerState<SourceWebViewTaskPage> {
                     },
             icon: const Icon(Icons.refresh_rounded),
           ),
-          TextButton(
+          AppButton(
+            variant: AppButtonVariant.text,
+            size: AppButtonSize.compact,
             onPressed: _isSubmitting ? null : _submitNow,
-            child:
-                _isSubmitting
-                    ? const AppProgressIndicator(
-                      size: 18,
-                      strokeWidth: 2,
-                      semanticLabel: '提交结果中',
-                    )
-                    : const Text('提交结果'),
+            isLoading: _isSubmitting,
+            label: _isSubmitting ? '提交中' : '提交结果',
           ),
         ],
       ),

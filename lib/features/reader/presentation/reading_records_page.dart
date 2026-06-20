@@ -477,9 +477,11 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
                       _canMovePeriodForward ? () => _movePeriod(1) : null,
                   icon: const Icon(Icons.chevron_right_rounded),
                 ),
-                TextButton(
+                AppButton(
+                  variant: AppButtonVariant.text,
+                  size: AppButtonSize.compact,
                   onPressed: () => _setPeriod(ReadingRecordsPeriod.all),
-                  child: const Text('重置'),
+                  label: '重置',
                 ),
               ],
             ),
@@ -632,13 +634,15 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
                 ),
               ),
               if (_period == ReadingRecordsPeriod.all)
-                TextButton(
+                AppButton(
+                  variant: AppButtonVariant.text,
+                  size: AppButtonSize.compact,
                   onPressed: () {
                     setState(() {
                       _heatmapRangeMode = _HeatmapRangeMode.all;
                     });
                   },
-                  child: const Text('重置'),
+                  label: '重置',
                 ),
             ],
           ),

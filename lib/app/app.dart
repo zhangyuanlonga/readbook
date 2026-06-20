@@ -22,6 +22,7 @@ import '../features/source/application/external_import_diagnostics.dart';
 import '../features/source/application/external_source_import_bridge.dart';
 import 'widgets/app_task_status.dart';
 import 'widgets/app_splash_screen.dart';
+import 'widgets/foundation/app_button.dart';
 import 'widgets/foundation/app_feedback.dart';
 import 'widgets/import_export_copy.dart';
 import 'widgets/import_export_task_overlay.dart';
@@ -850,7 +851,12 @@ class _StartupAnnouncementBanner extends StatelessWidget {
                         ],
                       ),
                     ),
-                    TextButton(onPressed: onOpen, child: const Text('查看')),
+                    AppButton(
+                      variant: AppButtonVariant.text,
+                      size: AppButtonSize.compact,
+                      onPressed: onOpen,
+                      label: '查看',
+                    ),
                     Semantics(
                       button: true,
                       label: '关闭',

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../layout/app_adaptive.dart';
 import '../motion/app_motion.dart';
 import '../theme/app_component_theme_tokens.dart';
+import 'foundation/app_button.dart';
 
 class AdaptiveFilterChipData {
   const AdaptiveFilterChipData({
@@ -128,28 +129,33 @@ class AdaptiveFilterBar extends StatelessWidget {
       );
     }
 
-    final action = TextButton.icon(
+    final action = AppButton(
+      variant: AppButtonVariant.text,
+      size: AppButtonSize.compact,
       onPressed: onActionPressed,
-      style: TextButton.styleFrom(
-        minimumSize: Size(0, height),
-        padding: EdgeInsets.symmetric(
-          horizontal: metrics.isCompactDensity ? 4 : 6,
+      style: ButtonStyle(
+        minimumSize: WidgetStatePropertyAll(Size(0, height)),
+        padding: WidgetStatePropertyAll(
+          EdgeInsets.symmetric(horizontal: metrics.isCompactDensity ? 4 : 6),
         ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(
-            componentTokens.selection.segmentRadius,
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(
+              componentTokens.selection.segmentRadius,
+            ),
           ),
         ),
         visualDensity: VisualDensity.compact,
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        foregroundColor:
-            actionColor ??
-            (highlightAction
-                ? colorScheme.primary
-                : colorScheme.onSurfaceVariant),
+        foregroundColor: WidgetStatePropertyAll(
+          actionColor ??
+              (highlightAction
+                  ? colorScheme.primary
+                  : colorScheme.onSurfaceVariant),
+        ),
       ),
       icon: Icon(actionIcon, size: 18),
-      label: Text(actionLabel),
+      label: actionLabel,
     );
 
     return SizedBox(

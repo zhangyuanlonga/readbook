@@ -14,6 +14,7 @@ import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
+import '../../../app/widgets/foundation/app_button.dart';
 import '../../../app/widgets/foundation/app_progress.dart';
 import '../../../app/widgets/foundation/app_refresh_indicator.dart';
 import '../../../app/widgets/foundation/app_skeleton.dart';
@@ -674,10 +675,12 @@ class _LoadMoreFooter extends StatelessWidget {
       return Padding(
         padding: const EdgeInsets.only(top: 8, bottom: 24),
         child: Center(
-          child: TextButton.icon(
+          child: AppButton(
+            variant: AppButtonVariant.text,
+            size: AppButtonSize.compact,
             onPressed: onRetry,
             icon: const Icon(Icons.refresh_rounded, size: 18),
-            label: const Text('加载更多失败，点击重试'),
+            label: '加载更多失败，点击重试',
           ),
         ),
       );
@@ -983,7 +986,12 @@ class _CategoryPanel extends ConsumerWidget {
               ),
             ),
             if (onRetry != null)
-              TextButton(onPressed: onRetry, child: const Text('重试')),
+              AppButton(
+                variant: AppButtonVariant.text,
+                size: AppButtonSize.compact,
+                onPressed: onRetry,
+                label: '重试',
+              ),
           ],
         ),
       );

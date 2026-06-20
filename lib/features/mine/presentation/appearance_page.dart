@@ -25,6 +25,7 @@ import '../../../app/widgets/foundation/app_progress.dart';
 import '../../../app/widgets/import_export_task_overlay.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../../app/widgets/adaptive_overflow_toolbar.dart';
+import '../../../app/widgets/foundation/app_button.dart';
 import '../../../core/media/image_selection_service.dart';
 import '../../../domain/entities/app_advanced_theme.dart';
 import '../application/appearance_page_resource_service.dart';
@@ -195,18 +196,16 @@ class _AppearancePageState extends ConsumerState<AppearancePage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(
+                AppButton(
+                  variant: AppButtonVariant.text,
                   onPressed: () => Navigator.of(surfaceContext).pop(false),
-                  child: const Text('取消'),
+                  label: '取消',
                 ),
                 const SizedBox(width: 8),
-                FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: colorScheme.error,
-                    foregroundColor: colorScheme.onError,
-                  ),
+                AppButton(
+                  variant: AppButtonVariant.danger,
                   onPressed: () => Navigator.of(surfaceContext).pop(true),
-                  child: const Text('删除'),
+                  label: '删除',
                 ),
               ],
             ),

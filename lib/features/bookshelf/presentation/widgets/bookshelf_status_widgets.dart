@@ -29,10 +29,10 @@ class BookshelfEmptyCard extends StatelessWidget {
                 label: '导入本地图书',
                 icon: const Icon(Icons.library_add_rounded),
                 onPressed: onImportLocal,
-                style: FilledButton.styleFrom(
-                  backgroundColor: palette.primaryColor,
-                  foregroundColor: _readableButtonForeground(
-                    palette.primaryColor,
+                style: ButtonStyle(
+                  backgroundColor: WidgetStatePropertyAll(palette.primaryColor),
+                  foregroundColor: WidgetStatePropertyAll(
+                    _readableButtonForeground(palette.primaryColor),
                   ),
                 ),
               )

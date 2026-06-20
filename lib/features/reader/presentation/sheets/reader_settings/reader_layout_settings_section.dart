@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../../app/widgets/foundation/app_button.dart';
 import '../../../../../domain/entities/reader_settings.dart';
 import '../../../application/reader_settings_groups.dart';
 import '../../widgets/reader_typography_slider_row.dart';
@@ -74,7 +75,9 @@ class ReaderLayoutInfoSettingsPanel extends StatelessWidget {
         Row(
           children: [
             const Expanded(child: _SectionTitle('正文边距')),
-            TextButton.icon(
+            AppButton(
+              variant: AppButtonVariant.text,
+              size: AppButtonSize.compact,
               onPressed: () {
                 onChanged(
                   settings.copyWith(
@@ -86,7 +89,7 @@ class ReaderLayoutInfoSettingsPanel extends StatelessWidget {
                 );
               },
               icon: const Icon(Icons.restart_alt_rounded, size: 16),
-              label: const Text('恢复默认'),
+              label: '恢复默认',
             ),
           ],
         ),
@@ -159,7 +162,9 @@ class ReaderLayoutInfoSettingsPanel extends StatelessWidget {
         Row(
           children: [
             const Expanded(child: _SectionTitle('阅读排版')),
-            TextButton.icon(
+            AppButton(
+              variant: AppButtonVariant.text,
+              size: AppButtonSize.compact,
               onPressed: () {
                 onChanged(
                   settings.copyWith(
@@ -171,7 +176,7 @@ class ReaderLayoutInfoSettingsPanel extends StatelessWidget {
                 );
               },
               icon: const Icon(Icons.restart_alt_rounded, size: 16),
-              label: const Text('恢复默认'),
+              label: '恢复默认',
             ),
           ],
         ),
@@ -246,7 +251,9 @@ class ReaderLayoutInfoSettingsPanel extends StatelessWidget {
         Row(
           children: [
             const Expanded(child: _SectionTitle('章节头')),
-            TextButton.icon(
+            AppButton(
+              variant: AppButtonVariant.text,
+              size: AppButtonSize.compact,
               onPressed: () {
                 onChanged(
                   settings.copyWith(
@@ -256,7 +263,7 @@ class ReaderLayoutInfoSettingsPanel extends StatelessWidget {
                 );
               },
               icon: const Icon(Icons.restart_alt_rounded, size: 16),
-              label: const Text('恢复默认'),
+              label: '恢复默认',
             ),
           ],
         ),
@@ -321,7 +328,9 @@ class ReaderLayoutInfoSettingsPanel extends StatelessWidget {
         Row(
           children: [
             const Expanded(child: _SectionTitle('页脚边距')),
-            TextButton.icon(
+            AppButton(
+              variant: AppButtonVariant.text,
+              size: AppButtonSize.compact,
               onPressed: () {
                 const defaults = ReaderSettings();
                 onChanged(
@@ -336,7 +345,7 @@ class ReaderLayoutInfoSettingsPanel extends StatelessWidget {
                 );
               },
               icon: const Icon(Icons.restart_alt_rounded, size: 16),
-              label: const Text('恢复默认'),
+              label: '恢复默认',
             ),
           ],
         ),

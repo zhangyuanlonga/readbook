@@ -1130,14 +1130,16 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(
+                AppButton(
+                  variant: AppButtonVariant.text,
                   onPressed: () => Navigator.of(surfaceContext).pop(false),
-                  child: const Text('取消'),
+                  label: '取消',
                 ),
                 const SizedBox(width: 8),
-                FilledButton(
+                AppButton(
+                  variant: AppButtonVariant.danger,
                   onPressed: () => Navigator.of(surfaceContext).pop(true),
-                  child: const Text('退出'),
+                  label: '退出',
                 ),
               ],
             ),
@@ -1207,14 +1209,16 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(
+                AppButton(
+                  variant: AppButtonVariant.text,
                   onPressed: () => Navigator.of(surfaceContext).pop(false),
-                  child: const Text('取消'),
+                  label: '取消',
                 ),
                 const SizedBox(width: 8),
-                FilledButton(
+                AppButton(
+                  variant: AppButtonVariant.danger,
                   onPressed: () => Navigator.of(surfaceContext).pop(true),
-                  child: const Text('清除'),
+                  label: '清除',
                 ),
               ],
             ),
@@ -1518,12 +1522,13 @@ class _EditProfileSurfaceState extends State<_EditProfileSurface> {
         Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            TextButton(
+            AppButton(
+              variant: AppButtonVariant.text,
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('取消'),
+              label: '取消',
             ),
             const SizedBox(width: 8),
-            FilledButton(onPressed: _submit, child: const Text('保存')),
+            AppButton(onPressed: _submit, label: '保存'),
           ],
         ),
       ],

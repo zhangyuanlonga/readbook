@@ -175,12 +175,13 @@ class PrivateBookSourceTestConfigSheetState
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: <Widget>[
-                  TextButton(
+                  AppButton(
+                    variant: AppButtonVariant.text,
                     onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('取消'),
+                    label: '取消',
                   ),
                   const SizedBox(width: 8),
-                  FilledButton.icon(
+                  AppButton(
                     onPressed:
                         _checkItems.isEmpty
                             ? null
@@ -192,7 +193,7 @@ class PrivateBookSourceTestConfigSheetState
                               ),
                             ),
                     icon: const Icon(Icons.science_outlined),
-                    label: const Text('开始检测'),
+                    label: '开始检测',
                   ),
                 ],
               ),
@@ -297,7 +298,8 @@ class PrivateBookSourceCheckReportSheet extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: <Widget>[
-                OutlinedButton.icon(
+                AppButton(
+                  variant: AppButtonVariant.secondary,
                   onPressed:
                       report.copyText.trim().isEmpty
                           ? null
@@ -313,7 +315,7 @@ class PrivateBookSourceCheckReportSheet extends StatelessWidget {
                             );
                           },
                   icon: const Icon(Icons.copy_rounded),
-                  label: const Text('复制日志'),
+                  label: '复制日志',
                 ),
               ],
             ),

@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../../../app/theme/app_component_theme_tokens.dart';
+import '../../../../../app/widgets/foundation/app_button.dart';
 import '../../../../../domain/entities/reader_settings.dart';
 import '../../widgets/reader_typography_slider_row.dart';
 import 'reader_settings_components.dart';
@@ -474,12 +476,17 @@ class _ColorSettingRow extends StatelessWidget {
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
-                  OutlinedButton(onPressed: onReset, child: Text(resetLabel)),
+                  AppButton(
+                    variant: AppButtonVariant.secondary,
+                    onPressed: onReset,
+                    label: resetLabel,
+                  ),
                   SizedBox(width: _scale(8)),
-                  FilledButton.tonalIcon(
+                  AppButton(
+                    variant: AppButtonVariant.tonal,
                     onPressed: () => unawaited(onPick()),
                     icon: const Icon(Icons.colorize_rounded, size: 16),
-                    label: const Text('颜色'),
+                    label: '颜色',
                   ),
                   if (currentColorValue != null) ...[
                     SizedBox(width: _scale(8)),
@@ -565,60 +572,66 @@ class _ReaderSettingsSecondaryCapsule extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final componentTokens = appComponentThemeTokensOf(context);
     return _ReaderSettingsInlineCapsule(
       compactScale: compactScale,
       padding: EdgeInsets.zero,
       child: SizedBox(
         height: _scale(38),
-        child: TextButton(
-          onPressed: onTap,
-          style: TextButton.styleFrom(
-            visualDensity: VisualDensity.compact,
+        child: InkWell(
+          onTap: onTap,
+          // UI-GOV-EXEMPT: hardcoded-style reader-settings capsule radius follows component token with density scaling.
+          borderRadius: BorderRadius.circular(
+            componentTokens.selection.segmentRadius,
+          ),
+          child: Padding(
             padding: EdgeInsets.symmetric(
               horizontal: _scale(8),
               vertical: _scale(6),
             ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: _scale(20),
-                height: _scale(20),
-                decoration: BoxDecoration(
-                  color: colorScheme.primaryContainer.withValues(alpha: 0.8),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  icon,
-                  size: _scale(11),
-                  color: colorScheme.onPrimaryContainer,
-                ),
-              ),
-              SizedBox(width: _scale(6)),
-              Flexible(
-                fit: FlexFit.loose,
-                child: Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    fontSize:
-                        (Theme.of(context).textTheme.bodyMedium?.fontSize ??
-                            14) *
-                        compactScale *
-                        0.88,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: _scale(20),
+                  height: _scale(20),
+                  // UI-GOV-EXEMPT: hardcoded-style reader-settings icon chip is a compact local affordance inside a tokenized capsule.
+                  decoration: BoxDecoration(
+                    color: colorScheme.primaryContainer.withValues(alpha: 0.8),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    icon,
+                    size: _scale(11),
+                    color: colorScheme.onPrimaryContainer,
                   ),
                 ),
-              ),
-              SizedBox(width: _scale(2)),
-              Icon(
-                Icons.chevron_right_rounded,
-                size: _scale(14),
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ],
+                SizedBox(width: _scale(6)),
+                Flexible(
+                  fit: FlexFit.loose,
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      // UI-GOV-EXEMPT: hardcoded-style reader-settings compactScale mirrors the sheet density slider.
+                      fontSize:
+                          (Theme.of(context).textTheme.bodyMedium?.fontSize ??
+                              14) *
+                          compactScale *
+                          0.88,
+                    ),
+                  ),
+                ),
+                SizedBox(width: _scale(2)),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: _scale(14),
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ],
+            ),
           ),
         ),
       ),

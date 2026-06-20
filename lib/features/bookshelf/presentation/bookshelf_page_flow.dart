@@ -2224,9 +2224,10 @@ class _BookshelfTaxonomyEditorDialogState
                     ),
                   ),
                 ),
-                TextButton(
+                AppButton(
+                  variant: AppButtonVariant.text,
                   onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('取消'),
+                  label: '取消',
                 ),
               ],
             ),
@@ -2861,9 +2862,10 @@ class _BookshelfImportLocalBooksSheetState
                   const SizedBox(height: 20),
                   Align(
                     alignment: Alignment.centerRight,
-                    child: TextButton(
+                    child: AppButton(
+                      variant: AppButtonVariant.text,
                       onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('知道了'),
+                      label: '知道了',
                     ),
                   ),
                 ],

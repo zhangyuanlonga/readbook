@@ -994,13 +994,19 @@ class _SearchSourcePickerActions extends StatelessWidget {
       return Row(
         children: <Widget>[
           Expanded(
-            child: OutlinedButton(onPressed: onCancel, child: const Text('取消')),
+            child: AppButton(
+              variant: AppButtonVariant.secondary,
+              expanded: true,
+              onPressed: onCancel,
+              label: '取消',
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: FilledButton(
+            child: AppButton(
+              expanded: true,
               onPressed: canApply ? onApply : null,
-              child: Text(selectionLabel),
+              label: selectionLabel,
             ),
           ),
         ],
@@ -1009,12 +1015,13 @@ class _SearchSourcePickerActions extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,
       children: <Widget>[
-        TextButton(onPressed: onCancel, child: const Text('取消')),
-        const SizedBox(width: 8),
-        FilledButton(
-          onPressed: canApply ? onApply : null,
-          child: Text(selectionLabel),
+        AppButton(
+          variant: AppButtonVariant.text,
+          onPressed: onCancel,
+          label: '取消',
         ),
+        const SizedBox(width: 8),
+        AppButton(onPressed: canApply ? onApply : null, label: selectionLabel),
       ],
     );
   }

@@ -585,9 +585,11 @@ class _StorageManagementPageState extends State<StorageManagementPage> {
         title: '读取失败',
         message: message,
         tone: AppFeedbackTone.error,
-        action: TextButton(
+        action: AppButton(
+          variant: AppButtonVariant.text,
+          size: AppButtonSize.compact,
           onPressed: _isLoading ? null : _load,
-          child: const Text('重试'),
+          label: '重试',
         ),
       ),
     );

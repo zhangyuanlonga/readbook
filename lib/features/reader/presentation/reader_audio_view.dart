@@ -611,26 +611,29 @@ class _ReaderAudioViewState extends State<ReaderAudioView> {
             spacing: 8,
             runSpacing: 8,
             children: [
-              OutlinedButton.icon(
+              AppButton(
+                variant: AppButtonVariant.secondary,
                 onPressed: state.isReady ? _controller.restart : null,
                 icon: const Icon(Icons.replay_rounded),
-                label: const Text('重播'),
+                label: '重播',
               ),
-              OutlinedButton.icon(
+              AppButton(
+                variant: AppButtonVariant.secondary,
                 onPressed:
                     audioUrl == null
                         ? null
                         : () => _openExternal(context, audioUrl),
                 icon: const Icon(Icons.open_in_new_rounded),
-                label: const Text('外部打开'),
+                label: '外部打开',
               ),
-              OutlinedButton.icon(
+              AppButton(
+                variant: AppButtonVariant.secondary,
                 onPressed:
                     audioUrl == null
                         ? null
                         : () => _copyToClipboard(context, audioUrl),
                 icon: const Icon(Icons.copy_rounded),
-                label: const Text('复制地址'),
+                label: '复制地址',
               ),
             ],
           ),

@@ -680,19 +680,23 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
             runSpacing: metrics.contentGap / 2,
             children: [
               if (_session == null)
-                TextButton(
+                AppButton(
+                  variant: AppButtonVariant.text,
                   onPressed: _isActing ? null : _handleActivateAction,
-                  child: const Text('许可证激活'),
+                  label: '许可证激活',
                 )
               else if (_hasActiveMembership)
-                TextButton(
+                AppButton(
+                  variant: AppButtonVariant.text,
                   onPressed: _isActing ? null : _handleActivateAction,
-                  child: const Text('激活新许可证'),
+                  label: '激活新许可证',
                 )
               else
-                TextButton(
+                AppButton(
+                  variant: AppButtonVariant.text,
                   onPressed: _isActing ? null : _handleTrialAction,
-                  child: Text(_isClaimingTrial ? '领取中...' : '试用权益'),
+                  isLoading: _isClaimingTrial,
+                  label: _isClaimingTrial ? '领取中...' : '试用权益',
                 ),
             ],
           ),

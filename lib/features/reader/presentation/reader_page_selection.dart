@@ -999,22 +999,24 @@ extension _ReaderPageSelectionExtension on _ReaderPageState {
               const SizedBox(height: 12),
               Row(
                 children: [
-                  TextButton(
+                  AppButton(
+                    variant: AppButtonVariant.text,
                     onPressed: () => Navigator.of(sheetContext).pop(''),
-                    child: const Text('清空笔记'),
+                    label: '清空笔记',
                   ),
                   const Spacer(),
-                  TextButton(
+                  AppButton(
+                    variant: AppButtonVariant.text,
                     onPressed: () => Navigator.of(sheetContext).pop(),
-                    child: const Text('取消'),
+                    label: '取消',
                   ),
                   const SizedBox(width: 8),
-                  FilledButton(
+                  AppButton(
                     onPressed:
                         () => Navigator.of(
                           sheetContext,
                         ).pop(controller.text.trim()),
-                    child: const Text('保存'),
+                    label: '保存',
                   ),
                 ],
               ),

@@ -455,14 +455,15 @@ extension on _BookDetailPageState {
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  TextButton(
+                  AppButton(
+                    variant: AppButtonVariant.text,
                     onPressed: () => Navigator.of(dialogContext).pop(false),
-                    child: const Text('稍后'),
+                    label: '稍后',
                   ),
                   const SizedBox(width: 8),
-                  FilledButton(
+                  AppButton(
                     onPressed: () => Navigator.of(dialogContext).pop(true),
-                    child: const Text('立即重建'),
+                    label: '立即重建',
                   ),
                 ],
               ),
