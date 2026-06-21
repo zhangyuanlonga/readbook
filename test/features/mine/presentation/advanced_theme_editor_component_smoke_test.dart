@@ -112,6 +112,7 @@ void main() {
           data: MediaQueryData(
             textScaler: TextScaler.linear(1.6),
             size: Size(430, 932),
+            disableAnimations: true,
           ),
           child: MaterialApp(
             home: AdvancedThemeEditorPage(themeId: 'editor_component_smoke'),
@@ -145,6 +146,14 @@ void main() {
     expect(find.text('底栏图集'), findsOneWidget);
     expect(find.text('主题特效'), findsOneWidget);
     expect(find.byType(AppAnimatedDashedRoundedBorder), findsNWidgets(6));
+    expect(
+      tester
+          .widgetList<AppAnimatedDashedRoundedBorder>(
+            find.byType(AppAnimatedDashedRoundedBorder),
+          )
+          .every((widget) => widget.animated),
+      isTrue,
+    );
     final resourceGrid = tester.widget<GridView>(
       find.byKey(const ValueKey<String>('advanced_theme_visual_resource_grid')),
     );
@@ -236,7 +245,7 @@ void main() {
           ),
         ],
         child: const MediaQuery(
-          data: MediaQueryData(size: Size(430, 932)),
+          data: MediaQueryData(size: Size(430, 932), disableAnimations: true),
           child: MaterialApp(home: AdvancedThemeEditorPage()),
         ),
       ),
@@ -299,7 +308,7 @@ void main() {
           ),
         ],
         child: const MediaQuery(
-          data: MediaQueryData(size: Size(430, 932)),
+          data: MediaQueryData(size: Size(430, 932), disableAnimations: true),
           child: MaterialApp(
             home: AdvancedThemeEditorPage(themeId: 'editor_component_smoke'),
           ),

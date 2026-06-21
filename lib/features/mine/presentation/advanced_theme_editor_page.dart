@@ -2581,9 +2581,8 @@ class _AdvancedThemeEditorPageState
       child:
           dashedBorder
               ? AppAnimatedDashedRoundedBorder(
-                color: colorScheme.outlineVariant,
+                color: colorScheme.onSurfaceVariant,
                 radius: componentTokens.card.radius,
-                animated: false,
                 child: frame,
               )
               : frame,
