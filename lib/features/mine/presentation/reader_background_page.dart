@@ -366,7 +366,6 @@ class _ReaderBackgroundPageState extends ConsumerState<ReaderBackgroundPage> {
     );
     return AppSurface(
       padding: EdgeInsets.zero,
-      borderRadius: BorderRadius.circular(18),
       clipBehavior: Clip.antiAlias,
       backgroundColor: colorScheme.surfaceContainerLow,
       borderColor: colorScheme.outlineVariant.withValues(alpha: 0.4),

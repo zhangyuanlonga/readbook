@@ -4,6 +4,7 @@ import '../../../../app/layout/app_layout.dart';
 import '../../../../app/navigation/bottom_nav_icon_gallery_tab_mapper.dart';
 import '../../../../app/navigation/bottom_nav_icon_resolver.dart';
 import '../../../../app/theme/app_component_theme_tokens.dart';
+import '../../../../app/widgets/app_animated_dashed_rounded_border.dart';
 import '../../../../app/widgets/bottom_nav_icon_view.dart';
 import '../../../../app/widgets/foundation/foundation.dart';
 import '../../../../app/widgets/text_cover_placeholder.dart';
@@ -14,6 +15,167 @@ typedef AdvancedThemeResourceImageBuilder =
 
 typedef AdvancedThemeImagePreviewCallback =
     void Function(String imagePath, String title);
+
+class AdvancedThemeVisualResourceCard extends StatelessWidget {
+  const AdvancedThemeVisualResourceCard({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    required this.preview,
+    required this.onTap,
+    this.badges = const <String>[],
+  });
+
+  final String title;
+  final String subtitle;
+  final Widget preview;
+  final VoidCallback onTap;
+  final List<String> badges;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return AppSurface(
+      tone: AppSurfaceTone.muted,
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+      // UI-GOV-EXEMPT: local-alpha shared resource card uses token colors with calibrated emphasis.
+      backgroundColor: colorScheme.surface.withValues(alpha: 0.84),
+      borderColor: colorScheme.outlineVariant.withValues(alpha: 0.34),
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: colorScheme.onSurface,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          if (badges.isNotEmpty) ...[
+            const SizedBox(height: 5),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 5,
+              runSpacing: 5,
+              children: [
+                for (final badge in badges)
+                  _AdvancedThemeVisualResourceBadge(label: badge),
+              ],
+            ),
+          ],
+          const SizedBox(height: 8),
+          Center(child: preview),
+          const SizedBox(height: 8),
+          Text(
+            subtitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class AdvancedThemeVisualResourceFrame extends StatelessWidget {
+  const AdvancedThemeVisualResourceFrame({
+    super.key,
+    required this.width,
+    required this.height,
+    required this.child,
+    this.dashedBorder = false,
+    this.animatedBorder = false,
+    this.clip = false,
+    this.onLongPress,
+    this.radius,
+  });
+
+  final double width;
+  final double height;
+  final Widget child;
+  final bool dashedBorder;
+  final bool animatedBorder;
+  final bool clip;
+  final VoidCallback? onLongPress;
+  final double? radius;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final componentTokens = appComponentThemeTokensOf(context);
+    // UI-GOV-EXEMPT: local-alpha animated resource border keeps selected/unset affordances readable.
+    final borderColor =
+        animatedBorder
+            ? colorScheme.primary.withValues(alpha: 0.92)
+            : colorScheme.primary.withValues(alpha: 0.64);
+    final resolvedRadius = radius ?? componentTokens.card.radius;
+    final frame = AppSurface(
+      tone: AppSurfaceTone.transparent,
+      padding: EdgeInsets.zero,
+      backgroundColor: colorScheme.surface,
+      // UI-GOV-EXEMPT: hardcoded-style border-radius tokenized-component uses AppComponentThemeTokens or supplied resource radius.
+      // UI-GOV-EXEMPT: border-radius tokenized-component uses AppComponentThemeTokens or supplied resource radius.
+      borderRadius: BorderRadius.circular(resolvedRadius),
+      clipBehavior: clip ? Clip.antiAlias : Clip.none,
+      onLongPress: onLongPress,
+      child: child,
+    );
+    return SizedBox(
+      width: width,
+      height: height,
+      child:
+          dashedBorder || animatedBorder
+              ? AppAnimatedDashedRoundedBorder(
+                color: borderColor,
+                radius: resolvedRadius,
+                strokeWidth: animatedBorder ? 1.8 : 1.4,
+                child: frame,
+              )
+              : frame,
+    );
+  }
+}
+
+class _AdvancedThemeVisualResourceBadge extends StatelessWidget {
+  const _AdvancedThemeVisualResourceBadge({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return AppSurface(
+      tone: AppSurfaceTone.transparent,
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      // UI-GOV-EXEMPT: hardcoded-style border-radius tokenized badge pill.
+      // UI-GOV-EXEMPT: border-radius local resource badge pill.
+      borderRadius: BorderRadius.circular(999),
+      // UI-GOV-EXEMPT: local-alpha shared resource badge uses themed container color with lighter emphasis.
+      backgroundColor: colorScheme.primaryContainer.withValues(alpha: 0.56),
+      // UI-GOV-EXEMPT: hardcoded-style transparent border required by AppSurface API for pill badges.
+      borderColor: Colors.transparent,
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: colorScheme.onPrimaryContainer,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
 
 class AdvancedThemeResourcePickerSheet extends StatelessWidget {
   const AdvancedThemeResourcePickerSheet({

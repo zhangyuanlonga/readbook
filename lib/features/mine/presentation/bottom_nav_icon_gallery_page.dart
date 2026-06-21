@@ -22,6 +22,7 @@ import '../../../app/widgets/foundation/foundation.dart';
 import '../../../domain/entities/bottom_nav_icon_gallery.dart';
 import '../application/advanced_theme_provider.dart';
 import '../application/gallery_index_models.dart';
+import 'widgets/advanced_theme_resource_picker_widgets.dart';
 import 'widgets/image_resource_collection_widgets.dart';
 import 'widgets/mine_route_top_bar.dart';
 
@@ -521,20 +522,22 @@ class _BottomNavIconGalleryPageState
     final iconSet = gallery.previewItems[tab] ?? const BottomNavIconSet();
     final asset = iconSet.lightUnselected ?? iconSet.lightSelected;
     final resolved = _fallbackIconForTab(tab).copyWith(assetRef: asset);
-    return AppSurface(
-      padding: EdgeInsets.zero,
-      borderRadius: BorderRadius.circular(10),
-      backgroundColor:
-          active
-              ? colorScheme.primaryContainer.withValues(alpha: 0.34)
-              : colorScheme.surfaceContainerLow,
-      borderColor: colorScheme.outlineVariant.withValues(alpha: 0.4),
-      child: Center(
-        child: BottomNavIconView(
-          icon: resolved,
-          size: 18,
-          fallbackColor:
-              active ? colorScheme.primary : colorScheme.onSurfaceVariant,
+    return AdvancedThemeVisualResourceFrame(
+      width: double.infinity,
+      height: double.infinity,
+      child: ColoredBox(
+        // UI-GOV-EXEMPT: local-alpha active resource preview tint derives from theme primary container.
+        color:
+            active
+                ? colorScheme.primaryContainer.withValues(alpha: 0.34)
+                : colorScheme.surfaceContainerLow,
+        child: Center(
+          child: BottomNavIconView(
+            icon: resolved,
+            size: 18,
+            fallbackColor:
+                active ? colorScheme.primary : colorScheme.onSurfaceVariant,
+          ),
         ),
       ),
     );

@@ -4,6 +4,7 @@ import '../../../../app/images/local_file_image.dart';
 import '../../../../app/platform/app_input_focus_behavior.dart';
 import '../../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../../app/widgets/foundation/foundation.dart';
+import 'advanced_theme_resource_picker_widgets.dart';
 
 Future<String?> showImageResourceNameSurface({
   required BuildContext context,
@@ -252,7 +253,6 @@ class ImageResourceGalleryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     return AppSurface(
-      borderRadius: BorderRadius.circular(18),
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
       backgroundColor:
           active
@@ -339,20 +339,19 @@ class ImageResourcePreviewSlot extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final radius = BorderRadius.circular(borderRadius);
-    return AppSurface(
-      padding: EdgeInsets.zero,
-      borderRadius: radius,
-      clipBehavior: Clip.antiAlias,
-      backgroundColor: colorScheme.surface,
-      borderColor: colorScheme.outlineVariant.withValues(alpha: 0.4),
+    return AdvancedThemeVisualResourceFrame(
+      width: double.infinity,
+      height: double.infinity,
+      dashedBorder: path == null,
+      clip: true,
+      radius: borderRadius,
       child:
           path == null
               ? ColoredBox(
                 color: colorScheme.surfaceContainerLow,
                 child: Center(
                   child: Icon(
-                    placeholderIcon,
+                    Icons.add_rounded,
                     size: 24,
                     color: colorScheme.onSurfaceVariant,
                   ),

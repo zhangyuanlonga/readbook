@@ -26,7 +26,6 @@ import '../../../app/widgets/adaptive_fullscreen_preview.dart';
 import '../../../app/widgets/adaptive_overflow_toolbar.dart';
 import '../../../app/widgets/adaptive_route_top_bar.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
-import '../../../app/widgets/app_animated_dashed_rounded_border.dart';
 import '../../../app/widgets/bottom_nav_icon_view.dart';
 import '../../../app/widgets/foundation/app_button.dart';
 import '../../../app/widgets/foundation/app_feedback.dart';
@@ -2071,12 +2070,15 @@ class _AdvancedThemeEditorPageState
               final itemWidth =
                   (constraints.maxWidth - gridSpacing * (gridColumns - 1)) /
                   gridColumns;
-              final previewWidth = itemWidth.clamp(88.0, 136.0).toDouble();
+              final cardPreviewWidth =
+                  (itemWidth - 20).clamp(92.0, 112.0).toDouble();
               final previewHeight =
-                  (previewWidth * 1.22).clamp(108.0, 164.0).toDouble();
-              final gridItemExtent = previewHeight + 76.0;
+                  (cardPreviewWidth * 1.22).clamp(112.0, 138.0).toDouble();
+              final gridItemExtent = previewHeight + 100.0;
               final squarePreviewSize =
-                  (previewWidth < previewHeight ? previewWidth : previewHeight)
+                  (cardPreviewWidth < previewHeight
+                          ? cardPreviewWidth
+                          : previewHeight)
                       .clamp(64.0, 104.0)
                       .toDouble();
               final rowCount = (6 / gridColumns).ceil();
@@ -2105,13 +2107,11 @@ class _AdvancedThemeEditorPageState
                       ),
                       title: '应用背景',
                       subtitle: wallpaperPath == null ? '未设置' : '已设置',
-                      previewWidth: previewWidth,
-                      previewHeight: previewHeight,
                       preview: _buildVisualImageResourcePreview(
                         context,
                         previewPath: wallpaperPath,
                         title: '应用背景',
-                        width: previewWidth,
+                        width: cardPreviewWidth,
                         height: previewHeight,
                         animateFilledBorder: true,
                         onLongPress:
@@ -2133,13 +2133,11 @@ class _AdvancedThemeEditorPageState
                       context,
                       title: '阅读背景',
                       subtitle: readerWallpaperPath == null ? '未设置' : '已设置',
-                      previewWidth: previewWidth,
-                      previewHeight: previewHeight,
                       preview: _buildVisualImageResourcePreview(
                         context,
                         previewPath: readerWallpaperPath,
                         title: '阅读器背景',
-                        width: previewWidth,
+                        width: cardPreviewWidth,
                         height: previewHeight,
                         animateFilledBorder: true,
                         onLongPress:
@@ -2161,13 +2159,11 @@ class _AdvancedThemeEditorPageState
                       context,
                       title: '书籍封面',
                       subtitle: coverGalleryPreviewPath == null ? '未设置' : '已设置',
-                      previewWidth: previewWidth,
-                      previewHeight: previewHeight,
                       preview: _buildVisualImageResourcePreview(
                         context,
                         previewPath: coverGalleryPreviewPath,
                         title: _selectedCoverGallery()?.name ?? '书籍封面',
-                        width: previewWidth,
+                        width: cardPreviewWidth,
                         height: previewHeight,
                         animateFilledBorder: true,
                         onLongPress:
@@ -2188,13 +2184,11 @@ class _AdvancedThemeEditorPageState
                       title: '启动图集',
                       subtitle:
                           launchGalleryPreviewPath == null ? '未设置' : '已设置',
-                      previewWidth: previewWidth,
-                      previewHeight: previewHeight,
                       preview: _buildVisualImageResourcePreview(
                         context,
                         previewPath: launchGalleryPreviewPath,
                         title: _selectedLaunchImageGallery()?.name ?? '启动图集',
-                        width: previewWidth,
+                        width: cardPreviewWidth,
                         height: previewHeight,
                         animateFilledBorder: true,
                         onLongPress:
@@ -2215,12 +2209,10 @@ class _AdvancedThemeEditorPageState
                       context,
                       title: '底栏图集',
                       subtitle: _resolvedBottomNavGalleryName(),
-                      previewWidth: previewWidth,
-                      previewHeight: previewHeight,
                       preview: _buildVisualBottomNavGalleryPreview(
                         context,
                         gallery: bottomNavGallery,
-                        width: previewWidth,
+                        width: cardPreviewWidth,
                         height: previewHeight,
                         animateFilledBorder: true,
                       ),
@@ -2230,12 +2222,10 @@ class _AdvancedThemeEditorPageState
                       context,
                       title: '主题特效',
                       subtitle: appAdvancedThemeEffectStatus(draft.themeEffect),
-                      previewWidth: previewWidth,
-                      previewHeight: previewHeight,
                       preview: _buildVisualThemeEffectPreview(
                         context,
                         effect: draft.themeEffect,
-                        width: previewWidth,
+                        width: cardPreviewWidth,
                         height: previewHeight,
                         iconSize: squarePreviewSize,
                         animateFilledBorder: true,
@@ -2258,53 +2248,14 @@ class _AdvancedThemeEditorPageState
     required String title,
     required String subtitle,
     required Widget preview,
-    required double previewWidth,
-    required double previewHeight,
     required VoidCallback onTap,
   }) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    return Material(
-      type: MaterialType.transparency,
-      child: InkWell(
-        key: key,
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(2, 0, 2, 2),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(
-                width: previewWidth,
-                height: previewHeight,
-                child: Center(child: preview),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.labelLarge?.copyWith(
-                  color: colorScheme.onSurface,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    return AdvancedThemeVisualResourceCard(
+      key: key,
+      title: title,
+      subtitle: subtitle,
+      preview: preview,
+      onTap: onTap,
     );
   }
 
@@ -2366,30 +2317,14 @@ class _AdvancedThemeEditorPageState
     bool clip = false,
     VoidCallback? onLongPress,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final componentTokens = appComponentThemeTokensOf(context);
-    final borderColor =
-        animatedBorder ? colorScheme.primary : colorScheme.onSurfaceVariant;
-    final frame = AppSurface(
-      tone: AppSurfaceTone.transparent,
-      padding: EdgeInsets.zero,
-      backgroundColor: colorScheme.surface,
-      clipBehavior: clip ? Clip.antiAlias : Clip.none,
-      onLongPress: onLongPress,
-      child: child,
-    );
-    return SizedBox(
+    return AdvancedThemeVisualResourceFrame(
       width: width,
       height: height,
-      child:
-          dashedBorder || animatedBorder
-              ? AppAnimatedDashedRoundedBorder(
-                color: borderColor,
-                radius: componentTokens.card.radius,
-                strokeWidth: animatedBorder ? 1.8 : 1.4,
-                child: frame,
-              )
-              : frame,
+      dashedBorder: dashedBorder,
+      animatedBorder: animatedBorder,
+      clip: clip,
+      onLongPress: onLongPress,
+      child: child,
     );
   }
 

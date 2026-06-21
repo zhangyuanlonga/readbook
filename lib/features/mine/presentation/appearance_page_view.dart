@@ -1191,11 +1191,9 @@ extension on _AppearancePageState {
                     child: Stack(
                       children: [
                         Positioned.fill(
-                          child: LazyFileImage(
+                          child: ImageResourcePreviewSlot(
                             path: path,
-                            fit: BoxFit.cover,
                             cacheWidth: 420,
-                            borderRadius: BorderRadius.circular(12),
                           ),
                         ),
                         Positioned(
