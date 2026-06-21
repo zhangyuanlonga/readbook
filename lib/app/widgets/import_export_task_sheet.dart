@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../motion/app_motion.dart';
+import 'foundation/app_progress.dart';
 import 'import_export_task_overlay.dart';
 
 class ImportExportProgressCard extends StatelessWidget {
@@ -38,7 +39,11 @@ class ImportExportProgressCard extends StatelessWidget {
                 ),
                 child: const Padding(
                   padding: EdgeInsets.all(6),
-                  child: CircularProgressIndicator(strokeWidth: 2.1),
+                  child: AppProgressIndicator(
+                    size: 18,
+                    strokeWidth: 2.1,
+                    semanticLabel: '任务处理中',
+                  ),
                 ),
               ),
               const SizedBox(width: 12),

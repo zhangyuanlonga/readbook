@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../layout/app_adaptive.dart';
+import 'foundation/app_progress.dart';
 
 class AdaptiveSettingSection extends StatelessWidget {
   const AdaptiveSettingSection({
@@ -142,13 +143,11 @@ class AdaptiveSettingTile extends StatelessWidget {
             if (loading || trailing != null) ...[
               SizedBox(width: metrics.contentGap),
               if (loading)
-                SizedBox(
-                  width: metrics.isCompactDensity ? 20 : 22,
-                  height: metrics.isCompactDensity ? 20 : 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: colorScheme.primary,
-                  ),
+                AppProgressIndicator(
+                  size: metrics.isCompactDensity ? 20 : 22,
+                  strokeWidth: 2,
+                  color: colorScheme.primary,
+                  semanticLabel: '$title加载中',
                 )
               else
                 IconTheme.merge(

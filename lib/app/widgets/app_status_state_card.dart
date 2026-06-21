@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 
 import 'foundation/app_button.dart';
+import 'foundation/app_surface.dart';
 
 enum AppStatusStateTone { neutral, error, warning }
 
 const double _kStatusStatePadding = 18;
 const double _kStatusStateCompactPadding = 14;
-const double _kStatusStateRadius = 18;
-const double _kStatusStateCompactRadius = 16;
 const double _kStatusStateIconSize = 20;
 const double _kStatusStateCompactIconSize = 18;
 const double _kStatusStateSectionGap = 12;
@@ -41,81 +40,79 @@ class AppStatusStateCard extends StatelessWidget {
     final colorScheme = theme.colorScheme;
     final palette = _resolvePalette(colorScheme);
 
-    return Container(
+    return SizedBox(
       width: double.infinity,
-      padding: EdgeInsets.fromLTRB(
-        compact ? _kStatusStateCompactPadding : _kStatusStatePadding,
-        compact ? _kStatusStateCompactPadding : _kStatusStatePadding,
-        compact ? _kStatusStateCompactPadding : _kStatusStatePadding,
-        compact ? _kStatusStateCompactPadding : _kStatusStatePadding,
-      ),
-      decoration: BoxDecoration(
-        color: palette.background,
-        borderRadius: BorderRadius.circular(
-          compact ? _kStatusStateCompactRadius : _kStatusStateRadius,
+      child: AppSurface(
+        tone: AppSurfaceTone.muted,
+        padding: EdgeInsets.fromLTRB(
+          compact ? _kStatusStateCompactPadding : _kStatusStatePadding,
+          compact ? _kStatusStateCompactPadding : _kStatusStatePadding,
+          compact ? _kStatusStateCompactPadding : _kStatusStatePadding,
+          compact ? _kStatusStateCompactPadding : _kStatusStatePadding,
         ),
-        border: Border.all(color: palette.border),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(
-                icon,
-                size:
-                    compact
-                        ? _kStatusStateCompactIconSize
-                        : _kStatusStateIconSize,
-                color: palette.accent,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        color: palette.foreground,
-                        fontWeight: FontWeight.w700,
+        backgroundColor: palette.background,
+        borderColor: palette.border,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  icon,
+                  size:
+                      compact
+                          ? _kStatusStateCompactIconSize
+                          : _kStatusStateIconSize,
+                  color: palette.accent,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: palette.foreground,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: _kStatusStateDescriptionGap),
-                    Text(
-                      message,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: palette.foreground,
-                        height: 1.4,
+                      const SizedBox(height: _kStatusStateDescriptionGap),
+                      Text(
+                        message,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: palette.foreground,
+                          height: 1.4,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (actionLabel != null && onAction != null) ...[
+              const SizedBox(height: _kStatusStateSectionGap),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: AppButton(
+                  variant: AppButtonVariant.tonal,
+                  size: AppButtonSize.compact,
+                  onPressed: onAction,
+                  style: const ButtonStyle(
+                    visualDensity: VisualDensity(horizontal: -1, vertical: -1),
+                  ),
+                  label: actionLabel!,
                 ),
               ),
             ],
-          ),
-          if (actionLabel != null && onAction != null) ...[
-            const SizedBox(height: _kStatusStateSectionGap),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: AppButton(
-                variant: AppButtonVariant.tonal,
-                size: AppButtonSize.compact,
-                onPressed: onAction,
-                style: const ButtonStyle(
-                  visualDensity: VisualDensity(horizontal: -1, vertical: -1),
-                ),
-                label: actionLabel!,
-              ),
-            ),
+            if (footer != null) ...[
+              const SizedBox(height: _kStatusStateSectionGap),
+              footer!,
+            ],
           ],
-          if (footer != null) ...[
-            const SizedBox(height: _kStatusStateSectionGap),
-            footer!,
-          ],
-        ],
+        ),
       ),
     );
   }

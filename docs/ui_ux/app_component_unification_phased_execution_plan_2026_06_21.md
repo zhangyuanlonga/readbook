@@ -383,30 +383,44 @@
 
 ## 阶段 11：缺省页、加载态、错误态统一（偏难但收益稳定）
 
-- [ ] 梳理所有空状态：
-  - [ ] 无数据
-  - [ ] 无搜索结果
-  - [ ] 权限不可用
-  - [ ] 资源未配置
-- [ ] 梳理所有加载态：
-  - [ ] 页面加载
-  - [ ] 局部刷新
-  - [ ] 按钮保存中
-- [ ] 梳理所有错误态：
-  - [ ] 网络失败
-  - [ ] 解析失败
-  - [ ] 权限失败
-- [ ] 抽统一缺省页/状态卡组件。
-- [ ] 替换散落的 `Center(Text(...))`、手写 spinner、手写错误卡。
+- [x] 梳理所有空状态：
+  - [x] 无数据
+  - [x] 无搜索结果
+  - [x] 权限不可用
+  - [x] 资源未配置
+- [x] 梳理所有加载态：
+  - [x] 页面加载
+  - [x] 局部刷新
+  - [x] 按钮保存中
+- [x] 梳理所有错误态：
+  - [x] 网络失败
+  - [x] 解析失败
+  - [x] 权限失败
+- [x] 复用统一缺省页/状态卡组件：
+  - [x] `AppStateView`
+  - [x] `AppEmptyStateCard`
+  - [x] `AppStatusStateCard`
+  - [x] `AppProgressIndicator`
+- [x] 替换非阅读器普通页面和通用控件中散落的手写 spinner。
+- [x] 将空状态卡、状态卡底层容器迁移到 `AppSurface`，让圆角、边框、背景进入高级主题卡片 token 作用域。
 
 验收：
 
-- [ ] 缺省页/加载态/错误态有统一组件。
-- [ ] 可被高级主题的页面背景、文字、卡片、按钮覆盖。
+- [x] 缺省页/加载态/错误态有统一组件。
+- [x] 可被高级主题的页面背景、文字、卡片、按钮覆盖。
+- [x] 非阅读器范围的原生 `CircularProgressIndicator` 只剩统一基础组件内部和按钮内部；阅读器加载态留给阶段 12。
+
+执行记录（2026-06-21）：
+
+- `AppEmptyStateCard` 和 `AppStatusStateCard` 已改由 `AppSurface` 承载，状态卡的圆角、边框、背景不再各自硬编码。
+- `AdaptiveSettingTile`、`ImportExportProgressCard`、`ImportExportTaskOverlay`、`RuntimeFeedbackCard`、新手引导完成跳转页的 loading 已统一到 `AppProgressIndicator`。
+- 全局复扫后，非阅读器普通页面没有继续散落原生 `CircularProgressIndicator`；剩余原生 spinner 集中在 `AppProgressIndicator`、`AppButton` 内部和阅读器专项文件。
+- `Center(Text(...))` 本轮只保留非状态语义的轻量标签，例如工具栏分类项和分页底部“已加载全部”，避免为小提示强行套大状态卡。
 
 预计覆盖：
 
-- 可减少状态类和局部硬编码约 40-90 个。
+- 本轮覆盖全局空状态、错误状态和通用 loading 基础组件。
+- 阅读器状态、阅读器设置 sheet、阅读正文加载态留到阶段 12，预计仍有约 20-50 个状态类问题。
 
 ## 阶段 12：阅读器后置专项（最难）
 

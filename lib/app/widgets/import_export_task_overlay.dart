@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../motion/app_motion_widgets.dart';
 import 'app_task_status.dart';
+import 'foundation/app_progress.dart';
 
 enum ImportExportTaskPresentation { overlay, inlineCompact, queuePanel }
 
@@ -201,10 +202,10 @@ class _ImportExportTaskPane extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2.2),
+                        const AppProgressIndicator(
+                          size: 20,
+                          strokeWidth: 2.2,
+                          semanticLabel: '导入导出任务处理中',
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -334,14 +335,11 @@ class ImportExportInlineStatus extends StatelessWidget {
         children: [
           Row(
             children: [
-              SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  value:
-                      status.isFinished && progress != null ? progress : null,
-                ),
+              AppProgressIndicator(
+                size: 16,
+                strokeWidth: 2,
+                value: status.isFinished && progress != null ? progress : null,
+                semanticLabel: '导入导出进度',
               ),
               const SizedBox(width: 10),
               Expanded(

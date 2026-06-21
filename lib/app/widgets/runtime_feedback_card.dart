@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'foundation/app_progress.dart';
+
 enum RuntimeFeedbackTone { loading, info, warning, error }
 
 class RuntimeFeedbackCard extends StatelessWidget {
@@ -63,13 +65,11 @@ class RuntimeFeedbackCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (tone == RuntimeFeedbackTone.loading)
-                    SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: foreground,
-                      ),
+                    AppProgressIndicator(
+                      size: 18,
+                      strokeWidth: 2,
+                      color: foreground,
+                      semanticLabel: '$title加载中',
                     )
                   else
                     Icon(resolvedIcon, color: foreground, size: 20),

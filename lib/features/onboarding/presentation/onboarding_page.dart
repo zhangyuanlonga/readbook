@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/navigation/app_navigation_style_provider.dart';
 import '../../../app/theme/app_official_theme_presets.dart';
 import '../../../app/widgets/foundation/app_button.dart';
+import '../../../app/widgets/foundation/app_progress.dart';
 import '../../bookshelf/providers.dart';
 import '../../mine/application/advanced_theme_provider.dart';
 import '../../mine/application/mine_page_preferences_service.dart';
@@ -102,7 +103,10 @@ class _OnboardingFinishedRedirectState
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    // UI-GOV-EXEMPT: scaffold redirect-placeholder
+    return const Scaffold(
+      body: Center(child: AppProgressIndicator(semanticLabel: '完成引导')),
+    );
   }
 }
 
