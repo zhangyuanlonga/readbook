@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shuxiang_reading_next/app/theme/app_theme_palette.dart';
 import 'package:shuxiang_reading_next/app/widgets/app_animated_dashed_rounded_border.dart';
+import 'package:shuxiang_reading_next/app/widgets/foundation/app_button.dart';
 import 'package:shuxiang_reading_next/core/storage/managed_asset_store.dart';
 import 'package:shuxiang_reading_next/domain/entities/app_advanced_theme.dart';
 import 'package:shuxiang_reading_next/domain/entities/bottom_nav_icon_gallery.dart';
@@ -188,14 +189,43 @@ void main() {
     expect(find.text('标准'), findsOneWidget);
     expect(find.text('柔和'), findsOneWidget);
     expect(find.text('圆润'), findsOneWidget);
+    expect(find.text('查看预览'), findsWidgets);
+    expect(find.text('圆角预览'), findsNothing);
+
+    final radiusPreviewAction = find.byKey(
+      const ValueKey<String>('advanced_theme_radius_preview_action'),
+    );
+    tester.widget<AppButton>(radiusPreviewAction).onPressed!();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('圆角比例预览'), findsOneWidget);
     expect(find.text('圆角预览'), findsOneWidget);
-    await _dragUntilFound(tester, editorScroll, find.text('弹窗预览'));
+
+    Navigator.of(tester.element(find.text('圆角比例预览'))).pop();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('弹窗预览'), findsNothing);
+    await _dragUntilFound(tester, editorScroll, find.text('弹窗组件'));
     await tester.pump();
 
+    final modalPreviewAction = find.byKey(
+      const ValueKey<String>('advanced_theme_modal_preview_action'),
+    );
+    tester.widget<AppButton>(modalPreviewAction).onPressed!();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('弹窗组件预览'), findsOneWidget);
     expect(find.text('弹窗预览'), findsOneWidget);
     expect(find.text('普通弹窗'), findsOneWidget);
     expect(find.text('底部面板'), findsOneWidget);
     expect(find.text('弹窗背景模糊'), findsNothing);
+
+    Navigator.of(tester.element(find.text('弹窗组件预览'))).pop();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     await _dragUntilFound(tester, editorScroll, find.text('高级参数'));
     await tester.ensureVisible(find.text('高级参数'));
