@@ -112,6 +112,7 @@ class _AdvancedThemeListEntry {
 class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   late final AdvancedThemeAccessController _accessController;
   late final AdvancedThemePageFlowCoordinator _pageFlowCoordinator;
+  late final ProviderSubscription<int> _themeRevisionSubscription;
   final AdvancedThemeBatchActionController _batchActionController =
       const AdvancedThemeBatchActionController();
   final AdvancedThemeBatchImportController _batchImportController =
@@ -237,6 +238,14 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
       },
       onAuthEvent: _handleAuthEvent,
     );
+    _themeRevisionSubscription = ref.listenManual<int>(
+      advancedThemeRevisionProvider,
+      (_, __) {
+        if (mounted) {
+          unawaited(_load());
+        }
+      },
+    );
     _loadAccess(refreshRemote: false);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
@@ -283,6 +292,7 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
   void dispose() {
     _searchController.dispose();
     _previewImageCache.clear();
+    _themeRevisionSubscription.close();
     unawaited(_pageFlowCoordinator.dispose());
     super.dispose();
   }

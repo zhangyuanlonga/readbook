@@ -166,7 +166,12 @@ void main() {
     expect(resourceGridDelegate.mainAxisExtent, lessThan(240));
     expect(find.text('背景资源参数'), findsNothing);
 
-    await tester.tap(find.text('应用背景'));
+    final appBackgroundResourceCard = find.byKey(
+      const ValueKey<String>('advanced_theme_resource_app_background'),
+    );
+    await tester.ensureVisible(appBackgroundResourceCard);
+    await tester.pump();
+    await tester.tap(appBackgroundResourceCard);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
@@ -185,10 +190,10 @@ void main() {
 
     expect(find.text('组件'), findsOneWidget);
     expect(find.text('圆角比例'), findsWidgets);
-    expect(find.text('利落'), findsOneWidget);
-    expect(find.text('标准'), findsOneWidget);
-    expect(find.text('柔和'), findsOneWidget);
-    expect(find.text('圆润'), findsOneWidget);
+    expect(find.text('利落'), findsNothing);
+    expect(find.text('标准'), findsNothing);
+    expect(find.text('柔和'), findsNothing);
+    expect(find.text('圆润'), findsNothing);
     expect(find.text('查看预览'), findsWidgets);
     expect(find.text('圆角预览'), findsNothing);
 
@@ -207,7 +212,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.text('弹窗预览'), findsNothing);
-    await _dragUntilFound(tester, editorScroll, find.text('弹窗组件'));
+    await _dragUntilFound(tester, editorScroll, find.text('弹窗'));
     await tester.pump();
 
     final modalPreviewAction = find.byKey(
@@ -217,21 +222,23 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('弹窗组件预览'), findsOneWidget);
-    expect(find.text('弹窗预览'), findsOneWidget);
+    expect(find.text('弹窗预览'), findsWidgets);
     expect(find.text('普通弹窗'), findsOneWidget);
     expect(find.text('底部面板'), findsOneWidget);
     expect(find.text('弹窗背景模糊'), findsNothing);
 
-    Navigator.of(tester.element(find.text('弹窗组件预览'))).pop();
+    Navigator.of(tester.element(find.text('普通弹窗'))).pop();
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    await _dragUntilFound(tester, editorScroll, find.text('高级参数'));
-    await tester.ensureVisible(find.text('高级参数'));
+    await _dragUntilFound(tester, editorScroll, find.text('输入框'));
+    await tester.ensureVisible(find.text('输入框'));
     await tester.pump();
 
-    expect(find.text('高级参数'), findsOneWidget);
+    expect(find.text('输入框'), findsOneWidget);
+    expect(find.text('搜索'), findsOneWidget);
+    expect(find.text('字体'), findsNothing);
+    expect(find.text('高级参数'), findsNothing);
     expect(find.text('卡片样式'), findsNothing);
     expect(find.text('按钮样式'), findsNothing);
     expect(find.text('输入框样式'), findsNothing);
@@ -241,26 +248,29 @@ void main() {
     expect(find.text('页面预览'), findsNothing);
     expect(find.text('搜索预览'), findsNothing);
 
-    await tester.tap(find.text('高级参数'));
+    final inputPreviewAction = find.byKey(
+      const ValueKey<String>('advanced_theme_input_preview_action'),
+    );
+    tester.widget<AppButton>(inputPreviewAction).onPressed!();
     await tester.pump();
-    await _dragUntilFound(tester, editorScroll, find.text('卡片样式'));
-    await tester.ensureVisible(find.text('卡片样式'));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('输入框预览'), findsOneWidget);
+    expect(find.text('输入框内容预览'), findsOneWidget);
+
+    Navigator.of(tester.element(find.text('输入框内容预览'))).pop();
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('组件样式'), findsOneWidget);
-    expect(find.text('卡片样式'), findsOneWidget);
-    expect(find.text('按钮样式'), findsOneWidget);
-    expect(find.text('输入框样式'), findsOneWidget);
-    expect(find.text('弹窗样式'), findsOneWidget);
-    expect(find.text('导航样式'), findsOneWidget);
-    expect(find.text('切换样式'), findsOneWidget);
-
-    await _dragUntilFound(tester, editorScroll, find.text('阴影色'));
-    await tester.ensureVisible(find.text('阴影色'));
+    final searchPreviewAction = find.byKey(
+      const ValueKey<String>('advanced_theme_search_preview_action'),
+    );
+    tester.widget<AppButton>(searchPreviewAction).onPressed!();
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('卡片文字'), findsOneWidget);
-    expect(find.text('阴影色'), findsOneWidget);
+    expect(find.text('搜索预览'), findsOneWidget);
+    expect(find.text('搜索书名或作者'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

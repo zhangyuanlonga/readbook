@@ -117,7 +117,7 @@ const ThemeSemanticGroupSpec colorCardThemeSemanticGroup =
     );
 
 const ThemeSemanticGroupSpec modalThemeSemanticGroup = ThemeSemanticGroupSpec(
-  title: '弹窗组件',
+  title: '弹窗',
   subtitle: '控制普通弹窗、菜单和底部面板背景；未设置时跟随默认浮层背景。',
   fields: <ThemeSemanticFieldSpec>[
     ThemeSemanticFieldSpec(
@@ -130,7 +130,7 @@ const ThemeSemanticGroupSpec modalThemeSemanticGroup = ThemeSemanticGroupSpec(
 );
 
 const ThemeSemanticGroupSpec cardThemeSemanticGroup = ThemeSemanticGroupSpec(
-  title: '卡片组件',
+  title: '卡片',
   subtitle: '控制卡片自己的背景，不放在全局颜色里。',
   fields: <ThemeSemanticFieldSpec>[
     ThemeSemanticFieldSpec(
@@ -175,7 +175,7 @@ const ThemeSemanticGroupSpec advancedColorThemeSemanticGroup =
     );
 
 const ThemeSemanticGroupSpec buttonThemeSemanticGroup = ThemeSemanticGroupSpec(
-  title: '按钮组件',
+  title: '按钮',
   subtitle: '控制按钮上的背景层和文字颜色。',
   fields: <ThemeSemanticFieldSpec>[
     ThemeSemanticFieldSpec(
@@ -200,20 +200,20 @@ const ThemeSemanticGroupSpec buttonThemeSemanticGroup = ThemeSemanticGroupSpec(
 );
 
 const ThemeSemanticGroupSpec inputThemeSemanticGroup = ThemeSemanticGroupSpec(
-  title: '输入框 / 搜索框组件',
-  subtitle: '控制搜索框和输入区自己的底色。',
+  title: '搜索',
+  subtitle: '控制搜索框自己的底色。',
   fields: <ThemeSemanticFieldSpec>[
     ThemeSemanticFieldSpec(
       id: ThemeSemanticFieldId.searchFieldBackground,
       label: '搜索框背景',
-      description: '搜索框、搜索触发条和输入区底色',
-      scopeLabels: <String>['搜索框', '搜索触发条', '输入区'],
+      description: '搜索框和搜索触发条的填充颜色',
+      scopeLabels: <String>['搜索框', '搜索触发条'],
     ),
   ],
 );
 
 const ThemeSemanticGroupSpec optionThemeSemanticGroup = ThemeSemanticGroupSpec(
-  title: '选项与切换组件',
+  title: '选项与切换',
   subtitle: '控制标签、徽标和状态提示的颜色。',
   fields: <ThemeSemanticFieldSpec>[
     ThemeSemanticFieldSpec(

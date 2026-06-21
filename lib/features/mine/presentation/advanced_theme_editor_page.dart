@@ -36,7 +36,6 @@ import '../../../domain/entities/app_advanced_theme.dart';
 import '../../../domain/entities/bottom_nav_icon_gallery.dart';
 import '../../../domain/entities/cover_gallery.dart';
 import '../../../domain/entities/launch_image_gallery.dart';
-import '../../reader/application/reader_font_registry_service.dart';
 import '../application/advanced_theme_editor_page_state.dart';
 import '../application/advanced_theme_editor_controller.dart';
 import '../application/advanced_theme_provider.dart';
@@ -49,7 +48,6 @@ import '../providers.dart';
 import 'advanced_theme_editor_models.dart';
 import 'widgets/advanced_theme_basic_section.dart';
 import 'widgets/advanced_theme_editor_shell_widgets.dart';
-import 'widgets/advanced_theme_font_section.dart';
 import 'widgets/advanced_theme_preview_panel.dart';
 import 'widgets/advanced_theme_resource_picker_widgets.dart';
 
@@ -131,15 +129,6 @@ class _AdvancedThemeEditorPageState
 
   List<LaunchImageGallery> get _launchImageGalleries =>
       _pageState.launchImageGalleries;
-
-  List<ReaderCustomFontEntry> get _availableFonts => _pageState.availableFonts;
-
-  bool get _advancedParametersExpanded => _pageState.componentControlsExpanded;
-  set _advancedParametersExpanded(bool value) {
-    _pageStateNotifier.update(
-      (state) => _editorController.setComponentControlsExpanded(state, value),
-    );
-  }
 
   bool get _isEditingName => _pageState.isEditingName;
   set _isEditingName(bool value) {
@@ -384,8 +373,7 @@ class _AdvancedThemeEditorPageState
     final currentConfig =
         draft?.configFor(_selectedMode) ??
         _defaultModeConfigForMode(_selectedMode);
-    final currentFit =
-        currentConfig.wallpaperFit;
+    final currentFit = currentConfig.wallpaperFit;
     String? selectedPath =
         draft == null ? null : _selectedWallpaperPreviewPath(draft);
     final imagePaths = _existingImagePaths(_backgroundLibraryPaths);
@@ -534,8 +522,7 @@ class _AdvancedThemeEditorPageState
     final currentConfig =
         draft?.configFor(_selectedMode) ??
         _defaultModeConfigForMode(_selectedMode);
-    final currentFit =
-        currentConfig.readerWallpaperFit;
+    final currentFit = currentConfig.readerWallpaperFit;
     String? selectedPath =
         draft == null ? null : _selectedReaderWallpaperPreviewPath(draft);
     final imagePaths = _existingImagePaths(_readerBackgroundLibraryPaths);
@@ -711,10 +698,9 @@ class _AdvancedThemeEditorPageState
       return;
     }
     String? selectedId = _draft?.bottomNavGalleryId;
-    final result =
-        await showAdaptiveActionSurface<
-          AdvancedThemeBottomNavGallerySelectionResult
-        >(
+    final result = await showAdaptiveActionSurface<
+      AdvancedThemeBottomNavGallerySelectionResult
+    >(
       context: context,
       maxWidth: 720,
       maxHeightFactor: _resourcePickerSheetHeightFactor,
@@ -736,8 +722,7 @@ class _AdvancedThemeEditorPageState
                       )
                       : ListView.separated(
                         itemCount: _bottomNavGalleries.length,
-                        separatorBuilder:
-                            (_, __) => const SizedBox(height: 10),
+                        separatorBuilder: (_, __) => const SizedBox(height: 10),
                         itemBuilder: (context, index) {
                           final gallery = _bottomNavGalleries[index];
                           final selected = gallery.id == selectedId;
@@ -1192,208 +1177,6 @@ class _AdvancedThemeEditorPageState
     return null;
   }
 
-  ReaderCustomFontEntry? _selectedAppInterfaceFont() {
-    final familyKey = _draft?.appInterfaceFontFamilyKey?.trim() ?? '';
-    if (familyKey.isEmpty) {
-      return null;
-    }
-    for (final entry in _availableFonts) {
-      if (entry.fontFamilyKey == familyKey) {
-        return entry;
-      }
-    }
-    return null;
-  }
-
-  ReaderCustomFontEntry? _selectedReaderFont() {
-    final familyKey = _draft?.readerFontFamilyKey?.trim() ?? '';
-    if (familyKey.isEmpty) {
-      return null;
-    }
-    for (final entry in _availableFonts) {
-      if (entry.fontFamilyKey == familyKey) {
-        return entry;
-      }
-    }
-    return null;
-  }
-
-  String _resolvedAppInterfaceFontName() {
-    final selected = _selectedAppInterfaceFont();
-    if (selected != null) {
-      return selected.displayName;
-    }
-    return '未设置';
-  }
-
-  String _resolvedReaderFontName() {
-    final selected = _selectedReaderFont();
-    if (selected != null) {
-      return selected.displayName;
-    }
-    return '未设置';
-  }
-
-  Future<void> _pickThemeFont({required bool readerFont}) async {
-    if (_isSaving) {
-      return;
-    }
-    String? selectedId =
-        (readerFont
-                ? _draft?.readerFontFamilyKey
-                : _draft?.appInterfaceFontFamilyKey)
-            ?.trim();
-    final result = await showAdaptiveActionSurface<
-      AdvancedThemeFontSelectionResult
-    >(
-      context: context,
-      maxWidth: 640,
-      maxHeightFactor: _resourcePickerSheetHeightFactor,
-      padding: EdgeInsets.zero,
-      builder: (context) {
-        final colorScheme = Theme.of(context).colorScheme;
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            return _buildResourcePickerSheet(
-              context,
-              title: readerFont ? '选择阅读字体' : '选择界面字体',
-              content:
-                  _availableFonts.isEmpty
-                      ? _buildEmptyResourceState(
-                        context,
-                        icon: Icons.font_download_outlined,
-                        title: '还没有已导入字体',
-                        description: '先去字体管理导入字体，再回来绑定。',
-                      )
-                      : ListView.separated(
-                        itemCount: _availableFonts.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemBuilder: (context, index) {
-                          final entry = _availableFonts[index];
-                          final selected = entry.fontFamilyKey == selectedId;
-                          return InkWell(
-                            borderRadius: BorderRadius.circular(12),
-                            onTap: () {
-                              setSheetState(() {
-                                selectedId = entry.fontFamilyKey;
-                              });
-                            },
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 4,
-                                vertical: 12,
-                              ),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          entry.displayName,
-                                          style: Theme.of(
-                                            context,
-                                          ).textTheme.labelLarge?.copyWith(
-                                            fontWeight: FontWeight.w700,
-                                            fontFamily: entry.fontFamilyKey,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          readerFont
-                                              ? '阅读页启用主题时覆盖正文自定义字体'
-                                              : '界面启用主题时覆盖应用自定义字体',
-                                          style: Theme.of(
-                                            context,
-                                          ).textTheme.bodySmall?.copyWith(
-                                            color: colorScheme.onSurfaceVariant,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  if (selected)
-                                    Icon(
-                                      Icons.check_rounded,
-                                      color: colorScheme.primary,
-                                      size: 18,
-                                    ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-              actions: [
-                AppButton(
-                  variant: AppButtonVariant.text,
-                  onPressed: () => Navigator.of(context).pop(),
-                  label: '取消',
-                ),
-                const Spacer(),
-                AppButton(
-                  variant: AppButtonVariant.text,
-                  onPressed:
-                      () => unawaited(
-                        _openRouteFromSheet(context, '/font-management'),
-                      ),
-                  label: '去管理',
-                ),
-                const SizedBox(width: 8),
-                AppButton(
-                  variant: AppButtonVariant.text,
-                  onPressed:
-                      selectedId == null
-                          ? null
-                          : () => Navigator.of(context).pop(
-                            const AdvancedThemeFontSelectionResult(
-                              applied: true,
-                              familyKey: null,
-                            ),
-                          ),
-                  label: '取消绑定',
-                ),
-                const SizedBox(width: 8),
-                AppButton(
-                  onPressed:
-                      selectedId == null
-                          ? null
-                          : () => Navigator.of(context).pop(
-                            AdvancedThemeFontSelectionResult(
-                              applied: true,
-                              familyKey: selectedId,
-                            ),
-                          ),
-                  label: '应用',
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-    if (result == null || !result.applied || !mounted) {
-      return;
-    }
-    final draft = _draft;
-    if (draft == null) {
-      return;
-    }
-    setState(() {
-      _draft =
-          result.familyKey == null
-              ? (readerFont
-                  ? draft.copyWith(clearReaderFontFamilyKey: true)
-                  : draft.copyWith(clearAppInterfaceFontFamilyKey: true))
-              : (readerFont
-                  ? draft.copyWith(readerFontFamilyKey: result.familyKey)
-                  : draft.copyWith(
-                    appInterfaceFontFamilyKey: result.familyKey,
-                  ));
-    });
-  }
-
   String? _resolveExistingLocalImagePath(String? path) {
     return _resourceService.resolveExistingImagePath(path);
   }
@@ -1497,7 +1280,9 @@ class _AdvancedThemeEditorPageState
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     final componentTokens = appComponentThemeTokensOf(context);
-    final radius = BorderRadius.all(Radius.circular(componentTokens.card.radius));
+    final radius = BorderRadius.all(
+      Radius.circular(componentTokens.card.radius),
+    );
     return AppSurface(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       borderRadius: radius,
@@ -2435,13 +2220,11 @@ class _AdvancedThemeEditorPageState
               const gridSpacing = 12.0;
               final gridColumns = constraints.maxWidth < 330 ? 2 : 3;
               final itemWidth =
-                  (constraints.maxWidth -
-                      gridSpacing * (gridColumns - 1)) /
+                  (constraints.maxWidth - gridSpacing * (gridColumns - 1)) /
                   gridColumns;
               final previewWidth = itemWidth.clamp(88.0, 136.0).toDouble();
-              final previewHeight = (previewWidth * 1.22)
-                  .clamp(108.0, 164.0)
-                  .toDouble();
+              final previewHeight =
+                  (previewWidth * 1.22).clamp(108.0, 164.0).toDouble();
               final gridItemExtent = previewHeight + 76.0;
               final squarePreviewSize =
                   (previewWidth < previewHeight ? previewWidth : previewHeight)
@@ -2468,6 +2251,9 @@ class _AdvancedThemeEditorPageState
                   children: [
                     _buildVisualResourceCard(
                       context,
+                      key: const ValueKey<String>(
+                        'advanced_theme_resource_app_background',
+                      ),
                       title: '应用背景',
                       subtitle: wallpaperPath == null ? '未设置' : '已设置',
                       previewWidth: previewWidth,
@@ -2619,6 +2405,7 @@ class _AdvancedThemeEditorPageState
 
   Widget _buildVisualResourceCard(
     BuildContext context, {
+    Key? key,
     required String title,
     required String subtitle,
     required Widget preview,
@@ -2631,6 +2418,7 @@ class _AdvancedThemeEditorPageState
     return Material(
       type: MaterialType.transparency,
       child: InkWell(
+        key: key,
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(2, 0, 2, 2),
@@ -2896,7 +2684,7 @@ class _AdvancedThemeEditorPageState
               () => unawaited(
                 _showComponentPreviewSheet(
                   context,
-                  title: '弹窗组件预览',
+                  title: '弹窗预览',
                   builder: _buildModalComponentPreview,
                 ),
               ),
@@ -2913,8 +2701,25 @@ class _AdvancedThemeEditorPageState
               () => unawaited(
                 _showComponentPreviewSheet(
                   context,
-                  title: '卡片组件预览',
+                  title: '卡片预览',
                   builder: _buildCardComponentPreview,
+                ),
+              ),
+        ),
+        const SizedBox(height: 10),
+        _buildComponentInfoCard(
+          context,
+          title: '输入框',
+          description: '跟随页面背景、边框和主要文字；圆角由圆角比例统一控制。',
+          previewKey: const ValueKey<String>(
+            'advanced_theme_input_preview_action',
+          ),
+          onPreview:
+              () => unawaited(
+                _showComponentPreviewSheet(
+                  context,
+                  title: '输入框预览',
+                  builder: _buildInputComponentPreview,
                 ),
               ),
         ),
@@ -2924,43 +2729,17 @@ class _AdvancedThemeEditorPageState
           title: inputThemeSemanticGroup.title,
           fields: _fieldSpecsForGroup(inputThemeSemanticGroup),
           previewKey: const ValueKey<String>(
-            'advanced_theme_input_preview_action',
+            'advanced_theme_search_preview_action',
           ),
           onPreview:
               () => unawaited(
                 _showComponentPreviewSheet(
                   context,
-                  title: '输入框组件预览',
-                  builder: _buildInputComponentPreview,
+                  title: '搜索预览',
+                  builder: _buildSearchComponentPreview,
                 ),
               ),
         ),
-        const SizedBox(height: 10),
-        _buildComponentCard(
-          context,
-          title: '字体',
-          previewKey: const ValueKey<String>(
-            'advanced_theme_font_preview_action',
-          ),
-          onPreview:
-              () => unawaited(
-                _showComponentPreviewSheet(
-                  context,
-                  title: '字体预览',
-                  builder: _buildFontComponentPreview,
-                ),
-              ),
-          children: [
-            AdvancedThemeFontSection(
-              interfaceFontName: _resolvedAppInterfaceFontName(),
-              readerFontName: _resolvedReaderFontName(),
-              onPickInterfaceFont: () => _pickThemeFont(readerFont: false),
-              onPickReaderFont: () => _pickThemeFont(readerFont: true),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        _buildAdvancedParametersSection(context, draft),
       ],
     );
   }
@@ -3057,309 +2836,6 @@ class _AdvancedThemeEditorPageState
     );
   }
 
-  Widget _buildAdvancedParametersSection(
-    BuildContext context,
-    AppAdvancedTheme draft,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        AdvancedThemeExpandableSectionHeader(
-          title: '高级参数',
-          tooltipMessage: '低频颜色和旧组件样式默认收起，便于后续继续删减。',
-          expanded: _advancedParametersExpanded,
-          onToggle: () {
-            _updateAdvancedThemeEditorState(() {
-              _advancedParametersExpanded = !_advancedParametersExpanded;
-            });
-          },
-        ),
-        if (_advancedParametersExpanded) ...[
-          const SizedBox(height: 4),
-          _buildAdvancedComponentStyleSection(context, draft),
-          const SizedBox(height: 10),
-          _buildThemeFieldSection(
-            context,
-            title: advancedColorThemeSemanticGroup.title,
-            tooltipMessage: advancedColorThemeSemanticGroup.subtitle,
-            fields: _fieldSpecsForGroup(advancedColorThemeSemanticGroup),
-          ),
-          const SizedBox(height: 10),
-          _buildThemeFieldSection(
-            context,
-            title: buttonThemeSemanticGroup.title,
-            tooltipMessage: buttonThemeSemanticGroup.subtitle,
-            fields: _fieldSpecsForGroup(buttonThemeSemanticGroup),
-          ),
-          const SizedBox(height: 10),
-          _buildThemeFieldSection(
-            context,
-            title: optionThemeSemanticGroup.title,
-            tooltipMessage: optionThemeSemanticGroup.subtitle,
-            fields: _fieldSpecsForGroup(optionThemeSemanticGroup),
-          ),
-          const SizedBox(height: 10),
-          _buildThemeFieldSection(
-            context,
-            title: pageEffectThemeSemanticGroup.title,
-            tooltipMessage: pageEffectThemeSemanticGroup.subtitle,
-            fields: _fieldSpecsForGroup(pageEffectThemeSemanticGroup),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildAdvancedComponentStyleSection(
-    BuildContext context,
-    AppAdvancedTheme draft,
-  ) {
-    final style = draft.configFor(_selectedMode).componentStyle;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionLabel(
-          context,
-          '组件样式',
-          tooltipMessage: '历史组件样式字段，默认收起用于兼容旧主题。',
-        ),
-        const SizedBox(height: 4),
-        _buildComponentStyleChoiceCard<AppAdvancedThemeCardStyle>(
-          context,
-          title: '卡片样式',
-          previewKey: const ValueKey<String>(
-            'advanced_theme_card_style_preview_action',
-          ),
-          onPreview:
-              () => unawaited(
-                _showComponentPreviewSheet(
-                  context,
-                  title: '卡片样式预览',
-                  builder: _buildCardComponentPreview,
-                ),
-              ),
-          value: style.cardStyle,
-          choices: const [
-            AdvancedThemeComponentStyleChoice<AppAdvancedThemeCardStyle>(
-              AppAdvancedThemeCardStyle.soft,
-              '柔和',
-            ),
-            AdvancedThemeComponentStyleChoice<AppAdvancedThemeCardStyle>(
-              AppAdvancedThemeCardStyle.outlined,
-              '描边',
-            ),
-            AdvancedThemeComponentStyleChoice<AppAdvancedThemeCardStyle>(
-              AppAdvancedThemeCardStyle.elevated,
-              '悬浮',
-            ),
-          ],
-          onChanged:
-              _isSaving
-                  ? null
-                  : (value) => _updateComponentStyle(
-                    (current) => current.copyWith(cardStyle: value),
-                  ),
-        ),
-        const SizedBox(height: 8),
-        _buildComponentStyleChoiceCard<AppAdvancedThemeButtonStyle>(
-          context,
-          title: '按钮样式',
-          previewKey: const ValueKey<String>(
-            'advanced_theme_button_style_preview_action',
-          ),
-          onPreview:
-              () => unawaited(
-                _showComponentPreviewSheet(
-                  context,
-                  title: '按钮样式预览',
-                  builder: _buildButtonComponentPreview,
-                ),
-              ),
-          value: style.buttonStyle,
-          choices: const [
-            AdvancedThemeComponentStyleChoice<AppAdvancedThemeButtonStyle>(
-              AppAdvancedThemeButtonStyle.stadium,
-              '胶囊',
-            ),
-            AdvancedThemeComponentStyleChoice<AppAdvancedThemeButtonStyle>(
-              AppAdvancedThemeButtonStyle.rounded,
-              '圆角',
-            ),
-            AdvancedThemeComponentStyleChoice<AppAdvancedThemeButtonStyle>(
-              AppAdvancedThemeButtonStyle.sharp,
-              '利落',
-            ),
-          ],
-          onChanged:
-              _isSaving
-                  ? null
-                  : (value) => _updateComponentStyle(
-                    (current) => current.copyWith(buttonStyle: value),
-                  ),
-        ),
-        const SizedBox(height: 8),
-        _buildComponentStyleChoiceCard<AppAdvancedThemeInputStyle>(
-          context,
-          title: '输入框样式',
-          previewKey: const ValueKey<String>(
-            'advanced_theme_input_style_preview_action',
-          ),
-          onPreview:
-              () => unawaited(
-                _showComponentPreviewSheet(
-                  context,
-                  title: '输入框样式预览',
-                  builder: _buildInputComponentPreview,
-                ),
-              ),
-          value: style.inputStyle,
-          choices: const [
-            AdvancedThemeComponentStyleChoice<AppAdvancedThemeInputStyle>(
-              AppAdvancedThemeInputStyle.soft,
-              '柔和',
-            ),
-            AdvancedThemeComponentStyleChoice<AppAdvancedThemeInputStyle>(
-              AppAdvancedThemeInputStyle.outlined,
-              '描边',
-            ),
-            AdvancedThemeComponentStyleChoice<AppAdvancedThemeInputStyle>(
-              AppAdvancedThemeInputStyle.underlined,
-              '下划线',
-            ),
-          ],
-          onChanged:
-              _isSaving
-                  ? null
-                  : (value) => _updateComponentStyle(
-                    (current) => current.copyWith(inputStyle: value),
-                  ),
-        ),
-        const SizedBox(height: 8),
-        _buildComponentStyleChoiceCard<AppAdvancedThemeOverlayStyle>(
-          context,
-          title: '弹窗样式',
-          previewKey: const ValueKey<String>(
-            'advanced_theme_overlay_style_preview_action',
-          ),
-          onPreview:
-              () => unawaited(
-                _showComponentPreviewSheet(
-                  context,
-                  title: '弹窗样式预览',
-                  builder: _buildModalComponentPreview,
-                ),
-              ),
-          value: style.overlayStyle,
-          choices: const [
-            AdvancedThemeComponentStyleChoice<AppAdvancedThemeOverlayStyle>(
-              AppAdvancedThemeOverlayStyle.comfortable,
-              '舒展',
-            ),
-            AdvancedThemeComponentStyleChoice<AppAdvancedThemeOverlayStyle>(
-              AppAdvancedThemeOverlayStyle.compact,
-              '紧凑',
-            ),
-          ],
-          onChanged:
-              _isSaving
-                  ? null
-                  : (value) => _updateComponentStyle(
-                    (current) => current.copyWith(overlayStyle: value),
-                  ),
-        ),
-        const SizedBox(height: 8),
-        _buildComponentStyleChoiceCard<AppAdvancedThemeNavigationStyle>(
-          context,
-          title: '导航样式',
-          previewKey: const ValueKey<String>(
-            'advanced_theme_navigation_style_preview_action',
-          ),
-          onPreview:
-              () => unawaited(
-                _showComponentPreviewSheet(
-                  context,
-                  title: '导航样式预览',
-                  builder: _buildNavigationComponentPreview,
-                ),
-              ),
-          value: style.navigationStyle,
-          choices: const [
-            AdvancedThemeComponentStyleChoice<AppAdvancedThemeNavigationStyle>(
-              AppAdvancedThemeNavigationStyle.soft,
-              '柔和',
-            ),
-            AdvancedThemeComponentStyleChoice<AppAdvancedThemeNavigationStyle>(
-              AppAdvancedThemeNavigationStyle.floating,
-              '悬浮',
-            ),
-            AdvancedThemeComponentStyleChoice<AppAdvancedThemeNavigationStyle>(
-              AppAdvancedThemeNavigationStyle.compact,
-              '紧凑',
-            ),
-          ],
-          onChanged:
-              _isSaving
-                  ? null
-                  : (value) => _updateComponentStyle(
-                    (current) => current.copyWith(navigationStyle: value),
-                  ),
-        ),
-        const SizedBox(height: 8),
-        _buildComponentStyleChoiceCard<AppAdvancedThemeSwitchStyle>(
-          context,
-          title: '切换样式',
-          previewKey: const ValueKey<String>(
-            'advanced_theme_switch_style_preview_action',
-          ),
-          onPreview:
-              () => unawaited(
-                _showComponentPreviewSheet(
-                  context,
-                  title: '切换样式预览',
-                  builder: _buildSwitchComponentPreview,
-                ),
-              ),
-          value: style.switchStyle,
-          choices: const [
-            AdvancedThemeComponentStyleChoice<AppAdvancedThemeSwitchStyle>(
-              AppAdvancedThemeSwitchStyle.soft,
-              '柔和',
-            ),
-            AdvancedThemeComponentStyleChoice<AppAdvancedThemeSwitchStyle>(
-              AppAdvancedThemeSwitchStyle.contrast,
-              '高对比',
-            ),
-          ],
-          onChanged:
-              _isSaving
-                  ? null
-                  : (value) => _updateComponentStyle(
-                    (current) => current.copyWith(switchStyle: value),
-                  ),
-        ),
-        const SizedBox(height: 8),
-        _buildComponentCard(
-          context,
-          title: '组件阴影',
-          previewKey: const ValueKey<String>(
-            'advanced_theme_shadow_preview_action',
-          ),
-          onPreview:
-              () => unawaited(
-                _showComponentPreviewSheet(
-                  context,
-                  title: '组件阴影预览',
-                  builder: _buildShadowComponentPreview,
-                ),
-              ),
-          children: [
-            _buildComponentShadowStrengthRow(context, style.shadowStrength),
-          ],
-        ),
-      ],
-    );
-  }
-
   Widget _buildComponentStyleSection(
     BuildContext context,
     AppAdvancedTheme draft,
@@ -3420,27 +2896,27 @@ class _AdvancedThemeEditorPageState
     );
   }
 
-  Widget _buildComponentStyleChoiceCard<T>(
+  Widget _buildComponentInfoCard(
     BuildContext context, {
     required String title,
-    required T value,
-    required List<AdvancedThemeComponentStyleChoice<T>> choices,
-    required ValueChanged<T>? onChanged,
+    required String description,
     VoidCallback? onPreview,
     Key? previewKey,
   }) {
+    final colorScheme = Theme.of(context).colorScheme;
     return _buildComponentCard(
       context,
       title: title,
       onPreview: onPreview,
       previewKey: previewKey,
       children: [
-        _buildComponentStyleChoiceRow<T>(
-          context,
-          label: '样式',
-          value: value,
-          choices: choices,
-          onChanged: onChanged,
+        Text(
+          description,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
         ),
       ],
     );
@@ -3544,30 +3020,23 @@ class _AdvancedThemeEditorPageState
     required List<AdvancedThemeComponentStyleChoice<double>> choices,
     required ValueChanged<double>? onChanged,
   }) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const spacing = 8.0;
-        final columns = constraints.maxWidth < 360 ? 2 : 4;
-        final itemWidth =
-            (constraints.maxWidth - spacing * (columns - 1)) / columns;
-        return Wrap(
-          spacing: spacing,
-          runSpacing: spacing,
-          children: [
-            for (final choice in choices)
-              SizedBox(
-                width: itemWidth,
-                child: _buildRadiusScaleChoiceTile(
-                  context,
-                  choice: choice,
-                  selected: choice.value == value,
-                  onTap:
-                      onChanged == null ? null : () => onChanged(choice.value),
-                ),
-              ),
-          ],
-        );
-      },
+    return Row(
+      children: [
+        for (var index = 0; index < choices.length; index++) ...[
+          Expanded(
+            child: _buildRadiusScaleChoiceTile(
+              context,
+              choice: choices[index],
+              selected: choices[index].value == value,
+              onTap:
+                  onChanged == null
+                      ? null
+                      : () => onChanged(choices[index].value),
+            ),
+          ),
+          if (index != choices.length - 1) const SizedBox(width: 8),
+        ],
+      ],
     );
   }
 
@@ -3581,37 +3050,39 @@ class _AdvancedThemeEditorPageState
     final colorScheme = theme.colorScheme;
     final componentTokens = appComponentThemeTokensOf(context);
     final previewRadius = _radiusPreviewValue(choice.value);
-    return AppSurface(
-      padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-      backgroundColor:
-          selected ? colorScheme.primaryContainer : colorScheme.surface,
-      borderColor: selected ? colorScheme.primary : colorScheme.outlineVariant,
-      // UI-GOV-EXEMPT: border-radius tokenized-component uses AppComponentThemeTokens.
-      borderRadius: BorderRadius.all(
-        Radius.circular(componentTokens.card.radius),
-      ),
-      onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            height: 34,
+    return Tooltip(
+      message: choice.label,
+      child: Semantics(
+        label: choice.label,
+        selected: selected,
+        button: true,
+        child: AppSurface(
+          padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+          backgroundColor:
+              selected ? colorScheme.primaryContainer : colorScheme.surface,
+          borderColor:
+              selected ? colorScheme.primary : colorScheme.outlineVariant,
+          // UI-GOV-EXEMPT: border-radius tokenized-component uses AppComponentThemeTokens.
+          borderRadius: BorderRadius.all(
+            Radius.circular(componentTokens.card.radius),
+          ),
+          onTap: onTap,
+          child: SizedBox(
+            height: 36,
             child: Center(
-              child: SizedBox(
-                width: 48,
-                height: 28,
-                child: AppSurface(
-                  padding: EdgeInsets.zero,
-                  backgroundColor:
-                      selected ? colorScheme.primary : colorScheme.surface,
-                  borderColor:
-                      selected
-                          ? colorScheme.onPrimaryContainer.withAlpha(82)
-                          : colorScheme.outlineVariant,
-                  // UI-GOV-EXEMPT: border-radius fixed-visual radius preview intentionally renders selectable radius scale.
-                  borderRadius: BorderRadius.all(
-                    Radius.circular(previewRadius),
-                  ),
+              child: AppSurface(
+                padding: EdgeInsets.zero,
+                backgroundColor:
+                    selected ? colorScheme.primary : colorScheme.surface,
+                borderColor:
+                    selected
+                        ? colorScheme.onPrimaryContainer.withAlpha(82)
+                        : colorScheme.outlineVariant,
+                // UI-GOV-EXEMPT: border-radius fixed-visual radius preview intentionally renders selectable radius scale.
+                borderRadius: BorderRadius.all(Radius.circular(previewRadius)),
+                child: SizedBox(
+                  width: 48,
+                  height: 28,
                   child: Align(
                     alignment: Alignment.topLeft,
                     child: Icon(
@@ -3627,20 +3098,7 @@ class _AdvancedThemeEditorPageState
               ),
             ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            choice.label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color:
-                  selected
-                      ? colorScheme.onPrimaryContainer
-                      : colorScheme.onSurface,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -3806,32 +3264,17 @@ class _AdvancedThemeEditorPageState
     );
   }
 
-  Widget _buildButtonComponentPreview(BuildContext context) {
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: [
-        AppButton(
-          onPressed: () {},
-          icon: const Icon(Icons.check_rounded, size: 16),
-          label: '主按钮',
-        ),
-        AppButton(
-          variant: AppButtonVariant.tonal,
-          onPressed: () {},
-          icon: const Icon(Icons.tune_rounded, size: 16),
-          label: '次级按钮',
-        ),
-        AppButton(
-          variant: AppButtonVariant.secondary,
-          onPressed: () {},
-          label: '描边按钮',
-        ),
-      ],
+  Widget _buildInputComponentPreview(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return AppSurface(
+      backgroundColor: colorScheme.surface,
+      borderColor: colorScheme.outlineVariant,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      child: Text('输入框内容预览', style: Theme.of(context).textTheme.bodyMedium),
     );
   }
 
-  Widget _buildInputComponentPreview(BuildContext context) {
+  Widget _buildSearchComponentPreview(BuildContext context) {
     return ValueListenableBuilder<int>(
       valueListenable: _colorPreviewRevision,
       builder: (context, _, __) {
@@ -3862,190 +3305,9 @@ class _AdvancedThemeEditorPageState
                 ],
               ),
             ),
-            const SizedBox(height: 10),
-            AppSurface(
-              backgroundColor: colorScheme.surface,
-              borderColor: colorScheme.outlineVariant,
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-              child: Text(
-                '输入框内容预览',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-            ),
           ],
         );
       },
-    );
-  }
-
-  Widget _buildFontComponentPreview(BuildContext context) {
-    final interfaceFont = _selectedAppInterfaceFont();
-    final readerFont = _selectedReaderFont();
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      children: [
-        SizedBox(
-          width: 210,
-          child: AppSurface(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '界面字体',
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    fontFamily: interfaceFont?.fontFamilyKey,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  interfaceFont?.displayName ?? '跟随系统',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontFamily: interfaceFont?.fontFamilyKey,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        SizedBox(
-          width: 210,
-          child: AppSurface(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '阅读字体',
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    fontFamily: readerFont?.fontFamilyKey,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '章节正文预览',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontFamily: readerFont?.fontFamilyKey,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildNavigationComponentPreview(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return AppSurface(
-      backgroundColor: colorScheme.surfaceContainerLow,
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _buildNavigationPreviewItem(context, Icons.home_rounded, '书架', true),
-          const SizedBox(width: 12),
-          _buildNavigationPreviewItem(
-            context,
-            Icons.explore_outlined,
-            '发现',
-            false,
-          ),
-          const SizedBox(width: 12),
-          _buildNavigationPreviewItem(
-            context,
-            Icons.person_outline_rounded,
-            '我的',
-            false,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNavigationPreviewItem(
-    BuildContext context,
-    IconData icon,
-    String label,
-    bool selected,
-  ) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final color = selected ? colorScheme.primary : colorScheme.onSurfaceVariant;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 20, color: color),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: color,
-            fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSwitchComponentPreview(BuildContext context) {
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: [
-        FilterChip(
-          selected: true,
-          onSelected: (_) {},
-          label: const Text('已选标签'),
-        ),
-        FilterChip(
-          selected: false,
-          onSelected: (_) {},
-          label: const Text('普通标签'),
-        ),
-        Switch(value: true, onChanged: (_) {}),
-      ],
-    );
-  }
-
-  Widget _buildShadowComponentPreview(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      children: [
-        SizedBox(
-          width: 150,
-          child: AppSurface(
-            backgroundColor: colorScheme.surface,
-            borderColor: colorScheme.outlineVariant,
-            padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-            child: Text(
-              '低阴影卡片',
-              style: Theme.of(
-                context,
-              ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w800),
-            ),
-          ),
-        ),
-        SizedBox(
-          width: 150,
-          child: AppSurface(
-            backgroundColor: colorScheme.surfaceContainerHighest,
-            borderColor: colorScheme.primary,
-            padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-            child: Text(
-              '强调浮层',
-              style: Theme.of(
-                context,
-              ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w800),
-            ),
-          ),
-        ),
-      ],
     );
   }
 
@@ -4171,28 +3433,6 @@ class _AdvancedThemeEditorPageState
       max: 24,
       divisions: 24,
       onChanged: _isSaving ? null : effectiveOnChanged,
-    );
-  }
-
-  Widget _buildComponentShadowStrengthRow(
-    BuildContext context,
-    double shadowStrength,
-  ) {
-    final normalizedStrength = shadowStrength.clamp(0.1, 1.0).toDouble();
-    return _buildStrengthSliderRow(
-      context,
-      label: '组件阴影强度',
-      valueLabel: '${(normalizedStrength * 100).round()}%',
-      value: normalizedStrength,
-      min: 0.1,
-      max: 1,
-      divisions: 9,
-      onChanged:
-          _isSaving
-              ? null
-              : (value) => _updateComponentStyle(
-                (current) => current.copyWith(shadowStrength: value),
-              ),
     );
   }
 
@@ -4329,56 +3569,6 @@ class _AdvancedThemeEditorPageState
     };
   }
 
-  Widget _buildComponentStyleChoiceRow<T>(
-    BuildContext context, {
-    required String label,
-    required T value,
-    required List<AdvancedThemeComponentStyleChoice<T>> choices,
-    required ValueChanged<T>? onChanged,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(2, 9, 2, 9),
-      child: Row(
-        children: [
-          Expanded(
-            flex: 30,
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(
-                context,
-              ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            flex: 70,
-            child: Wrap(
-              alignment: WrapAlignment.end,
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                for (final choice in choices)
-                  _buildFitChoiceButton(
-                    context,
-                    label: choice.label,
-                    selected: choice.value == value,
-                    onPressed:
-                        onChanged == null
-                            ? null
-                            : () => onChanged(choice.value),
-                    colorScheme: colorScheme,
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildFitChoiceButton(
     BuildContext context, {
     required String label,
@@ -4475,7 +3665,7 @@ class _AdvancedThemeEditorPageState
                       const SizedBox(height: 2),
                       Text(
                         field.description.trim(),
-                        maxLines: 1,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: colorScheme.onSurfaceVariant,
