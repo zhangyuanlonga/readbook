@@ -19,6 +19,7 @@ import '../../../app/theme/app_interface_typography_provider.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/adaptive_overflow_toolbar.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
+import '../../../app/widgets/adaptive_search_bar.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/app_task_bottom_sheet.dart';
 import '../../../app/widgets/app_task_status.dart';
@@ -52,6 +53,7 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
   final ReaderPreferencesService _readerPreferencesService =
       ReaderPreferencesService();
   final ScrollController _scrollController = ScrollController();
+  final TextEditingController _searchController = TextEditingController();
   late final ExternalImportBridge _externalImportBridge;
 
   bool _isLoading = true;
@@ -87,6 +89,7 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
   @override
   void dispose() {
     _scrollController.dispose();
+    _searchController.dispose();
     unawaited(_importSubscription?.cancel());
     super.dispose();
   }
@@ -518,6 +521,7 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
     if (_searchKeyword.isNotEmpty) {
       setState(() {
         _searchKeyword = '';
+        _searchController.clear();
       });
       return;
     }
@@ -541,15 +545,10 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 16),
-            TextField(
+            AppTextField(
               controller: controller,
               autofocus: appEnableAutoFocusForTextInput,
-              decoration: const InputDecoration(
-                hintText: '输入字体名称',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(12)),
-                ),
-              ),
+              hintText: '输入字体名称',
               textInputAction: TextInputAction.search,
               onSubmitted: (_) => submit(),
             ),
@@ -576,55 +575,25 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
     }
     setState(() {
       _searchKeyword = keyword.trim();
+      _searchController.text = _searchKeyword;
     });
   }
 
   Widget _buildSearchBar(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(30),
-      ),
-      child: Row(
-        children: [
-          const SizedBox(width: 12),
-          Icon(
-            Icons.search_rounded,
-            size: 18,
-            color: colorScheme.onSurfaceVariant,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: TextField(
-              autofocus: false,
-              decoration: const InputDecoration(
-                hintText: '搜索字体',
-                border: InputBorder.none,
-                isDense: true,
-                contentPadding: EdgeInsets.symmetric(vertical: 12),
-              ),
-              onChanged: (value) {
-                setState(() {
-                  _searchKeyword = value;
-                });
-              },
-              controller: TextEditingController(text: _searchKeyword),
-            ),
-          ),
-          if (_searchKeyword.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.clear_rounded, size: 18),
-              onPressed: () {
-                setState(() {
-                  _searchKeyword = '';
-                });
-              },
-            ),
-          const SizedBox(width: 4),
-        ],
-      ),
+    return AdaptiveSearchBar(
+      controller: _searchController,
+      hintText: '搜索字体',
+      onChanged: (value) {
+        setState(() {
+          _searchKeyword = value;
+        });
+      },
+      onClear: () {
+        _searchController.clear();
+        setState(() {
+          _searchKeyword = '';
+        });
+      },
     );
   }
 
@@ -1341,13 +1310,11 @@ class _FontManagementPageState extends ConsumerState<FontManagementPage> {
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 16),
-            TextField(
+            AppTextField(
               controller: controller,
               autofocus: true,
-              decoration: const InputDecoration(
-                labelText: '显示名称',
-                hintText: '输入新的字体名称',
-              ),
+              labelText: '显示名称',
+              hintText: '输入新的字体名称',
               textInputAction: TextInputAction.done,
               onSubmitted: (_) {
                 Navigator.of(surfaceContext).pop(controller.text.trim());

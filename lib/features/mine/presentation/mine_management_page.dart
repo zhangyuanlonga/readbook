@@ -15,12 +15,14 @@ import '../../../app/platform/app_input_focus_behavior.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/adaptive_bottom_sheet.dart';
+import '../../../app/widgets/adaptive_search_bar.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
 import '../../../app/widgets/app_status_state_card.dart';
 import '../../../app/widgets/foundation/app_button.dart';
 import '../../../app/widgets/foundation/app_feedback.dart';
 import '../../../app/widgets/foundation/app_progress.dart';
 import '../../../app/widgets/foundation/app_reorderable_list.dart';
+import '../../../app/widgets/foundation/app_text_field.dart';
 import '../../bookshelf/application/bookshelf_service.dart';
 import '../application/advanced_theme_provider.dart';
 
@@ -556,58 +558,22 @@ class _BookshelfTaxonomyManagementPageState
   }
 
   Widget _buildSearchBar(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(30),
-      ),
-      child: Row(
-        children: [
-          const SizedBox(width: 12),
-          Icon(
-            Icons.search_rounded,
-            size: 18,
-            color: colorScheme.onSurfaceVariant,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: '搜索$_entityName',
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                disabledBorder: InputBorder.none,
-                errorBorder: InputBorder.none,
-                focusedErrorBorder: InputBorder.none,
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(vertical: 12),
-              ),
-              onChanged: (value) {
-                setState(() {
-                  _searchKeyword = value;
-                  _filteredItems = _applyFilter(_items);
-                });
-              },
-            ),
-          ),
-          if (_searchKeyword.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.clear_rounded, size: 18),
-              onPressed: () {
-                setState(() {
-                  _searchKeyword = '';
-                  _filteredItems = _applyFilter(_items);
-                });
-                _searchController.clear();
-              },
-            ),
-          const SizedBox(width: 4),
-        ],
-      ),
+    return AdaptiveSearchBar(
+      controller: _searchController,
+      hintText: '搜索$_entityName',
+      onChanged: (value) {
+        setState(() {
+          _searchKeyword = value;
+          _filteredItems = _applyFilter(_items);
+        });
+      },
+      onClear: () {
+        _searchController.clear();
+        setState(() {
+          _searchKeyword = '';
+          _filteredItems = _applyFilter(_items);
+        });
+      },
     );
   }
 
@@ -1049,19 +1015,12 @@ class _TaxonomyEditorPanelState extends State<_TaxonomyEditorPanel> {
               ],
             ),
             const SizedBox(height: 14),
-            TextField(
+            AppTextField(
               controller: _nameController,
               autofocus: appEnableAutoFocusForTextInput,
               maxLength: 12,
-              decoration: InputDecoration(
-                labelText: '${widget.entityName}名称',
-                errorText: _errorText,
-                filled: true,
-                fillColor: colorScheme.surfaceContainerLow,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
+              labelText: '${widget.entityName}名称',
+              errorText: _errorText,
               onChanged: (_) {
                 if (_errorText == null) {
                   return;
@@ -1073,22 +1032,14 @@ class _TaxonomyEditorPanelState extends State<_TaxonomyEditorPanel> {
               onSubmitted: (_) => _save(),
             ),
             const SizedBox(height: 12),
-            TextField(
+            AppTextField(
               controller: _hexController,
               textCapitalization: TextCapitalization.characters,
               inputFormatters: [
                 FilteringTextInputFormatter.allow(RegExp(r'[#0-9a-fA-F]')),
               ],
-              decoration: InputDecoration(
-                isDense: true,
-                prefixIcon: const Icon(Icons.palette_outlined, size: 18),
-                hintText: '#RRGGBB / #AARRGGBB',
-                filled: true,
-                fillColor: colorScheme.surfaceContainerLow,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
+              prefixIcon: const Icon(Icons.palette_outlined, size: 18),
+              hintText: '#RRGGBB / #AARRGGBB',
               onChanged: (value) {
                 final parsed = _parseTaxonomyHexColor(value);
                 if (parsed == null) {

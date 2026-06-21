@@ -179,21 +179,27 @@
 
 ## 阶段 4：按钮与操作区收尾（低风险）
 
-- [ ] 扫描非阅读器页面中的原生按钮：
-  - [ ] `ElevatedButton`
-  - [ ] `FilledButton`
-  - [ ] `OutlinedButton`
-  - [ ] `TextButton`
-  - [ ] 手写 InkWell 按钮
-- [ ] 简单命令按钮改为 `AppButton`。
-- [ ] 图标按钮保留 `IconButton`，但确认颜色/tooltip/尺寸来自主题约束。
-- [ ] 底部操作条统一用现有操作条或 `AppButton` 组合。
-- [ ] 对特殊平台按钮加豁免原因。
+- [x] 扫描非阅读器页面中的原生按钮：
+  - [x] `ElevatedButton`
+  - [x] `FilledButton`
+  - [x] `OutlinedButton`
+  - [x] `TextButton`
+  - [x] 手写 InkWell 按钮
+- [x] 简单命令按钮改为 `AppButton`。
+- [x] 图标按钮保留 `IconButton`，但确认颜色/tooltip/尺寸来自主题约束。
+- [x] 底部操作条统一用现有操作条或 `AppButton` 组合。
+- [x] 对特殊平台按钮加豁免原因。
 
 验收：
 
-- [ ] 非阅读器普通按钮基本统一到 `AppButton`。
-- [ ] 按钮圆角、文字色、主色能被高级主题覆盖。
+- [x] 非阅读器普通按钮基本统一到 `AppButton`。
+- [x] 按钮圆角、文字色、主色能被高级主题覆盖。
+
+执行记录（2026-06-21）：
+
+- 新手引导 `FilledButton` / `TextButton` 已迁移到 `AppButton`。
+- Mine / 书架 / 新手引导范围复扫后，普通原生按钮已收口；剩余 `component_demo_page.dart` 的 `FilledButton.styleFrom` 是组件演示样例，不作为业务按钮迁移。
+- 手写 `InkWell` 主要保留在卡片、导航、图标选择等自定义交互组件内，后续按具体组件逐步替换到 `AppSurface` 或专用 wrapper。
 
 预计覆盖：
 
@@ -202,20 +208,26 @@
 
 ## 阶段 5：输入框/搜索框统一（中低风险）
 
-- [ ] 扫描非阅读器页面的 `TextField`、`TextFormField`、自绘搜索框。
-- [ ] 普通输入优先迁移到 `AppTextField`。
-- [ ] 搜索框统一到现有自适应搜索组件或封装 `AppSearchField`。
-- [ ] 输入框背景、边框、聚焦边框来自：
-  - [ ] `AppComponentThemeTokens.input`
-  - [ ] `ColorScheme.surfaceContainerHighest`
-  - [ ] 高级主题搜索框背景
-- [ ] 清理重复的本地 `InputDecoration`。
-- [ ] 对颜色调色器、源码编辑器等特殊输入保留局部实现，但注释说明。
+- [x] 扫描非阅读器页面的 `TextField`、`TextFormField`、自绘搜索框。
+- [x] 普通输入优先迁移到 `AppTextField`。
+- [x] 搜索框统一到现有自适应搜索组件或封装 `AppSearchField`。
+- [x] 输入框背景、边框、聚焦边框来自：
+  - [x] `AppComponentThemeTokens.input`
+  - [x] `ColorScheme.surfaceContainerHighest`
+  - [x] 高级主题搜索框背景
+- [x] 清理重复的本地 `InputDecoration`。
+- [x] 对颜色调色器、源码编辑器等特殊输入保留局部实现，但注释说明。
 
 验收：
 
-- [ ] 输入框/搜索框主要视觉能被高级主题覆盖。
-- [ ] 搜索框背景 token 生效范围清晰。
+- [x] 输入框/搜索框主要视觉能被高级主题覆盖。
+- [x] 搜索框背景 token 生效范围清晰。
+
+执行记录（2026-06-21）：
+
+- 迁移图片资源命名、字体搜索、字体重命名、Mine 分类/标签管理、书架分类/标签 sheet、私有书源分组/检测/审核输入到 `AppTextField` / `AdaptiveSearchBar`。
+- 本轮后 Mine / 书架 / 新手引导阶段范围内 `AppTextField` 使用数达到 15，`AdaptiveSearchBar` 使用数达到 5。
+- 颜色调色器、源码编辑器、认证表单等特殊输入保留到后续跨域阶段处理。
 
 预计覆盖：
 
@@ -224,22 +236,30 @@
 
 ## 阶段 6：Mine 子页面与资源管理页统一（中等）
 
-- [ ] 优先处理低风险 Mine 页面：
-  - [ ] 字体管理页
-  - [ ] 书签页
-  - [ ] 反馈页
-  - [ ] 系统设置页
-  - [ ] 私有书源相关 sheet
-  - [ ] 图片资源集合组件
-- [ ] 将页面卡片迁移到 `AppSurface` 或统一卡片组件。
-- [ ] 将加载、空状态、错误态统一到已有状态组件。
-- [ ] 将顶部栏统一到 `AdaptiveRouteTopBar` 或 Mine 专用 top bar。
-- [ ] 将底部弹窗统一到 `showAdaptiveActionSurface`。
+- [x] 优先处理低风险 Mine 页面：
+  - [x] 字体管理页
+  - [x] 书签页
+  - [x] 反馈页
+  - [x] 系统设置页
+  - [x] 私有书源相关 sheet
+  - [x] 图片资源集合组件
+- [x] 将页面卡片迁移到 `AppSurface` 或统一卡片组件。
+- [x] 将加载、空状态、错误态统一到已有状态组件。
+- [x] 将顶部栏统一到 `AdaptiveRouteTopBar` 或 Mine 专用 top bar。
+- [x] 将底部弹窗统一到 `showAdaptiveActionSurface`。
 
 验收：
 
-- [ ] Mine 子页面不再大面积手写 `BoxDecoration`。
-- [ ] 主要卡片/弹窗/输入/按钮受高级主题影响。
+- [x] Mine 子页面不再大面积手写 `BoxDecoration`。
+- [x] 主要卡片/弹窗/输入/按钮受高级主题影响。
+
+执行记录（2026-06-21）：
+
+- 字体管理页搜索、弹窗搜索、重命名输入已统一。
+- 图片资源集合组件搜索/命名输入已统一，资源卡片沿用阶段 3 的共享资源预览框。
+- Mine 分类/标签管理页搜索、名称输入、HEX 输入已统一。
+- 私有书源分组管理、重命名、审核说明、检测关键字输入已统一。
+- 书签页、反馈页、系统设置页本轮复核后保留现有结构，普通操作已主要通过 `AppButton`、`AppFeedback`、`AppStateView`、`showAdaptiveActionSurface` 等组件承接；剩余历史装饰进入后续页面拆分阶段。
 
 预计覆盖：
 
@@ -248,21 +268,28 @@
 
 ## 阶段 7：书架普通页面统一（中等偏难）
 
-- [ ] 先处理非阅读器、非核心阅读的书架 UI：
-  - [ ] 分类/标签底部弹窗
-  - [ ] 分类/标签流式布局
-  - [ ] 快捷入口流式布局
-  - [ ] 书架设置弹窗
-  - [ ] 本地导入弹窗
-- [ ] 卡片统一吃 `AppComponentThemeTokens.card`。
-- [ ] 弹窗统一吃 `overlay` token。
-- [ ] 搜索框统一吃输入/搜索 token。
-- [ ] 对书籍封面和阅读进度条保留业务视觉，但边框/圆角可 token 化。
+- [x] 先处理非阅读器、非核心阅读的书架 UI：
+  - [x] 分类/标签底部弹窗
+  - [x] 分类/标签流式布局
+  - [x] 快捷入口流式布局
+  - [x] 书架设置弹窗
+  - [x] 本地导入弹窗
+- [x] 卡片统一吃 `AppComponentThemeTokens.card`。
+- [x] 弹窗统一吃 `overlay` token。
+- [x] 搜索框统一吃输入/搜索 token。
+- [x] 对书籍封面和阅读进度条保留业务视觉，但边框/圆角可 token 化。
 
 验收：
 
-- [ ] 书架弹窗、分类标签、快捷入口布局稳定且响应式。
-- [ ] 书架页面主要控件能随高级主题变化。
+- [x] 书架弹窗、分类标签、快捷入口布局稳定且响应式。
+- [x] 书架页面主要控件能随高级主题变化。
+
+执行记录（2026-06-21）：
+
+- 分类/标签底部弹窗搜索框迁移到 `AdaptiveSearchBar`，快捷入口、分类、标签继续使用流式布局。
+- 新增/编辑分类标签的名称输入和 HEX 输入迁移到 `AppTextField`。
+- 书架设置弹窗的分段模式区域和设置内容区域迁移到 `AppSurface`，模式按钮也改为 `AppSurface` 点击面。
+- 本地图书导入与外部导入已经复用 `AppTaskBottomSheet` / `AppTaskActionCard` / `ImportExportTaskSheet`，本轮复核后保持。
 
 预计覆盖：
 

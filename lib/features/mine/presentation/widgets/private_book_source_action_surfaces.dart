@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../app/widgets/foundation/app_button.dart';
+import '../../../../app/widgets/foundation/app_text_field.dart';
 import '../../application/private_book_source_service.dart';
 
 enum BookSourceImportMethod { url, file, paste }
@@ -192,10 +193,10 @@ class RenameGroupSurface extends StatelessWidget {
           ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 14),
-        TextField(
+        AppTextField(
           controller: controller,
           autofocus: true,
-          decoration: const InputDecoration(labelText: '分组名称'),
+          labelText: '分组名称',
           onSubmitted: (value) => Navigator.of(context).pop(value.trim()),
         ),
         const SizedBox(height: 18),
@@ -238,15 +239,12 @@ class SubmitSourceReviewSurface extends StatelessWidget {
           ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 14),
-        TextField(
+        AppTextField(
           controller: controller,
           minLines: 3,
           maxLines: 6,
-          decoration: const InputDecoration(
-            labelText: '提交说明',
-            hintText: '说明这个书源适合共享的原因',
-            alignLabelWithHint: true,
-          ),
+          labelText: '提交说明',
+          hintText: '说明这个书源适合共享的原因',
         ),
         const SizedBox(height: 18),
         Row(

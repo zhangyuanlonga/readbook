@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/navigation/app_navigation_style_provider.dart';
 import '../../../app/theme/app_official_theme_presets.dart';
+import '../../../app/widgets/foundation/app_button.dart';
 import '../../bookshelf/providers.dart';
 import '../../mine/application/advanced_theme_provider.dart';
 import '../../mine/application/mine_page_preferences_service.dart';
@@ -57,16 +58,14 @@ Widget _filledButton(
   String label,
   VoidCallback onPressed,
 ) {
-  return FilledButton(
-    onPressed: onPressed,
-    child: Text(_localizedButtonLabel(label)),
-  );
+  return AppButton(onPressed: onPressed, label: _localizedButtonLabel(label));
 }
 
 Widget _textButton(BuildContext context, String label, VoidCallback onPressed) {
-  return TextButton(
+  return AppButton(
+    variant: AppButtonVariant.text,
     onPressed: onPressed,
-    child: Text(_localizedButtonLabel(label)),
+    label: _localizedButtonLabel(label),
   );
 }
 

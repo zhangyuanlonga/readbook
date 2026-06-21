@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../app/images/local_file_image.dart';
 import '../../../../app/platform/app_input_focus_behavior.dart';
 import '../../../../app/widgets/adaptive_bottom_sheet.dart';
+import '../../../../app/widgets/adaptive_search_bar.dart';
 import '../../../../app/widgets/foundation/foundation.dart';
 import 'advanced_theme_resource_picker_widgets.dart';
 
@@ -33,10 +34,10 @@ Future<String?> showImageResourceNameSurface({
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 16),
-            TextField(
+            AppTextField(
               controller: controller,
               autofocus: appEnableAutoFocusForTextInput,
-              decoration: InputDecoration(labelText: labelText),
+              labelText: labelText,
               textInputAction: TextInputAction.done,
               onSubmitted: (_) => submit(),
             ),
@@ -136,70 +137,12 @@ class CompactCollectionSearchField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return SizedBox(
+    return AdaptiveSearchBar(
+      controller: controller,
+      hintText: hintText,
       height: 40,
-      child: TextField(
-        controller: controller,
-        onChanged: onChanged,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.15),
-        decoration: InputDecoration(
-          isDense: true,
-          filled: true,
-          fillColor: colorScheme.surfaceContainerLowest.withValues(alpha: 0.92),
-          hintText: hintText,
-          hintStyle: Theme.of(
-            context,
-          ).textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: 10,
-          ),
-          prefixIcon: Icon(
-            Icons.search_rounded,
-            size: 18,
-            color: colorScheme.onSurfaceVariant,
-          ),
-          prefixIconConstraints: const BoxConstraints(
-            minWidth: 38,
-            minHeight: 40,
-          ),
-          suffixIcon:
-              query.trim().isEmpty
-                  ? null
-                  : IconButton(
-                    tooltip: '清空搜索',
-                    onPressed: onClear,
-                    icon: const Icon(Icons.close_rounded, size: 18),
-                    visualDensity: const VisualDensity(
-                      horizontal: -2,
-                      vertical: -2,
-                    ),
-                  ),
-          suffixIconConstraints: const BoxConstraints(
-            minWidth: 38,
-            minHeight: 40,
-          ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide(
-              color: colorScheme.outlineVariant.withValues(alpha: 0.28),
-            ),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide(
-              color: colorScheme.outlineVariant.withValues(alpha: 0.28),
-            ),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide(
-              color: colorScheme.primary.withValues(alpha: 0.7),
-            ),
-          ),
-        ),
-      ),
+      onChanged: onChanged,
+      onClear: onClear,
     );
   }
 }

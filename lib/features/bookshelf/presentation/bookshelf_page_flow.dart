@@ -1280,18 +1280,12 @@ extension on _BookshelfPageState {
                         ],
                       ),
                     ),
-                    Container(
+                    AppSurface(
                       margin: const EdgeInsets.symmetric(horizontal: 12),
                       padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: _resolvedPalette(sheetContext).surfaceColor,
-                        borderRadius: BorderRadius.circular(13),
-                        border: Border.all(
-                          color: _resolvedPalette(
-                            sheetContext,
-                          ).cardBorderColor.withValues(alpha: 0.42),
-                        ),
-                      ),
+                      tone: AppSurfaceTone.muted,
+                      backgroundColor:
+                          _resolvedPalette(sheetContext).surfaceColor,
                       child: Row(
                         children: [
                           Expanded(
@@ -1349,16 +1343,11 @@ extension on _BookshelfPageState {
                     ),
                     const SizedBox(height: 10),
                     Expanded(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: _resolvedPalette(sheetContext).surfaceColor,
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(
-                            color: _resolvedPalette(
-                              sheetContext,
-                            ).cardBorderColor.withValues(alpha: 0.42),
-                          ),
-                        ),
+                      child: AppSurface(
+                        padding: EdgeInsets.zero,
+                        tone: AppSurfaceTone.muted,
+                        backgroundColor:
+                            _resolvedPalette(sheetContext).surfaceColor,
                         child:
                             draftUseGridView
                                 ? buildGridSettings()
@@ -1523,313 +1512,328 @@ extension on _BookshelfPageState {
     final uncategorizedCount =
         _books.where((book) => (_categoryOfBook(book) ?? '').isEmpty).length;
 
-    final selected = await _showBookshelfBottomSheet<String>(
-      isScrollControlled: true,
-      builder: (sheetContext) {
-        final maxHeight = MediaQuery.sizeOf(sheetContext).height * 0.72;
-        final bottomInset = _bookshelfBottomSafeInset(sheetContext);
-        var searchKeyword = '';
-        return StatefulBuilder(
-          builder: (sheetContext, setSheetState) {
-            final colorScheme = Theme.of(sheetContext).colorScheme;
-            final textTheme = Theme.of(sheetContext).textTheme;
-            final palette = _resolvedPalette(sheetContext);
-            final compactTheme = Theme.of(
-              sheetContext,
-            ).copyWith(visualDensity: VisualDensity.compact);
+    final searchController = TextEditingController();
+    final String? selected;
+    try {
+      selected = await _showBookshelfBottomSheet<String>(
+        isScrollControlled: true,
+        builder: (sheetContext) {
+          final maxHeight = MediaQuery.sizeOf(sheetContext).height * 0.72;
+          final bottomInset = _bookshelfBottomSafeInset(sheetContext);
+          var searchKeyword = '';
+          return StatefulBuilder(
+            builder: (sheetContext, setSheetState) {
+              final colorScheme = Theme.of(sheetContext).colorScheme;
+              final textTheme = Theme.of(sheetContext).textTheme;
+              final palette = _resolvedPalette(sheetContext);
+              final compactTheme = Theme.of(
+                sheetContext,
+              ).copyWith(visualDensity: VisualDensity.compact);
 
-            Widget buildSectionHeader({
-              required String title,
-              VoidCallback? onManage,
-            }) {
-              return Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  if (onManage != null)
-                    AppButton(
-                      label: '管理',
-                      variant: AppButtonVariant.text,
-                      size: AppButtonSize.compact,
-                      onPressed: onManage,
-                      icon: const Icon(Icons.tune_rounded, size: 16),
-                    ),
-                ],
-              );
-            }
-
-            Widget buildFilterChip({
-              required String value,
-              required String label,
-              required String countText,
-              required bool selected,
-              IconData? icon,
-              Color? accentColor,
-            }) {
-              final color = accentColor ?? colorScheme.primary;
-              final avatarColor =
-                  selected ? color : colorScheme.onSurfaceVariant;
-              return FilterChip(
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                visualDensity: VisualDensity.compact,
-                avatar:
-                    icon == null
-                        ? null
-                        : Icon(icon, size: 16, color: avatarColor),
-                label: Row(
-                  mainAxisSize: MainAxisSize.min,
+              Widget buildSectionHeader({
+                required String title,
+                VoidCallback? onManage,
+              }) {
+                return Row(
                   children: [
-                    Flexible(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 132),
-                        child: Text(
-                          label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 6),
-                    Text(
-                      countText,
-                      style: textTheme.labelSmall?.copyWith(
-                        color:
-                            selected
-                                ? colorScheme.onSecondaryContainer
-                                : colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w700,
+                    if (onManage != null)
+                      AppButton(
+                        label: '管理',
+                        variant: AppButtonVariant.text,
+                        size: AppButtonSize.compact,
+                        onPressed: onManage,
+                        icon: const Icon(Icons.tune_rounded, size: 16),
                       ),
-                    ),
                   ],
-                ),
-                selected: selected,
-                selectedColor:
-                    accentColor == null
-                        ? palette.primaryContainerColor.withValues(alpha: 0.52)
-                        : color.withValues(alpha: 0.16),
-                checkmarkColor: color,
-                side: BorderSide(
-                  color:
-                      selected
-                          ? color.withValues(alpha: 0.72)
-                          : colorScheme.outlineVariant.withValues(alpha: 0.72),
-                ),
-                onSelected:
-                    (_) => _dismissBookshelfBottomSheet(sheetContext, value),
-              );
-            }
-
-            Widget buildSection({
-              required String title,
-              required List<Widget> chips,
-              VoidCallback? onManage,
-              Widget? footer,
-            }) {
-              if (chips.isEmpty && footer == null) {
-                return const SizedBox.shrink();
-              }
-              return Padding(
-                padding: const EdgeInsets.fromLTRB(4, 10, 4, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    buildSectionHeader(title: title, onManage: onManage),
-                    const SizedBox(height: 6),
-                    if (chips.isNotEmpty)
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        alignment: WrapAlignment.start,
-                        children: chips,
-                      ),
-                    if (footer != null) ...[const SizedBox(height: 4), footer],
-                  ],
-                ),
-              );
-            }
-
-            Widget buildEmptyHint(String text) {
-              return Text(
-                text,
-                style: textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              );
-            }
-
-            bool matchesKeyword(String value) {
-              final keyword = searchKeyword.trim().toLowerCase();
-              if (keyword.isEmpty) {
-                return true;
-              }
-              return value.toLowerCase().contains(keyword);
-            }
-
-            final visibleCategories = customCategories
-                .where(matchesKeyword)
-                .toList(growable: false);
-            final visibleTags = customTags
-                .where(matchesKeyword)
-                .toList(growable: false);
-            final defaultChips = <Widget>[
-              buildFilterChip(
-                value: 'all',
-                label: '全部',
-                countText: '${baseFilterBookCount[_BookshelfFilter.all] ?? 0}',
-                selected:
-                    !_activeView.isTag &&
-                    !_activeView.isCategory &&
-                    _activeView.filter == _BookshelfFilter.all,
-                icon: Icons.collections_bookmark_outlined,
-              ),
-              buildFilterChip(
-                value: 'local',
-                label: '本地',
-                countText:
-                    '${baseFilterBookCount[_BookshelfFilter.local] ?? 0}',
-                selected:
-                    !_activeView.isTag &&
-                    !_activeView.isCategory &&
-                    _activeView.filter == _BookshelfFilter.local,
-                icon: Icons.folder_outlined,
-              ),
-              buildFilterChip(
-                value: 'novel',
-                label: '小说',
-                countText:
-                    '${baseFilterBookCount[_BookshelfFilter.novel] ?? 0}',
-                selected:
-                    !_activeView.isTag &&
-                    !_activeView.isCategory &&
-                    _activeView.filter == _BookshelfFilter.novel,
-                icon: Icons.menu_book_outlined,
-              ),
-              buildFilterChip(
-                value: 'manga',
-                label: '漫画',
-                countText:
-                    '${baseFilterBookCount[_BookshelfFilter.manga] ?? 0}',
-                selected:
-                    !_activeView.isTag &&
-                    !_activeView.isCategory &&
-                    _activeView.filter == _BookshelfFilter.manga,
-                icon: Icons.photo_library_outlined,
-              ),
-            ];
-            final categoryChips = <Widget>[
-              if (matchesKeyword('未分类'))
-                buildFilterChip(
-                  value: 'category::__uncategorized__',
-                  label: '未分类',
-                  countText: '$uncategorizedCount',
-                  selected: _activeView.isUncategorized,
-                  icon: Icons.folder_off_outlined,
-                ),
-              ...visibleCategories.map((category) {
-                final item = _categoryItem(category);
-                return buildFilterChip(
-                  value: 'category::$category',
-                  label: category,
-                  countText: '${categoryBookCount[category] ?? 0}',
-                  selected:
-                      _activeView.isCategory &&
-                      _activeView.category == category,
-                  icon: Icons.folder_copy_outlined,
-                  accentColor: Color(item.colorValue),
                 );
-              }),
-            ];
-            final tagChips = <Widget>[
-              if (matchesKeyword('未打标签'))
-                buildFilterChip(
-                  value: 'tag::__untagged__',
-                  label: '未打标签',
-                  countText:
-                      '${_books.where((book) => _tagsOfBook(book).isEmpty).length}',
-                  selected: _activeView.isTag && _activeView.tag == '',
-                  icon: Icons.sell_outlined,
-                ),
-              ...visibleTags.map((tag) {
-                final item = _tagItem(tag);
-                return buildFilterChip(
-                  value: 'tag::$tag',
-                  label: tag,
-                  countText: '${tagBookCount[tag] ?? 0}',
-                  selected: _activeView.isTag && _activeView.tag == tag,
-                  icon: Icons.sell_outlined,
-                  accentColor: Color(item.colorValue),
-                );
-              }),
-            ];
+              }
 
-            return Padding(
-              padding: EdgeInsets.fromLTRB(12, 4, 12, 10 + bottomInset),
-              child: Theme(
-                data: compactTheme,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxHeight: maxHeight),
-                  child: ListView(
+              Widget buildFilterChip({
+                required String value,
+                required String label,
+                required String countText,
+                required bool selected,
+                IconData? icon,
+                Color? accentColor,
+              }) {
+                final color = accentColor ?? colorScheme.primary;
+                final avatarColor =
+                    selected ? color : colorScheme.onSurfaceVariant;
+                return FilterChip(
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
+                  avatar:
+                      icon == null
+                          ? null
+                          : Icon(icon, size: 16, color: avatarColor),
+                  label: Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      TextField(
-                        decoration: InputDecoration(
-                          isDense: true,
-                          hintText: '搜索分类或标签',
-                          prefixIcon: const Icon(
-                            Icons.search_rounded,
-                            size: 18,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
+                      Flexible(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 132),
+                          child: Text(
+                            label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        onChanged: (value) {
-                          setSheetState(() {
-                            searchKeyword = value;
-                          });
-                        },
                       ),
-                      buildSection(title: '快捷入口', chips: defaultChips),
-                      buildSection(
-                        title: '分类',
-                        chips: categoryChips,
-                        onManage:
-                            () => _dismissBookshelfBottomSheet(
-                              sheetContext,
-                              'manage_category::__new__',
-                            ),
-                        footer:
-                            categoryChips.isEmpty
-                                ? buildEmptyHint('暂无分类，点击右上角管理可新建。')
-                                : null,
-                      ),
-                      buildSection(
-                        title: '标签',
-                        chips: tagChips,
-                        onManage:
-                            () => _dismissBookshelfBottomSheet(
-                              sheetContext,
-                              'manage_tag::__new__',
-                            ),
-                        footer:
-                            tagChips.isEmpty
-                                ? buildEmptyHint('暂无标签，点击右上角管理可新建。')
-                                : null,
+                      const SizedBox(width: 6),
+                      Text(
+                        countText,
+                        style: textTheme.labelSmall?.copyWith(
+                          color:
+                              selected
+                                  ? colorScheme.onSecondaryContainer
+                                  : colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ],
                   ),
+                  selected: selected,
+                  // UI-GOV-EXEMPT: local-alpha taxonomy chip tint derives from semantic category/tag color.
+                  selectedColor:
+                      accentColor == null
+                          ? palette.primaryContainerColor.withValues(
+                            alpha: 0.52,
+                          )
+                          // UI-GOV-EXEMPT: local-alpha custom taxonomy chip tint derives from item color.
+                          : color.withValues(alpha: 0.16),
+                  checkmarkColor: color,
+                  // UI-GOV-EXEMPT: local-alpha taxonomy chip border keeps selected custom colors legible.
+                  side: BorderSide(
+                    color:
+                        selected
+                            ? color.withValues(alpha: 0.72)
+                            : colorScheme.outlineVariant.withValues(
+                              alpha: 0.72,
+                            ),
+                  ),
+                  onSelected:
+                      (_) => _dismissBookshelfBottomSheet(sheetContext, value),
+                );
+              }
+
+              Widget buildSection({
+                required String title,
+                required List<Widget> chips,
+                VoidCallback? onManage,
+                Widget? footer,
+              }) {
+                if (chips.isEmpty && footer == null) {
+                  return const SizedBox.shrink();
+                }
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(4, 10, 4, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      buildSectionHeader(title: title, onManage: onManage),
+                      const SizedBox(height: 6),
+                      if (chips.isNotEmpty)
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          alignment: WrapAlignment.start,
+                          children: chips,
+                        ),
+                      if (footer != null) ...[
+                        const SizedBox(height: 4),
+                        footer,
+                      ],
+                    ],
+                  ),
+                );
+              }
+
+              Widget buildEmptyHint(String text) {
+                return Text(
+                  text,
+                  style: textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                );
+              }
+
+              bool matchesKeyword(String value) {
+                final keyword = searchKeyword.trim().toLowerCase();
+                if (keyword.isEmpty) {
+                  return true;
+                }
+                return value.toLowerCase().contains(keyword);
+              }
+
+              final visibleCategories = customCategories
+                  .where(matchesKeyword)
+                  .toList(growable: false);
+              final visibleTags = customTags
+                  .where(matchesKeyword)
+                  .toList(growable: false);
+              final defaultChips = <Widget>[
+                buildFilterChip(
+                  value: 'all',
+                  label: '全部',
+                  countText:
+                      '${baseFilterBookCount[_BookshelfFilter.all] ?? 0}',
+                  selected:
+                      !_activeView.isTag &&
+                      !_activeView.isCategory &&
+                      _activeView.filter == _BookshelfFilter.all,
+                  icon: Icons.collections_bookmark_outlined,
                 ),
-              ),
-            );
-          },
-        );
-      },
-    );
+                buildFilterChip(
+                  value: 'local',
+                  label: '本地',
+                  countText:
+                      '${baseFilterBookCount[_BookshelfFilter.local] ?? 0}',
+                  selected:
+                      !_activeView.isTag &&
+                      !_activeView.isCategory &&
+                      _activeView.filter == _BookshelfFilter.local,
+                  icon: Icons.folder_outlined,
+                ),
+                buildFilterChip(
+                  value: 'novel',
+                  label: '小说',
+                  countText:
+                      '${baseFilterBookCount[_BookshelfFilter.novel] ?? 0}',
+                  selected:
+                      !_activeView.isTag &&
+                      !_activeView.isCategory &&
+                      _activeView.filter == _BookshelfFilter.novel,
+                  icon: Icons.menu_book_outlined,
+                ),
+                buildFilterChip(
+                  value: 'manga',
+                  label: '漫画',
+                  countText:
+                      '${baseFilterBookCount[_BookshelfFilter.manga] ?? 0}',
+                  selected:
+                      !_activeView.isTag &&
+                      !_activeView.isCategory &&
+                      _activeView.filter == _BookshelfFilter.manga,
+                  icon: Icons.photo_library_outlined,
+                ),
+              ];
+              final categoryChips = <Widget>[
+                if (matchesKeyword('未分类'))
+                  buildFilterChip(
+                    value: 'category::__uncategorized__',
+                    label: '未分类',
+                    countText: '$uncategorizedCount',
+                    selected: _activeView.isUncategorized,
+                    icon: Icons.folder_off_outlined,
+                  ),
+                ...visibleCategories.map((category) {
+                  final item = _categoryItem(category);
+                  return buildFilterChip(
+                    value: 'category::$category',
+                    label: category,
+                    countText: '${categoryBookCount[category] ?? 0}',
+                    selected:
+                        _activeView.isCategory &&
+                        _activeView.category == category,
+                    icon: Icons.folder_copy_outlined,
+                    accentColor: Color(item.colorValue),
+                  );
+                }),
+              ];
+              final tagChips = <Widget>[
+                if (matchesKeyword('未打标签'))
+                  buildFilterChip(
+                    value: 'tag::__untagged__',
+                    label: '未打标签',
+                    countText:
+                        '${_books.where((book) => _tagsOfBook(book).isEmpty).length}',
+                    selected: _activeView.isTag && _activeView.tag == '',
+                    icon: Icons.sell_outlined,
+                  ),
+                ...visibleTags.map((tag) {
+                  final item = _tagItem(tag);
+                  return buildFilterChip(
+                    value: 'tag::$tag',
+                    label: tag,
+                    countText: '${tagBookCount[tag] ?? 0}',
+                    selected: _activeView.isTag && _activeView.tag == tag,
+                    icon: Icons.sell_outlined,
+                    accentColor: Color(item.colorValue),
+                  );
+                }),
+              ];
+
+              return Padding(
+                padding: EdgeInsets.fromLTRB(12, 4, 12, 10 + bottomInset),
+                child: Theme(
+                  data: compactTheme,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: maxHeight),
+                    // UI-GOV-EXEMPT: list-children bounded taxonomy sheet with three short sections.
+                    child: ListView(
+                      children: [
+                        AdaptiveSearchBar(
+                          controller: searchController,
+                          hintText: '搜索分类或标签',
+                          onChanged: (value) {
+                            setSheetState(() {
+                              searchKeyword = value;
+                            });
+                          },
+                          onClear: () {
+                            searchController.clear();
+                            setSheetState(() {
+                              searchKeyword = '';
+                            });
+                          },
+                        ),
+                        buildSection(title: '快捷入口', chips: defaultChips),
+                        buildSection(
+                          title: '分类',
+                          chips: categoryChips,
+                          onManage:
+                              () => _dismissBookshelfBottomSheet(
+                                sheetContext,
+                                'manage_category::__new__',
+                              ),
+                          footer:
+                              categoryChips.isEmpty
+                                  ? buildEmptyHint('暂无分类，点击右上角管理可新建。')
+                                  : null,
+                        ),
+                        buildSection(
+                          title: '标签',
+                          chips: tagChips,
+                          onManage:
+                              () => _dismissBookshelfBottomSheet(
+                                sheetContext,
+                                'manage_tag::__new__',
+                              ),
+                          footer:
+                              tagChips.isEmpty
+                                  ? buildEmptyHint('暂无标签，点击右上角管理可新建。')
+                                  : null,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      searchController.dispose();
+    }
 
     if (!mounted || selected == null) {
       return;
@@ -1914,42 +1918,34 @@ class _BookshelfSettingsModeButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Material(
-      color:
-          selected
-              ? colorScheme.primaryContainer.withValues(alpha: 0.92)
-              : Colors.transparent,
-      borderRadius: BorderRadius.circular(10),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(10),
-        onTap: selected ? null : onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                size: 17,
-                color:
-                    selected
-                        ? colorScheme.onPrimaryContainer
-                        : colorScheme.onSurfaceVariant,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color:
-                      selected
-                          ? colorScheme.onPrimaryContainer
-                          : colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
+    return AppSurface(
+      tone: AppSurfaceTone.transparent,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      backgroundColor: selected ? colorScheme.primaryContainer : null,
+      onTap: selected ? null : onTap,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            icon,
+            size: 17,
+            color:
+                selected
+                    ? colorScheme.onPrimaryContainer
+                    : colorScheme.onSurfaceVariant,
           ),
-        ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              fontWeight: FontWeight.w800,
+              color:
+                  selected
+                      ? colorScheme.onPrimaryContainer
+                      : colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -2088,15 +2084,11 @@ class _BookshelfTaxonomyEditorDialogState
               ],
             ),
             const SizedBox(height: 18),
-            TextField(
+            AppTextField(
               controller: _nameController,
               autofocus: true,
-              decoration: InputDecoration(
-                labelText: _isTag ? '标签名称' : '分类名称',
-                errorText: _errorText,
-                filled: true,
-                fillColor: colorScheme.surface.withValues(alpha: 0.72),
-              ),
+              labelText: _isTag ? '标签名称' : '分类名称',
+              errorText: _errorText,
               onChanged: (_) {
                 if (_errorText == null) {
                   return;
@@ -2108,7 +2100,7 @@ class _BookshelfTaxonomyEditorDialogState
               onSubmitted: (_) => _save(),
             ),
             const SizedBox(height: 18),
-            TextField(
+            AppTextField(
               controller: _hexController,
               keyboardType: TextInputType.text,
               textCapitalization: TextCapitalization.characters,
@@ -2124,13 +2116,8 @@ class _BookshelfTaxonomyEditorDialogState
                   _draftColor = Color(parsed);
                 });
               },
-              decoration: InputDecoration(
-                isDense: true,
-                prefixIcon: const Icon(Icons.tag_rounded, size: 18),
-                hintText: '#RRGGBB / #AARRGGBB',
-                filled: true,
-                fillColor: colorScheme.surface.withValues(alpha: 0.72),
-              ),
+              prefixIcon: const Icon(Icons.tag_rounded, size: 18),
+              hintText: '#RRGGBB / #AARRGGBB',
             ),
             const SizedBox(height: 16),
             ColorPicker(

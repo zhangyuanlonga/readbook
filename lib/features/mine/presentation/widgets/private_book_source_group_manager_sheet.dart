@@ -60,48 +60,12 @@ class PrivateBookSourceGroupManagerSheetState
             Row(
               children: <Widget>[
                 Expanded(
-                  child: SizedBox(
-                    height: 48,
-                    child: TextField(
-                      controller: _nameController,
-                      enabled: !_saving,
-                      style: theme.textTheme.bodyMedium?.copyWith(height: 1.15),
-                      decoration: InputDecoration(
-                        isDense: true,
-                        filled: true,
-                        fillColor: colorScheme.surfaceContainerLowest
-                            .withValues(alpha: 0.94),
-                        hintText: '新增分组，例如：常用、漫画、备用',
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 13,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide(
-                            color: colorScheme.outlineVariant.withValues(
-                              alpha: 0.48,
-                            ),
-                          ),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide(
-                            color: colorScheme.outlineVariant.withValues(
-                              alpha: 0.48,
-                            ),
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide(
-                            color: colorScheme.primary.withValues(alpha: 0.78),
-                            width: 1.4,
-                          ),
-                        ),
-                      ),
-                      onSubmitted: (_) => unawaited(_createGroup()),
-                    ),
+                  child: AppTextField(
+                    controller: _nameController,
+                    enabled: !_saving,
+                    hintText: '新增分组，例如：常用、漫画、备用',
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) => unawaited(_createGroup()),
                   ),
                 ),
                 const SizedBox(width: 10),

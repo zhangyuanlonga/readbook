@@ -113,13 +113,11 @@ class PrivateBookSourceTestConfigSheetState
                 },
               ),
               const SizedBox(height: 14),
-              TextField(
+              AppTextField(
                 controller: _keywordController,
-                decoration: const InputDecoration(
-                  labelText: '检测关键字',
-                  hintText: '为空时使用书源内置关键字',
-                  prefixIcon: Icon(Icons.search_rounded),
-                ),
+                labelText: '检测关键字',
+                hintText: '为空时使用书源内置关键字',
+                prefixIcon: const Icon(Icons.search_rounded),
               ),
               const SizedBox(height: 14),
               AppDropdownField<int>(
