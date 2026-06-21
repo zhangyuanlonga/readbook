@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/theme/app_component_theme_tokens.dart';
+
 class AdvancedThemeSectionLabel extends StatelessWidget {
   const AdvancedThemeSectionLabel({
     super.key,
@@ -12,11 +14,15 @@ class AdvancedThemeSectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final normalizedDescription = tooltipMessage?.trim();
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2),
-      child: _AdvancedThemeSectionHeading(
-        title: title,
-        description: tooltipMessage,
+      child: Semantics(
+        hint:
+            normalizedDescription == null || normalizedDescription.isEmpty
+                ? null
+                : normalizedDescription,
+        child: _AdvancedThemeSectionHeading(title: title),
       ),
     );
   }
@@ -39,27 +45,33 @@ class AdvancedThemeExpandableSectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: onToggle,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(2, 6, 2, 6),
-        child: Row(
-          children: [
-            Expanded(
-              child: _AdvancedThemeSectionHeading(
-                title: title,
-                description: tooltipMessage,
+    final componentTokens = appComponentThemeTokensOf(context);
+    final normalizedDescription = tooltipMessage?.trim();
+    return Semantics(
+      button: true,
+      hint:
+          normalizedDescription == null || normalizedDescription.isEmpty
+              ? null
+              : normalizedDescription,
+      child: InkWell(
+        borderRadius: BorderRadius.all(
+          Radius.circular(componentTokens.card.radius),
+        ),
+        onTap: onToggle,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(2, 6, 2, 6),
+          child: Row(
+            children: [
+              Expanded(child: _AdvancedThemeSectionHeading(title: title)),
+              Icon(
+                expanded
+                    ? Icons.keyboard_arrow_up_rounded
+                    : Icons.keyboard_arrow_down_rounded,
+                size: 18,
+                color: colorScheme.onSurfaceVariant,
               ),
-            ),
-            Icon(
-              expanded
-                  ? Icons.keyboard_arrow_up_rounded
-                  : Icons.keyboard_arrow_down_rounded,
-              size: 18,
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -81,12 +93,15 @@ class AdvancedThemePanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final componentTokens = appComponentThemeTokensOf(context);
     return Container(
       width: double.infinity,
       padding: padding,
       decoration: BoxDecoration(
         color: backgroundColor ?? colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.all(
+          Radius.circular(componentTokens.card.radius),
+        ),
         border: Border.all(
           color: colorScheme.outlineVariant.withValues(alpha: 0.35),
         ),
@@ -104,12 +119,15 @@ class AdvancedThemeListSectionBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final componentTokens = appComponentThemeTokensOf(context);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
       decoration: BoxDecoration(
         color: colorScheme.surface.withValues(alpha: 0.52),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.all(
+          Radius.circular(componentTokens.card.radius),
+        ),
         border: Border.all(
           color: colorScheme.outlineVariant.withValues(alpha: 0.28),
         ),
@@ -120,29 +138,13 @@ class AdvancedThemeListSectionBody extends StatelessWidget {
 }
 
 class _AdvancedThemeSectionHeading extends StatelessWidget {
-  const _AdvancedThemeSectionHeading({
-    required this.title,
-    required this.description,
-  });
+  const _AdvancedThemeSectionHeading({required this.title});
 
   final String title;
-  final String? description;
 
   @override
   Widget build(BuildContext context) {
-    final normalizedDescription = description?.trim();
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _AdvancedThemeSectionTitle(title: title),
-        if (normalizedDescription != null &&
-            normalizedDescription.isNotEmpty) ...[
-          const SizedBox(height: 2),
-          _AdvancedThemeSectionDescription(description: normalizedDescription),
-        ],
-      ],
-    );
+    return _AdvancedThemeSectionTitle(title: title);
   }
 }
 
@@ -159,25 +161,6 @@ class _AdvancedThemeSectionTitle extends StatelessWidget {
         fontSize: 12,
         fontWeight: FontWeight.w700,
         color: Theme.of(context).colorScheme.onSurfaceVariant,
-      ),
-    );
-  }
-}
-
-class _AdvancedThemeSectionDescription extends StatelessWidget {
-  const _AdvancedThemeSectionDescription({required this.description});
-
-  final String description;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Text(
-      description,
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      style: theme.textTheme.bodySmall?.copyWith(
-        color: theme.colorScheme.onSurfaceVariant,
       ),
     );
   }

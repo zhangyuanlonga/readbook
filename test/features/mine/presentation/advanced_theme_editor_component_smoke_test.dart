@@ -327,7 +327,7 @@ void main() {
     }
 
     expect(find.text('颜色卡片'), findsOneWidget);
-    expect(find.text('这里放全局共享的颜色语义，优先决定整体氛围。'), findsOneWidget);
+    expect(find.text('这里放全局共享的颜色语义，优先决定整体氛围。'), findsNothing);
     expect(find.text('按钮、链接和选中状态的颜色'), findsOneWidget);
     expect(find.byIcon(Icons.help_outline_rounded), findsNothing);
 

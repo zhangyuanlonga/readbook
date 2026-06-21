@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shuxiang_reading_next/features/mine/presentation/widgets/advanced_theme_editor_shell_widgets.dart';
 
 void main() {
-  testWidgets('section label renders tooltip trigger', (tester) async {
+  testWidgets('section label hides description copy', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
@@ -13,7 +13,8 @@ void main() {
     );
 
     expect(find.text('颜色层'), findsOneWidget);
-    expect(find.byIcon(Icons.help_outline_rounded), findsOneWidget);
+    expect(find.text('颜色说明'), findsNothing);
+    expect(find.byIcon(Icons.help_outline_rounded), findsNothing);
   });
 
   testWidgets('expandable section header reports toggle taps', (tester) async {
