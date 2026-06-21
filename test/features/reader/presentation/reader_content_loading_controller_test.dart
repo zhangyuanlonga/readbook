@@ -299,6 +299,65 @@ void main() {
       expect(nearBottom.forwardChapterIndex, 3);
     });
 
+    test('prefetches next continuous chapter before the hard edge', () {
+      final loaded = <ReaderContinuousTextChapter>[
+        ReaderContinuousTextChapter(
+          chapterId: 'chapter-2',
+          chapterUrl: 'chapter://2',
+          chapterTitle: '第二章',
+          displayTitle: '第二章',
+          chapterIndex: 2,
+          content: '第二章内容',
+          document: ReaderDocument.fromContent(content: '第二章内容'),
+          paragraphs: <String>['第二章内容'],
+          isCached: false,
+        ),
+      ];
+
+      final plan = controller.resolveNeighborPrefetchPlan(
+        shouldUseContinuousTextFlow: true,
+        hasScrollClients: true,
+        loadedChapters: loaded,
+        isScrollEdgeAdvancingChapter: false,
+        isAutoReadAdvancingChapter: false,
+        viewport: const ReaderContinuousTextViewportMetrics(
+          pixels: 1280,
+          viewportDimension: 500,
+          maxScrollExtent: 2000,
+        ),
+        chapters: chapters,
+      );
+
+      expect(plan.forwardChapterIndex, 3);
+    });
+
+    test('keeps immediate continuous neighbor window warm around current', () {
+      final loaded = <ReaderContinuousTextChapter>[
+        ReaderContinuousTextChapter(
+          chapterId: 'chapter-2',
+          chapterUrl: 'chapter://2',
+          chapterTitle: '第二章',
+          displayTitle: '第二章',
+          chapterIndex: 2,
+          content: '第二章内容',
+          document: ReaderDocument.fromContent(content: '第二章内容'),
+          paragraphs: <String>['第二章内容'],
+          isCached: false,
+        ),
+      ];
+
+      final plan = controller.resolveImmediateNeighborWindowPlan(
+        shouldUseContinuousTextFlow: true,
+        loadedChapters: loaded,
+        isScrollEdgeAdvancingChapter: false,
+        isAutoReadAdvancingChapter: false,
+        chapters: chapters,
+      );
+
+      expect(plan.backwardChapterIndex, 0);
+      expect(plan.forwardChapterIndex, 3);
+    });
+
     test('resolves active continuous chapter from measured layouts', () {
       final loaded = <ReaderContinuousTextChapter>[
         ReaderContinuousTextChapter(

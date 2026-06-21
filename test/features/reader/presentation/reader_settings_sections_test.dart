@@ -119,6 +119,47 @@ void main() {
     expect(latest.infoFooterEnabled, isFalse);
   });
 
+  testWidgets('layout margin sliders commit after drag ends', (tester) async {
+    var latest = const ReaderSettings();
+
+    await tester.pumpWidget(
+      _wrap(
+        ReaderLayoutInfoSettingsPanel(
+          settings: latest,
+          groups: latest.grouped,
+          compactScale: 1,
+          marginControlStep: 1,
+          sliderBuilder: _sliderBuilder,
+          onChanged: (next) => latest = next,
+          formatLayoutMarginValue: (value) => value.toStringAsFixed(0),
+          letterSpacingSliderValue: (_) => 50,
+          letterSpacingValueLabel: (_) => '默认',
+          letterSpacingFromSliderValue:
+              (_) => ReaderSettings.defaultLetterSpacing,
+          lineHeightSliderValue: (_) => 10,
+          lineHeightValueLabel: (_) => '1.67',
+          lineHeightFromSliderValue:
+              ({required sliderValue, required settings}) => 1.67,
+          paragraphSpacingValueLabel: (_) => '2',
+          paragraphIndentValueLabel: (_) => '2',
+          readerBatteryReadFailed: false,
+        ),
+      ),
+    );
+
+    final firstSlider = tester.widget<Slider>(find.byType(Slider).first);
+    firstSlider.onChanged?.call(18);
+    await tester.pump();
+
+    expect(latest.bodyMarginTop, const ReaderSettings().bodyMarginTop);
+    expect(tester.widget<Slider>(find.byType(Slider).first).value, 18);
+
+    tester.widget<Slider>(find.byType(Slider).first).onChangeEnd?.call(18);
+    await tester.pump();
+
+    expect(latest.bodyMarginTop, 18);
+  });
+
   testWidgets('page turn settings panels render animation and interaction', (
     tester,
   ) async {
@@ -419,6 +460,7 @@ Widget _sliderBuilder({
   required int? divisions,
   required double value,
   required ValueChanged<double>? onChanged,
+  ValueChanged<double>? onChangeEnd,
   String? label,
 }) {
   return Slider(
@@ -428,5 +470,6 @@ Widget _sliderBuilder({
     value: value.clamp(min, max).toDouble(),
     label: label,
     onChanged: onChanged,
+    onChangeEnd: onChangeEnd,
   );
 }

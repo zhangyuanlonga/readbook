@@ -245,19 +245,22 @@ class ReaderViewportBuilder {
   Widget buildContinuousTextViewport({
     required Widget listView,
     required Key bodyKey,
+    required Widget Function({required Widget child}) selectionWrapper,
     ReaderTextScrollViewModel? shellModel,
     Widget? overlay,
   }) {
+    final content = KeyedSubtree(
+      key: bodyKey,
+      child: selectionWrapper(child: listView),
+    );
+
     if (shellModel == null) {
-      return Stack(
-        key: bodyKey,
-        children: [listView, if (overlay != null) overlay],
-      );
+      return Stack(children: [content, if (overlay != null) overlay]);
     }
 
     return ReaderTextScrollView(
       model: shellModel,
-      content: listView,
+      content: content,
       overlay: overlay,
     );
   }

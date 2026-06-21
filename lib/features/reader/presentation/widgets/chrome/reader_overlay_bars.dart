@@ -584,7 +584,7 @@ class ReaderAutoReadFloatingHint extends StatelessWidget {
   }
 }
 
-class ReaderBottomProgressStrip extends StatelessWidget {
+class ReaderBottomProgressStrip extends StatefulWidget {
   const ReaderBottomProgressStrip({
     super.key,
     required this.colors,
@@ -611,10 +611,53 @@ class ReaderBottomProgressStrip extends StatelessWidget {
   final ValueChanged<double> onChangeEnd;
 
   @override
+  State<ReaderBottomProgressStrip> createState() =>
+      _ReaderBottomProgressStripState();
+}
+
+class _ReaderBottomProgressStripState extends State<ReaderBottomProgressStrip> {
+  double? _draftValue;
+  bool _isDragging = false;
+
+  double get _effectiveProgressValue =>
+      (_draftValue ?? widget.progressValue).clamp(0.0, 1.0);
+
+  @override
+  void didUpdateWidget(covariant ReaderBottomProgressStrip oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_isDragging && widget.progressValue != oldWidget.progressValue) {
+      _draftValue = null;
+    }
+  }
+
+  void _handleChangeStart(double value) {
+    setState(() {
+      _isDragging = true;
+      _draftValue = value;
+    });
+    widget.onChangeStart(value);
+  }
+
+  void _handleChanged(double value) {
+    setState(() {
+      _draftValue = value;
+    });
+    widget.onChanged(value);
+  }
+
+  void _handleChangeEnd(double value) {
+    setState(() {
+      _isDragging = false;
+      _draftValue = value;
+    });
+    widget.onChangeEnd(value);
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Listener(
       behavior: HitTestBehavior.translucent,
-      onPointerDown: (_) => onPointerDown(),
+      onPointerDown: (_) => widget.onPointerDown(),
       child: Row(
         children: [
           IconButton(
@@ -623,10 +666,11 @@ class ReaderBottomProgressStrip extends StatelessWidget {
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 48, minHeight: 44),
             tooltip: '上一章',
-            onPressed: canNavigateChapters ? onPreviousChapter : null,
+            onPressed:
+                widget.canNavigateChapters ? widget.onPreviousChapter : null,
             icon: Icon(
               Icons.skip_previous_rounded,
-              color: colors.text,
+              color: widget.colors.text,
               size: 21,
             ),
           ),
@@ -636,18 +680,23 @@ class ReaderBottomProgressStrip extends StatelessWidget {
                 trackHeight: 3,
                 overlayShape: SliderComponentShape.noOverlay,
                 thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                activeTrackColor: colors.text,
-                inactiveTrackColor: colors.divider.withValues(alpha: 0.34),
-                thumbColor: colors.text,
+                activeTrackColor: widget.colors.text,
+                inactiveTrackColor: widget.colors.divider.withValues(
+                  alpha: 0.34,
+                ),
+                thumbColor: widget.colors.text,
               ),
               child: Slider(
                 min: 0,
                 max: 1,
                 divisions: 100,
-                value: progressValue,
-                onChangeStart: hasVisibleReaderContent ? onChangeStart : null,
-                onChanged: hasVisibleReaderContent ? onChanged : null,
-                onChangeEnd: hasVisibleReaderContent ? onChangeEnd : null,
+                value: _effectiveProgressValue,
+                onChangeStart:
+                    widget.hasVisibleReaderContent ? _handleChangeStart : null,
+                onChanged:
+                    widget.hasVisibleReaderContent ? _handleChanged : null,
+                onChangeEnd:
+                    widget.hasVisibleReaderContent ? _handleChangeEnd : null,
               ),
             ),
           ),
@@ -657,8 +706,12 @@ class ReaderBottomProgressStrip extends StatelessWidget {
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 48, minHeight: 44),
             tooltip: '下一章',
-            onPressed: canNavigateChapters ? onNextChapter : null,
-            icon: Icon(Icons.skip_next_rounded, color: colors.text, size: 21),
+            onPressed: widget.canNavigateChapters ? widget.onNextChapter : null,
+            icon: Icon(
+              Icons.skip_next_rounded,
+              color: widget.colors.text,
+              size: 21,
+            ),
           ),
         ],
       ),

@@ -553,6 +553,7 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
           return ReaderPagedPageFrame(
             pageSize: pageSize,
             includeBackgroundDecoration: includeBackgroundDecoration,
+            backgroundDecoration: _buildReaderBackgroundDecoration(colors),
             pinnedHeader:
                 _showsPagedPinnedChapterHeaderFor(_currentViewportKind)
                     ? SelectionContainer.disabled(

@@ -393,12 +393,12 @@ class ReaderContentLoadingController {
     }
 
     final prefetchBottomDistance = math.max(
-      240.0,
-      viewport.viewportDimension * 0.7,
+      720.0,
+      viewport.viewportDimension * 1.35,
     );
     final prefetchTopDistance = math.max(
-      120.0,
-      viewport.viewportDimension * 0.3,
+      360.0,
+      viewport.viewportDimension * 0.75,
     );
     final remainingBottom = viewport.maxScrollExtent - viewport.pixels;
 
@@ -419,6 +419,34 @@ class ReaderContentLoadingController {
                 forward: false,
               )
               : null,
+    );
+  }
+
+  ReaderContinuousTextNeighborPlan resolveImmediateNeighborWindowPlan({
+    required bool shouldUseContinuousTextFlow,
+    required List<ReaderContinuousTextChapter> loadedChapters,
+    required bool isScrollEdgeAdvancingChapter,
+    required bool isAutoReadAdvancingChapter,
+    required List<Chapter> chapters,
+  }) {
+    if (!shouldUseContinuousTextFlow ||
+        loadedChapters.isEmpty ||
+        isScrollEdgeAdvancingChapter ||
+        isAutoReadAdvancingChapter) {
+      return const ReaderContinuousTextNeighborPlan();
+    }
+
+    return ReaderContinuousTextNeighborPlan(
+      forwardChapterIndex: resolveAdjacentContinuousTextChapterIndex(
+        chapters: chapters,
+        loadedChapters: loadedChapters,
+        forward: true,
+      ),
+      backwardChapterIndex: resolveAdjacentContinuousTextChapterIndex(
+        chapters: chapters,
+        loadedChapters: loadedChapters,
+        forward: false,
+      ),
     );
   }
 

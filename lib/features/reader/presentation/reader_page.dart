@@ -862,6 +862,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool _isAutoReadAdvancingChapter = false;
   bool _isAutoReadHandlingBoundary = false;
   bool _isScrollStepAnimating = false;
+  int _scrollStepAnimationToken = 0;
+  bool _isUserScrollInteractionActive = false;
+  bool _isContinuousTextNeighborWarmupQueued = false;
+  bool _isContinuousTextNeighborWarmupActive = false;
   ReaderScrollEdgeAdvanceState _scrollEdgeAdvanceState =
       const ReaderScrollEdgeAdvanceState();
   DateTime? _lastPointerScrollPageTurnAt;
@@ -2526,6 +2530,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return _viewportBuilder.buildContinuousTextViewport(
       listView: listView,
       bodyKey: _readerBodyKey,
+      selectionWrapper: ({required child}) => _wrapSelectionArea(child: child),
       shellModel: _viewportBuilder.buildContinuousShellModel(
         contentSession: contentSession,
         settings: _settings,
@@ -2692,6 +2697,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           notification is ScrollEndNotification ||
           (notification is UserScrollNotification &&
               notification.direction == ScrollDirection.idle)) {
+        if (notification is ScrollEndNotification ||
+            notification is UserScrollNotification &&
+                notification.direction == ScrollDirection.idle) {
+          _isUserScrollInteractionActive = false;
+        }
         _resetScrollEdgeAdvanceState();
       }
       return false;
@@ -2703,6 +2713,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }
 
     if (notification is ScrollStartNotification) {
+      if (notification.dragDetails != null) {
+        _isUserScrollInteractionActive = true;
+      }
       _resetScrollEdgeAdvanceState();
       return false;
     }
@@ -2788,6 +2801,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     if (notification is ScrollEndNotification ||
         (notification is UserScrollNotification &&
             notification.direction == ScrollDirection.idle)) {
+      _isUserScrollInteractionActive = false;
       final isDragEnd =
           notification is ScrollEndNotification &&
           notification.dragDetails != null;
@@ -2811,6 +2825,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           _handleScrollEdgeChapterAction(_kScrollRefreshCurrentChapterAction),
         );
       }
+      _syncActiveContinuousTextChapterFromScroll();
     }
 
     return false;
@@ -2825,12 +2840,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       return;
     }
     if (_shouldUseContinuousTextFlow) {
-      _showMessage(
-        direction > 0 ? '正在加载下一章...' : '正在加载上一章...',
-        duration: const Duration(milliseconds: 900),
-        dedupeKey:
-            direction > 0 ? 'loading_next_chapter' : 'loading_prev_chapter',
-      );
       final chapter = await _loadAdjacentContinuousTextChapter(
         forward: direction > 0,
       );
@@ -2846,19 +2855,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   forward: direction > 0,
                 ) !=
                 null;
-        _showMessage(
-          hasAdjacent
-              ? (direction > 0 ? '下一章仍在加载，请稍后再试。' : '上一章仍在加载，请稍后再试。')
-              : (direction > 0 ? '已经是最后一章。' : '已经是第一章。'),
-          dedupeKey:
-              hasAdjacent
-                  ? (direction > 0
-                      ? 'next_chapter_loading_pending'
-                      : 'prev_chapter_loading_pending')
-                  : (direction > 0
-                      ? 'boundary_last_chapter'
-                      : 'boundary_first_chapter'),
-        );
+        if (!hasAdjacent) {
+          _showMessage(
+            direction > 0 ? '已经是最后一章。' : '已经是第一章。',
+            dedupeKey:
+                direction > 0
+                    ? 'boundary_last_chapter'
+                    : 'boundary_first_chapter',
+          );
+        }
       }
       return;
     }
@@ -4647,9 +4652,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   Widget _buildBottomProgressStrip(ReaderThemeColors colors) {
-    final progressValue = (_overlayController.bottomDraftProgressRatio ??
-            _safeCurrentScrollRatio())
-        .clamp(0.0, 1.0);
+    final progressValue = _safeCurrentScrollRatio().clamp(0.0, 1.0);
     final canNavigateChapters = _chapters.isNotEmpty;
 
     return ReaderBottomProgressStrip(
@@ -4675,16 +4678,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           ),
       onPointerDown: _markReaderTapHandledByChild,
       onChangeStart: (_) => _suspendOverlayAutoHide(),
-      onChanged: (value) {
+      onChanged: (_) {
         _touchOverlayControls();
-        setState(() {
-          _overlayController.bottomDraftProgressRatio = value;
-        });
       },
       onChangeEnd: (value) {
-        setState(() {
-          _overlayController.resetBottomDraftProgress();
-        });
+        _overlayController.resetBottomDraftProgress();
         final request = _navigationEntryResolver.resolveProgressSelection(
           scrollRatio: value,
         );

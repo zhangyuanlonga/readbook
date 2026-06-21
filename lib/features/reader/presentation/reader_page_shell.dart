@@ -78,7 +78,9 @@ extension _ReaderPageShellExtension on _ReaderPageState {
     ReaderPageTurnRequestSource source = ReaderPageTurnRequestSource.unknown,
     bool includeMangaPaged = true,
   }) async {
-    if (_overlayController.showOverlayControls) {
+    final shouldHideOverlayBeforeTurn =
+        _currentViewportKind != ReaderModeViewportKind.textScroll;
+    if (shouldHideOverlayBeforeTurn && _overlayController.showOverlayControls) {
       _hideOverlayControls(resumeAutoRead: false);
     }
     switch (_currentViewportKind) {
@@ -107,8 +109,28 @@ extension _ReaderPageShellExtension on _ReaderPageState {
   }
 
   Future<void> _advanceScrollReaderByStep({required bool forward}) async {
-    if (!_scrollController.hasClients || _isScrollStepAnimating) {
+    if (!_scrollController.hasClients) {
       return;
+    }
+
+    if (_isScrollStepAnimating) {
+      _scrollStepAnimationToken += 1;
+      _isScrollStepAnimating = false;
+      final currentOffset =
+          _scrollController.position.pixels
+              .clamp(
+                _scrollController.position.minScrollExtent,
+                _scrollController.position.maxScrollExtent,
+              )
+              .toDouble();
+      try {
+        _scrollController.jumpTo(currentOffset);
+      } catch (_) {
+        // Ignore interruptions from a detached scroll position.
+      }
+      if (!_scrollController.hasClients) {
+        return;
+      }
     }
 
     final position = _scrollController.position;
@@ -130,6 +152,7 @@ extension _ReaderPageShellExtension on _ReaderPageState {
             : max(current - distance, 0.0);
 
     if ((target - current).abs() >= 1.0) {
+      final animationToken = ++_scrollStepAnimationToken;
       _isScrollStepAnimating = true;
       try {
         await _scrollController.animateTo(
@@ -140,8 +163,14 @@ extension _ReaderPageShellExtension on _ReaderPageState {
       } catch (_) {
         // Ignore interrupted animations.
       } finally {
-        _isScrollStepAnimating = false;
+        if (animationToken == _scrollStepAnimationToken) {
+          _isScrollStepAnimating = false;
+        }
       }
+      if (animationToken != _scrollStepAnimationToken) {
+        return;
+      }
+      _syncActiveContinuousTextChapterFromScroll();
       _scheduleProgressSave();
       return;
     }

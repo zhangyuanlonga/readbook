@@ -108,6 +108,8 @@ class ReaderLayoutInfoSettingsPanel extends StatelessWidget {
           value: settings.bodyMarginTop,
           step: marginControlStep,
           valueLabel: formatLayoutMarginValue(settings.bodyMarginTop),
+          valueLabelBuilder: formatLayoutMarginValue,
+          deferChangedUntilEnd: true,
           onChanged:
               (value) => onChanged(settings.copyWith(bodyMarginTop: value)),
         ),
@@ -119,6 +121,8 @@ class ReaderLayoutInfoSettingsPanel extends StatelessWidget {
           value: settings.bodyMarginBottom,
           step: marginControlStep,
           valueLabel: formatLayoutMarginValue(settings.bodyMarginBottom),
+          valueLabelBuilder: formatLayoutMarginValue,
+          deferChangedUntilEnd: true,
           onChanged:
               (value) => onChanged(settings.copyWith(bodyMarginBottom: value)),
         ),
@@ -130,6 +134,8 @@ class ReaderLayoutInfoSettingsPanel extends StatelessWidget {
           value: settings.bodyMarginLeft,
           step: marginControlStep,
           valueLabel: formatLayoutMarginValue(settings.bodyMarginLeft),
+          valueLabelBuilder: formatLayoutMarginValue,
+          deferChangedUntilEnd: true,
           onChanged:
               (value) => onChanged(settings.copyWith(bodyMarginLeft: value)),
         ),
@@ -141,6 +147,8 @@ class ReaderLayoutInfoSettingsPanel extends StatelessWidget {
           value: settings.bodyMarginRight,
           step: marginControlStep,
           valueLabel: formatLayoutMarginValue(settings.bodyMarginRight),
+          valueLabelBuilder: formatLayoutMarginValue,
+          deferChangedUntilEnd: true,
           onChanged:
               (value) => onChanged(settings.copyWith(bodyMarginRight: value)),
         ),
@@ -277,6 +285,8 @@ class ReaderLayoutInfoSettingsPanel extends StatelessWidget {
           step: 0.01,
           valueLabel:
               (settings.chapterHeaderHorizontalOffset * 100).round().toString(),
+          valueLabelBuilder: (value) => (value * 100).round().toString(),
+          deferChangedUntilEnd: true,
           onChanged:
               (value) => onChanged(
                 settings.copyWith(chapterHeaderHorizontalOffset: value),
@@ -293,6 +303,8 @@ class ReaderLayoutInfoSettingsPanel extends StatelessWidget {
           value: settings.chapterHeaderVerticalOffset,
           step: 1,
           valueLabel: settings.chapterHeaderVerticalOffset.round().toString(),
+          valueLabelBuilder: (value) => value.round().toString(),
+          deferChangedUntilEnd: true,
           onChanged:
               (value) => onChanged(
                 settings.copyWith(chapterHeaderVerticalOffset: value),
@@ -416,6 +428,8 @@ class ReaderLayoutInfoSettingsPanel extends StatelessWidget {
       value: value,
       step: 1,
       valueLabel: value.round().toString(),
+      valueLabelBuilder: (value) => value.round().toString(),
+      deferChangedUntilEnd: true,
       onChanged: onChanged,
     );
   }
@@ -435,6 +449,8 @@ class ReaderLayoutInfoSettingsPanel extends StatelessWidget {
       value: value,
       step: 1,
       valueLabel: value.round().toString(),
+      valueLabelBuilder: (value) => value.round().toString(),
+      deferChangedUntilEnd: true,
       onChanged: onChanged,
     );
   }
@@ -448,6 +464,8 @@ class ReaderLayoutInfoSettingsPanel extends StatelessWidget {
     required String valueLabel,
     required ValueChanged<double> onChanged,
     double step = 1,
+    bool deferChangedUntilEnd = false,
+    String Function(double value)? valueLabelBuilder,
   }) {
     return ReaderTypographySliderRow(
       label: label,
@@ -459,6 +477,8 @@ class ReaderLayoutInfoSettingsPanel extends StatelessWidget {
       onChanged: onChanged,
       compactSheetScale: compactScale,
       step: step,
+      deferChangedUntilEnd: deferChangedUntilEnd,
+      valueLabelBuilder: valueLabelBuilder,
       sliderBuilder: sliderBuilder,
     );
   }

@@ -225,6 +225,7 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                       required int? divisions,
                       required double value,
                       required ValueChanged<double>? onChanged,
+                      ValueChanged<double>? onChangeEnd,
                       String? label,
                     }) {
                       return Slider(
@@ -240,10 +241,13 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                         onChangeEnd:
                             onChanged == null
                                 ? null
-                                : (_) => setSliderInteractionPreview(
-                                  false,
-                                  delayedRestore: true,
-                                ),
+                                : (value) {
+                                  setSliderInteractionPreview(
+                                    false,
+                                    delayedRestore: true,
+                                  );
+                                  onChangeEnd?.call(value);
+                                },
                         onChanged: onChanged,
                       );
                     }

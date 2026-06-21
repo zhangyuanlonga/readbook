@@ -248,11 +248,88 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
   }
 
   void _scheduleNeighborPreload() {
+    _scheduleContinuousTextNeighborWindowWarmup();
     if (_isLowPriorityReaderWorkPaused) {
       _interactionRuntimeController.markDeferredNeighborPreload();
       return;
     }
     _startNeighborPreloadNow();
+  }
+
+  void _scheduleContinuousTextNeighborWindowWarmup() {
+    if (!mounted ||
+        !_shouldUseContinuousTextFlow ||
+        _continuousTextChapters.isEmpty ||
+        _isContinuousTextNeighborWarmupQueued) {
+      return;
+    }
+
+    _isContinuousTextNeighborWarmupQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _isContinuousTextNeighborWarmupQueued = false;
+      if (!mounted) {
+        return;
+      }
+      unawaited(_warmContinuousTextNeighborWindow());
+    });
+  }
+
+  Future<void> _warmContinuousTextNeighborWindow() async {
+    if (_isContinuousTextNeighborWarmupActive ||
+        !_shouldUseContinuousTextFlow ||
+        _continuousTextChapters.isEmpty ||
+        _isScrollEdgeAdvancingChapter ||
+        _isAutoReadAdvancingChapter) {
+      return;
+    }
+
+    final plan = _contentLoadingController.resolveImmediateNeighborWindowPlan(
+      shouldUseContinuousTextFlow: _shouldUseContinuousTextFlow,
+      loadedChapters: _continuousTextChapters
+          .map(_toContinuousTextChapterSupportFlow)
+          .toList(growable: false),
+      isScrollEdgeAdvancingChapter: _isScrollEdgeAdvancingChapter,
+      isAutoReadAdvancingChapter: _isAutoReadAdvancingChapter,
+      chapters: _chapters,
+    );
+    if (!plan.hasWork) {
+      return;
+    }
+
+    _isContinuousTextNeighborWarmupActive = true;
+    var loadedAnyNeighbor = false;
+    try {
+      if (plan.forwardChapterIndex != null) {
+        final chapter = await _loadAdjacentContinuousTextChapter(forward: true);
+        loadedAnyNeighbor = chapter != null;
+      }
+      if (!mounted) {
+        return;
+      }
+      if (plan.backwardChapterIndex != null) {
+        final chapter = await _loadAdjacentContinuousTextChapter(
+          forward: false,
+        );
+        loadedAnyNeighbor = loadedAnyNeighbor || chapter != null;
+      }
+    } finally {
+      _isContinuousTextNeighborWarmupActive = false;
+      if (mounted && loadedAnyNeighbor) {
+        final followUpPlan = _contentLoadingController
+            .resolveImmediateNeighborWindowPlan(
+              shouldUseContinuousTextFlow: _shouldUseContinuousTextFlow,
+              loadedChapters: _continuousTextChapters
+                  .map(_toContinuousTextChapterSupportFlow)
+                  .toList(growable: false),
+              isScrollEdgeAdvancingChapter: _isScrollEdgeAdvancingChapter,
+              isAutoReadAdvancingChapter: _isAutoReadAdvancingChapter,
+              chapters: _chapters,
+            );
+        if (followUpPlan.hasWork) {
+          _scheduleContinuousTextNeighborWindowWarmup();
+        }
+      }
+    }
   }
 
   void _startNeighborPreloadNow() {
@@ -1233,8 +1310,11 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     }
 
     final position = _scrollController.position;
-    final prefetchBottomDistance = max(240.0, position.viewportDimension * 0.7);
-    final prefetchTopDistance = max(120.0, position.viewportDimension * 0.3);
+    final prefetchBottomDistance = max(
+      720.0,
+      position.viewportDimension * 1.35,
+    );
+    final prefetchTopDistance = max(360.0, position.viewportDimension * 0.75);
     final remainingBottom = position.maxScrollExtent - position.pixels;
 
     if (remainingBottom <= prefetchBottomDistance) {
@@ -1839,14 +1919,15 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       );
     }
 
-    await _waitForCrossChapterSnapshotTarget(
+    final targetReady = await _waitForCrossChapterSnapshotTarget(
       generation: generation,
       targetChapterIndex: targetChapterIndex,
     );
     if (!mounted ||
         !_pageTurnRuntimeController.isCrossChapterSnapshotGenerationActive(
           generation,
-        )) {
+        ) ||
+        _currentIndex != targetChapterIndex) {
       _clearCrossChapterSnapshotTransition();
       _scheduleReaderInteractionSettle();
       return ReaderPageTurnResult(
@@ -1856,11 +1937,25 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
         rejectReason: ReaderPageTurnRejectReason.crossChapterCancelled,
       );
     }
+    if (!targetReady) {
+      _clearCrossChapterSnapshotTransition(setStateIfNeeded: true);
+      _recordFirstPageTurnCompleted(mode: completionMode);
+      _syncActiveReadingRecordSessionProgress();
+      _scheduleProgressSave();
+      _scheduleReaderInteractionSettle();
+      return ReaderPageTurnResult(
+        type: ReaderPageTurnResultType.fallbackCommitted,
+        request: plan.request,
+        executionType: ReaderPageTurnExecutionType.crossChapter,
+      );
+    }
 
     final toImage = await _captureReaderContentSnapshot();
     if (toImage == null) {
-      _clearCrossChapterSnapshotTransition();
+      _clearCrossChapterSnapshotTransition(setStateIfNeeded: true);
       _recordFirstPageTurnCompleted(mode: completionMode);
+      _syncActiveReadingRecordSessionProgress();
+      _scheduleProgressSave();
       _scheduleReaderInteractionSettle();
       return ReaderPageTurnResult(
         type: ReaderPageTurnResultType.fallbackCommitted,
@@ -1935,28 +2030,30 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     return renderObject.toImage(pixelRatio: pixelRatio);
   }
 
-  Future<void> _waitForCrossChapterSnapshotTarget({
+  Future<bool> _waitForCrossChapterSnapshotTarget({
     required int generation,
     required int targetChapterIndex,
   }) async {
-    const maxFrames = 60;
-    for (var frame = 0; frame < maxFrames; frame++) {
-      if (!mounted ||
-          !_pageTurnRuntimeController.isCrossChapterSnapshotGenerationActive(
-            generation,
-          ) ||
-          _currentIndex != targetChapterIndex) {
-        return;
-      }
-      final hasPagedContent = _currentPagedPageCount > 0;
-      if (!_isLoadingContent &&
-          !_pageTurnRuntimeController.pagedPaginationState.isPaginating &&
-          hasPagedContent) {
-        await WidgetsBinding.instance.endOfFrame;
-        return;
-      }
-      await WidgetsBinding.instance.endOfFrame;
+    if (!mounted ||
+        !_pageTurnRuntimeController.isCrossChapterSnapshotGenerationActive(
+          generation,
+        ) ||
+        _currentIndex != targetChapterIndex ||
+        _isLoadingContent ||
+        _pageTurnRuntimeController.pagedPaginationState.isPaginating ||
+        _currentPagedPageCount <= 0) {
+      return false;
     }
+
+    await WidgetsBinding.instance.endOfFrame;
+    return mounted &&
+        _pageTurnRuntimeController.isCrossChapterSnapshotGenerationActive(
+          generation,
+        ) &&
+        _currentIndex == targetChapterIndex &&
+        !_isLoadingContent &&
+        !_pageTurnRuntimeController.pagedPaginationState.isPaginating &&
+        _currentPagedPageCount > 0;
   }
 
   void _startCrossChapterSnapshotTransition({

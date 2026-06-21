@@ -98,6 +98,7 @@ dependencies:
   epub_pro: ^5.6.0
   ambient_effects_container: ^0.2.0
   dynamic_app_icon_flutter_plus: ^1.0.0
+  first_run_kit: ^1.1.3
 
 dev_dependencies:
   flutter_test:

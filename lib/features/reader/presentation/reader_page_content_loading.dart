@@ -607,7 +607,10 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
   }
 
   void _syncActiveContinuousTextChapterFromScrollFlow() {
-    if (!_shouldUseContinuousTextFlow || _continuousTextChapters.length <= 1) {
+    if (!_shouldUseContinuousTextFlow ||
+        _continuousTextChapters.length <= 1 ||
+        _isScrollStepAnimating ||
+        _isUserScrollInteractionActive) {
       return;
     }
 
@@ -660,6 +663,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
         seeded.map(_fromContinuousTextChapterSupportFlow),
       );
     });
+    _scheduleContinuousTextNeighborWindowWarmup();
   }
 
   Future<ReaderPageChapterLoadSnapshot> _fetchChapterContentSnapshotFlow({
@@ -941,6 +945,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
           _bootstrapProgress = null;
         }
         _restoreScrollPosition(previewRatio);
+        _scheduleNeighborPreload();
         _scheduleReadingRecordSessionStart(initialRatio: previewRatio);
         return true;
       } catch (_) {
@@ -1026,6 +1031,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
         _bootstrapProgress = null;
       }
       _restoreScrollPosition(previewRatio);
+      _scheduleNeighborPreload();
       _scheduleReadingRecordSessionStart(initialRatio: previewRatio);
       return true;
     } catch (_) {

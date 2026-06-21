@@ -254,7 +254,10 @@ class ReaderPagedPageFrame extends StatelessWidget {
     this.footer,
     this.backgroundDecoration,
     this.includeBackgroundDecoration = false,
-  });
+  }) : assert(
+         !includeBackgroundDecoration || backgroundDecoration != null,
+         'backgroundDecoration is required when background decoration is enabled.',
+       );
 
   final Size pageSize;
   final Widget body;

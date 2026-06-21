@@ -13,6 +13,8 @@ import '../features/bookshelf/routes.dart';
 import '../features/discover/routes.dart';
 import '../features/mine/routes.dart';
 import '../features/mine/providers.dart';
+import '../features/onboarding/application/onboarding_first_run_bootstrap.dart';
+import '../features/onboarding/routes.dart';
 import '../features/reader/routes.dart';
 import '../features/search/routes.dart';
 import '../features/source/routes.dart';
@@ -48,6 +50,7 @@ final GoRouter appRouter = GoRouter(
     ...authRoutes,
     ...searchRoutes,
     ...sourceRoutes,
+    ...onboardingRoutes,
     ...bookshelfRoutes,
     ...bookRoutes,
     ...readerRoutes,
@@ -55,6 +58,9 @@ final GoRouter appRouter = GoRouter(
 );
 
 String resolveAppRootStartupLocation(BuildContext context) {
+  if (OnboardingFirstRunBootstrap.shouldShowOnboardingSync()) {
+    return '/onboarding';
+  }
   if (AppLayout.isDesktopLike(
     context,
     isWeb: kIsWeb,

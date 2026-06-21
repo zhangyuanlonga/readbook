@@ -7,6 +7,7 @@ typedef ReaderPreviewAwareSliderBuilder =
       required int? divisions,
       required double value,
       required ValueChanged<double>? onChanged,
+      ValueChanged<double>? onChangeEnd,
       String? label,
     });
 
@@ -15,7 +16,7 @@ typedef ReaderPreviewAwareSliderBuilder =
 /// 这个 widget 只负责展示标签、加减按钮、滑杆和值文本，不读取阅读器状态，
 /// 也不直接持久化配置。调用方把预览感知滑杆 builder 传进来，保留原来的
 /// 拖动预览 / 延迟恢复逻辑，同时让超大 settings sheet 少承担一块 UI 细节。
-class ReaderTypographySliderRow extends StatelessWidget {
+class ReaderTypographySliderRow extends StatefulWidget {
   const ReaderTypographySliderRow({
     super.key,
     required this.label,
@@ -29,6 +30,8 @@ class ReaderTypographySliderRow extends StatelessWidget {
     this.compactSheetScale = 1,
     this.step = 1,
     this.showValueLabel = true,
+    this.deferChangedUntilEnd = false,
+    this.valueLabelBuilder,
   });
 
   final String label;
@@ -42,17 +45,69 @@ class ReaderTypographySliderRow extends StatelessWidget {
   final double compactSheetScale;
   final double step;
   final bool showValueLabel;
+  final bool deferChangedUntilEnd;
+  final String Function(double value)? valueLabelBuilder;
 
-  double _scale(double value) => value * compactSheetScale;
+  @override
+  State<ReaderTypographySliderRow> createState() =>
+      _ReaderTypographySliderRowState();
+}
+
+class _ReaderTypographySliderRowState extends State<ReaderTypographySliderRow> {
+  double? _draftValue;
+  bool _isDragging = false;
+
+  double get _safeValue =>
+      (_draftValue ?? widget.value).clamp(widget.min, widget.max).toDouble();
+
+  String get _safeValueLabel =>
+      widget.valueLabelBuilder?.call(_safeValue) ?? widget.valueLabel;
+
+  double _scale(double value) => value * widget.compactSheetScale;
+
+  @override
+  void didUpdateWidget(covariant ReaderTypographySliderRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_isDragging && widget.value != oldWidget.value) {
+      _draftValue = null;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final safeValue = value.clamp(min, max).toDouble();
+    final safeValue = _safeValue;
+    final safeValueLabel = _safeValueLabel;
     final textScale = MediaQuery.textScalerOf(context).scale(1);
 
     void nudge(double delta) {
-      final next = (safeValue + delta).clamp(min, max).toDouble();
-      onChanged(next);
+      final next = (safeValue + delta).clamp(widget.min, widget.max).toDouble();
+      setState(() {
+        _isDragging = false;
+        _draftValue = null;
+      });
+      widget.onChanged(next);
+    }
+
+    void handleSliderChanged(double next) {
+      if (!widget.deferChangedUntilEnd) {
+        widget.onChanged(next);
+        return;
+      }
+      setState(() {
+        _isDragging = true;
+        _draftValue = next;
+      });
+    }
+
+    void handleSliderChangeEnd(double next) {
+      if (!widget.deferChangedUntilEnd) {
+        return;
+      }
+      setState(() {
+        _isDragging = false;
+        _draftValue = next;
+      });
+      widget.onChanged(next);
     }
 
     Widget controls({required bool stacked}) {
@@ -62,11 +117,11 @@ class ReaderTypographySliderRow extends StatelessWidget {
             SizedBox(
               width: _scale(28),
               child: Text(
-                label,
+                widget.label,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   fontSize:
                       (Theme.of(context).textTheme.bodySmall?.fontSize ?? 12) *
-                      compactSheetScale *
+                      widget.compactSheetScale *
                       0.95,
                 ),
               ),
@@ -78,16 +133,17 @@ class ReaderTypographySliderRow extends StatelessWidget {
               minWidth: _scale(28),
               minHeight: _scale(28),
             ),
-            onPressed: () => nudge(-step),
+            onPressed: () => nudge(-widget.step),
             icon: Icon(Icons.remove_rounded, size: _scale(16)),
           ),
           Expanded(
-            child: sliderBuilder(
-              min: min,
-              max: max,
-              divisions: divisions,
+            child: widget.sliderBuilder(
+              min: widget.min,
+              max: widget.max,
+              divisions: widget.divisions,
               value: safeValue,
-              onChanged: onChanged,
+              onChanged: handleSliderChanged,
+              onChangeEnd: handleSliderChangeEnd,
             ),
           ),
           IconButton(
@@ -96,19 +152,19 @@ class ReaderTypographySliderRow extends StatelessWidget {
               minWidth: _scale(28),
               minHeight: _scale(28),
             ),
-            onPressed: () => nudge(step),
+            onPressed: () => nudge(widget.step),
             icon: Icon(Icons.add_rounded, size: _scale(16)),
           ),
-          if (showValueLabel && !stacked)
+          if (widget.showValueLabel && !stacked)
             SizedBox(
               width: _scale(54),
               child: Text(
-                valueLabel,
+                safeValueLabel,
                 textAlign: TextAlign.right,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   fontSize:
                       (Theme.of(context).textTheme.bodySmall?.fontSize ?? 12) *
-                      compactSheetScale *
+                      widget.compactSheetScale *
                       0.94,
                 ),
               ),
@@ -122,26 +178,26 @@ class ReaderTypographySliderRow extends StatelessWidget {
         children: [
           Expanded(
             child: Text(
-              label,
+              widget.label,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 fontWeight: FontWeight.w600,
                 fontSize:
                     (Theme.of(context).textTheme.bodySmall?.fontSize ?? 12) *
-                    compactSheetScale *
+                    widget.compactSheetScale *
                     0.95,
               ),
             ),
           ),
-          if (showValueLabel)
+          if (widget.showValueLabel)
             Text(
-              valueLabel,
+              safeValueLabel,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
                 fontSize:
                     (Theme.of(context).textTheme.bodySmall?.fontSize ?? 12) *
-                    compactSheetScale *
+                    widget.compactSheetScale *
                     0.94,
               ),
             ),

@@ -15,6 +15,7 @@ import '../features/mine/application/advanced_theme_provider.dart';
 import '../features/mine/application/advanced_theme_service.dart';
 import '../features/mine/application/mine_page_session_service.dart';
 import '../features/mine/providers.dart';
+import '../features/onboarding/application/onboarding_first_run_bootstrap.dart';
 import '../core/app_data_migrator.dart';
 import '../core/auth/auth_install_recovery_service.dart';
 import '../features/reader/application/reader_font_registry_service.dart';
@@ -40,6 +41,7 @@ Future<void> bootstrap() async {
   unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
   _configureImagePicker();
   final prefs = await SharedPreferences.getInstance();
+  await OnboardingFirstRunBootstrap.preserveExistingInstallState(prefs);
   await AuthInstallRecoveryService(
     preferences: prefs,
   ).clearAuthStateIfFreshInstall();
@@ -68,6 +70,7 @@ void primeBootstrappedPreferences(SharedPreferences prefs) {
   AppThemeModeNotifier.prime(prefs);
   AppSeedColorNotifier.prime(prefs);
   AppBaseColorSchemeNotifier.prime(prefs);
+  OnboardingFirstRunBootstrap.prime(prefs);
   ActiveAdvancedThemeIdNotifier.prime(prefs);
   ActiveThemeAppearanceSnapshotNotifier.prime(prefs);
   MinePageSessionPriming.prime(prefs);

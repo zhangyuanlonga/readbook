@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shuxiang_reading_next/domain/entities/reader_settings.dart';
 import 'package:shuxiang_reading_next/features/reader/application/reader_layout_resolver.dart';
+import 'package:shuxiang_reading_next/features/reader/presentation/reader_page_support_models.dart';
 import 'package:shuxiang_reading_next/features/reader/presentation/widgets/chrome/reader_chrome_widgets.dart';
+import 'package:shuxiang_reading_next/features/reader/presentation/widgets/chrome/reader_overlay_bars.dart';
 
 void main() {
   group('ReaderInfoBar', () {
@@ -75,6 +77,54 @@ void main() {
 
       expect(model.outerPadding, const EdgeInsets.fromLTRB(6, 2, 8, 22));
       expect(model.hasContent, isTrue);
+    });
+  });
+
+  group('ReaderBottomProgressStrip', () {
+    const colors = ReaderThemeColors(
+      background: Colors.white,
+      text: Colors.black,
+      meta: Colors.black54,
+      divider: Colors.black12,
+      overlay: Colors.white,
+    );
+
+    testWidgets('keeps drag progress locally until parent commits', (
+      tester,
+    ) async {
+      final changedValues = <double>[];
+      double? committedValue;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ReaderBottomProgressStrip(
+              colors: colors,
+              progressValue: 0.2,
+              canNavigateChapters: true,
+              hasVisibleReaderContent: true,
+              onPreviousChapter: () {},
+              onNextChapter: () {},
+              onPointerDown: () {},
+              onChangeStart: (_) {},
+              onChanged: changedValues.add,
+              onChangeEnd: (value) => committedValue = value,
+            ),
+          ),
+        ),
+      );
+
+      tester.widget<Slider>(find.byType(Slider)).onChanged?.call(0.74);
+      await tester.pump();
+
+      expect(changedValues, <double>[0.74]);
+      expect(tester.widget<Slider>(find.byType(Slider)).value, 0.74);
+
+      tester.widget<Slider>(find.byType(Slider)).onChangeEnd?.call(0.74);
+      await tester.pump();
+
+      expect(committedValue, 0.74);
+      expect(tester.widget<Slider>(find.byType(Slider)).value, 0.74);
     });
   });
 }

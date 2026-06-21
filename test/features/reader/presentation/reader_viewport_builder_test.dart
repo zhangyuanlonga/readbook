@@ -134,5 +134,28 @@ void main() {
       );
       expect(find.text('暂无正文'), findsNothing);
     });
+
+    testWidgets('wraps continuous scroll viewport in a single selection area', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: builder.buildContinuousTextViewport(
+              listView: const Text('正文'),
+              bodyKey: const Key('reader-body'),
+              selectionWrapper:
+                  ({required child}) => SelectionArea(child: child),
+              overlay: const Text('工具层'),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byKey(const Key('reader-body')), findsOneWidget);
+      expect(find.byType(SelectionArea), findsOneWidget);
+      expect(find.text('正文'), findsOneWidget);
+      expect(find.text('工具层'), findsOneWidget);
+    });
   });
 }

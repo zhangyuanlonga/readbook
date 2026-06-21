@@ -210,6 +210,20 @@ void main() {
   });
 
   group('ReaderPagedPageFrame', () {
+    test(
+      'requires a background decoration when page background is enabled',
+      () {
+        expect(
+          () => ReaderPagedPageFrame(
+            pageSize: const Size(300, 400),
+            includeBackgroundDecoration: true,
+            body: const Text('body'),
+          ),
+          throwsAssertionError,
+        );
+      },
+    );
+
     testWidgets('renders frame sections and optional decoration', (
       tester,
     ) async {

@@ -39,10 +39,7 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
       ],
     );
 
-    return KeyedSubtree(
-      key: _continuousTextChapterKey(chapter),
-      child: isActive ? _wrapSelectionArea(child: body) : body,
-    );
+    return KeyedSubtree(key: _continuousTextChapterKey(chapter), child: body);
   }
 
   Widget _buildStaticParagraphItem({
