@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import '../../../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../../../app/widgets/foundation/app_button.dart';
 import '../../../../../domain/entities/reader_settings.dart';
+import '../../reader_icons.dart';
 
 Future<void> showReaderTapZoneEditorSheet({
   required BuildContext context,
@@ -42,14 +43,14 @@ String readerTapZoneActionLabel(ReaderTapZoneAction action) {
 
 IconData readerTapZoneActionIcon(ReaderTapZoneAction action) {
   return switch (action) {
-    ReaderTapZoneAction.previousPage => Icons.chevron_left_rounded,
-    ReaderTapZoneAction.nextPage => Icons.chevron_right_rounded,
-    ReaderTapZoneAction.toggleToolbar => Icons.tune_rounded,
-    ReaderTapZoneAction.catalog => Icons.list_alt_outlined,
-    ReaderTapZoneAction.autoRead => Icons.play_circle_outline_rounded,
-    ReaderTapZoneAction.bookmark => Icons.bookmark_outline_rounded,
-    ReaderTapZoneAction.nightMode => Icons.dark_mode_rounded,
-    ReaderTapZoneAction.none => Icons.block_rounded,
+    ReaderTapZoneAction.previousPage => ReaderIcons.previousPage,
+    ReaderTapZoneAction.nextPage => ReaderIcons.nextPage,
+    ReaderTapZoneAction.toggleToolbar => ReaderIcons.settings,
+    ReaderTapZoneAction.catalog => ReaderIcons.catalog,
+    ReaderTapZoneAction.autoRead => ReaderIcons.autoRead,
+    ReaderTapZoneAction.bookmark => ReaderIcons.bookmark,
+    ReaderTapZoneAction.nightMode => ReaderIcons.nightMode,
+    ReaderTapZoneAction.none => ReaderIcons.noAction,
   };
 }
 
@@ -104,7 +105,7 @@ class _ReaderTapZoneEditorContentState
                     title: Text(readerTapZoneActionLabel(action)),
                     trailing:
                         _localActions[index] == action
-                            ? const Icon(Icons.check_rounded)
+                            ? const Icon(ReaderIcons.selected)
                             : null,
                     onTap: () => Navigator.of(menuContext).pop(action),
                   ),

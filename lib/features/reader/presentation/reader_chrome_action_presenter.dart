@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'reader_icons.dart';
+
 enum ReaderChromeAutoReadStatus {
   off,
   running,
@@ -49,7 +51,7 @@ class ReaderChromeActionPresenter {
 
   ReaderChromeActionData dayNightAction({required bool isDarkMode}) {
     return ReaderChromeActionData(
-      icon: isDarkMode ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+      icon: isDarkMode ? ReaderIcons.dayMode : ReaderIcons.nightMode,
       label: isDarkMode ? '日间' : '夜间',
       tooltip: isDarkMode ? '切换日间模式' : '切换夜间模式',
       active: isDarkMode,
@@ -60,8 +62,8 @@ class ReaderChromeActionPresenter {
     return ReaderChromeActionData(
       icon:
           status == ReaderChromeAutoReadStatus.running
-              ? Icons.pause_circle_filled_rounded
-              : Icons.play_circle_outline_rounded,
+              ? ReaderIcons.pause
+              : ReaderIcons.play,
       label: switch (status) {
         ReaderChromeAutoReadStatus.running => '暂停',
         ReaderChromeAutoReadStatus.paused ||
@@ -110,17 +112,14 @@ class ReaderChromeActionPresenter {
       if (canCacheChapter)
         ReaderChromeTopMoreActionData(
           kind: ReaderChromeTopMoreActionKind.cacheChapter,
-          icon:
-              isCurrentChapterCached
-                  ? Icons.cloud_done_rounded
-                  : Icons.cloud_download_outlined,
+          icon: isCurrentChapterCached ? ReaderIcons.cached : ReaderIcons.cache,
           title: isCurrentChapterCached ? '已缓存章节' : '缓存章节',
           enabled: !isCurrentChapterCached,
         ),
       if (canSwitchSource)
         ReaderChromeTopMoreActionData(
           kind: ReaderChromeTopMoreActionKind.switchSource,
-          icon: Icons.swap_horiz_rounded,
+          icon: ReaderIcons.switchSource,
           title: isSwitchSourceLoading ? '换源中...' : '切换书源',
           enabled: !isSwitchSourceLoading,
           loading: isSwitchSourceLoading,
@@ -128,7 +127,9 @@ class ReaderChromeActionPresenter {
       ReaderChromeTopMoreActionData(
         kind: ReaderChromeTopMoreActionKind.toggleBookshelf,
         icon:
-            isInBookshelf ? Icons.bookmark_added : Icons.bookmark_add_outlined,
+            isInBookshelf
+                ? ReaderIcons.bookshelfAdded
+                : ReaderIcons.bookshelfAdd,
         title: isInBookshelf ? '从书架移除' : '加入书架',
         enabled: !isShelfActionLoading,
         loading: isShelfActionLoading,

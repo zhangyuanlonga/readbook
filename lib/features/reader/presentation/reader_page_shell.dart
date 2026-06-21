@@ -964,7 +964,7 @@ extension _ReaderPageShellExtension on _ReaderPageState {
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: Icon(
-                        Icons.auto_mode_rounded,
+                        ReaderIcons.autoReadPanel,
                         color: colorScheme.onPrimaryContainer,
                       ),
                     ),
@@ -1048,7 +1048,7 @@ extension _ReaderPageShellExtension on _ReaderPageState {
                     Expanded(
                       child: _buildAutoReadControlButton(
                         context: context,
-                        icon: Icons.list_alt_outlined,
+                        icon: ReaderIcons.catalog,
                         label: '目录',
                         action: _ReaderAutoReadControlAction.catalog,
                       ),
@@ -1058,9 +1058,7 @@ extension _ReaderPageShellExtension on _ReaderPageState {
                       child: _buildAutoReadControlButton(
                         context: context,
                         icon:
-                            canContinue
-                                ? Icons.play_arrow_rounded
-                                : Icons.pause_rounded,
+                            canContinue ? ReaderIcons.play : ReaderIcons.pause,
                         label: canContinue ? '继续' : '暂停',
                         action: _ReaderAutoReadControlAction.toggle,
                       ),
@@ -1069,7 +1067,7 @@ extension _ReaderPageShellExtension on _ReaderPageState {
                     Expanded(
                       child: _buildAutoReadControlButton(
                         context: context,
-                        icon: Icons.tune_rounded,
+                        icon: ReaderIcons.settings,
                         label: '设置',
                         action: _ReaderAutoReadControlAction.settings,
                       ),
@@ -1078,7 +1076,7 @@ extension _ReaderPageShellExtension on _ReaderPageState {
                     Expanded(
                       child: _buildAutoReadControlButton(
                         context: context,
-                        icon: Icons.close_rounded,
+                        icon: ReaderIcons.close,
                         label: '退出',
                         action: _ReaderAutoReadControlAction.exit,
                         destructive: true,

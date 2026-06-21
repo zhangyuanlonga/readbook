@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../../../../app/widgets/foundation/app_button.dart';
 import '../../../../../domain/entities/reader_settings.dart';
 import '../../../application/reader_mode_model.dart';
+import '../../reader_icons.dart';
 import 'reader_settings_components.dart';
 import 'reader_tap_zone_editor_sheet.dart';
 
@@ -162,7 +163,7 @@ class ReaderPageTurnInteractionSettingsPanel extends StatelessWidget {
         AppButton(
           variant: AppButtonVariant.secondary,
           onPressed: onOpenTapZoneEditor,
-          icon: const Icon(Icons.grid_view_rounded, size: 16),
+          icon: const Icon(ReaderIcons.tapZone, size: 16),
           label: '编辑 3×3 分区',
         ),
         const SizedBox(height: 8),
@@ -191,7 +192,7 @@ class ReaderReadingBehaviorSettingsPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ReaderSettingsSectionCard(
-      icon: Icons.toggle_on_rounded,
+      icon: ReaderIcons.quickToggles,
       title: '快捷开关',
       compactScale: compactScale,
       children: [

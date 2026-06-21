@@ -188,6 +188,7 @@ import 'reader_layout_release_surface.dart';
 import 'reader_layout_renderer_preview_surface.dart';
 import 'paged_animation/curl_paged_animation_renderer.dart';
 import 'paged_animation/reader_paged_animation_surface.dart';
+import 'reader_icons.dart';
 import 'reader_interaction_coordinator.dart';
 import 'reader_pdf_view.dart';
 import 'reader_paper_curl_paged_view.dart';

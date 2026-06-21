@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'reader_annotation_controller.dart';
+import 'reader_icons.dart';
 import 'reader_page_support_models.dart';
 
 typedef ReaderSelectionToolbarActionCallback =
@@ -28,25 +29,24 @@ class ReaderSelectionToolbarPresenter {
   IconData iconForAction(ReaderAnnotationToolbarAction action) {
     if (action.kind == ReaderAnnotationToolbarActionKind.saveOrRemoveBookmark &&
         action.isDestructive) {
-      return Icons.delete_outline_rounded;
+      return ReaderIcons.delete;
     }
     return iconFor(action.kind);
   }
 
   IconData iconFor(ReaderAnnotationToolbarActionKind kind) {
     return switch (kind) {
-      ReaderAnnotationToolbarActionKind.copy => Icons.copy_all_rounded,
+      ReaderAnnotationToolbarActionKind.copy => ReaderIcons.copy,
       ReaderAnnotationToolbarActionKind.saveOrRemoveBookmark =>
-        Icons.lightbulb_outline_rounded,
-      ReaderAnnotationToolbarActionKind.editNote => Icons.edit_note_rounded,
+        ReaderIcons.inspiration,
+      ReaderAnnotationToolbarActionKind.editNote => ReaderIcons.note,
       ReaderAnnotationToolbarActionKind.toggleHighlight =>
-        Icons.highlight_alt_rounded,
-      ReaderAnnotationToolbarActionKind.toggleBold => Icons.format_bold_rounded,
+        ReaderIcons.highlight,
+      ReaderAnnotationToolbarActionKind.toggleBold => ReaderIcons.bold,
       ReaderAnnotationToolbarActionKind.toggleUnderline =>
-        Icons.format_underlined_rounded,
-      ReaderAnnotationToolbarActionKind.toggleWavy =>
-        Icons.multiline_chart_rounded,
-      ReaderAnnotationToolbarActionKind.clearSelection => Icons.close_rounded,
+        ReaderIcons.underline,
+      ReaderAnnotationToolbarActionKind.toggleWavy => ReaderIcons.wavyUnderline,
+      ReaderAnnotationToolbarActionKind.clearSelection => ReaderIcons.close,
     };
   }
 }

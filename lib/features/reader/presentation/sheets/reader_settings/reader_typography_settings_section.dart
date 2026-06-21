@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../../../app/theme/app_component_theme_tokens.dart';
 import '../../../../../app/widgets/foundation/app_button.dart';
 import '../../../../../domain/entities/reader_settings.dart';
+import '../../reader_icons.dart';
 import '../../widgets/reader_typography_slider_row.dart';
 import 'reader_settings_components.dart';
 
@@ -60,7 +61,7 @@ class ReaderTypographySettingsPanel extends StatelessWidget {
                 child: ConstrainedBox(
                   constraints: BoxConstraints(maxWidth: _scale(180)),
                   child: _ReaderSettingsSecondaryCapsule(
-                    icon: Icons.font_download_outlined,
+                    icon: ReaderIcons.fontLibrary,
                     title: currentFontLabel,
                     compactScale: compactScale,
                     onTap: onOpenFontPicker,
@@ -69,7 +70,7 @@ class ReaderTypographySettingsPanel extends StatelessWidget {
               ),
               SizedBox(width: _scale(8)),
               _ReaderSettingsIconCapsule(
-                icon: Icons.open_in_new_rounded,
+                icon: ReaderIcons.fontManage,
                 tooltip: '管理字体',
                 compactScale: compactScale,
                 onTap: onManageFonts,
@@ -82,7 +83,7 @@ class ReaderTypographySettingsPanel extends StatelessWidget {
           label: '字重',
           compactScale: compactScale,
           child: _ReaderSettingsSecondaryCapsule(
-            icon: Icons.line_weight_rounded,
+            icon: ReaderIcons.fontWeight,
             title: fontWeightLabel,
             compactScale: compactScale,
             onTap: onOpenFontWeightSheet,

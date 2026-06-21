@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../../../../../app/widgets/foundation/foundation.dart';
+import '../../reader_icons.dart';
 
 const double _readerOverlayBlurSigma = 8;
 
@@ -260,7 +261,7 @@ class ReaderBottomOverlayWidget extends StatelessWidget {
                                       ? onPreviousChapter
                                       : null,
                               icon: Icon(
-                                Icons.skip_previous_rounded,
+                                ReaderIcons.previousChapter,
                                 color: palette.text,
                                 size: 22,
                               ),
@@ -301,7 +302,7 @@ class ReaderBottomOverlayWidget extends StatelessWidget {
                               onPressed:
                                   canNavigateChapters ? onNextChapter : null,
                               icon: Icon(
-                                Icons.skip_next_rounded,
+                                ReaderIcons.nextChapter,
                                 color: palette.text,
                                 size: 22,
                               ),

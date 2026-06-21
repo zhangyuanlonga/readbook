@@ -12,6 +12,7 @@ import '../../../app/layout/app_spacing.dart';
 import '../../../app/widgets/foundation/foundation.dart';
 import '../../../domain/entities/chapter.dart';
 import '../application/chapter_cache_service.dart';
+import 'reader_icons.dart';
 
 class ChapterCacheEntryPoint {
   const ChapterCacheEntryPoint._(this.name);
@@ -189,12 +190,12 @@ class _ChapterCacheRangeSheetState extends State<_ChapterCacheRangeSheet> {
               children: [
                 _buildInfoChip(
                   context,
-                  icon: Icons.library_books_rounded,
+                  icon: ReaderIcons.chapters,
                   label: '共 ${widget.totalChapters} 章',
                 ),
                 _buildInfoChip(
                   context,
-                  icon: Icons.download_for_offline_rounded,
+                  icon: ReaderIcons.cache,
                   label: '本次缓存 $selectedCount 章',
                 ),
               ],
@@ -429,7 +430,7 @@ class _ChapterCacheRangeSheetState extends State<_ChapterCacheRangeSheet> {
                   visualDensity: VisualDensity.compact,
                   onPressed:
                       value <= minValue ? null : () => onChanged(value - 1),
-                  icon: const Icon(Icons.remove_circle_outline),
+                  icon: const Icon(ReaderIcons.cacheRangeDecrease),
                 ),
                 Expanded(
                   child: Text(
@@ -446,7 +447,7 @@ class _ChapterCacheRangeSheetState extends State<_ChapterCacheRangeSheet> {
                   visualDensity: VisualDensity.compact,
                   onPressed:
                       value >= maxValue ? null : () => onChanged(value + 1),
-                  icon: const Icon(Icons.add_circle_outline),
+                  icon: const Icon(ReaderIcons.cacheRangeIncrease),
                 ),
               ],
             ),
@@ -624,17 +625,17 @@ class _ChapterCacheProgressSheetState
                 children: [
                   _buildProgressChip(
                     context,
-                    icon: Icons.task_alt_rounded,
+                    icon: ReaderIcons.cached,
                     label: '$done / $total',
                   ),
                   _buildProgressChip(
                     context,
-                    icon: Icons.error_outline_rounded,
+                    icon: ReaderIcons.cacheError,
                     label: '失败 $failed',
                   ),
                   _buildProgressChip(
                     context,
-                    icon: Icons.percent_rounded,
+                    icon: ReaderIcons.cachePercent,
                     label: total == 0 ? '0%' : '${(ratio * 100).round()}%',
                   ),
                 ],
@@ -745,7 +746,7 @@ class _ChapterCacheProgressSheetState
                               _token.cancel();
                             });
                           },
-                  icon: const Icon(Icons.stop_circle_outlined),
+                  icon: const Icon(ReaderIcons.cacheStop),
                   label: '停止',
                 );
                 final doneButton = AppButton(

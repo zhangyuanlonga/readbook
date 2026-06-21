@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../../../app/motion/app_motion.dart';
 import '../../../../../app/widgets/foundation/foundation.dart';
 import '../../reader_chrome_action_presenter.dart';
+import '../../reader_icons.dart';
 import '../../reader_page_support_models.dart';
 
 typedef ReaderOverlayTransitionBuilder = Widget Function(Widget child);
@@ -110,7 +111,7 @@ class ReaderTopOverlayBar extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
                               ReaderTopChromeActionButton(
-                                icon: Icons.arrow_back_ios_new,
+                                icon: ReaderIcons.back,
                                 tooltip: '返回',
                                 onPressed: onBack,
                                 colors: colors,
@@ -128,7 +129,7 @@ class ReaderTopOverlayBar extends StatelessWidget {
                               const SizedBox(width: 8),
                               if (useDesktopChrome) ...[
                                 ReaderTopChromeActionButton(
-                                  icon: Icons.list_alt_outlined,
+                                  icon: ReaderIcons.catalog,
                                   tooltip: '目录',
                                   onPressed: onCatalog,
                                   colors: colors,
@@ -155,7 +156,7 @@ class ReaderTopOverlayBar extends StatelessWidget {
                                 ),
                                 const SizedBox(width: 2),
                                 ReaderTopChromeActionButton(
-                                  icon: Icons.palette_outlined,
+                                  icon: ReaderIcons.appearance,
                                   tooltip: '界面设置',
                                   onPressed: onInterfaceSettings,
                                   colors: colors,
@@ -165,7 +166,7 @@ class ReaderTopOverlayBar extends StatelessWidget {
                                 const SizedBox(width: 8),
                               ],
                               ReaderTopChromeActionButton(
-                                icon: Icons.auto_stories_rounded,
+                                icon: ReaderIcons.bookDetail,
                                 tooltip: '书籍详情',
                                 onPressed: onOpenDetail,
                                 colors: colors,
@@ -174,7 +175,7 @@ class ReaderTopOverlayBar extends StatelessWidget {
                               ),
                               const SizedBox(width: 2),
                               ReaderTopChromeActionButton(
-                                icon: Icons.more_vert_rounded,
+                                icon: ReaderIcons.more,
                                 tooltip: '更多',
                                 onPressed: onMore,
                                 colors: colors,
@@ -297,7 +298,7 @@ class ReaderMobileBottomOverlayBar extends StatelessWidget {
                               children: [
                                 Expanded(
                                   child: ReaderBottomToolbarActionButton(
-                                    icon: Icons.list_alt_outlined,
+                                    icon: ReaderIcons.catalog,
                                     label: '目录',
                                     onTap: onCatalog,
                                     colors: colors,
@@ -508,7 +509,7 @@ class ReaderAutoReadStatusOverlay extends StatelessWidget {
                 onLongPress: onOpenSettings,
                 child: ReaderAutoReadFloatingHint(
                   colors: colors,
-                  icon: Icons.play_arrow_rounded,
+                  icon: ReaderIcons.play,
                   title: '自动阅读已暂停',
                   actionLabel: '点击继续 · 长按设置',
                 ),
@@ -520,7 +521,7 @@ class ReaderAutoReadStatusOverlay extends StatelessWidget {
                 onTap: onContinueChapter,
                 child: ReaderAutoReadFloatingHint(
                   colors: colors,
-                  icon: Icons.play_arrow_rounded,
+                  icon: ReaderIcons.play,
                   title: '本章结束',
                   actionLabel: '点击继续',
                 ),
@@ -669,7 +670,7 @@ class _ReaderBottomProgressStripState extends State<ReaderBottomProgressStrip> {
             onPressed:
                 widget.canNavigateChapters ? widget.onPreviousChapter : null,
             icon: Icon(
-              Icons.skip_previous_rounded,
+              ReaderIcons.previousChapter,
               color: widget.colors.text,
               size: 21,
             ),
@@ -708,7 +709,7 @@ class _ReaderBottomProgressStripState extends State<ReaderBottomProgressStrip> {
             tooltip: '下一章',
             onPressed: widget.canNavigateChapters ? widget.onNextChapter : null,
             icon: Icon(
-              Icons.skip_next_rounded,
+              ReaderIcons.nextChapter,
               color: widget.colors.text,
               size: 21,
             ),
