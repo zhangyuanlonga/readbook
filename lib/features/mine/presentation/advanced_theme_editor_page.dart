@@ -46,7 +46,6 @@ import 'advanced_theme_editor_models.dart';
 import 'widgets/advanced_theme_basic_section.dart';
 import 'widgets/advanced_theme_editor_shell_widgets.dart';
 import 'widgets/advanced_theme_font_section.dart';
-import 'widgets/advanced_theme_wallpaper_section.dart';
 import 'widgets/advanced_theme_launch_gallery_selection_card.dart';
 import 'widgets/advanced_theme_preview_panel.dart';
 import 'widgets/advanced_theme_resource_picker_widgets.dart';
@@ -2396,14 +2395,26 @@ class _AdvancedThemeEditorPageState
         const SizedBox(height: 4),
         _buildPanel(
           context,
-          padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
           child: LayoutBuilder(
             builder: (context, constraints) {
-              const gridSpacing = 10.0;
-              final compactGrid = constraints.maxWidth < 430;
+              const gridSpacing = 12.0;
+              final componentTokens = appComponentThemeTokensOf(context);
+              final previewRadius = componentTokens.card.radius;
               final gridColumns = constraints.maxWidth < 330 ? 2 : 3;
-              final gridItemExtent = compactGrid ? 190.0 : 216.0;
-              final previewSize = compactGrid ? 52.0 : 72.0;
+              final itemWidth =
+                  (constraints.maxWidth -
+                      gridSpacing * (gridColumns - 1)) /
+                  gridColumns;
+              final previewWidth = itemWidth.clamp(88.0, 136.0).toDouble();
+              final previewHeight = (previewWidth * 1.22)
+                  .clamp(108.0, 164.0)
+                  .toDouble();
+              final gridItemExtent = previewHeight + 76.0;
+              final squarePreviewSize =
+                  (previewWidth < previewHeight ? previewWidth : previewHeight)
+                      .clamp(64.0, 104.0)
+                      .toDouble();
               final rowCount = (6 / gridColumns).ceil();
               final gridHeight =
                   gridItemExtent * rowCount + gridSpacing * (rowCount - 1);
@@ -2423,20 +2434,19 @@ class _AdvancedThemeEditorPageState
                     mainAxisExtent: gridItemExtent,
                   ),
                   children: [
-                    AdvancedThemeWallpaperResourceCard(
+                    _buildVisualResourceCard(
+                      context,
                       title: '应用背景',
                       subtitle: wallpaperPath == null ? '未设置' : '已设置',
-                      badges: _visualResourceBadges(
-                        draft,
-                        hasResource: wallpaperPath != null,
-                      ),
+                      previewWidth: previewWidth,
+                      previewHeight: previewHeight,
                       preview: _buildGalleryPreviewThumb(
                         context,
                         previewPath: wallpaperPath,
                         title: '应用背景',
-                        width: previewSize,
-                        height: previewSize,
-                        borderRadius: 12,
+                        width: previewWidth,
+                        height: previewHeight,
+                        borderRadius: previewRadius,
                         useAddPlaceholder: true,
                         onLongPress:
                             wallpaperPath == null
@@ -2453,20 +2463,19 @@ class _AdvancedThemeEditorPageState
                               ? () {}
                               : _pickWallpaperFromBackgroundLibrary,
                     ),
-                    AdvancedThemeWallpaperResourceCard(
+                    _buildVisualResourceCard(
+                      context,
                       title: '阅读背景',
                       subtitle: readerWallpaperPath == null ? '未设置' : '已设置',
-                      badges: _visualResourceBadges(
-                        draft,
-                        hasResource: readerWallpaperPath != null,
-                      ),
+                      previewWidth: previewWidth,
+                      previewHeight: previewHeight,
                       preview: _buildGalleryPreviewThumb(
                         context,
                         previewPath: readerWallpaperPath,
                         title: '阅读器背景',
-                        width: previewSize,
-                        height: previewSize,
-                        borderRadius: 12,
+                        width: previewWidth,
+                        height: previewHeight,
+                        borderRadius: previewRadius,
                         useAddPlaceholder: true,
                         onLongPress:
                             readerWallpaperPath == null
@@ -2483,20 +2492,19 @@ class _AdvancedThemeEditorPageState
                               ? () {}
                               : _pickReaderWallpaperFromBackgroundLibrary,
                     ),
-                    AdvancedThemeWallpaperResourceCard(
+                    _buildVisualResourceCard(
+                      context,
                       title: '书籍封面',
                       subtitle: coverGalleryPreviewPath == null ? '未设置' : '已设置',
-                      badges: _visualResourceBadges(
-                        draft,
-                        hasResource: coverGalleryPreviewPath != null,
-                      ),
+                      previewWidth: previewWidth,
+                      previewHeight: previewHeight,
                       preview: _buildGalleryPreviewThumb(
                         context,
                         previewPath: coverGalleryPreviewPath,
                         title: _selectedCoverGallery()?.name ?? '书籍封面',
-                        width: previewSize,
-                        height: previewSize,
-                        borderRadius: 12,
+                        width: previewWidth,
+                        height: previewHeight,
+                        borderRadius: previewRadius,
                         useAddPlaceholder: true,
                         onLongPress:
                             coverGalleryPreviewPath == null
@@ -2511,21 +2519,20 @@ class _AdvancedThemeEditorPageState
                       ),
                       onTap: _pickCoverGallery,
                     ),
-                    AdvancedThemeWallpaperResourceCard(
+                    _buildVisualResourceCard(
+                      context,
                       title: '启动图集',
                       subtitle:
                           launchGalleryPreviewPath == null ? '未设置' : '已设置',
-                      badges: _visualResourceBadges(
-                        draft,
-                        hasResource: launchGalleryPreviewPath != null,
-                      ),
+                      previewWidth: previewWidth,
+                      previewHeight: previewHeight,
                       preview: _buildGalleryPreviewThumb(
                         context,
                         previewPath: launchGalleryPreviewPath,
                         title: _selectedLaunchImageGallery()?.name ?? '启动图集',
-                        width: previewSize,
-                        height: previewSize,
-                        borderRadius: 12,
+                        width: previewWidth,
+                        height: previewHeight,
+                        borderRadius: previewRadius,
                         useAddPlaceholder: true,
                         onLongPress:
                             launchGalleryPreviewPath == null
@@ -2541,32 +2548,35 @@ class _AdvancedThemeEditorPageState
                       ),
                       onTap: _pickLaunchImageGallery,
                     ),
-                    AdvancedThemeWallpaperResourceCard(
+                    _buildVisualResourceCard(
+                      context,
                       title: '底栏图集',
                       subtitle: _resolvedBottomNavGalleryName(),
-                      badges: _visualResourceBadges(
-                        draft,
-                        hasResource: bottomNavGallery != null,
-                      ),
-                      preview: _buildBottomNavGalleryPreview(
+                      previewWidth: previewWidth,
+                      previewHeight: previewHeight,
+                      preview: _buildVisualBottomNavGalleryPreview(
                         context,
                         gallery: bottomNavGallery,
-                        width: previewSize,
+                        width: previewWidth,
+                        height: previewHeight,
                       ),
                       onTap: _isSaving ? () {} : _pickBottomNavGallery,
                     ),
-                    AdvancedThemeWallpaperResourceCard(
+                    _buildVisualResourceCard(
+                      context,
                       title: '主题特效',
                       subtitle: appAdvancedThemeEffectStatus(draft.themeEffect),
-                      badges: _visualResourceBadges(
-                        draft,
-                        hasResource:
-                            draft.themeEffect != AppAdvancedThemeEffect.none,
-                      ),
-                      preview: _buildThemeEffectPreviewThumb(
+                      previewWidth: previewWidth,
+                      previewHeight: previewHeight,
+                      preview: _buildVisualResourcePreviewFrame(
                         context,
-                        effect: draft.themeEffect,
-                        size: previewSize,
+                        width: previewWidth,
+                        height: previewHeight,
+                        child: _buildThemeEffectPreviewThumb(
+                          context,
+                          effect: draft.themeEffect,
+                          size: squarePreviewSize,
+                        ),
                       ),
                       onTap: _isSaving ? () {} : _pickThemeEffect,
                     ),
@@ -2582,15 +2592,110 @@ class _AdvancedThemeEditorPageState
     );
   }
 
-  List<String> _visualResourceBadges(
-    AppAdvancedTheme draft, {
-    required bool hasResource,
+  Widget _buildVisualResourceCard(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required Widget preview,
+    required double previewWidth,
+    required double previewHeight,
+    required VoidCallback onTap,
   }) {
-    if (!hasResource) {
-      return const <String>['默认'];
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(2, 0, 2, 2),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: previewWidth,
+                height: previewHeight,
+                child: Center(child: preview),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: colorScheme.onSurface,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVisualResourcePreviewFrame(
+    BuildContext context, {
+    required double width,
+    required double height,
+    required Widget child,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return SizedBox(
+      width: width,
+      height: height,
+      child: AppSurface(
+        padding: EdgeInsets.zero,
+        backgroundColor: colorScheme.surface,
+        child: Center(child: child),
+      ),
+    );
+  }
+
+  Widget _buildVisualBottomNavGalleryPreview(
+    BuildContext context, {
+    required BottomNavIconGallery? gallery,
+    required double width,
+    required double height,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    if (gallery == null) {
+      return _buildVisualResourcePreviewFrame(
+        context,
+        width: width,
+        height: height,
+        child: Icon(
+          Icons.add_rounded,
+          size: 28,
+          color: colorScheme.onSurfaceVariant,
+        ),
+      );
     }
-    final activeThemeId = ref.watch(activeAdvancedThemeIdProvider);
-    return <String>['高级主题引用', if (activeThemeId == draft.id) '当前主题'];
+    return _buildVisualResourcePreviewFrame(
+      context,
+      width: width,
+      height: height,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: _buildBottomNavGalleryPreview(
+          context,
+          gallery: gallery,
+          width: width - 16,
+        ),
+      ),
+    );
   }
 
   Widget _buildBackgroundResourceTuningSection(

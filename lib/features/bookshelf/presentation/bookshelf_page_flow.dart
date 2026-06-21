@@ -1529,8 +1529,6 @@ extension on _BookshelfPageState {
         final maxHeight = MediaQuery.sizeOf(sheetContext).height * 0.72;
         final bottomInset = _bookshelfBottomSafeInset(sheetContext);
         var searchKeyword = '';
-        var expandCategories = false;
-        var expandTags = false;
         return StatefulBuilder(
           builder: (sheetContext, setSheetState) {
             final colorScheme = Theme.of(sheetContext).colorScheme;
@@ -1644,29 +1642,14 @@ extension on _BookshelfPageState {
                     buildSectionHeader(title: title, onManage: onManage),
                     const SizedBox(height: 6),
                     if (chips.isNotEmpty)
-                      Wrap(spacing: 6, runSpacing: 6, children: chips),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        alignment: WrapAlignment.start,
+                        children: chips,
+                      ),
                     if (footer != null) ...[const SizedBox(height: 4), footer],
                   ],
-                ),
-              );
-            }
-
-            Widget buildExpandButton({
-              required bool expanded,
-              required String expandLabel,
-              required String collapseLabel,
-              required VoidCallback onPressed,
-            }) {
-              return AppButton(
-                label: expanded ? collapseLabel : expandLabel,
-                variant: AppButtonVariant.text,
-                size: AppButtonSize.compact,
-                onPressed: onPressed,
-                icon: Icon(
-                  expanded
-                      ? Icons.expand_less_rounded
-                      : Icons.expand_more_rounded,
-                  size: 18,
                 ),
               );
             }
@@ -1694,14 +1677,6 @@ extension on _BookshelfPageState {
             final visibleTags = customTags
                 .where(matchesKeyword)
                 .toList(growable: false);
-            final effectiveVisibleCategories =
-                searchKeyword.trim().isNotEmpty || expandCategories
-                    ? visibleCategories
-                    : visibleCategories.take(10).toList(growable: false);
-            final effectiveVisibleTags =
-                searchKeyword.trim().isNotEmpty || expandTags
-                    ? visibleTags
-                    : visibleTags.take(10).toList(growable: false);
             final defaultChips = <Widget>[
               buildFilterChip(
                 value: 'all',
@@ -1756,7 +1731,7 @@ extension on _BookshelfPageState {
                   selected: _activeView.isUncategorized,
                   icon: Icons.folder_off_outlined,
                 ),
-              ...effectiveVisibleCategories.map((category) {
+              ...visibleCategories.map((category) {
                 final item = _categoryItem(category);
                 return buildFilterChip(
                   value: 'category::$category',
@@ -1780,7 +1755,7 @@ extension on _BookshelfPageState {
                   selected: _activeView.isTag && _activeView.tag == '',
                   icon: Icons.sell_outlined,
                 ),
-              ...effectiveVisibleTags.map((tag) {
+              ...visibleTags.map((tag) {
                 final item = _tagItem(tag);
                 return buildFilterChip(
                   value: 'tag::$tag',
@@ -1829,19 +1804,7 @@ extension on _BookshelfPageState {
                               'manage_category::__new__',
                             ),
                         footer:
-                            searchKeyword.trim().isEmpty &&
-                                    visibleCategories.length > 10
-                                ? buildExpandButton(
-                                  expanded: expandCategories,
-                                  expandLabel: '展开全部分类',
-                                  collapseLabel: '收起分类',
-                                  onPressed: () {
-                                    setSheetState(() {
-                                      expandCategories = !expandCategories;
-                                    });
-                                  },
-                                )
-                                : categoryChips.isEmpty
+                            categoryChips.isEmpty
                                 ? buildEmptyHint('暂无分类，点击右上角管理可新建。')
                                 : null,
                       ),
@@ -1854,19 +1817,7 @@ extension on _BookshelfPageState {
                               'manage_tag::__new__',
                             ),
                         footer:
-                            searchKeyword.trim().isEmpty &&
-                                    visibleTags.length > 10
-                                ? buildExpandButton(
-                                  expanded: expandTags,
-                                  expandLabel: '展开全部标签',
-                                  collapseLabel: '收起标签',
-                                  onPressed: () {
-                                    setSheetState(() {
-                                      expandTags = !expandTags;
-                                    });
-                                  },
-                                )
-                                : tagChips.isEmpty
+                            tagChips.isEmpty
                                 ? buildEmptyHint('暂无标签，点击右上角管理可新建。')
                                 : null,
                       ),
