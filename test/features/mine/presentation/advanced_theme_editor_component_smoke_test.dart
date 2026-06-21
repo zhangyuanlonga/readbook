@@ -137,10 +137,11 @@ void main() {
     expect(find.text('壁纸图片适配'), findsNothing);
     expect(find.text('阅读器图片适配'), findsNothing);
     expect(find.text('背景资源参数'), findsNothing);
-    await _dragUntilFound(tester, editorScroll, find.text('视觉资源'));
+    expect(find.text('资源层'), findsNothing);
+    await _dragUntilFound(tester, editorScroll, find.text('视觉效果'));
     await tester.pump();
 
-    expect(find.text('视觉资源'), findsOneWidget);
+    expect(find.text('视觉效果'), findsOneWidget);
     expect(find.text('应用背景'), findsOneWidget);
     expect(find.text('阅读背景'), findsOneWidget);
     expect(find.text('书籍封面'), findsOneWidget);
@@ -214,6 +215,7 @@ void main() {
     expect(find.text('弹窗预览'), findsNothing);
     await _dragUntilFound(tester, editorScroll, find.text('弹窗'));
     await tester.pump();
+    expect(find.text('弹窗背景模糊'), findsOneWidget);
 
     final modalPreviewAction = find.byKey(
       const ValueKey<String>('advanced_theme_modal_preview_action'),
@@ -225,7 +227,7 @@ void main() {
     expect(find.text('弹窗预览'), findsWidgets);
     expect(find.text('普通弹窗'), findsOneWidget);
     expect(find.text('底部面板'), findsOneWidget);
-    expect(find.text('弹窗背景模糊'), findsNothing);
+    expect(find.text('背景模糊'), findsOneWidget);
 
     Navigator.of(tester.element(find.text('普通弹窗'))).pop();
     await tester.pump();
@@ -382,7 +384,7 @@ void main() {
       }
     }
 
-    expect(find.text('颜色卡片'), findsOneWidget);
+    expect(find.text('颜色'), findsOneWidget);
     expect(find.text('这里放全局共享的颜色语义，优先决定整体氛围。'), findsNothing);
     expect(find.text('按钮、链接和选中状态的颜色'), findsOneWidget);
     expect(find.byIcon(Icons.help_outline_rounded), findsNothing);
@@ -393,7 +395,7 @@ void main() {
     final darkScheme = buildAppBaseDarkColorScheme(
       AppBaseColorSchemeId.luminaNeutral,
     );
-    final sectionTitle = tester.widget<Text>(find.text('颜色卡片'));
+    final sectionTitle = tester.widget<Text>(find.text('颜色'));
     final fieldLabel = tester.widget<Text>(find.text('强调色'));
 
     expect(sectionTitle.style?.color, darkScheme.onSurfaceVariant);

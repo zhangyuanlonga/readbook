@@ -111,7 +111,7 @@ const List<ThemeSemanticFieldSpec> colorCardThemeSemanticFields =
 
 const ThemeSemanticGroupSpec colorCardThemeSemanticGroup =
     ThemeSemanticGroupSpec(
-      title: '颜色卡片',
+      title: '颜色',
       subtitle: '这里放全局共享的颜色语义，优先决定整体氛围。',
       fields: colorCardThemeSemanticFields,
     );

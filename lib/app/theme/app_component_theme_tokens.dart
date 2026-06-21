@@ -146,6 +146,7 @@ class AppOverlayComponentTokens {
   const AppOverlayComponentTokens({
     required this.radius,
     required this.topRadius,
+    required this.backgroundBlurSigma,
     required this.borderWidth,
     required this.shadowBlur,
     required this.shadowOffsetY,
@@ -154,6 +155,7 @@ class AppOverlayComponentTokens {
 
   final double radius;
   final double topRadius;
+  final double backgroundBlurSigma;
   final double borderWidth;
   final double shadowBlur;
   final double shadowOffsetY;
@@ -162,6 +164,7 @@ class AppOverlayComponentTokens {
   AppOverlayComponentTokens copyWith({
     double? radius,
     double? topRadius,
+    double? backgroundBlurSigma,
     double? borderWidth,
     double? shadowBlur,
     double? shadowOffsetY,
@@ -170,6 +173,7 @@ class AppOverlayComponentTokens {
     return AppOverlayComponentTokens(
       radius: radius ?? this.radius,
       topRadius: topRadius ?? this.topRadius,
+      backgroundBlurSigma: backgroundBlurSigma ?? this.backgroundBlurSigma,
       borderWidth: borderWidth ?? this.borderWidth,
       shadowBlur: shadowBlur ?? this.shadowBlur,
       shadowOffsetY: shadowOffsetY ?? this.shadowOffsetY,
@@ -185,6 +189,8 @@ class AppOverlayComponentTokens {
     return AppOverlayComponentTokens(
       radius: lerpDouble(a.radius, b.radius, t)!,
       topRadius: lerpDouble(a.topRadius, b.topRadius, t)!,
+      backgroundBlurSigma:
+          lerpDouble(a.backgroundBlurSigma, b.backgroundBlurSigma, t)!,
       borderWidth: lerpDouble(a.borderWidth, b.borderWidth, t)!,
       shadowBlur: lerpDouble(a.shadowBlur, b.shadowBlur, t)!,
       shadowOffsetY: lerpDouble(a.shadowOffsetY, b.shadowOffsetY, t)!,
@@ -498,6 +504,7 @@ AppComponentThemeTokens resolveAppComponentThemeTokens(
     overlay: AppOverlayComponentTokens(
       radius: 16,
       topRadius: 20,
+      backgroundBlurSigma: 0,
       borderWidth: 1,
       shadowBlur: 18,
       shadowOffsetY: 8,
@@ -620,6 +627,7 @@ AppComponentThemeTokens resolveAppComponentThemeTokensFromModeConfig(
   var overlay = base.overlay.copyWith(
     radius: base.overlay.radius * radiusScale,
     topRadius: base.overlay.topRadius * radiusScale,
+    backgroundBlurSigma: _clamp(style.modalBackgroundBlurSigma, 0, 24),
     shadowAlpha: _clamp(base.overlay.shadowAlpha * (0.6 + shadowScale * 0.9)),
   );
   switch (style.overlayStyle) {
@@ -642,7 +650,11 @@ AppComponentThemeTokens resolveAppComponentThemeTokensFromModeConfig(
   var navigation = base.navigation.copyWith(
     standardFloatingRadius:
         base.navigation.standardFloatingRadius * radiusScale,
-    dockItemRadius: _clamp(base.navigation.dockItemRadius * radiusScale, 16, 34),
+    dockItemRadius: _clamp(
+      base.navigation.dockItemRadius * radiusScale,
+      16,
+      34,
+    ),
   );
   switch (style.navigationStyle) {
     case AppAdvancedThemeNavigationStyle.soft:

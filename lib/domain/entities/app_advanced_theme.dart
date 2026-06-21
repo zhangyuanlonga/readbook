@@ -28,6 +28,7 @@ class AppAdvancedThemeComponentStyle {
   const AppAdvancedThemeComponentStyle({
     this.globalRadiusScale = 1,
     this.shadowStrength = 0.5,
+    this.modalBackgroundBlurSigma = 0,
     this.cardStyle = AppAdvancedThemeCardStyle.soft,
     this.buttonStyle = AppAdvancedThemeButtonStyle.stadium,
     this.inputStyle = AppAdvancedThemeInputStyle.soft,
@@ -38,6 +39,7 @@ class AppAdvancedThemeComponentStyle {
 
   final double globalRadiusScale;
   final double shadowStrength;
+  final double modalBackgroundBlurSigma;
   final AppAdvancedThemeCardStyle cardStyle;
   final AppAdvancedThemeButtonStyle buttonStyle;
   final AppAdvancedThemeInputStyle inputStyle;
@@ -49,6 +51,7 @@ class AppAdvancedThemeComponentStyle {
     return <String, dynamic>{
       'globalRadiusScale': globalRadiusScale,
       'shadowStrength': shadowStrength,
+      'modalBackgroundBlurSigma': modalBackgroundBlurSigma,
       'cardStyle': cardStyle.name,
       'buttonStyle': buttonStyle.name,
       'inputStyle': inputStyle.name,
@@ -65,6 +68,12 @@ class AppAdvancedThemeComponentStyle {
           1,
       shadowStrength:
           AppAdvancedThemeModeConfig._readDouble(json, 'shadowStrength') ?? 0.5,
+      modalBackgroundBlurSigma:
+          AppAdvancedThemeModeConfig._readDouble(
+            json,
+            'modalBackgroundBlurSigma',
+          ) ??
+          0,
       cardStyle: _readCardStyle(json['cardStyle']?.toString().trim()),
       buttonStyle: _readButtonStyle(json['buttonStyle']?.toString().trim()),
       inputStyle: _readInputStyle(json['inputStyle']?.toString().trim()),
@@ -79,6 +88,7 @@ class AppAdvancedThemeComponentStyle {
   AppAdvancedThemeComponentStyle copyWith({
     double? globalRadiusScale,
     double? shadowStrength,
+    double? modalBackgroundBlurSigma,
     AppAdvancedThemeCardStyle? cardStyle,
     AppAdvancedThemeButtonStyle? buttonStyle,
     AppAdvancedThemeInputStyle? inputStyle,
@@ -89,6 +99,8 @@ class AppAdvancedThemeComponentStyle {
     return AppAdvancedThemeComponentStyle(
       globalRadiusScale: globalRadiusScale ?? this.globalRadiusScale,
       shadowStrength: shadowStrength ?? this.shadowStrength,
+      modalBackgroundBlurSigma:
+          modalBackgroundBlurSigma ?? this.modalBackgroundBlurSigma,
       cardStyle: cardStyle ?? this.cardStyle,
       buttonStyle: buttonStyle ?? this.buttonStyle,
       inputStyle: inputStyle ?? this.inputStyle,

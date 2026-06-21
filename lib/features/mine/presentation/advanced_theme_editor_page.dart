@@ -2,6 +2,7 @@
 // reason: Phase 10 reviewed this advanced theme editor shell; resource binding logic remains covered by feature tests.
 
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -1736,170 +1737,20 @@ class _AdvancedThemeEditorPageState
     required String title,
     required int initialColorValue,
   }) async {
-    Color draftColor = Color(initialColorValue);
-    final hexController = TextEditingController(
-      text: AdvancedThemeColorCodec.formatHex(draftColor.toARGB32()),
-    );
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final desktopLike = AppLayout.isDesktopLike(
-      context,
-      platform: theme.platform,
-    );
-    final panelRadius = BorderRadius.vertical(
-      top: const Radius.circular(28),
-      bottom: desktopLike ? const Radius.circular(28) : Radius.zero,
-    );
-
-    final result = await showAdaptiveRawSurface<int>(
+    return showAdaptiveRawSurface<int>(
       context: context,
       showDragHandle: false,
       mobileBackgroundColor: Colors.transparent,
       builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return Material(
-              color: colorScheme.surfaceContainerHigh,
-              shape: RoundedRectangleBorder(borderRadius: panelRadius),
-              clipBehavior: Clip.antiAlias,
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (!desktopLike) ...[
-                      const AdaptiveSheetDragHandle(),
-                      const SizedBox(height: 12),
-                    ],
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            '选择$title',
-                            style: theme.textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: () {
-                            _showMessage('吸管取色需要系统截图权限，后续接入。');
-                          },
-                          tooltip: '吸管取色',
-                          icon: const Icon(Icons.colorize_rounded),
-                        ),
-                        AppButton(
-                          variant: AppButtonVariant.tonal,
-                          onPressed:
-                              () => Navigator.of(
-                                dialogContext,
-                              ).pop(draftColor.toARGB32()),
-                          label: '保存',
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 18),
-                    TextField(
-                      controller: hexController,
-                      keyboardType: TextInputType.text,
-                      textCapitalization: TextCapitalization.characters,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(
-                          RegExp(r'[#0-9a-fA-F]'),
-                        ),
-                      ],
-                      onChanged: (value) {
-                        final parsed = AdvancedThemeColorCodec.parseHexColor(
-                          value,
-                        );
-                        if (parsed == null) {
-                          return;
-                        }
-                        setDialogState(() {
-                          draftColor = Color(parsed);
-                        });
-                      },
-                      decoration: InputDecoration(
-                        isDense: true,
-                        prefixIcon: const Icon(Icons.tag_rounded, size: 18),
-                        hintText: '#RRGGBB / #AARRGGBB',
-                        filled: true,
-                        fillColor: colorScheme.surface.withValues(alpha: 0.72),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    ColorPicker(
-                      pickerColor: draftColor,
-                      onColorChanged: (color) {
-                        setDialogState(() {
-                          draftColor = color;
-                        });
-                      },
-                      enableAlpha: true,
-                      displayThumbColor: true,
-                      portraitOnly: true,
-                      paletteType: PaletteType.hsvWithHue,
-                      colorPickerWidth: 360,
-                      pickerAreaHeightPercent: 0.62,
-                      pickerAreaBorderRadius: const BorderRadius.all(
-                        Radius.circular(12),
-                      ),
-                      labelTypes: const [],
-                      hexInputController: hexController,
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Container(
-                          width: 34,
-                          height: 34,
-                          decoration: BoxDecoration(
-                            color: draftColor,
-                            borderRadius: BorderRadius.circular(9),
-                            border: Border.all(
-                              color: colorScheme.outline.withValues(
-                                alpha: 0.38,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            AdvancedThemeColorCodec.formatHex(
-                              draftColor.toARGB32(),
-                            ),
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.2,
-                            ),
-                          ),
-                        ),
-                        AppButton(
-                          variant: AppButtonVariant.text,
-                          onPressed: () => Navigator.of(dialogContext).pop(),
-                          label: '取消',
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '上方色板调明度和饱和度，第一条调色相，第二条调透明度。',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
+        return _AdvancedThemeColorPickerSheet(
+          title: title,
+          initialColorValue: initialColorValue,
+          onEyedropper: () {
+            _showMessage('吸管取色需要系统截图权限，后续接入。');
           },
         );
       },
     );
-    hexController.dispose();
-    return result;
   }
 
   void _showMessage(String message) {
@@ -2189,8 +2040,6 @@ class _AdvancedThemeEditorPageState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionLabel(context, '资源层'),
-        const SizedBox(height: 4),
         _buildVisualResourceSection(context, draft),
         const SizedBox(height: 10),
         _buildStyleResourceSection(context, draft),
@@ -2210,7 +2059,7 @@ class _AdvancedThemeEditorPageState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionLabel(context, '视觉资源'),
+        _buildSectionLabel(context, '视觉效果'),
         const SizedBox(height: 4),
         _buildPanel(
           context,
@@ -2666,6 +2515,7 @@ class _AdvancedThemeEditorPageState
     BuildContext context,
     AppAdvancedTheme draft,
   ) {
+    final style = draft.configFor(_selectedMode).componentStyle;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2673,10 +2523,9 @@ class _AdvancedThemeEditorPageState
         const SizedBox(height: 4),
         _buildComponentStyleSection(context, draft),
         const SizedBox(height: 10),
-        _buildComponentColorFieldCard(
+        _buildComponentCard(
           context,
           title: modalThemeSemanticGroup.title,
-          fields: _fieldSpecsForGroup(modalThemeSemanticGroup),
           previewKey: const ValueKey<String>(
             'advanced_theme_modal_preview_action',
           ),
@@ -2688,6 +2537,17 @@ class _AdvancedThemeEditorPageState
                   builder: _buildModalComponentPreview,
                 ),
               ),
+          children: [
+            ..._buildColorFieldRows(
+              context,
+              _fieldSpecsForGroup(modalThemeSemanticGroup),
+            ),
+            const Divider(height: 1),
+            _buildModalBackgroundBlurRow(
+              context,
+              style.modalBackgroundBlurSigma,
+            ),
+          ],
         ),
         const SizedBox(height: 10),
         _buildComponentColorFieldCard(
@@ -2753,6 +2613,14 @@ class _AdvancedThemeEditorPageState
           AdvancedThemeColorSlot.surface,
         );
         final textColor = _readableTextColorFor(context, modalColor);
+        final blurSigma =
+            (_draft
+                        ?.configFor(_selectedMode)
+                        .componentStyle
+                        .modalBackgroundBlurSigma ??
+                    0)
+                .clamp(0.0, 24.0)
+                .toDouble();
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -2828,11 +2696,88 @@ class _AdvancedThemeEditorPageState
                     ),
                   ),
                 ),
+                SizedBox(
+                  width: 136,
+                  child: _buildModalBlurPreviewCard(
+                    context,
+                    modalColor: modalColor,
+                    textColor: textColor,
+                    blurSigma: blurSigma,
+                  ),
+                ),
               ],
             ),
           ],
         );
       },
+    );
+  }
+
+  Widget _buildModalBlurPreviewCard(
+    BuildContext context, {
+    required Color modalColor,
+    required Color textColor,
+    required double blurSigma,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    // UI-GOV-EXEMPT: hardcoded-style border-radius tokenized-component uses AppComponentThemeTokens.
+    final radius = BorderRadius.circular(
+      appComponentThemeTokensOf(context).overlay.radius,
+    );
+    return ClipRRect(
+      borderRadius: radius,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    colorScheme.primary.withValues(alpha: 0.46),
+                    colorScheme.tertiary.withValues(alpha: 0.34),
+                    colorScheme.surfaceContainerHighest,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
+            child: AppSurface(
+              backgroundColor:
+                  blurSigma > 0
+                      ? modalColor.withValues(alpha: 0.84)
+                      : modalColor,
+              borderColor: colorScheme.outlineVariant,
+              borderRadius: radius,
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '背景模糊',
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: textColor,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    blurSigma <= 0
+                        ? '未开启'
+                        : '${blurSigma.toStringAsFixed(0)} 级',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: textColor.withAlpha(
+                        _modalPreviewSecondaryTextAlpha,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -2893,6 +2838,25 @@ class _AdvancedThemeEditorPageState
       onPreview: onPreview,
       previewKey: previewKey,
       children: _buildColorFieldRows(context, fields),
+    );
+  }
+
+  Widget _buildModalBackgroundBlurRow(BuildContext context, double blurSigma) {
+    final normalizedBlur = blurSigma.clamp(0.0, 24.0).toDouble();
+    return _buildStrengthSliderRow(
+      context,
+      label: '弹窗背景模糊',
+      valueLabel: normalizedBlur.toStringAsFixed(0),
+      value: normalizedBlur,
+      min: 0,
+      max: 24,
+      divisions: 24,
+      onChanged:
+          _isSaving
+              ? null
+              : (value) => _updateComponentStyle(
+                (current) => current.copyWith(modalBackgroundBlurSigma: value),
+              ),
     );
   }
 
@@ -3899,5 +3863,202 @@ class _AdvancedThemeEditorPageState
       AdvancedThemeColorSlot.wallpaperOverlay =>
         colors.wallpaperOverlayColorValue,
     };
+  }
+}
+
+class _AdvancedThemeColorPickerSheet extends StatefulWidget {
+  const _AdvancedThemeColorPickerSheet({
+    required this.title,
+    required this.initialColorValue,
+    required this.onEyedropper,
+  });
+
+  final String title;
+  final int initialColorValue;
+  final VoidCallback onEyedropper;
+
+  @override
+  State<_AdvancedThemeColorPickerSheet> createState() =>
+      _AdvancedThemeColorPickerSheetState();
+}
+
+class _AdvancedThemeColorPickerSheetState
+    extends State<_AdvancedThemeColorPickerSheet> {
+  late Color _draftColor;
+  late final TextEditingController _hexController;
+
+  @override
+  void initState() {
+    super.initState();
+    _draftColor = Color(widget.initialColorValue);
+    _hexController = TextEditingController(text: _formattedDraftColor);
+  }
+
+  @override
+  void dispose() {
+    _hexController.dispose();
+    super.dispose();
+  }
+
+  String get _formattedDraftColor =>
+      AdvancedThemeColorCodec.formatHex(_draftColor.toARGB32());
+
+  void _syncHexField() {
+    final nextText = _formattedDraftColor;
+    if (_hexController.text == nextText) {
+      return;
+    }
+    _hexController.value = TextEditingValue(
+      text: nextText,
+      selection: TextSelection.collapsed(offset: nextText.length),
+    );
+  }
+
+  void _updateDraftColor(Color color) {
+    setState(() {
+      _draftColor = color;
+      _syncHexField();
+    });
+  }
+
+  void _handleHexChanged(String value) {
+    final parsed = AdvancedThemeColorCodec.parseHexColor(value);
+    if (parsed == null) {
+      return;
+    }
+    setState(() {
+      _draftColor = Color(parsed);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final desktopLike = AppLayout.isDesktopLike(
+      context,
+      platform: theme.platform,
+    );
+    final panelRadius = BorderRadius.vertical(
+      top: const Radius.circular(28),
+      bottom: desktopLike ? const Radius.circular(28) : Radius.zero,
+    );
+    return Material(
+      color: colorScheme.surfaceContainerHigh,
+      shape: RoundedRectangleBorder(borderRadius: panelRadius),
+      clipBehavior: Clip.antiAlias,
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (!desktopLike) ...[
+                const AdaptiveSheetDragHandle(),
+                const SizedBox(height: 12),
+              ],
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '选择${widget.title}',
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: widget.onEyedropper,
+                    tooltip: '吸管取色',
+                    icon: const Icon(Icons.colorize_rounded),
+                  ),
+                  AppButton(
+                    variant: AppButtonVariant.tonal,
+                    onPressed:
+                        () => Navigator.of(context).pop(_draftColor.toARGB32()),
+                    label: '保存',
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: _hexController,
+                keyboardType: TextInputType.text,
+                textCapitalization: TextCapitalization.characters,
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[#0-9a-fA-F]')),
+                ],
+                onChanged: _handleHexChanged,
+                decoration: InputDecoration(
+                  isDense: true,
+                  prefixIcon: const Icon(Icons.tag_rounded, size: 18),
+                  hintText: '#RRGGBB / #AARRGGBB',
+                  filled: true,
+                  fillColor: colorScheme.surface.withValues(alpha: 0.72),
+                ),
+              ),
+              const SizedBox(height: 14),
+              ColorPicker(
+                pickerColor: _draftColor,
+                onColorChanged: _updateDraftColor,
+                enableAlpha: true,
+                displayThumbColor: true,
+                portraitOnly: true,
+                paletteType: PaletteType.hsvWithHue,
+                colorPickerWidth: 360,
+                pickerAreaHeightPercent: 0.62,
+                pickerAreaBorderRadius: const BorderRadius.all(
+                  Radius.circular(12),
+                ),
+                labelTypes: const [],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  SizedBox(
+                    width: 34,
+                    height: 34,
+                    child: AppSurface(
+                      padding: EdgeInsets.zero,
+                      backgroundColor: _draftColor,
+                      borderColor: colorScheme.outline.withValues(alpha: 0.38),
+                      // UI-GOV-EXEMPT: hardcoded-style border-radius tokenized-component uses AppComponentThemeTokens.
+                      borderRadius: BorderRadius.circular(
+                        appComponentThemeTokensOf(context).input.radius,
+                      ),
+                      child: const SizedBox.shrink(),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _formattedDraftColor,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ),
+                  AppButton(
+                    variant: AppButtonVariant.text,
+                    onPressed: () => Navigator.of(context).pop(),
+                    label: '取消',
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '色板调明度和饱和度，下方两条分别调色相和透明度。',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

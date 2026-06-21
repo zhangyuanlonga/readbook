@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 
 import '../layout/app_adaptive.dart';
@@ -54,7 +56,7 @@ Future<T?> showAdaptiveActionSurface<T>({
       isScrollControlled: true,
       isDismissible: barrierDismissible,
       enableDrag: barrierDismissible,
-      backgroundColor: mobileBackgroundColor,
+      backgroundColor: mobileBackgroundColor ?? Colors.transparent,
       builder:
           (surfaceContext) => Padding(
             padding: EdgeInsets.only(
@@ -265,20 +267,27 @@ class _AdaptiveBottomSheetState extends State<AdaptiveBottomSheet> {
               maxWidth: widget.maxWidth ?? metrics.bottomSheetMaxWidth,
               maxHeight: viewportHeight * _heightFactor,
             ),
-            child: Padding(
-              padding:
-                  widget.padding ??
-                  EdgeInsets.fromLTRB(
-                    metrics.pagePadding,
-                    metrics.contentGap,
-                    metrics.pagePadding,
-                    bottomPadding,
-                  ),
-              child: CustomScrollView(
-                shrinkWrap: true,
-                primary: false,
-                physics: const ClampingScrollPhysics(),
-                slivers: [SliverToBoxAdapter(child: widget.child)],
+            child: _AdaptiveBlurredSurface(
+              borderRadius: BorderRadius.vertical(
+                top: Radius.circular(
+                  appComponentThemeTokensOf(context).overlay.topRadius,
+                ),
+              ),
+              child: Padding(
+                padding:
+                    widget.padding ??
+                    EdgeInsets.fromLTRB(
+                      metrics.pagePadding,
+                      metrics.contentGap,
+                      metrics.pagePadding,
+                      bottomPadding,
+                    ),
+                child: CustomScrollView(
+                  shrinkWrap: true,
+                  primary: false,
+                  physics: const ClampingScrollPhysics(),
+                  slivers: [SliverToBoxAdapter(child: widget.child)],
+                ),
               ),
             ),
           ),
@@ -320,20 +329,15 @@ class AdaptiveDialogSurface extends StatelessWidget {
             maxWidth: maxWidth ?? metrics.dialogMaxWidth,
             maxHeight: maxHeight,
           ),
-          child: Material(
+          child: _AdaptiveBlurredSurface(
+            borderRadius: BorderRadius.circular(componentTokens.overlay.radius),
             color: backgroundColor,
             elevation: 8,
             shadowColor: shadowColor,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(
-                componentTokens.overlay.radius,
-              ),
-              side: BorderSide(
-                color: colorScheme.outlineVariant.withValues(alpha: 0.46),
-                width: componentTokens.overlay.borderWidth,
-              ),
+            borderSide: BorderSide(
+              color: colorScheme.outlineVariant.withValues(alpha: 0.46),
+              width: componentTokens.overlay.borderWidth,
             ),
-            clipBehavior: Clip.antiAlias,
             child: Padding(
               padding:
                   padding ?? EdgeInsets.all(metrics.isCompactDensity ? 16 : 20),
@@ -341,6 +345,61 @@ class AdaptiveDialogSurface extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _AdaptiveBlurredSurface extends StatelessWidget {
+  const _AdaptiveBlurredSurface({
+    required this.child,
+    required this.borderRadius,
+    this.color,
+    this.elevation = 0,
+    this.shadowColor,
+    this.borderSide = BorderSide.none,
+  });
+
+  final Widget child;
+  final BorderRadiusGeometry borderRadius;
+  final Color? color;
+  final double elevation;
+  final Color? shadowColor;
+  final BorderSide borderSide;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final bottomSheetTheme = Theme.of(context).bottomSheetTheme;
+    final componentTokens = appComponentThemeTokensOf(context);
+    final blurSigma =
+        componentTokens.overlay.backgroundBlurSigma.clamp(0.0, 24.0).toDouble();
+    final surfaceColor =
+        color ??
+        bottomSheetTheme.modalBackgroundColor ??
+        bottomSheetTheme.backgroundColor ??
+        colorScheme.surfaceContainerLow;
+    final effectiveColor =
+        blurSigma > 0 ? surfaceColor.withValues(alpha: 0.88) : surfaceColor;
+    final content = Material(
+      color: effectiveColor,
+      elevation: elevation,
+      shadowColor: shadowColor,
+      shape: RoundedRectangleBorder(
+        borderRadius: borderRadius,
+        side: borderSide,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: child,
+    );
+    if (blurSigma <= 0) {
+      return content;
+    }
+    return ClipRRect(
+      borderRadius: borderRadius,
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
+        child: content,
       ),
     );
   }
