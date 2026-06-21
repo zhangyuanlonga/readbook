@@ -1328,11 +1328,36 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     );
     final prefetchTopDistance = max(360.0, position.viewportDimension * 0.75);
     final remainingBottom = position.maxScrollExtent - position.pixels;
+    final activeChapter =
+        _resolveActiveContinuousTextChapterForRuntime() ??
+        _findCurrentContinuousTextChapter();
+    final activeChapterIndex = activeChapter?.chapterIndex ?? _currentIndex;
+    final loadedChapterIndices = _continuousTextChapters.map(
+      (chapter) => chapter.chapterIndex,
+    );
 
-    if (remainingBottom <= prefetchBottomDistance) {
+    final shouldPrefetchForward =
+        remainingBottom <= prefetchBottomDistance &&
+        _chapterWindowController.resolveAdjacentLoadIndex(
+              chapters: _chapters,
+              loadedChapterIndices: loadedChapterIndices,
+              currentChapterIndex: activeChapterIndex,
+              forward: true,
+            ) !=
+            null;
+    if (shouldPrefetchForward) {
       unawaited(_loadAdjacentContinuousTextChapter(forward: true));
     }
-    if (position.pixels <= prefetchTopDistance) {
+    final shouldPrefetchBackward =
+        position.pixels <= prefetchTopDistance &&
+        _chapterWindowController.resolveAdjacentLoadIndex(
+              chapters: _chapters,
+              loadedChapterIndices: loadedChapterIndices,
+              currentChapterIndex: activeChapterIndex,
+              forward: false,
+            ) !=
+            null;
+    if (shouldPrefetchBackward) {
       unawaited(_loadAdjacentContinuousTextChapter(forward: false));
     }
     if (_document.hasImageBlocks) {

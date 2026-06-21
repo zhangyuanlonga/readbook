@@ -164,6 +164,87 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
         );
   }
 
+  List<ReaderPageContinuousTextChapter>
+  _insertContinuousTextChapterInStableWindowFlow(
+    ReaderPageContinuousTextChapter chapter,
+  ) {
+    if (_continuousTextChapters.any(
+      (item) => item.chapterIndex == chapter.chapterIndex,
+    )) {
+      return _continuousTextChapters;
+    }
+    final chapters = <ReaderPageContinuousTextChapter>[
+      ..._continuousTextChapters,
+      chapter,
+    ]..sort((a, b) => a.chapterIndex.compareTo(b.chapterIndex));
+    return chapters;
+  }
+
+  String _continuousTextChapterIndexesForLogFlow([
+    Iterable<ReaderPageContinuousTextChapter>? chapters,
+  ]) {
+    return (chapters ?? _continuousTextChapters)
+        .map((chapter) => chapter.chapterIndex)
+        .join(',');
+  }
+
+  void _logContinuousTextWindowFlow(
+    String step, {
+    bool? forward,
+    int? visibleChapterIndex,
+    int? adjacentIndex,
+    int? targetIndex,
+    int? loadedChapterIndex,
+    bool? keepStableWindow,
+    String? indexesBefore,
+    String? indexesAfter,
+    double? currentOffset,
+    double? maxScrollExtent,
+    double? anchorStart,
+    double? anchorDelta,
+    double? targetOffset,
+  }) {
+    const enabledSteps = <String>{
+      'load_adjacent_inserted',
+      'load_adjacent_result_empty',
+      'load_adjacent_target_rejected',
+      'anchor_restore_jump',
+      'activate_commit',
+      'activate_restore_offset_jump',
+      'sync_active_activate_resolved',
+    };
+    if (!enabledSteps.contains(step)) {
+      return;
+    }
+    _logger.info(
+      'Reader continuous text window',
+      context: <String, Object?>{
+        'chain': 'reader_continuous_window',
+        'step': step,
+        'direction': forward == null ? null : (forward ? 'next' : 'previous'),
+        'chapterId': _chapterId,
+        'currentIndex': _currentIndex,
+        'visibleChapterIndex': visibleChapterIndex,
+        'adjacentIndex': adjacentIndex,
+        'targetIndex': targetIndex,
+        'loadedChapterIndex': loadedChapterIndex,
+        'keepStableWindow': keepStableWindow,
+        'scrollStepPreparing': _isScrollStepPreparing,
+        'scrollStepAnimating': _isScrollStepAnimating,
+        'userScrollActive': _isUserScrollInteractionActive,
+        'edgeAdvancing': _isScrollEdgeAdvancingChapter,
+        'chapterIndexesBefore': indexesBefore,
+        'chapterIndexesAfter':
+            indexesAfter ?? _continuousTextChapterIndexesForLogFlow(),
+        'currentOffset': currentOffset?.toStringAsFixed(1),
+        'maxScrollExtent': maxScrollExtent?.toStringAsFixed(1),
+        'anchorStart': anchorStart?.toStringAsFixed(1),
+        'anchorDelta': anchorDelta?.toStringAsFixed(1),
+        'targetOffset': targetOffset?.toStringAsFixed(1),
+      },
+    );
+  }
+
   ReaderContinuousTextChapter _toContinuousTextChapterSupportFlow(
     ReaderPageContinuousTextChapter chapter,
   ) {
@@ -265,9 +346,23 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
     if (_isScrollEdgeAdvancingChapter ||
         !_shouldUseContinuousTextFlow ||
         _continuousTextChapters.isEmpty) {
+      _logContinuousTextWindowFlow(
+        'load_adjacent_skipped',
+        forward: forward,
+        indexesBefore: _continuousTextChapterIndexesForLogFlow(),
+        currentOffset:
+            _scrollController.hasClients
+                ? _scrollController.position.pixels
+                : null,
+        maxScrollExtent:
+            _scrollController.hasClients
+                ? _scrollController.position.maxScrollExtent
+                : null,
+      );
       return null;
     }
 
+    final indexesBefore = _continuousTextChapterIndexesForLogFlow();
     final anchorChapter = _findCurrentContinuousTextChapter();
     final beforeAnchorStart =
         anchorChapter == null
@@ -281,9 +376,19 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
         _resolveActiveContinuousTextChapterFlow() ??
         _findCurrentContinuousTextChapter();
     final visibleChapterIndex = visibleChapter?.chapterIndex ?? _currentIndex;
-    _continuousTextChapters = _retainContinuousTextWindowFlow(
-      _continuousTextChapters,
-      currentChapterIndex: visibleChapterIndex,
+    const keepStableWindow = true;
+    _logContinuousTextWindowFlow(
+      'load_adjacent_start',
+      forward: forward,
+      visibleChapterIndex: visibleChapterIndex,
+      keepStableWindow: keepStableWindow,
+      indexesBefore: indexesBefore,
+      currentOffset: beforeScrollOffset,
+      maxScrollExtent:
+          _scrollController.hasClients
+              ? _scrollController.position.maxScrollExtent
+              : null,
+      anchorStart: beforeAnchorStart,
     );
     final plan = _chapterWindowController.buildWindowPlan(
       chapters: _chapters,
@@ -292,10 +397,34 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
     final adjacentIndex =
         forward ? plan?.nextChapterIndex : plan?.previousChapterIndex;
     if (adjacentIndex == null) {
+      _logContinuousTextWindowFlow(
+        'load_adjacent_no_plan_target',
+        forward: forward,
+        visibleChapterIndex: visibleChapterIndex,
+        keepStableWindow: keepStableWindow,
+        indexesBefore: indexesBefore,
+      );
       return null;
     }
     for (final chapter in _continuousTextChapters) {
       if (chapter.chapterIndex == adjacentIndex) {
+        _logContinuousTextWindowFlow(
+          'load_adjacent_already_loaded',
+          forward: forward,
+          visibleChapterIndex: visibleChapterIndex,
+          adjacentIndex: adjacentIndex,
+          keepStableWindow: keepStableWindow,
+          indexesBefore: indexesBefore,
+          loadedChapterIndex: chapter.chapterIndex,
+          currentOffset:
+              _scrollController.hasClients
+                  ? _scrollController.position.pixels
+                  : null,
+          maxScrollExtent:
+              _scrollController.hasClients
+                  ? _scrollController.position.maxScrollExtent
+                  : null,
+        );
         return chapter;
       }
     }
@@ -309,6 +438,15 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
       forward: forward,
     );
     if (targetIndex == null || targetIndex != adjacentIndex) {
+      _logContinuousTextWindowFlow(
+        'load_adjacent_target_rejected',
+        forward: forward,
+        visibleChapterIndex: visibleChapterIndex,
+        adjacentIndex: adjacentIndex,
+        targetIndex: targetIndex,
+        keepStableWindow: keepStableWindow,
+        indexesBefore: indexesBefore,
+      );
       return null;
     }
 
@@ -316,19 +454,55 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
     try {
       final chapter = await _loadContinuousTextChapterFlow(targetIndex);
       if (!mounted || chapter == null) {
+        _logContinuousTextWindowFlow(
+          'load_adjacent_result_empty',
+          forward: forward,
+          visibleChapterIndex: visibleChapterIndex,
+          adjacentIndex: adjacentIndex,
+          targetIndex: targetIndex,
+          keepStableWindow: keepStableWindow,
+          indexesBefore: indexesBefore,
+        );
         return null;
       }
       if (_continuousTextChapters.any(
         (item) => item.chapterIndex == chapter.chapterIndex,
       )) {
+        _logContinuousTextWindowFlow(
+          'load_adjacent_loaded_during_wait',
+          forward: forward,
+          visibleChapterIndex: visibleChapterIndex,
+          adjacentIndex: adjacentIndex,
+          targetIndex: targetIndex,
+          loadedChapterIndex: chapter.chapterIndex,
+          keepStableWindow: keepStableWindow,
+          indexesBefore: indexesBefore,
+        );
         return chapter;
       }
       _updateReaderState(() {
-        _continuousTextChapters = _insertContinuousTextChapterInWindowFlow(
-          chapter,
-          currentChapterIndex: visibleChapterIndex,
-        );
+        _continuousTextChapters =
+            _insertContinuousTextChapterInStableWindowFlow(chapter);
       });
+      _logContinuousTextWindowFlow(
+        'load_adjacent_inserted',
+        forward: forward,
+        visibleChapterIndex: visibleChapterIndex,
+        adjacentIndex: adjacentIndex,
+        targetIndex: targetIndex,
+        loadedChapterIndex: chapter.chapterIndex,
+        keepStableWindow: keepStableWindow,
+        indexesBefore: indexesBefore,
+        indexesAfter: _continuousTextChapterIndexesForLogFlow(),
+        currentOffset:
+            _scrollController.hasClients
+                ? _scrollController.position.pixels
+                : null,
+        maxScrollExtent:
+            _scrollController.hasClients
+                ? _scrollController.position.maxScrollExtent
+                : null,
+      );
       _restoreContinuousWindowAnchorAfterLayout(
         anchorChapter: anchorChapter,
         beforeAnchorStart: beforeAnchorStart,
@@ -346,8 +520,22 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
     required double? beforeScrollOffset,
   }) {
     if (anchorChapter == null || beforeAnchorStart == null) {
+      _logContinuousTextWindowFlow(
+        'anchor_restore_skipped_no_anchor',
+        currentOffset: beforeScrollOffset,
+      );
       return;
     }
+    _logContinuousTextWindowFlow(
+      'anchor_restore_scheduled',
+      visibleChapterIndex: anchorChapter.chapterIndex,
+      anchorStart: beforeAnchorStart,
+      currentOffset: beforeScrollOffset,
+      maxScrollExtent:
+          _scrollController.hasClients
+              ? _scrollController.position.maxScrollExtent
+              : null,
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scrollController.hasClients) {
         return;
@@ -355,10 +543,24 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
       final afterAnchorStart =
           _measureContinuousTextChapterLayoutFlow(anchorChapter)?.startOffset;
       if (afterAnchorStart == null) {
+        _logContinuousTextWindowFlow(
+          'anchor_restore_skipped_unmeasured',
+          visibleChapterIndex: anchorChapter.chapterIndex,
+          anchorStart: beforeAnchorStart,
+          currentOffset: beforeScrollOffset,
+        );
         return;
       }
       final delta = afterAnchorStart - beforeAnchorStart;
       if (delta.abs() <= 0.5) {
+        _logContinuousTextWindowFlow(
+          'anchor_restore_noop',
+          visibleChapterIndex: anchorChapter.chapterIndex,
+          anchorStart: beforeAnchorStart,
+          anchorDelta: delta,
+          currentOffset: _scrollController.position.pixels,
+          maxScrollExtent: _scrollController.position.maxScrollExtent,
+        );
         return;
       }
       final position = _scrollController.position;
@@ -381,7 +583,26 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
             'targetOffset': target.toStringAsFixed(1),
           },
         );
+        _logContinuousTextWindowFlow(
+          'anchor_restore_jump',
+          visibleChapterIndex: anchorChapter.chapterIndex,
+          anchorStart: beforeAnchorStart,
+          anchorDelta: delta,
+          currentOffset: position.pixels,
+          maxScrollExtent: position.maxScrollExtent,
+          targetOffset: target.toDouble(),
+        );
         _scrollController.jumpTo(target);
+      } else {
+        _logContinuousTextWindowFlow(
+          'anchor_restore_target_already_stable',
+          visibleChapterIndex: anchorChapter.chapterIndex,
+          anchorStart: beforeAnchorStart,
+          anchorDelta: delta,
+          currentOffset: position.pixels,
+          maxScrollExtent: position.maxScrollExtent,
+          targetOffset: target.toDouble(),
+        );
       }
     });
   }
@@ -538,6 +759,19 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
   void _activateContinuousTextChapterFlow(
     ReaderPageContinuousTextChapter chapter,
   ) {
+    _logContinuousTextWindowFlow(
+      'activate_start',
+      visibleChapterIndex: chapter.chapterIndex,
+      indexesBefore: _continuousTextChapterIndexesForLogFlow(),
+      currentOffset:
+          _scrollController.hasClients
+              ? _scrollController.position.pixels
+              : null,
+      maxScrollExtent:
+          _scrollController.hasClients
+              ? _scrollController.position.maxScrollExtent
+              : null,
+    );
     final layout = _measureContinuousTextChapterLayoutFlow(chapter);
     final activation =
         layout == null
@@ -570,6 +804,11 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
                   ),
                 );
     if (activation == null) {
+      _logContinuousTextWindowFlow(
+        'activate_skipped_no_activation',
+        visibleChapterIndex: chapter.chapterIndex,
+        indexesBefore: _continuousTextChapterIndexesForLogFlow(),
+      );
       return;
     }
     _commitReadingRecordSession();
@@ -578,6 +817,18 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
     }
     final preserveOffset =
         _scrollController.hasClients ? _scrollController.position.pixels : null;
+    _logContinuousTextWindowFlow(
+      'activate_commit',
+      visibleChapterIndex: chapter.chapterIndex,
+      targetIndex: activation.chapterIndex,
+      indexesBefore: _continuousTextChapterIndexesForLogFlow(),
+      currentOffset: preserveOffset,
+      maxScrollExtent:
+          _scrollController.hasClients
+              ? _scrollController.position.maxScrollExtent
+              : null,
+      targetOffset: activation.initialRatio,
+    );
 
     _updateReaderState(() {
       _currentIndex = activation.chapterIndex;
@@ -624,7 +875,24 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
           position.maxScrollExtent,
         );
         if ((position.pixels - stableOffset).abs() > 0.5) {
+          _logContinuousTextWindowFlow(
+            'activate_restore_offset_jump',
+            visibleChapterIndex: chapter.chapterIndex,
+            targetIndex: activation.chapterIndex,
+            currentOffset: position.pixels,
+            maxScrollExtent: position.maxScrollExtent,
+            targetOffset: stableOffset.toDouble(),
+          );
           _scrollController.jumpTo(stableOffset);
+        } else {
+          _logContinuousTextWindowFlow(
+            'activate_restore_offset_noop',
+            visibleChapterIndex: chapter.chapterIndex,
+            targetIndex: activation.chapterIndex,
+            currentOffset: position.pixels,
+            maxScrollExtent: position.maxScrollExtent,
+            targetOffset: stableOffset.toDouble(),
+          );
         }
       });
     }
@@ -639,15 +907,56 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
   void _syncActiveContinuousTextChapterFromScrollFlow() {
     if (!_shouldUseContinuousTextFlow ||
         _continuousTextChapters.length <= 1 ||
+        _isScrollStepPreparing ||
         _isScrollStepAnimating ||
-        _isUserScrollInteractionActive) {
+        _isUserScrollInteractionActive ||
+        _pointerInputController.hasActivePointer) {
+      if (!_isScrollStepPreparing && !_isScrollStepAnimating) {
+        _logContinuousTextWindowFlow(
+          'sync_active_skipped',
+          currentOffset:
+              _scrollController.hasClients
+                  ? _scrollController.position.pixels
+                  : null,
+          maxScrollExtent:
+              _scrollController.hasClients
+                  ? _scrollController.position.maxScrollExtent
+                  : null,
+        );
+      }
       return;
     }
 
     final resolved = _resolveActiveContinuousTextChapterFlow();
     if (resolved == null || _isContinuousTextChapterActiveFlow(resolved)) {
+      _logContinuousTextWindowFlow(
+        resolved == null
+            ? 'sync_active_no_resolved_chapter'
+            : 'sync_active_already_current',
+        visibleChapterIndex: resolved?.chapterIndex,
+        currentOffset:
+            _scrollController.hasClients
+                ? _scrollController.position.pixels
+                : null,
+        maxScrollExtent:
+            _scrollController.hasClients
+                ? _scrollController.position.maxScrollExtent
+                : null,
+      );
       return;
     }
+    _logContinuousTextWindowFlow(
+      'sync_active_activate_resolved',
+      visibleChapterIndex: resolved.chapterIndex,
+      currentOffset:
+          _scrollController.hasClients
+              ? _scrollController.position.pixels
+              : null,
+      maxScrollExtent:
+          _scrollController.hasClients
+              ? _scrollController.position.maxScrollExtent
+              : null,
+    );
     _activateContinuousTextChapterFlow(resolved);
   }
 

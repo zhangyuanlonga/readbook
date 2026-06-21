@@ -871,6 +871,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool _isUserScrollInteractionActive = false;
   bool _isContinuousTextNeighborWarmupQueued = false;
   bool _isContinuousTextNeighborWarmupActive = false;
+  bool _isContinuousTextCurrentSeedQueued = false;
   ReaderScrollEdgeAdvanceState _scrollEdgeAdvanceState =
       const ReaderScrollEdgeAdvanceState();
   DateTime? _lastPointerScrollPageTurnAt;
@@ -2296,9 +2297,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         return currentChild ?? const SizedBox.shrink();
       },
       child: KeyedSubtree(
-        key: ValueKey<String>(
-          'reader_content_${_chapterId}_$hasRenderableContent',
-        ),
+        key: ValueKey<String>(_readerContentSwitcherKey(hasRenderableContent)),
         child: _composeReaderContent(colors),
       ),
     );
@@ -2329,6 +2328,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           ),
       ],
     );
+  }
+
+  String _readerContentSwitcherKey(bool hasRenderableContent) {
+    if (_shouldUseContinuousTextFlow) {
+      return 'reader_content_continuous_$hasRenderableContent';
+    }
+    return 'reader_content_${_chapterId}_$hasRenderableContent';
   }
 
   ReaderChromePalette _chromePalette(ReaderThemeColors colors) {

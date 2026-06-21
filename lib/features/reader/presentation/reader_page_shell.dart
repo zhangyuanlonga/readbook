@@ -119,8 +119,37 @@ extension _ReaderPageShellExtension on _ReaderPageState {
     _isScrollStepPreparing = true;
     try {
       if (_shouldUseContinuousTextFlow && _continuousTextChapters.isEmpty) {
+        final offsetBeforeSeed = _scrollController.position.pixels;
         final seeded = _seedCurrentContinuousTextChapterForScrollStep();
         if (seeded) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted || !_scrollController.hasClients) {
+              return;
+            }
+            final position = _scrollController.position;
+            final restoredOffset = offsetBeforeSeed.clamp(
+              position.minScrollExtent,
+              position.maxScrollExtent,
+            );
+            if ((position.pixels - restoredOffset).abs() > 0.5) {
+              _scrollController.jumpTo(restoredOffset.toDouble());
+              _logScrollPageStep(
+                step: 'seed_current_continuous_offset_restored',
+                forward: forward,
+                source: source,
+                currentOffset: restoredOffset.toDouble(),
+                maxScrollExtent: position.maxScrollExtent,
+              );
+            } else {
+              _logScrollPageStep(
+                step: 'seed_current_continuous_offset_stable',
+                forward: forward,
+                source: source,
+                currentOffset: position.pixels,
+                maxScrollExtent: position.maxScrollExtent,
+              );
+            }
+          });
           await WidgetsBinding.instance.endOfFrame;
           if (!mounted || !_scrollController.hasClients) {
             return;
@@ -263,6 +292,45 @@ extension _ReaderPageShellExtension on _ReaderPageState {
       viewport * _settings.pageTurnStepRatio,
     );
     return preferredDistance.clamp(120.0, max(viewport, 120.0)).toDouble();
+  }
+
+  void _scheduleCurrentContinuousTextChapterSeed() {
+    if (_isContinuousTextCurrentSeedQueued ||
+        !_shouldUseContinuousTextFlow ||
+        _continuousTextChapters.isNotEmpty) {
+      return;
+    }
+    _isContinuousTextCurrentSeedQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _isContinuousTextCurrentSeedQueued = false;
+      if (!mounted ||
+          !_shouldUseContinuousTextFlow ||
+          _continuousTextChapters.isNotEmpty ||
+          _document.isPureImageDocument) {
+        return;
+      }
+      final offsetBeforeSeed =
+          _scrollController.hasClients
+              ? _scrollController.position.pixels
+              : null;
+      final seeded = _seedCurrentContinuousTextChapterForScrollStep();
+      if (!seeded || offsetBeforeSeed == null) {
+        return;
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_scrollController.hasClients) {
+          return;
+        }
+        final position = _scrollController.position;
+        final restoredOffset = offsetBeforeSeed.clamp(
+          position.minScrollExtent,
+          position.maxScrollExtent,
+        );
+        if ((position.pixels - restoredOffset).abs() > 0.5) {
+          _scrollController.jumpTo(restoredOffset.toDouble());
+        }
+      });
+    });
   }
 
   bool _seedCurrentContinuousTextChapterForScrollStep() {
@@ -599,6 +667,13 @@ extension _ReaderPageShellExtension on _ReaderPageState {
         'chapterId': _chapterId,
         'currentIndex': _currentIndex,
         'continuousChapterCount': _continuousTextChapters.length,
+        'continuousChapterIndexes': _continuousTextChapters
+            .map((chapter) => chapter.chapterIndex)
+            .join(','),
+        'scrollStepPreparing': _isScrollStepPreparing,
+        'scrollStepAnimating': _isScrollStepAnimating,
+        'userScrollActive': _isUserScrollInteractionActive,
+        'scrollEdgeAdvancing': _isScrollEdgeAdvancingChapter,
         'currentOffset': currentOffset?.toStringAsFixed(1),
         'targetOffset': targetOffset?.toStringAsFixed(1),
         'maxScrollExtent': maxScrollExtent?.toStringAsFixed(1),
@@ -621,17 +696,29 @@ extension _ReaderPageShellExtension on _ReaderPageState {
     if (!mounted || token != _continuousScrollStepSyncToken) {
       return;
     }
-    if (_isScrollStepAnimating || _isUserScrollInteractionActive) {
-      await Future<void>.delayed(const Duration(milliseconds: 180));
+    for (var attempt = 0; attempt < 6; attempt += 1) {
       if (!mounted ||
           token != _continuousScrollStepSyncToken ||
-          _isScrollStepAnimating ||
-          _isUserScrollInteractionActive) {
-        return;
+          !_isContinuousTextChapterSyncBlockedByInteraction()) {
+        break;
       }
+      await Future<void>.delayed(const Duration(milliseconds: 90));
+    }
+    if (!mounted ||
+        token != _continuousScrollStepSyncToken ||
+        _isContinuousTextChapterSyncBlockedByInteraction()) {
+      return;
     }
     _syncActiveContinuousTextChapterFromScroll();
     _scheduleProgressSave();
+  }
+
+  bool _isContinuousTextChapterSyncBlockedByInteraction() {
+    return _isScrollStepPreparing ||
+        _isScrollStepAnimating ||
+        _isUserScrollInteractionActive ||
+        _pointerInputController.hasActivePointer ||
+        _isDrainingPendingReaderNavigation;
   }
 
   ReaderNavigationCommandSource _navigationCommandSourceForPageTurnSource(

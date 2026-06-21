@@ -75,6 +75,20 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
           textDirection: Directionality.of(context),
           highlightColor: colors.text,
           wavyColor: colors.text.withValues(alpha: 0.7),
+          bodyDecorationEnabled:
+              _settings.bodyTextDecorationStyle !=
+              ReaderBodyTextDecorationStyle.none,
+          bodyDecorationColor: Color(
+            _settings.bodyTextDecorationColorValue ?? colors.text.toARGB32(),
+          ),
+          bodyDecorationStyle: _settings.bodyTextDecorationStyle,
+          bodyDecorationThickness: _settings.bodyTextUnderlineThickness,
+          bodyDecorationGap: max(
+            _settings.bodyTextUnderlineGap,
+            ReaderSettings.defaultBodyTextUnderlineGap,
+          ),
+          bodyDecorationDashLength: _settings.bodyTextUnderlineDashLength,
+          bodyDecorationDashGapRatio: _settings.bodyTextUnderlineDashGapRatio,
         ),
       ),
     );
@@ -147,6 +161,20 @@ extension _ReaderPageContentRenderingExtension on _ReaderPageState {
           textDirection: Directionality.of(context),
           highlightColor: colors.text,
           wavyColor: colors.text.withValues(alpha: 0.7),
+          bodyDecorationEnabled:
+              _settings.bodyTextDecorationStyle !=
+              ReaderBodyTextDecorationStyle.none,
+          bodyDecorationColor: Color(
+            _settings.bodyTextDecorationColorValue ?? colors.text.toARGB32(),
+          ),
+          bodyDecorationStyle: _settings.bodyTextDecorationStyle,
+          bodyDecorationThickness: _settings.bodyTextUnderlineThickness,
+          bodyDecorationGap: max(
+            _settings.bodyTextUnderlineGap,
+            ReaderSettings.defaultBodyTextUnderlineGap,
+          ),
+          bodyDecorationDashLength: _settings.bodyTextUnderlineDashLength,
+          bodyDecorationDashGapRatio: _settings.bodyTextUnderlineDashGapRatio,
         ),
       ),
     );

@@ -285,9 +285,18 @@ extension _ReaderPageSelectionExtension on _ReaderPageState {
       return;
     }
     final details = _selectionNotifier.selection;
+    if (details.status != SelectionStatus.uncollapsed &&
+        !_isTextSelectionActive &&
+        !_selectionState.hasSnippet) {
+      return;
+    }
     _logLongPressTrace(
       'selection_notifier_changed',
-      context: <String, Object?>{'status': details.status.name},
+      context: <String, Object?>{
+        'status': details.status.name,
+        'selectionActive': _isTextSelectionActive,
+        'hasSnippet': _selectionState.hasSnippet,
+      },
     );
     if (details.status != SelectionStatus.none) {
       _markReaderTapHandledByChild();
@@ -417,13 +426,6 @@ extension _ReaderPageSelectionExtension on _ReaderPageState {
   }
 
   void _clearSelectionState() {
-    _logLongPressTrace(
-      'selection_clear',
-      context: <String, Object?>{
-        'selectionActive': _isTextSelectionActive,
-        'hasSnippet': _selectionState.hasSnippet,
-      },
-    );
     if (!_isTextSelectionActive && !_selectionState.hasSnippet) {
       _selectionState = _selectionState.copyWith(
         range: null,
@@ -431,6 +433,13 @@ extension _ReaderPageSelectionExtension on _ReaderPageState {
       );
       return;
     }
+    _logLongPressTrace(
+      'selection_clear',
+      context: <String, Object?>{
+        'selectionActive': _isTextSelectionActive,
+        'hasSnippet': _selectionState.hasSnippet,
+      },
+    );
 
     _updateReaderState(() {
       _selectionState = _selectionState.clear();

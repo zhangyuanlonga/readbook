@@ -177,6 +177,9 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
     if (surfaceModel.mode == ReaderContentMode.audio) {
       return _buildAudioReader(colors);
     }
+    if (_shouldUseContinuousTextFlow && _continuousTextChapters.isEmpty) {
+      _scheduleCurrentContinuousTextChapterSeed();
+    }
     if (_shouldUseContinuousTextFlow && _continuousTextChapters.isNotEmpty) {
       return _buildContinuousTextReader(colors);
     }
