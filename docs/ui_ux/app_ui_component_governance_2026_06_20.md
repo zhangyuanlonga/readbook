@@ -23,6 +23,14 @@
 | 状态 | `AppStateView`、`AppEmptyStateCard`、`AppStatusStateCard` | 每个页面自绘 empty/error |
 | 弹层 | `showAdaptiveActionSurface`、`AdaptiveBottomSheet` | 新增不可自适应 bottom sheet |
 
+## 2.1 导航与高级主题覆盖
+
+- App Shell、标准底部导航和 Cupertino Dock 必须读取 `AppComponentThemeTokens.navigation`，导航高度、圆角、边框、阴影和毛玻璃模糊不在页面内新增常量。
+- 导航背景和选中态颜色来自 `ThemeData` / `ColorScheme`，由官方主题预设或自定义高级主题最终覆盖。
+- 底栏图集运行时只读取 `effectiveBottomNavIconGalleryProvider`；该 provider 只解析当前高级主题绑定的图集，未绑定时返回默认图标，不恢复独立“当前底栏图集”配置入口。
+- 启动图集同样作为高级主题资源绑定项处理；资源管理页只负责维护图集，不负责单独启用。
+- 导航图标、启动图、应用背景、阅读背景、封面图集都属于高级主题资源层；新增入口应进入主题编辑器或资源管理页，不在 App 外观里新增并行配置。
+
 ## 3. 分级门禁
 
 日常新增代码使用 strict-new 模式，只扫描未提交和已暂存变更。阻断型问题会失败，样式类低风险问题会继续报告并进入复查:

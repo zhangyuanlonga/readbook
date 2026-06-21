@@ -674,42 +674,29 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final selected = _themeSortMode == mode;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => Navigator.of(context).pop(mode),
-        borderRadius: BorderRadius.circular(8),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          curve: Curves.easeOutCubic,
-          margin: const EdgeInsets.symmetric(vertical: 3),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-          decoration: BoxDecoration(
-            color:
-                selected
-                    ? colorScheme.primaryContainer.withValues(alpha: 0.32)
-                    : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  _themeSortModeLabel(mode),
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onSurface,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+    return AppSurface(
+      tone: AppSurfaceTone.transparent,
+      margin: const EdgeInsets.symmetric(vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      backgroundColor: selected ? colorScheme.primaryContainer : null,
+      onTap: () => Navigator.of(context).pop(mode),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              _themeSortModeLabel(mode),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurface,
+                fontWeight: FontWeight.w700,
               ),
-              const SizedBox(width: 12),
-              AppSelectionIndicator(
-                selected: selected,
-                semanticLabel: selected ? '当前排序方式' : '可选排序方式',
-              ),
-            ],
+            ),
           ),
-        ),
+          const SizedBox(width: 12),
+          AppSelectionIndicator(
+            selected: selected,
+            semanticLabel: selected ? '当前排序方式' : '可选排序方式',
+          ),
+        ],
       ),
     );
   }
@@ -1464,14 +1451,12 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
                   children: [
                     Text('已选 $count 个主题'),
                     const SizedBox(height: 12),
-                    TextField(
+                    AppTextField(
                       controller: controller,
                       autofocus: true,
-                      decoration: InputDecoration(
-                        labelText: '主题分类',
-                        hintText: '例如：护眼 / 极简 / 漫画',
-                        errorText: errorText,
-                      ),
+                      labelText: '主题分类',
+                      hintText: '例如：护眼 / 极简 / 漫画',
+                      errorText: errorText,
                       onChanged: (_) {
                         if (errorText == null) {
                           return;
@@ -2138,7 +2123,6 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
     final summary = _officialThemeSummary(preset);
     return AppSurface(
       key: ValueKey('official-theme-${preset.id.id}'),
-      borderRadius: BorderRadius.circular(18),
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
       backgroundColor:
           isActive
@@ -2241,7 +2225,6 @@ class _AdvancedThemeListPageState extends ConsumerState<AdvancedThemeListPage> {
           label: '开通会员',
         );
         return AppSurface(
-          borderRadius: BorderRadius.circular(18),
           backgroundColor: colorScheme.surfaceContainerLow.withValues(
             alpha: 0.94,
           ),

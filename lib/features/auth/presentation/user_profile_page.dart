@@ -16,6 +16,7 @@ import '../../../app/widgets/foundation/app_button.dart';
 import '../../../app/widgets/foundation/app_feedback.dart';
 import '../../../app/widgets/foundation/app_progress.dart';
 import '../../../app/widgets/foundation/app_refresh_indicator.dart';
+import '../../../app/widgets/foundation/app_text_field.dart';
 import '../../../core/auth/auth_event_bus.dart';
 import '../../../core/auth/auth_service.dart';
 import '../../../core/auth/auth_session.dart';
@@ -1441,76 +1442,67 @@ class _EditProfileSurfaceState extends State<_EditProfileSurface> {
           ).textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant),
         ),
         const SizedBox(height: 16),
-        TextField(
+        AppTextField(
           controller: _accountController,
           readOnly: true,
-          decoration: const InputDecoration(
-            labelText: '账号',
-            helperText: '账号创建后不可修改',
-          ),
+          labelText: '账号',
+          helperText: '账号创建后不可修改',
         ),
         const SizedBox(height: 12),
-        TextField(
+        AppTextField(
           controller: _displayNameController,
-          decoration: const InputDecoration(
-            labelText: '显示名',
-            hintText: '请输入显示名',
-          ),
+          labelText: '显示名',
+          hintText: '请输入显示名',
         ),
         const SizedBox(height: 12),
-        TextField(
+        AppTextField(
           controller: _phoneController,
           keyboardType: TextInputType.phone,
-          decoration: const InputDecoration(
-            labelText: '手机号',
-            hintText: '请输入手机号',
-          ),
+          labelText: '手机号',
+          hintText: '请输入手机号',
         ),
         const SizedBox(height: 12),
-        TextField(
+        AppTextField(
           controller: _emailController,
           keyboardType: TextInputType.emailAddress,
-          decoration: const InputDecoration(labelText: '邮箱', hintText: '请输入邮箱'),
+          labelText: '邮箱',
+          hintText: '请输入邮箱',
         ),
         const SizedBox(height: 12),
-        TextField(
+        AppTextField(
           controller: _passwordController,
           obscureText: _obscurePassword,
-          decoration: InputDecoration(
-            labelText: '新密码',
-            hintText: '留空则不修改密码',
-            suffixIcon: IconButton(
-              onPressed: () {
-                setState(() {
-                  _obscurePassword = !_obscurePassword;
-                });
-              },
-              icon: Icon(
-                _obscurePassword
-                    ? Icons.visibility_outlined
-                    : Icons.visibility_off_outlined,
-              ),
+          labelText: '新密码',
+          hintText: '留空则不修改密码',
+          suffixIcon: IconButton(
+            onPressed: () {
+              setState(() {
+                _obscurePassword = !_obscurePassword;
+              });
+            },
+            icon: Icon(
+              _obscurePassword
+                  ? Icons.visibility_outlined
+                  : Icons.visibility_off_outlined,
             ),
           ),
         ),
         const SizedBox(height: 12),
-        TextField(
+        AppTextField(
           controller: _confirmPasswordController,
           obscureText: _obscureConfirmPassword,
-          decoration: InputDecoration(
-            labelText: '确认新密码',
-            hintText: '再次输入新密码',
-            suffixIcon: IconButton(
-              onPressed: () {
-                setState(() {
-                  _obscureConfirmPassword = !_obscureConfirmPassword;
-                });
-              },
-              icon: Icon(
-                _obscureConfirmPassword
-                    ? Icons.visibility_outlined
-                    : Icons.visibility_off_outlined,
-              ),
+          labelText: '确认新密码',
+          hintText: '再次输入新密码',
+          suffixIcon: IconButton(
+            onPressed: () {
+              setState(() {
+                _obscureConfirmPassword = !_obscureConfirmPassword;
+              });
+            },
+            icon: Icon(
+              _obscureConfirmPassword
+                  ? Icons.visibility_outlined
+                  : Icons.visibility_off_outlined,
             ),
           ),
         ),

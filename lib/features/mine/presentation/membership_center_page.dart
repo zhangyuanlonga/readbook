@@ -15,6 +15,7 @@ import '../../../app/widgets/foundation/app_button.dart';
 import '../../../app/widgets/foundation/app_feedback.dart';
 import '../../../app/widgets/foundation/app_progress.dart';
 import '../../../app/widgets/foundation/app_refresh_indicator.dart';
+import '../../../app/widgets/foundation/app_text_field.dart';
 import '../../../core/auth/auth_session.dart';
 import '../../../core/auth/auth_session_store.dart';
 import '../../../core/device/device_identity.dart';
@@ -1078,14 +1079,12 @@ class _MembershipCenterPageState extends ConsumerState<MembershipCenterPage> {
               ),
             ),
             const SizedBox(height: 12),
-            TextField(
+            AppTextField(
               controller: _codeController,
-              decoration: const InputDecoration(
-                labelText: '许可证码',
-                hintText: '例如：PRO-XXXX-XXXX',
-                helperText: '请使用你已持有的许可证码',
-                prefixIcon: Icon(Icons.confirmation_number_outlined),
-              ),
+              labelText: '许可证码',
+              hintText: '例如：PRO-XXXX-XXXX',
+              helperText: '请使用你已持有的许可证码',
+              prefixIcon: const Icon(Icons.confirmation_number_outlined),
             ),
             const SizedBox(height: 12),
             AppButton(
