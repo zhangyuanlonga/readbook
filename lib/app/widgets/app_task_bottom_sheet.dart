@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../layout/app_adaptive.dart';
 import '../layout/app_layout.dart';
-import '../motion/app_motion.dart';
 import '../motion/app_motion_widgets.dart';
+import 'app_animated_dashed_rounded_border.dart';
 import 'adaptive_bottom_sheet.dart';
 
 class AppTaskStep {
@@ -81,7 +81,7 @@ class AppTaskActionCard extends StatelessWidget {
 
     final wrapped =
         dashedBorder
-            ? _AnimatedDashedRoundedBorder(
+            ? AppAnimatedDashedRoundedBorder(
               color: colorScheme.onSurface.withValues(alpha: 0.78),
               radius: 24,
               child: content,
@@ -313,122 +313,6 @@ class _AppTaskStepNode extends StatelessWidget {
         ],
       ),
     );
-  }
-}
-
-class _AnimatedDashedRoundedBorder extends StatefulWidget {
-  const _AnimatedDashedRoundedBorder({
-    required this.child,
-    required this.color,
-    required this.radius,
-  });
-
-  final Widget child;
-  final Color color;
-  final double radius;
-
-  @override
-  State<_AnimatedDashedRoundedBorder> createState() =>
-      _AnimatedDashedRoundedBorderState();
-}
-
-class _AnimatedDashedRoundedBorderState
-    extends State<_AnimatedDashedRoundedBorder>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1800),
-    );
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (AppMotion.enabledOf(context)) {
-      if (!_controller.isAnimating) {
-        _controller.repeat();
-      }
-    } else {
-      _controller.stop();
-      _controller.value = 0;
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _DashedRoundedRectPainter(
-        color: widget.color,
-        radius: widget.radius,
-        animation: _controller,
-      ),
-      child: widget.child,
-    );
-  }
-}
-
-class _DashedRoundedRectPainter extends CustomPainter {
-  const _DashedRoundedRectPainter({
-    required this.color,
-    required this.radius,
-    this.animation,
-  }) : super(repaint: animation);
-
-  final Color color;
-  final double radius;
-  final Animation<double>? animation;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = RRect.fromRectAndRadius(
-      Offset.zero & size,
-      Radius.circular(radius),
-    );
-    final paint =
-        Paint()
-          ..color = color
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.4;
-
-    const dashWidth = 8.0;
-    const dashSpace = 6.0;
-    const dashCycle = dashWidth + dashSpace;
-    final phase = (animation?.value ?? 0) * dashCycle;
-    final path = Path()..addRRect(rect);
-    for (final metric in path.computeMetrics()) {
-      var distance = -phase;
-      while (distance < metric.length) {
-        final next = distance + dashWidth;
-        if (next > 0) {
-          canvas.drawPath(
-            metric.extractPath(
-              distance.clamp(0.0, metric.length).toDouble(),
-              next.clamp(0.0, metric.length).toDouble(),
-            ),
-            paint,
-          );
-        }
-        distance = next + dashSpace;
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _DashedRoundedRectPainter oldDelegate) {
-    return oldDelegate.color != color ||
-        oldDelegate.radius != radius ||
-        oldDelegate.animation != animation;
   }
 }
 

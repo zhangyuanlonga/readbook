@@ -14,6 +14,8 @@ import 'package:go_router/go_router.dart';
 import '../../../app/layout/app_layout.dart';
 import '../../../app/layout/app_spacing.dart';
 import '../../../app/motion/app_motion_widgets.dart';
+import '../../../app/navigation/bottom_nav_icon_gallery_tab_mapper.dart';
+import '../../../app/navigation/bottom_nav_icon_resolver.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/theme/app_component_theme_tokens.dart';
 import '../../../app/theme/app_theme_effects.dart';
@@ -23,6 +25,8 @@ import '../../../app/widgets/adaptive_fullscreen_preview.dart';
 import '../../../app/widgets/adaptive_overflow_toolbar.dart';
 import '../../../app/widgets/adaptive_route_top_bar.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/app_animated_dashed_rounded_border.dart';
+import '../../../app/widgets/bottom_nav_icon_view.dart';
 import '../../../app/widgets/foundation/app_button.dart';
 import '../../../app/widgets/foundation/app_feedback.dart';
 import '../../../app/widgets/foundation/app_progress.dart';
@@ -1665,14 +1669,6 @@ class _AdvancedThemeEditorPageState
     );
   }
 
-  Widget _buildBottomNavGalleryPreview(
-    BuildContext context, {
-    required BottomNavIconGallery? gallery,
-    double width = 190,
-  }) {
-    return AdvancedThemeBottomNavGalleryPreview(gallery: gallery, width: width);
-  }
-
   Widget _buildThemeEffectPreviewThumb(
     BuildContext context, {
     required AppAdvancedThemeEffect effect,
@@ -2399,8 +2395,6 @@ class _AdvancedThemeEditorPageState
           child: LayoutBuilder(
             builder: (context, constraints) {
               const gridSpacing = 12.0;
-              final componentTokens = appComponentThemeTokensOf(context);
-              final previewRadius = componentTokens.card.radius;
               final gridColumns = constraints.maxWidth < 330 ? 2 : 3;
               final itemWidth =
                   (constraints.maxWidth -
@@ -2440,14 +2434,12 @@ class _AdvancedThemeEditorPageState
                       subtitle: wallpaperPath == null ? '未设置' : '已设置',
                       previewWidth: previewWidth,
                       previewHeight: previewHeight,
-                      preview: _buildGalleryPreviewThumb(
+                      preview: _buildVisualImageResourcePreview(
                         context,
                         previewPath: wallpaperPath,
                         title: '应用背景',
                         width: previewWidth,
                         height: previewHeight,
-                        borderRadius: previewRadius,
-                        useAddPlaceholder: true,
                         onLongPress:
                             wallpaperPath == null
                                 ? null
@@ -2469,14 +2461,12 @@ class _AdvancedThemeEditorPageState
                       subtitle: readerWallpaperPath == null ? '未设置' : '已设置',
                       previewWidth: previewWidth,
                       previewHeight: previewHeight,
-                      preview: _buildGalleryPreviewThumb(
+                      preview: _buildVisualImageResourcePreview(
                         context,
                         previewPath: readerWallpaperPath,
                         title: '阅读器背景',
                         width: previewWidth,
                         height: previewHeight,
-                        borderRadius: previewRadius,
-                        useAddPlaceholder: true,
                         onLongPress:
                             readerWallpaperPath == null
                                 ? null
@@ -2498,14 +2488,12 @@ class _AdvancedThemeEditorPageState
                       subtitle: coverGalleryPreviewPath == null ? '未设置' : '已设置',
                       previewWidth: previewWidth,
                       previewHeight: previewHeight,
-                      preview: _buildGalleryPreviewThumb(
+                      preview: _buildVisualImageResourcePreview(
                         context,
                         previewPath: coverGalleryPreviewPath,
                         title: _selectedCoverGallery()?.name ?? '书籍封面',
                         width: previewWidth,
                         height: previewHeight,
-                        borderRadius: previewRadius,
-                        useAddPlaceholder: true,
                         onLongPress:
                             coverGalleryPreviewPath == null
                                 ? null
@@ -2526,14 +2514,12 @@ class _AdvancedThemeEditorPageState
                           launchGalleryPreviewPath == null ? '未设置' : '已设置',
                       previewWidth: previewWidth,
                       previewHeight: previewHeight,
-                      preview: _buildGalleryPreviewThumb(
+                      preview: _buildVisualImageResourcePreview(
                         context,
                         previewPath: launchGalleryPreviewPath,
                         title: _selectedLaunchImageGallery()?.name ?? '启动图集',
                         width: previewWidth,
                         height: previewHeight,
-                        borderRadius: previewRadius,
-                        useAddPlaceholder: true,
                         onLongPress:
                             launchGalleryPreviewPath == null
                                 ? null
@@ -2568,15 +2554,12 @@ class _AdvancedThemeEditorPageState
                       subtitle: appAdvancedThemeEffectStatus(draft.themeEffect),
                       previewWidth: previewWidth,
                       previewHeight: previewHeight,
-                      preview: _buildVisualResourcePreviewFrame(
+                      preview: _buildVisualThemeEffectPreview(
                         context,
+                        effect: draft.themeEffect,
                         width: previewWidth,
                         height: previewHeight,
-                        child: _buildThemeEffectPreviewThumb(
-                          context,
-                          effect: draft.themeEffect,
-                          size: squarePreviewSize,
-                        ),
+                        iconSize: squarePreviewSize,
                       ),
                       onTap: _isSaving ? () {} : _pickThemeEffect,
                     ),
@@ -2646,21 +2629,83 @@ class _AdvancedThemeEditorPageState
     );
   }
 
+  Widget _buildVisualImageResourcePreview(
+    BuildContext context, {
+    required String? previewPath,
+    required String title,
+    required double width,
+    required double height,
+    VoidCallback? onLongPress,
+  }) {
+    if (previewPath == null || previewPath.isEmpty) {
+      return _buildVisualEmptyResourcePreview(
+        context,
+        width: width,
+        height: height,
+      );
+    }
+    return _buildVisualResourcePreviewFrame(
+      context,
+      width: width,
+      height: height,
+      clip: true,
+      onLongPress: onLongPress,
+      child: _buildResolvedImage(previewPath, fit: BoxFit.cover),
+    );
+  }
+
+  Widget _buildVisualEmptyResourcePreview(
+    BuildContext context, {
+    required double width,
+    required double height,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return _buildVisualResourcePreviewFrame(
+      context,
+      width: width,
+      height: height,
+      dashedBorder: true,
+      child: Center(
+        child: Icon(
+          Icons.add_rounded,
+          size: 28,
+          color: colorScheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+
   Widget _buildVisualResourcePreviewFrame(
     BuildContext context, {
     required double width,
     required double height,
     required Widget child,
+    bool dashedBorder = false,
+    bool clip = false,
+    VoidCallback? onLongPress,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
+    final componentTokens = appComponentThemeTokensOf(context);
+    final frame = AppSurface(
+      tone: AppSurfaceTone.transparent,
+      padding: EdgeInsets.zero,
+      backgroundColor: colorScheme.surface,
+      clipBehavior: clip ? Clip.antiAlias : Clip.none,
+      onLongPress: onLongPress,
+      child: child,
+    );
     return SizedBox(
       width: width,
       height: height,
-      child: AppSurface(
-        padding: EdgeInsets.zero,
-        backgroundColor: colorScheme.surface,
-        child: Center(child: child),
-      ),
+      child:
+          dashedBorder
+              ? AppAnimatedDashedRoundedBorder(
+                color: colorScheme.outlineVariant,
+                radius: componentTokens.card.radius,
+                animated: false,
+                child: frame,
+              )
+              : frame,
     );
   }
 
@@ -2670,17 +2715,11 @@ class _AdvancedThemeEditorPageState
     required double width,
     required double height,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
     if (gallery == null) {
-      return _buildVisualResourcePreviewFrame(
+      return _buildVisualEmptyResourcePreview(
         context,
         width: width,
         height: height,
-        child: Icon(
-          Icons.add_rounded,
-          size: 28,
-          color: colorScheme.onSurfaceVariant,
-        ),
       );
     }
     return _buildVisualResourcePreviewFrame(
@@ -2688,11 +2727,97 @@ class _AdvancedThemeEditorPageState
       width: width,
       height: height,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: _buildBottomNavGalleryPreview(
-          context,
-          gallery: gallery,
-          width: width - 16,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _buildVisualBottomNavGalleryPreviewRow(
+              context,
+              gallery: gallery,
+              brightness: Brightness.light,
+            ),
+            const SizedBox(height: 10),
+            _buildVisualBottomNavGalleryPreviewRow(
+              context,
+              gallery: gallery,
+              brightness: Brightness.dark,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVisualBottomNavGalleryPreviewRow(
+    BuildContext context, {
+    required BottomNavIconGallery gallery,
+    required Brightness brightness,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = brightness == Brightness.dark;
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final tab in bottomNavIconGalleryTabs)
+            for (final selected in const <bool>[false, true])
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2.5),
+                child: BottomNavIconView(
+                  icon: resolveCupertinoBottomNavIcon(
+                    tab: appShellTabForBottomNavIconGalleryTab(tab),
+                    selected: selected,
+                    brightness: brightness,
+                    gallery: gallery,
+                  ),
+                  size: 16,
+                  fallbackColor:
+                      selected
+                          ? colorScheme.primary
+                          : (isDark
+                              ? colorScheme.onSurfaceVariant
+                              : colorScheme.outline),
+                ),
+              ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVisualThemeEffectPreview(
+    BuildContext context, {
+    required AppAdvancedThemeEffect effect,
+    required double width,
+    required double height,
+    required double iconSize,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final config = appAmbientEffectConfigFor(effect, preview: true);
+    if (config == null) {
+      return _buildVisualEmptyResourcePreview(
+        context,
+        width: width,
+        height: height,
+      );
+    }
+    return _buildVisualResourcePreviewFrame(
+      context,
+      width: width,
+      height: height,
+      clip: true,
+      child: SizedBox.expand(
+        child: AmbientEffectsContainer(
+          foregroundEffect: config,
+          performanceMode: PerformanceMode.low,
+          renderStyle: EffectRenderStyle.layered,
+          child: Center(
+            child: Icon(
+              Icons.auto_awesome_rounded,
+              size: iconSize >= 96 ? 24 : 22,
+              color: colorScheme.primary,
+            ),
+          ),
         ),
       ),
     );
