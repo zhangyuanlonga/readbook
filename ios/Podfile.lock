@@ -31,6 +31,8 @@ PODS:
   - pdfium_flutter (0.1.5):
     - Flutter
     - FlutterMacOS
+  - permission_handler_apple (9.4.8):
+    - Flutter
   - Sentry/HybridSDK (8.58.3)
   - sentry_flutter (9.21.0):
     - Flutter
@@ -69,6 +71,7 @@ DEPENDENCIES:
   - package_info_plus (from `.symlinks/plugins/package_info_plus/ios`)
   - pdf_text_extract (from `.symlinks/plugins/pdf_text_extract/ios`)
   - pdfium_flutter (from `.symlinks/plugins/pdfium_flutter/darwin`)
+  - permission_handler_apple (from `.symlinks/plugins/permission_handler_apple/ios`)
   - sentry_flutter (from `.symlinks/plugins/sentry_flutter/ios`)
   - share_plus (from `.symlinks/plugins/share_plus/ios`)
   - shared_preferences_foundation (from `.symlinks/plugins/shared_preferences_foundation/darwin`)
@@ -111,6 +114,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/pdf_text_extract/ios"
   pdfium_flutter:
     :path: ".symlinks/plugins/pdfium_flutter/darwin"
+  permission_handler_apple:
+    :path: ".symlinks/plugins/permission_handler_apple/ios"
   sentry_flutter:
     :path: ".symlinks/plugins/sentry_flutter/ios"
   share_plus:
@@ -141,6 +146,7 @@ SPEC CHECKSUMS:
   package_info_plus: af8e2ca6888548050f16fa2f1938db7b5a5df499
   pdf_text_extract: c36cdf801571aa0f72e5332f3fb5f6ce5340bf45
   pdfium_flutter: e5a6e881af0b182d5b0465ebad23a8a20caa28d4
+  permission_handler_apple: 92d754bbaa7361d436db2d6c3c1c2a0fdcec462e
   Sentry: 108fdbb76299c4189af12246bf0308c09c278922
   sentry_flutter: 32e67cb4756ce3de42bbd56581fa935922ff328f
   share_plus: 50da8cb520a8f0f65671c6c6a99b3617ed10a58a

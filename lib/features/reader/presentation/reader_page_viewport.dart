@@ -716,19 +716,29 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
 
         final releaseDecision = _resolveLayoutReleaseDecision();
         if (!releaseDecision.useReleaseRenderer) {
-          _deactivateLayoutReleaseForFallback(
-            _formatLayoutReleaseDiagnostic(
-              releaseDecision.toDiagnosticsContext(),
-            ),
+          final diagnostic = _formatLayoutReleaseDiagnostic(
+            releaseDecision.toDiagnosticsContext(),
           );
+          _deactivateLayoutReleaseForFallback(diagnostic);
+          if (releaseDecision.strictReleaseValidation) {
+            return ReaderLayoutStrictReleaseFailure(
+              reason: releaseDecision.reason,
+              diagnostic: diagnostic,
+            );
+          }
           return buildLegacyViewport();
         }
 
         final releaseRequest = _buildLayoutReleaseRequest(paginationSpec);
         if (releaseRequest == null) {
-          _deactivateLayoutReleaseForFallback(
-            'readerLayoutReleaseReason=no_request',
-          );
+          const diagnostic = 'readerLayoutReleaseReason=no_request';
+          _deactivateLayoutReleaseForFallback(diagnostic);
+          if (releaseDecision.strictReleaseValidation) {
+            return const ReaderLayoutStrictReleaseFailure(
+              reason: 'no_request',
+              diagnostic: diagnostic,
+            );
+          }
           return buildLegacyViewport();
         }
 

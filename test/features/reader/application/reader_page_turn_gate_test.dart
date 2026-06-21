@@ -35,6 +35,43 @@ void main() {
       expect(decision.shouldAllow, isFalse);
       expect(
         decision.blockReason,
+        ReaderPageTurnBlockReason.crossChapterSnapshotActive,
+      );
+      expect(decision.message, contains('跨章节动画'));
+    });
+
+    test('allows page requests while paper curl can be interrupted', () {
+      final decision = gate.resolve(
+        requestKind: ReaderPageTurnRequestKind.page,
+        snapshot: const ReaderPageTurnGateSnapshot(
+          pagedTransitionAnimating: false,
+          curlAutoTurning: false,
+          curlPreviewActive: false,
+          crossChapterSnapshotActive: false,
+          paperCurlAnimating: true,
+          readerInteractionAnimating: true,
+        ),
+      );
+
+      expect(decision.shouldAllow, isTrue);
+    });
+
+    test('blocks chapter requests while paper curl is animating', () {
+      final decision = gate.resolve(
+        requestKind: ReaderPageTurnRequestKind.chapter,
+        snapshot: const ReaderPageTurnGateSnapshot(
+          pagedTransitionAnimating: false,
+          curlAutoTurning: false,
+          curlPreviewActive: false,
+          crossChapterSnapshotActive: false,
+          paperCurlAnimating: true,
+          readerInteractionAnimating: true,
+        ),
+      );
+
+      expect(decision.shouldAllow, isFalse);
+      expect(
+        decision.blockReason,
         ReaderPageTurnBlockReason.paperCurlAnimating,
       );
       expect(decision.message, contains('纸页卷动'));

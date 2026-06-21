@@ -119,6 +119,12 @@ class _ReaderLayoutRendererPreviewSurfaceState
         oldWidget.request.totalContentLength !=
             widget.request.totalContentLength ||
         oldWidget.options.mode != widget.options.mode ||
+        oldWidget.options.diagnosticsEnabled !=
+            widget.options.diagnosticsEnabled ||
+        oldWidget.options.includeAdapterMetrics !=
+            widget.options.includeAdapterMetrics ||
+        oldWidget.options.strictReleaseValidation !=
+            widget.options.strictReleaseValidation ||
         oldWidget.targetRatio != widget.targetRatio ||
         oldWidget.initialPageIndex != widget.initialPageIndex ||
         oldWidget.nearbyPageRadius != widget.nearbyPageRadius;
@@ -161,11 +167,17 @@ class _ReaderLayoutRendererPreviewSurfaceState
     }
 
     if (state.shouldUseLegacyRenderer) {
+      if (widget.options.strictReleaseValidation) {
+        return ReaderLayoutStrictReleaseFailure(state: state);
+      }
       return widget.legacyBuilder?.call(context, state) ??
           const SizedBox.shrink();
     }
 
     if (!state.canRenderLayout) {
+      if (widget.options.strictReleaseValidation) {
+        return ReaderLayoutStrictReleaseFailure(state: state);
+      }
       return widget.legacyBuilder?.call(context, state) ??
           const SizedBox.shrink();
     }
@@ -190,6 +202,87 @@ class _ReaderLayoutRendererPreviewSurfaceState
       onSelectionChanged: widget.onSelectionChanged,
     );
     return widget.readyBuilder?.call(context, state, pagedView) ?? pagedView;
+  }
+}
+
+class ReaderLayoutStrictReleaseFailure extends StatelessWidget {
+  const ReaderLayoutStrictReleaseFailure({
+    super.key,
+    this.state,
+    this.reason,
+    this.diagnostic,
+  });
+
+  final ReaderLayoutRendererState? state;
+  final String? reason;
+  final String? diagnostic;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final effectiveReason =
+        reason ??
+        state?.diagnostics.fallbackReason ??
+        state?.errorMessage ??
+        'release_renderer_unavailable';
+    final details = <String>[
+      'reason=$effectiveReason',
+      if (state != null) 'kind=${state!.kind.name}',
+      if (state != null) 'requested=${state!.requestedMode.name}',
+      if (state != null) 'effective=${state!.effectiveMode.name}',
+      if (state != null) 'pages=${state!.pages.length}',
+      if (state?.errorMessage != null) 'error=${state!.errorMessage}',
+      if (diagnostic != null && diagnostic!.isNotEmpty) diagnostic!,
+    ];
+    return ColoredBox(
+      color: colorScheme.surface,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: colorScheme.errorContainer.withValues(alpha: 0.24),
+                border: Border.all(color: colorScheme.error),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: DefaultTextStyle(
+                  style:
+                      textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onSurface,
+                      ) ??
+                      TextStyle(color: colorScheme.onSurface),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Reader layout strict release failed',
+                        style: textTheme.titleMedium?.copyWith(
+                          color: colorScheme.error,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        details.join('\n'),
+                        key: const ValueKey<String>(
+                          'reader-layout-strict-release-failure',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

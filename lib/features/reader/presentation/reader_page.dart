@@ -186,6 +186,7 @@ import 'reader_feedback_widgets.dart';
 import 'reader_layout_context.dart';
 import 'reader_layout_paged_view.dart';
 import 'reader_layout_release_surface.dart';
+import 'reader_layout_renderer_preview_surface.dart';
 import 'paged_animation/curl_paged_animation_renderer.dart';
 import 'paged_animation/reader_paged_animation_surface.dart';
 import 'reader_interaction_coordinator.dart';
@@ -862,7 +863,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   bool _isAutoReadAdvancingChapter = false;
   bool _isAutoReadHandlingBoundary = false;
   bool _isScrollStepAnimating = false;
+  bool _isScrollStepPreparing = false;
   int _scrollStepAnimationToken = 0;
+  int _continuousScrollStepSyncToken = 0;
+  ReaderNavigationCommand? _pendingReaderNavigationCommand;
+  bool _isDrainingPendingReaderNavigation = false;
   bool _isUserScrollInteractionActive = false;
   bool _isContinuousTextNeighborWarmupQueued = false;
   bool _isContinuousTextNeighborWarmupActive = false;
@@ -955,7 +960,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   static const Duration _kOverlayControlsAutoHideDelay = Duration(seconds: 5);
   static const double _kShellOverlayTranslateDistance = 12;
   static const Duration _kCurlAutoTurnDuration = Duration(milliseconds: 760);
-  static const Duration _kPagedScrollTurnDuration = Duration(milliseconds: 300);
+  static const Duration _kPagedScrollTurnDuration = Duration(milliseconds: 380);
   static const Duration _kMangaPagedTurnDuration = Duration(milliseconds: 320);
   static const Duration _kAutoReadMinimumScrollDuration = Duration(
     milliseconds: 260,
@@ -2502,7 +2507,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       child: ListView.separated(
         controller: _scrollController,
         scrollCacheExtent: ScrollCacheExtent.pixels(
-          _document.hasImageBlocks ? 640 : 1800,
+          _document.hasImageBlocks ? 960 : 3200,
         ),
         padding: bodyPadding,
         itemCount: _continuousTextChapters.length,
@@ -3334,6 +3339,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       });
       _recordFirstPageTurnCompleted(mode: 'curl_cross_chapter');
       _scheduleReaderInteractionSettle();
+      _drainPendingReaderNavigationAfterSettle();
       _logReaderPageTurnResult(
         ReaderPageTurnResult(
           type: ReaderPageTurnResultType.committed,
@@ -3354,6 +3360,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         _pageTurnRuntimeController.resetCurlTransition();
       });
       _scheduleReaderInteractionSettle();
+      _drainPendingReaderNavigationAfterSettle();
       return;
     }
     final nextIndex = _curlAnimationToIndex.clamp(
@@ -3367,6 +3374,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _scheduleProgressSave();
     _recordFirstPageTurnCompleted(mode: 'curl');
     _scheduleReaderInteractionSettle();
+    _drainPendingReaderNavigationAfterSettle();
     _logReaderPageTurnResult(
       ReaderPageTurnResult(
         type: ReaderPageTurnResultType.committed,

@@ -268,12 +268,26 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
       return null;
     }
 
+    final anchorChapter = _findCurrentContinuousTextChapter();
+    final beforeAnchorStart =
+        anchorChapter == null
+            ? null
+            : _measureContinuousTextChapterLayoutFlow(
+              anchorChapter,
+            )?.startOffset;
+    final beforeScrollOffset =
+        _scrollController.hasClients ? _scrollController.position.pixels : null;
+    final visibleChapter =
+        _resolveActiveContinuousTextChapterFlow() ??
+        _findCurrentContinuousTextChapter();
+    final visibleChapterIndex = visibleChapter?.chapterIndex ?? _currentIndex;
     _continuousTextChapters = _retainContinuousTextWindowFlow(
       _continuousTextChapters,
+      currentChapterIndex: visibleChapterIndex,
     );
     final plan = _chapterWindowController.buildWindowPlan(
       chapters: _chapters,
-      currentChapterIndex: _currentIndex,
+      currentChapterIndex: visibleChapterIndex,
     );
     final adjacentIndex =
         forward ? plan?.nextChapterIndex : plan?.previousChapterIndex;
@@ -291,7 +305,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
       loadedChapterIndices: _continuousTextChapters.map(
         (item) => item.chapterIndex,
       ),
-      currentChapterIndex: _currentIndex,
+      currentChapterIndex: visibleChapterIndex,
       forward: forward,
     );
     if (targetIndex == null || targetIndex != adjacentIndex) {
@@ -300,18 +314,6 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
 
     _isScrollEdgeAdvancingChapter = true;
     try {
-      final anchorChapter =
-          forward ? null : _findCurrentContinuousTextChapter();
-      final beforeAnchorStart =
-          anchorChapter == null
-              ? null
-              : _measureContinuousTextChapterLayoutFlow(
-                anchorChapter,
-              )?.startOffset;
-      final beforeScrollOffset =
-          _scrollController.hasClients
-              ? _scrollController.position.pixels
-              : null;
       final chapter = await _loadContinuousTextChapterFlow(targetIndex);
       if (!mounted || chapter == null) {
         return null;
@@ -324,36 +326,64 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
       _updateReaderState(() {
         _continuousTextChapters = _insertContinuousTextChapterInWindowFlow(
           chapter,
+          currentChapterIndex: visibleChapterIndex,
         );
       });
-      if (!forward && anchorChapter != null && beforeAnchorStart != null) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted || !_scrollController.hasClients) {
-            return;
-          }
-          final afterAnchorStart =
-              _measureContinuousTextChapterLayoutFlow(
-                anchorChapter,
-              )?.startOffset;
-          if (afterAnchorStart == null) {
-            return;
-          }
-          final delta = afterAnchorStart - beforeAnchorStart;
-          if (delta.abs() <= 0.5) {
-            return;
-          }
-          final position = _scrollController.position;
-          final target = ((beforeScrollOffset ?? position.pixels) + delta)
-              .clamp(position.minScrollExtent, position.maxScrollExtent);
-          if ((position.pixels - target).abs() > 0.5) {
-            _scrollController.jumpTo(target);
-          }
-        });
-      }
+      _restoreContinuousWindowAnchorAfterLayout(
+        anchorChapter: anchorChapter,
+        beforeAnchorStart: beforeAnchorStart,
+        beforeScrollOffset: beforeScrollOffset,
+      );
       return chapter;
     } finally {
       _isScrollEdgeAdvancingChapter = false;
     }
+  }
+
+  void _restoreContinuousWindowAnchorAfterLayout({
+    required ReaderPageContinuousTextChapter? anchorChapter,
+    required double? beforeAnchorStart,
+    required double? beforeScrollOffset,
+  }) {
+    if (anchorChapter == null || beforeAnchorStart == null) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) {
+        return;
+      }
+      final afterAnchorStart =
+          _measureContinuousTextChapterLayoutFlow(anchorChapter)?.startOffset;
+      if (afterAnchorStart == null) {
+        return;
+      }
+      final delta = afterAnchorStart - beforeAnchorStart;
+      if (delta.abs() <= 0.5) {
+        return;
+      }
+      final position = _scrollController.position;
+      final target = ((beforeScrollOffset ?? position.pixels) + delta).clamp(
+        position.minScrollExtent,
+        position.maxScrollExtent,
+      );
+      if ((position.pixels - target).abs() > 0.5) {
+        _logger.info(
+          'Reader continuous window anchor restored',
+          context: <String, Object?>{
+            'chain': 'reader_scroll_step',
+            'step': 'continuous_window_anchor_restored',
+            'chapterId': anchorChapter.chapterId,
+            'activeChapterId': _chapterId,
+            'beforeAnchorStart': beforeAnchorStart.toStringAsFixed(1),
+            'afterAnchorStart': afterAnchorStart.toStringAsFixed(1),
+            'delta': delta.toStringAsFixed(1),
+            'beforeScrollOffset': beforeScrollOffset?.toStringAsFixed(1),
+            'targetOffset': target.toStringAsFixed(1),
+          },
+        );
+        _scrollController.jumpTo(target);
+      }
+    });
   }
 
   bool _isContinuousTextChapterActiveFlow(
@@ -1192,6 +1222,7 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
         _updateReaderState(() {
           _isLoadingContent = false;
         });
+        _drainPendingReaderNavigationAfterSettle();
         unawaited(_syncVolumeKeyPageInterception());
         if (readingRecordStartRatio != null) {
           _scheduleReadingRecordSessionStart(

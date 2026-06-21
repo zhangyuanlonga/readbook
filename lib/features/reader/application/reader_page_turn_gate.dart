@@ -65,7 +65,7 @@ class ReaderPageTurnGate {
       return const ReaderPageTurnGateDecision.allow();
     }
 
-    final reason = _firstBlockingReason(snapshot);
+    final reason = _firstBlockingReason(snapshot, requestKind);
     if (reason == null) {
       return const ReaderPageTurnGateDecision.allow();
     }
@@ -78,9 +78,12 @@ class ReaderPageTurnGate {
 
   ReaderPageTurnBlockReason? _firstBlockingReason(
     ReaderPageTurnGateSnapshot snapshot,
+    ReaderPageTurnRequestKind requestKind,
   ) {
     if (snapshot.paperCurlAnimating) {
-      return ReaderPageTurnBlockReason.paperCurlAnimating;
+      if (requestKind != ReaderPageTurnRequestKind.page) {
+        return ReaderPageTurnBlockReason.paperCurlAnimating;
+      }
     }
     if (snapshot.crossChapterSnapshotActive) {
       return ReaderPageTurnBlockReason.crossChapterSnapshotActive;
@@ -95,6 +98,9 @@ class ReaderPageTurnGate {
       return ReaderPageTurnBlockReason.curlPreviewActive;
     }
     if (snapshot.readerInteractionAnimating) {
+      if (requestKind == ReaderPageTurnRequestKind.page) {
+        return null;
+      }
       return ReaderPageTurnBlockReason.readerInteractionAnimating;
     }
     return null;

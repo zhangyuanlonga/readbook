@@ -39,6 +39,24 @@ void main() {
       expect(decision.reason, 'force_legacy');
     });
 
+    test('passes strict release validation to renderer options', () {
+      const policy = ReaderLayoutReleasePolicy(strictReleaseValidation: true);
+
+      final decision = policy.resolve(
+        contentMode: ReaderContentMode.text,
+        viewportKind: ReaderModeViewportKind.textPaged,
+        hasRenderableText: true,
+        contentLength: 120,
+      );
+
+      expect(decision.strictReleaseValidation, isTrue);
+      expect(decision.options.strictReleaseValidation, isTrue);
+      expect(
+        decision.toDiagnosticsContext(),
+        containsPair('readerLayoutReleaseStrictValidation', true),
+      );
+    });
+
     test('does not touch non paged text surfaces', () {
       const policy = ReaderLayoutReleasePolicy();
 

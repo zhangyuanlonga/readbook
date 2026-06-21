@@ -99,7 +99,7 @@ extension _ReaderPageShellExtension on _ReaderPageState {
         return;
       case ReaderModeViewportKind.textScroll:
         if (_settings.pageTurnMode.usesScrollLayout) {
-          await _advanceScrollReaderByStep(forward: forward);
+          await _advanceScrollReaderByStep(forward: forward, source: source);
         }
         return;
       case ReaderModeViewportKind.imageScroll:
@@ -108,82 +108,556 @@ extension _ReaderPageShellExtension on _ReaderPageState {
     }
   }
 
-  Future<void> _advanceScrollReaderByStep({required bool forward}) async {
+  Future<void> _advanceScrollReaderByStep({
+    required bool forward,
+    ReaderPageTurnRequestSource source = ReaderPageTurnRequestSource.unknown,
+  }) async {
     if (!_scrollController.hasClients) {
       return;
     }
 
-    if (_isScrollStepAnimating) {
-      _scrollStepAnimationToken += 1;
-      _isScrollStepAnimating = false;
-      final currentOffset =
-          _scrollController.position.pixels
-              .clamp(
-                _scrollController.position.minScrollExtent,
-                _scrollController.position.maxScrollExtent,
-              )
-              .toDouble();
-      try {
-        _scrollController.jumpTo(currentOffset);
-      } catch (_) {
-        // Ignore interruptions from a detached scroll position.
+    _isScrollStepPreparing = true;
+    try {
+      if (_shouldUseContinuousTextFlow && _continuousTextChapters.isEmpty) {
+        final seeded = _seedCurrentContinuousTextChapterForScrollStep();
+        if (seeded) {
+          await WidgetsBinding.instance.endOfFrame;
+          if (!mounted || !_scrollController.hasClients) {
+            return;
+          }
+        }
       }
-      if (!_scrollController.hasClients) {
+
+      if (_isScrollStepAnimating) {
+        _scrollStepAnimationToken += 1;
+        _isScrollStepAnimating = false;
+        if (!_scrollController.hasClients) {
+          return;
+        }
+      }
+
+      var position = _scrollController.position;
+      var distance = _resolveScrollPageStepDistance(position);
+      if (_shouldUseContinuousTextFlow) {
+        final prewarmed = await _prewarmContinuousAdjacentChapterForScrollStep(
+          forward: forward,
+          source: source,
+          distance: distance,
+        );
+        if (prewarmed) {
+          if (!mounted || !_scrollController.hasClients) {
+            return;
+          }
+          position = _scrollController.position;
+          distance = _resolveScrollPageStepDistance(position);
+        }
+      }
+      final current = position.pixels;
+      final target =
+          forward
+              ? min(current + distance, position.maxScrollExtent)
+              : max(current - distance, 0.0);
+      _logScrollPageStep(
+        step: 'request',
+        forward: forward,
+        source: source,
+        currentOffset: current,
+        targetOffset: target,
+        maxScrollExtent: position.maxScrollExtent,
+        distance: distance,
+      );
+
+      if ((target - current).abs() >= 1.0) {
+        final animationToken = ++_scrollStepAnimationToken;
+        _isScrollStepAnimating = true;
+        try {
+          await _scrollController.animateTo(
+            target,
+            duration: _ReaderPageState._kPagedScrollTurnDuration,
+            curve: Curves.easeOutCubic,
+          );
+        } catch (_) {
+          // Ignore interrupted animations.
+        } finally {
+          if (animationToken == _scrollStepAnimationToken) {
+            _isScrollStepAnimating = false;
+          }
+        }
+        if (animationToken != _scrollStepAnimationToken) {
+          _logScrollPageStep(
+            step: 'interrupted',
+            forward: forward,
+            source: source,
+            currentOffset:
+                _scrollController.hasClients
+                    ? _scrollController.position.pixels
+                    : null,
+            targetOffset: target,
+            maxScrollExtent:
+                _scrollController.hasClients
+                    ? _scrollController.position.maxScrollExtent
+                    : null,
+            distance: distance,
+          );
+          return;
+        }
+        _scheduleContinuousTextChapterSyncAfterScrollStep();
+        _scheduleProgressSave();
+        _drainPendingReaderNavigationAfterSettle();
+        _logScrollPageStep(
+          step: 'complete',
+          forward: forward,
+          source: source,
+          currentOffset:
+              _scrollController.hasClients
+                  ? _scrollController.position.pixels
+                  : null,
+          targetOffset: target,
+          maxScrollExtent:
+              _scrollController.hasClients
+                  ? _scrollController.position.maxScrollExtent
+                  : null,
+          distance: distance,
+        );
         return;
       }
-    }
 
-    final position = _scrollController.position;
+      if (_shouldUseContinuousTextFlow) {
+        final advanced = await _advanceContinuousScrollReaderToAdjacentChapter(
+          forward: forward,
+          source: source,
+          distance: distance,
+        );
+        if (advanced) {
+          return;
+        }
+      }
+
+      await _dispatchReaderNavigationCommand(
+        forward
+            ? ReaderNavigationCommand.nextChapter(
+              source: _navigationCommandSourceForPageTurnSource(source),
+            )
+            : ReaderNavigationCommand.previousChapter(
+              source: _navigationCommandSourceForPageTurnSource(source),
+            ),
+      );
+    } finally {
+      _isScrollStepPreparing = false;
+    }
+  }
+
+  double _resolveScrollPageStepDistance(ScrollPosition position) {
     final viewport = position.viewportDimension;
     final lineReserve =
         (_settings.fontSize *
                 _typographyMetricsResolver.resolveLineHeight(_settings))
             .clamp(18.0, viewport * 0.22)
             .toDouble();
-    final imageReserve = _document.hasImageBlocks ? 0.0 : lineReserve;
-    final distance =
-        (viewport * _settings.pageTurnStepRatio - imageReserve)
-            .clamp(120.0, max(viewport - imageReserve, 120.0))
-            .toDouble();
-    final current = position.pixels;
-    final target =
-        forward
-            ? min(current + distance, position.maxScrollExtent)
-            : max(current - distance, 0.0);
+    final visiblePageDistance =
+        _document.hasImageBlocks
+            ? viewport
+            : max(viewport - lineReserve, 120.0);
+    final preferredDistance = max(
+      visiblePageDistance,
+      viewport * _settings.pageTurnStepRatio,
+    );
+    return preferredDistance.clamp(120.0, max(viewport, 120.0)).toDouble();
+  }
 
-    if ((target - current).abs() >= 1.0) {
-      final animationToken = ++_scrollStepAnimationToken;
-      _isScrollStepAnimating = true;
-      try {
-        await _scrollController.animateTo(
-          target,
-          duration: _ReaderPageState._kPagedScrollTurnDuration,
-          curve: Curves.easeOutCubic,
-        );
-      } catch (_) {
-        // Ignore interrupted animations.
-      } finally {
-        if (animationToken == _scrollStepAnimationToken) {
-          _isScrollStepAnimating = false;
+  bool _seedCurrentContinuousTextChapterForScrollStep() {
+    final currentIndex = _currentIndex;
+    if (currentIndex == null ||
+        currentIndex < 0 ||
+        currentIndex >= _chapters.length ||
+        _continuousTextChapters.isNotEmpty ||
+        !_shouldUseContinuousTextFlow ||
+        _document.isPureImageDocument) {
+      return false;
+    }
+    final content = _content.trim();
+    final paragraphs =
+        _paragraphs.isNotEmpty
+            ? List<String>.unmodifiable(_paragraphs)
+            : _document.paragraphs.isNotEmpty
+            ? List<String>.unmodifiable(_document.paragraphs)
+            : content.isNotEmpty
+            ? <String>[content]
+            : const <String>[];
+    if (paragraphs.isEmpty) {
+      return false;
+    }
+    final chapter = _chapters[currentIndex];
+    _updateReaderState(() {
+      _continuousTextChapters = _insertContinuousTextChapterInWindowFlow(
+        ReaderPageContinuousTextChapter(
+          chapterId: _chapterId,
+          chapterUrl:
+              (_chapterUrl?.trim().isNotEmpty ?? false)
+                  ? _chapterUrl!.trim()
+                  : chapter.chapterUrl.trim(),
+          chapterTitle: chapter.title.trim(),
+          displayTitle:
+              (_chapterTitle?.trim().isNotEmpty ?? false)
+                  ? _chapterTitle!.trim()
+                  : chapter.title.trim(),
+          chapterIndex: currentIndex,
+          content: _content,
+          document: _document,
+          paragraphs: paragraphs,
+          isCached: _isCurrentChapterCached,
+        ),
+        currentChapterIndex: currentIndex,
+      );
+    });
+    _logScrollPageStep(
+      step: 'seed_current_continuous_chapter',
+      forward: true,
+      source: ReaderPageTurnRequestSource.navigationCommand,
+      currentOffset:
+          _scrollController.hasClients
+              ? _scrollController.position.pixels
+              : null,
+      maxScrollExtent:
+          _scrollController.hasClients
+              ? _scrollController.position.maxScrollExtent
+              : null,
+    );
+    return true;
+  }
+
+  Future<bool> _prewarmContinuousAdjacentChapterForScrollStep({
+    required bool forward,
+    required ReaderPageTurnRequestSource source,
+    required double distance,
+  }) async {
+    if (!_scrollController.hasClients || _continuousTextChapters.isEmpty) {
+      return false;
+    }
+    final position = _scrollController.position;
+    final edgeDistance =
+        forward
+            ? position.maxScrollExtent - position.pixels
+            : position.pixels - position.minScrollExtent;
+    final prewarmThreshold = max(
+      distance + 24.0,
+      position.viewportDimension * 1.2,
+    );
+    if (edgeDistance > prewarmThreshold) {
+      return false;
+    }
+    _logScrollPageStep(
+      step: 'prewarm_adjacent_request',
+      forward: forward,
+      source: source,
+      currentOffset: position.pixels,
+      maxScrollExtent: position.maxScrollExtent,
+      distance: distance,
+    );
+    final chapter = await _loadAdjacentContinuousTextChapter(forward: forward);
+    if (!mounted || chapter == null) {
+      _logScrollPageStep(
+        step: 'prewarm_adjacent_unavailable',
+        forward: forward,
+        source: source,
+        currentOffset:
+            _scrollController.hasClients
+                ? _scrollController.position.pixels
+                : null,
+        maxScrollExtent:
+            _scrollController.hasClients
+                ? _scrollController.position.maxScrollExtent
+                : null,
+        distance: distance,
+      );
+      return false;
+    }
+    await _resolveContinuousAdjacentScrollTarget(
+      chapter: chapter,
+      forward: forward,
+    );
+    if (!mounted || !_scrollController.hasClients) {
+      return false;
+    }
+    _logScrollPageStep(
+      step: 'prewarm_adjacent_ready',
+      forward: forward,
+      source: source,
+      currentOffset: _scrollController.position.pixels,
+      maxScrollExtent: _scrollController.position.maxScrollExtent,
+      distance: distance,
+    );
+    return true;
+  }
+
+  Future<bool> _advanceContinuousScrollReaderToAdjacentChapter({
+    required bool forward,
+    required ReaderPageTurnRequestSource source,
+    required double distance,
+  }) async {
+    final startPosition =
+        _scrollController.hasClients ? _scrollController.position : null;
+    _logScrollPageStep(
+      step: 'edge_load_adjacent',
+      forward: forward,
+      source: source,
+      currentOffset: startPosition?.pixels,
+      maxScrollExtent: startPosition?.maxScrollExtent,
+      distance: distance,
+    );
+    final visibleChapter =
+        _resolveActiveContinuousTextChapterForRuntime() ??
+        _findCurrentContinuousTextChapter();
+    final current = visibleChapter?.chapterIndex ?? _currentIndex;
+    final targetChapterIndex =
+        current == null
+            ? null
+            : _chapterNavigation.findReadableChapterIndex(
+              _chapters,
+              current + (forward ? 1 : -1),
+              forward: forward,
+            );
+    for (
+      var attempt = 0;
+      attempt < 6 && _isScrollEdgeAdvancingChapter;
+      attempt++
+    ) {
+      await WidgetsBinding.instance.endOfFrame;
+    }
+    ReaderPageContinuousTextChapter? chapter;
+    if (targetChapterIndex != null) {
+      for (final item in _continuousTextChapters) {
+        if (item.chapterIndex == targetChapterIndex) {
+          chapter = item;
+          break;
         }
       }
-      if (animationToken != _scrollStepAnimationToken) {
-        return;
+    }
+    chapter ??= await _loadAdjacentContinuousTextChapter(forward: forward);
+    if (!mounted || chapter == null) {
+      final hasAdjacent = targetChapterIndex != null;
+      if (!hasAdjacent) {
+        _showChapterBoundaryHint(isFirst: !forward);
+        _logScrollPageStep(
+          step: chapter == null ? 'edge_no_adjacent' : 'edge_cancelled',
+          forward: forward,
+          source: source,
+          currentOffset:
+              _scrollController.hasClients
+                  ? _scrollController.position.pixels
+                  : null,
+          maxScrollExtent:
+              _scrollController.hasClients
+                  ? _scrollController.position.maxScrollExtent
+                  : null,
+          distance: distance,
+        );
+        return true;
       }
-      _syncActiveContinuousTextChapterFromScroll();
-      _scheduleProgressSave();
-      return;
+      _logScrollPageStep(
+        step: 'edge_fallback_chapter_jump',
+        forward: forward,
+        source: source,
+        currentOffset:
+            _scrollController.hasClients
+                ? _scrollController.position.pixels
+                : null,
+        maxScrollExtent:
+            _scrollController.hasClients
+                ? _scrollController.position.maxScrollExtent
+                : null,
+        distance: distance,
+      );
+      await _jumpTo(targetChapterIndex, initialScrollRatio: forward ? 0 : 1);
+      return true;
     }
 
-    await _dispatchReaderNavigationCommand(
-      forward
-          ? const ReaderNavigationCommand.nextChapter(
-            source: ReaderNavigationCommandSource.scrollEdge,
-          )
-          : const ReaderNavigationCommand.previousChapter(
-            source: ReaderNavigationCommandSource.scrollEdge,
-          ),
+    final target = await _resolveContinuousAdjacentScrollTarget(
+      chapter: chapter,
+      forward: forward,
     );
+    if (!mounted || !_scrollController.hasClients || target == null) {
+      _logScrollPageStep(
+        step: 'edge_target_unavailable',
+        forward: forward,
+        source: source,
+        currentOffset:
+            _scrollController.hasClients
+                ? _scrollController.position.pixels
+                : null,
+        maxScrollExtent:
+            _scrollController.hasClients
+                ? _scrollController.position.maxScrollExtent
+                : null,
+        distance: distance,
+      );
+      if (targetChapterIndex != null) {
+        await _jumpTo(targetChapterIndex, initialScrollRatio: forward ? 0 : 1);
+      }
+      return true;
+    }
+
+    final animationToken = ++_scrollStepAnimationToken;
+    _isScrollStepAnimating = true;
+    try {
+      await _scrollController.animateTo(
+        target,
+        duration: _ReaderPageState._kPagedScrollTurnDuration,
+        curve: Curves.easeOutCubic,
+      );
+    } catch (_) {
+      // Ignore interrupted animations.
+    } finally {
+      if (animationToken == _scrollStepAnimationToken) {
+        _isScrollStepAnimating = false;
+      }
+    }
+    if (animationToken != _scrollStepAnimationToken) {
+      _logScrollPageStep(
+        step: 'edge_interrupted',
+        forward: forward,
+        source: source,
+        currentOffset:
+            _scrollController.hasClients
+                ? _scrollController.position.pixels
+                : null,
+        targetOffset: target,
+        maxScrollExtent:
+            _scrollController.hasClients
+                ? _scrollController.position.maxScrollExtent
+                : null,
+        distance: distance,
+      );
+      return true;
+    }
+    _scheduleContinuousTextChapterSyncAfterScrollStep();
+    _scheduleProgressSave();
+    _drainPendingReaderNavigationAfterSettle();
+    _logScrollPageStep(
+      step: 'edge_complete',
+      forward: forward,
+      source: source,
+      currentOffset:
+          _scrollController.hasClients
+              ? _scrollController.position.pixels
+              : null,
+      targetOffset: target,
+      maxScrollExtent:
+          _scrollController.hasClients
+              ? _scrollController.position.maxScrollExtent
+              : null,
+      distance: distance,
+    );
+    return true;
+  }
+
+  Future<double?> _resolveContinuousAdjacentScrollTarget({
+    required ReaderPageContinuousTextChapter chapter,
+    required bool forward,
+  }) async {
+    for (var attempt = 0; attempt < 4; attempt++) {
+      if (!mounted || !_scrollController.hasClients) {
+        return null;
+      }
+      final layout = _measureContinuousTextChapterLayoutFlow(chapter);
+      if (layout != null) {
+        final position = _scrollController.position;
+        final lineReserve =
+            (_settings.fontSize *
+                    _typographyMetricsResolver.resolveLineHeight(_settings))
+                .clamp(18.0, position.viewportDimension * 0.22)
+                .toDouble();
+        final rawTarget =
+            forward
+                ? layout.startOffset
+                : layout.endOffset - position.viewportDimension + lineReserve;
+        return rawTarget
+            .clamp(position.minScrollExtent, position.maxScrollExtent)
+            .toDouble();
+      }
+      await WidgetsBinding.instance.endOfFrame;
+    }
+    return null;
+  }
+
+  void _logScrollPageStep({
+    required String step,
+    required bool forward,
+    required ReaderPageTurnRequestSource source,
+    double? currentOffset,
+    double? targetOffset,
+    double? maxScrollExtent,
+    double? distance,
+  }) {
+    _logger.info(
+      'Reader scroll page step',
+      context: <String, Object?>{
+        'chain': 'reader_scroll_step',
+        'step': step,
+        'direction': forward ? 'next' : 'previous',
+        'source': source.name,
+        'chapterId': _chapterId,
+        'currentIndex': _currentIndex,
+        'continuousChapterCount': _continuousTextChapters.length,
+        'currentOffset': currentOffset?.toStringAsFixed(1),
+        'targetOffset': targetOffset?.toStringAsFixed(1),
+        'maxScrollExtent': maxScrollExtent?.toStringAsFixed(1),
+        'distance': distance?.toStringAsFixed(1),
+      },
+    );
+  }
+
+  void _scheduleContinuousTextChapterSyncAfterScrollStep() {
+    if (!_shouldUseContinuousTextFlow) {
+      _syncActiveContinuousTextChapterFromScroll();
+      return;
+    }
+    final token = ++_continuousScrollStepSyncToken;
+    unawaited(_syncContinuousTextChapterAfterScrollStepIdle(token));
+  }
+
+  Future<void> _syncContinuousTextChapterAfterScrollStepIdle(int token) async {
+    await Future<void>.delayed(const Duration(milliseconds: 260));
+    if (!mounted || token != _continuousScrollStepSyncToken) {
+      return;
+    }
+    if (_isScrollStepAnimating || _isUserScrollInteractionActive) {
+      await Future<void>.delayed(const Duration(milliseconds: 180));
+      if (!mounted ||
+          token != _continuousScrollStepSyncToken ||
+          _isScrollStepAnimating ||
+          _isUserScrollInteractionActive) {
+        return;
+      }
+    }
+    _syncActiveContinuousTextChapterFromScroll();
+    _scheduleProgressSave();
+  }
+
+  ReaderNavigationCommandSource _navigationCommandSourceForPageTurnSource(
+    ReaderPageTurnRequestSource source,
+  ) {
+    return switch (source) {
+      ReaderPageTurnRequestSource.chrome =>
+        ReaderNavigationCommandSource.chrome,
+      ReaderPageTurnRequestSource.audio => ReaderNavigationCommandSource.audio,
+      ReaderPageTurnRequestSource.autoRead =>
+        ReaderNavigationCommandSource.autoRead,
+      ReaderPageTurnRequestSource.tapZone =>
+        ReaderNavigationCommandSource.tapZone,
+      ReaderPageTurnRequestSource.keyboard =>
+        ReaderNavigationCommandSource.keyboard,
+      ReaderPageTurnRequestSource.swipe => ReaderNavigationCommandSource.swipe,
+      ReaderPageTurnRequestSource.volumeKey =>
+        ReaderNavigationCommandSource.volumeKey,
+      ReaderPageTurnRequestSource.scrollEdge =>
+        ReaderNavigationCommandSource.scrollEdge,
+      ReaderPageTurnRequestSource.catalog =>
+        ReaderNavigationCommandSource.catalog,
+      ReaderPageTurnRequestSource.navigationCommand ||
+      ReaderPageTurnRequestSource
+          .unknown => ReaderNavigationCommandSource.unknown,
+    };
   }
 
   Future<void> _turnMangaPage({required bool forward}) async {

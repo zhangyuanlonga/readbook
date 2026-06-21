@@ -103,6 +103,68 @@ void main() {
 
     expect(find.text('layout_stream_failed'), findsOneWidget);
   });
+
+  testWidgets('strict release validation blocks legacy fallback', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ReaderLayoutRendererPreviewSurface(
+            request: _request('正文'),
+            options: const ReaderLayoutDevOptions(
+              strictReleaseValidation: true,
+            ),
+            legacyBuilder: (context, state) {
+              return const Text('legacy builder should not render');
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(
+        const ValueKey<String>('reader-layout-strict-release-failure'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('legacy builder should not render'), findsNothing);
+  });
+
+  testWidgets('strict release validation blocks layout failure fallback', (
+    tester,
+  ) async {
+    final controller = ReaderLayoutRendererController(
+      streamController: ReaderLayoutStreamController(
+        engine: const _ThrowingLayoutEngine(),
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ReaderLayoutRendererPreviewSurface(
+            request: _request('boom'),
+            controller: controller,
+            options: const ReaderLayoutDevOptions(
+              mode: ReaderLayoutEngineMode.experimental,
+              diagnosticsEnabled: true,
+              strictReleaseValidation: true,
+            ),
+            legacyBuilder: (context, state) {
+              return const Text('legacy builder should not render');
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('reason=layout_stream_failed'), findsOneWidget);
+    expect(find.text('legacy builder should not render'), findsNothing);
+  });
 }
 
 ReaderLayoutRequest _request(String text) {

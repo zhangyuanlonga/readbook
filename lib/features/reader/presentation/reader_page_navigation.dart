@@ -155,6 +155,11 @@ extension _ReaderPageNavigationExtension on _ReaderPageState {
     ReaderNavigationCommand command,
     ReaderNavigationCommandDecision decision,
   ) {
+    if (_shouldDeferReaderNavigationCommand(command, decision)) {
+      _deferReaderNavigationCommand(command, decision);
+      return;
+    }
+
     if (decision.rejectReason == ReaderNavigationCommandRejectReason.boundary) {
       if (command.type == ReaderNavigationCommandType.previousChapter) {
         _showChapterBoundaryHint(isFirst: true);
@@ -179,6 +184,181 @@ extension _ReaderPageNavigationExtension on _ReaderPageState {
     final turnGateDecision = _readerPageTurnGateDecisionForCommand(command);
     return turnGateDecision.blockReason ==
         ReaderPageTurnBlockReason.crossChapterSnapshotActive;
+  }
+
+  bool _shouldDeferReaderNavigationCommand(
+    ReaderNavigationCommand command,
+    ReaderNavigationCommandDecision decision,
+  ) {
+    if (!_isDeferrableReaderNavigationCommand(command)) {
+      return false;
+    }
+    if (!_isDeferrableReaderNavigationSource(command.source)) {
+      return false;
+    }
+    return switch (decision.rejectReason) {
+      ReaderNavigationCommandRejectReason.pageTurnBusy ||
+      ReaderNavigationCommandRejectReason.loading => true,
+      ReaderNavigationCommandRejectReason.notMounted ||
+      ReaderNavigationCommandRejectReason.noChapters ||
+      ReaderNavigationCommandRejectReason.noCurrentChapter ||
+      ReaderNavigationCommandRejectReason.boundary ||
+      ReaderNavigationCommandRejectReason.invalidTarget ||
+      ReaderNavigationCommandRejectReason.unsupported ||
+      ReaderNavigationCommandRejectReason.selectionActive ||
+      null => false,
+    };
+  }
+
+  bool _isDeferrableReaderNavigationCommand(ReaderNavigationCommand command) {
+    return switch (command.type) {
+      ReaderNavigationCommandType.previousPage ||
+      ReaderNavigationCommandType.nextPage ||
+      ReaderNavigationCommandType.previousChapter ||
+      ReaderNavigationCommandType.nextChapter => true,
+      ReaderNavigationCommandType.reloadChapter ||
+      ReaderNavigationCommandType.jumpChapter => false,
+    };
+  }
+
+  bool _isDeferrableReaderNavigationSource(
+    ReaderNavigationCommandSource source,
+  ) {
+    return switch (source) {
+      ReaderNavigationCommandSource.tapZone ||
+      ReaderNavigationCommandSource.swipe ||
+      ReaderNavigationCommandSource.keyboard ||
+      ReaderNavigationCommandSource.volumeKey ||
+      ReaderNavigationCommandSource.chrome => true,
+      ReaderNavigationCommandSource.audio ||
+      ReaderNavigationCommandSource.scrollEdge ||
+      ReaderNavigationCommandSource.autoRead ||
+      ReaderNavigationCommandSource.catalog ||
+      ReaderNavigationCommandSource.unknown => false,
+    };
+  }
+
+  void _deferReaderNavigationCommand(
+    ReaderNavigationCommand command,
+    ReaderNavigationCommandDecision decision,
+  ) {
+    _pendingReaderNavigationCommand = command;
+    final context = <String, Object?>{
+      'chain': 'reader_navigation_command',
+      'step': 'defer_navigation_command',
+      'command': command.type.name,
+      'source': command.source.name,
+      'rejectReason': decision.rejectReason?.name,
+      'pageTurnBusyReason':
+          _readerPageTurnGateDecisionForCommand(command).blockReason?.name,
+      'chapterId': _chapterId,
+    };
+    developer.Timeline.instantSync(
+      'reader.navigation_command.deferred',
+      arguments: context,
+    );
+    _logger.debug(
+      'Reader navigation command deferred while reader is busy',
+      context: context,
+    );
+    if (_completeInterruptibleActivePageTurn()) {
+      _drainPendingReaderNavigationAfterSettle();
+    }
+  }
+
+  bool _completeInterruptibleActivePageTurn() {
+    if (_isPagedTransitionAnimating) {
+      final pageCount = _currentPagedPageCount;
+      if (pageCount <= 0) {
+        return false;
+      }
+      final state = _pageTurnRuntimeController.pagedTransition;
+      final targetPageIndex = state.toIndex.clamp(
+        0,
+        _safePageUpperBound(pageCount),
+      );
+      _pagedTransitionController.stop();
+      setState(() {
+        _pageTurnRuntimeController.currentPageIndex = targetPageIndex;
+        _pageTurnRuntimeController.beginPagedTransition(
+          PagedTransitionState(
+            style: state.style,
+            direction: state.direction,
+            fromIndex: targetPageIndex,
+            toIndex: targetPageIndex,
+          ),
+        );
+      });
+      _syncActiveReadingRecordSessionProgress();
+      _scheduleProgressSave();
+      _recordFirstPageTurnCompleted(mode: 'animated_interrupted');
+      _scheduleReaderInteractionSettle();
+      return true;
+    }
+
+    if (_isCurlAutoTurning && !_isCurlCrossChapterTurn) {
+      final pageCount = _currentPagedPageCount;
+      if (pageCount <= 0) {
+        return false;
+      }
+      final targetPageIndex = _curlAnimationToIndex.clamp(
+        0,
+        _safePageUpperBound(pageCount),
+      );
+      _curlAutoTurnController.stop();
+      setState(() {
+        _pageTurnRuntimeController.commitCurlTurn(pageIndex: targetPageIndex);
+      });
+      _syncActiveReadingRecordSessionProgress();
+      _scheduleProgressSave();
+      _recordFirstPageTurnCompleted(mode: 'curl_interrupted');
+      _scheduleReaderInteractionSettle();
+      return true;
+    }
+
+    final paperCurlState = _paperCurlViewKey.currentState;
+    if (paperCurlState?.completeActiveTurnImmediately() ?? false) {
+      _scheduleReaderInteractionSettle();
+      return true;
+    }
+
+    return false;
+  }
+
+  void _drainPendingReaderNavigationAfterSettle() {
+    if (_pendingReaderNavigationCommand == null ||
+        _isDrainingPendingReaderNavigation) {
+      return;
+    }
+    unawaited(_drainPendingReaderNavigation());
+  }
+
+  Future<void> _drainPendingReaderNavigation() async {
+    if (_isDrainingPendingReaderNavigation) {
+      return;
+    }
+    _isDrainingPendingReaderNavigation = true;
+    try {
+      await Future<void>.delayed(Duration.zero);
+      if (!mounted) {
+        return;
+      }
+      final command = _pendingReaderNavigationCommand;
+      if (command == null) {
+        return;
+      }
+      if (_isLoadingContent) {
+        return;
+      }
+      final turnGateDecision = _readerPageTurnGateDecisionForCommand(command);
+      if (turnGateDecision.isBlocked) {
+        return;
+      }
+      _pendingReaderNavigationCommand = null;
+      await _dispatchReaderNavigationCommand(command);
+    } finally {
+      _isDrainingPendingReaderNavigation = false;
+    }
   }
 
   void _logReaderNavigationCommand({

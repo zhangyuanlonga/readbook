@@ -14,6 +14,7 @@ class ReaderLayoutReleasePolicy {
   const ReaderLayoutReleasePolicy({
     this.releaseEnabled = _releaseEnabledFromEnvironment,
     this.forceLegacy = _forceLegacyFromEnvironment,
+    this.strictReleaseValidation = _strictReleaseValidationFromEnvironment,
     this.showDiagnosticsOverlay = _showDiagnosticsOverlayFromEnvironment,
     this.maxContentLength = _maxContentLengthFromEnvironment,
     this.pageTurnDelegate = const ReaderPageTurnDelegate(),
@@ -26,6 +27,8 @@ class ReaderLayoutReleasePolicy {
   static const bool _forceLegacyFromEnvironment = bool.fromEnvironment(
     'READER_LAYOUT_FORCE_LEGACY',
   );
+  static const bool _strictReleaseValidationFromEnvironment =
+      bool.fromEnvironment('READER_LAYOUT_STRICT_RELEASE');
   static const bool _showDiagnosticsOverlayFromEnvironment =
       bool.fromEnvironment('READER_LAYOUT_SHOW_DIAGNOSTICS');
   static const int _maxContentLengthFromEnvironment = int.fromEnvironment(
@@ -35,6 +38,7 @@ class ReaderLayoutReleasePolicy {
 
   final bool releaseEnabled;
   final bool forceLegacy;
+  final bool strictReleaseValidation;
   final bool showDiagnosticsOverlay;
   final int maxContentLength;
   final ReaderPageTurnDelegate pageTurnDelegate;
@@ -77,6 +81,7 @@ class ReaderLayoutReleasePolicy {
       showDiagnosticsOverlay: showDiagnosticsOverlay,
       releaseEnabled: releaseEnabled,
       forceLegacy: forceLegacy,
+      strictReleaseValidation: strictReleaseValidation,
       maxContentLength: maxContentLength,
       requestedPageAnimationStyle: pageAnimationStyle,
       pageTurnDelegateReason: pageTurnDecision?.reason,
@@ -161,6 +166,7 @@ class ReaderLayoutReleaseDecision {
     required this.showDiagnosticsOverlay,
     required this.releaseEnabled,
     required this.forceLegacy,
+    required this.strictReleaseValidation,
     required this.maxContentLength,
     required this.requestedPageAnimationStyle,
     this.pageTurnDelegateReason,
@@ -173,6 +179,7 @@ class ReaderLayoutReleaseDecision {
   final bool showDiagnosticsOverlay;
   final bool releaseEnabled;
   final bool forceLegacy;
+  final bool strictReleaseValidation;
   final int maxContentLength;
   final ReaderPageAnimationStyle requestedPageAnimationStyle;
   final String? pageTurnDelegateReason;
@@ -181,6 +188,7 @@ class ReaderLayoutReleaseDecision {
     return ReaderLayoutDevOptions(
       mode: mode,
       diagnosticsEnabled: diagnosticsEnabled,
+      strictReleaseValidation: strictReleaseValidation,
     );
   }
 
@@ -191,6 +199,7 @@ class ReaderLayoutReleaseDecision {
       'readerLayoutReleaseReason': reason,
       'readerLayoutReleaseMode': mode.name,
       'readerLayoutReleaseForceLegacy': forceLegacy,
+      'readerLayoutReleaseStrictValidation': strictReleaseValidation,
       'readerLayoutReleaseShowDiagnostics': showDiagnosticsOverlay,
       'readerLayoutReleaseRequestedAnimation': requestedPageAnimationStyle.name,
       if (pageTurnDelegateReason != null)

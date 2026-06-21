@@ -102,8 +102,9 @@ class ReaderPaperCurlPagedView extends StatefulWidget {
 }
 
 class ReaderPaperCurlPagedViewState extends State<ReaderPaperCurlPagedView> {
+  static const int _kPaperCurlFlipTimeMs = 680;
   static const Duration _kAnimationCompleteTimeout = Duration(
-    milliseconds: 2400,
+    milliseconds: 1600,
   );
 
   final GlobalKey _currentPageKey = GlobalKey();
@@ -125,6 +126,37 @@ class ReaderPaperCurlPagedViewState extends State<ReaderPaperCurlPagedView> {
   List<ui.Image>? _snapshotPages;
 
   bool get isAnimating => _isAnimating || _queuedDirection != null;
+
+  bool completeActiveTurnImmediately({bool emitCommittedResult = true}) {
+    final pendingIndex = _pendingPageIndex;
+    final pageCount = widget.surface.pageCount;
+    if (!_isAnimating || pendingIndex == null || pageCount <= 0) {
+      return false;
+    }
+    final direction = _queuedDirection ?? _overlayDirection;
+    final fromIndex = _pendingFromPageIndex ?? widget.surface.safePageIndex;
+    final safeIndex = pendingIndex.clamp(0, pageCount - 1).toInt();
+    _logPaperCurlTrace(
+      'complete_active_turn_immediately',
+      context: <String, Object?>{
+        'direction': direction,
+        'fromPageIndex': fromIndex,
+        'targetPageIndex': safeIndex,
+      },
+    );
+    _cancelAnimationTimeout();
+    if (emitCommittedResult) {
+      _emitTurnResult(
+        ReaderPaperCurlResultType.committed,
+        direction: direction,
+        fromPageIndex: fromIndex,
+        targetPageIndex: safeIndex,
+      );
+    }
+    widget.onPageCommitted(safeIndex);
+    _resetOverlay();
+    return true;
+  }
 
   @override
   void didUpdateWidget(covariant ReaderPaperCurlPagedView oldWidget) {
@@ -724,7 +756,7 @@ class _PaperCurlSnapshotOverlay extends StatelessWidget {
             drawShadow: true,
             hideLeftShadow: true,
             onlyVerticalPageFlip: false,
-            flippingTime: 1200,
+            flippingTime: ReaderPaperCurlPagedViewState._kPaperCurlFlipTimeMs,
             swipeDistance: 42,
             cornerTriggerAreaSize: 0.22,
             showPageCorners: true,

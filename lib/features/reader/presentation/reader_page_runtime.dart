@@ -234,6 +234,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
             return;
           }
           _applyReaderInteractionTransition(transition);
+          _drainPendingReaderNavigationAfterSettle();
         },
       ),
     );
@@ -306,7 +307,15 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       if (!mounted) {
         return;
       }
-      if (plan.backwardChapterIndex != null) {
+      final shouldWarmBackward =
+          plan.backwardChapterIndex != null &&
+          (!_scrollController.hasClients ||
+              _scrollController.position.pixels <=
+                  max(
+                    360.0,
+                    _scrollController.position.viewportDimension * 0.75,
+                  ));
+      if (shouldWarmBackward) {
         final chapter = await _loadAdjacentContinuousTextChapter(
           forward: false,
         );
@@ -1304,6 +1313,9 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
         !_scrollController.hasClients ||
         _continuousTextChapters.isEmpty ||
         _isScrollEdgeAdvancingChapter ||
+        _isScrollStepPreparing ||
+        _isScrollStepAnimating ||
+        _isDrainingPendingReaderNavigation ||
         _isAutoReadAdvancingChapter ||
         _isProgrammaticAutoReadScrollActive) {
       return;
@@ -2146,6 +2158,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     _syncActiveReadingRecordSessionProgress();
     _scheduleProgressSave();
     _scheduleReaderInteractionSettle();
+    _drainPendingReaderNavigationAfterSettle();
     _logReaderPageTurnResult(
       ReaderPageTurnResult(
         type: ReaderPageTurnResultType.committed,
@@ -2165,13 +2178,26 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
   Future<ReaderPageTurnResult?> _turnPaperCurlPage(
     ReaderPageTurnPlan plan,
   ) async {
-    if (_paperCurlViewKey.currentState?.isAnimating ?? false) {
-      return ReaderPageTurnResult(
-        type: ReaderPageTurnResultType.rejected,
-        request: plan.request,
-        executionType: ReaderPageTurnExecutionType.paperCurl,
-        rejectReason: ReaderPageTurnRejectReason.pageTurnBusy,
-      );
+    var paperCurlState = _paperCurlViewKey.currentState;
+    if (paperCurlState?.isAnimating ?? false) {
+      if (!paperCurlState!.completeActiveTurnImmediately()) {
+        return ReaderPageTurnResult(
+          type: ReaderPageTurnResultType.rejected,
+          request: plan.request,
+          executionType: ReaderPageTurnExecutionType.paperCurl,
+          rejectReason: ReaderPageTurnRejectReason.pageTurnBusy,
+        );
+      }
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) {
+        return ReaderPageTurnResult(
+          type: ReaderPageTurnResultType.rejected,
+          request: plan.request,
+          executionType: ReaderPageTurnExecutionType.paperCurl,
+          rejectReason: ReaderPageTurnRejectReason.pageTurnBusy,
+        );
+      }
+      paperCurlState = _paperCurlViewKey.currentState;
     }
     final direction = plan.safeDirection;
     final pageCount = _currentPagedPageCount;
@@ -2194,7 +2220,6 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       );
     }
 
-    final paperCurlState = _paperCurlViewKey.currentState;
     if (paperCurlState == null) {
       return ReaderPageTurnResult(
         type: ReaderPageTurnResultType.rejected,
@@ -2234,6 +2259,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     _syncActiveReadingRecordSessionProgress();
     _scheduleProgressSave();
     _scheduleReaderInteractionSettle();
+    _drainPendingReaderNavigationAfterSettle();
     _logReaderPageTurnResult(
       ReaderPageTurnResult(
         type: ReaderPageTurnResultType.committed,
@@ -2286,6 +2312,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     _scheduleProgressSave();
     _recordFirstPageTurnCompleted(mode: 'animated');
     _scheduleReaderInteractionSettle();
+    _drainPendingReaderNavigationAfterSettle();
     _logReaderPageTurnResult(
       ReaderPageTurnResult(
         type: ReaderPageTurnResultType.committed,

@@ -5,16 +5,19 @@ class ReaderLayoutDevOptions {
     this.mode = ReaderLayoutEngineMode.legacy,
     this.diagnosticsEnabled = false,
     this.includeAdapterMetrics = true,
+    this.strictReleaseValidation = false,
   });
 
   const ReaderLayoutDevOptions.adapterOnlyDiagnostics()
     : mode = ReaderLayoutEngineMode.adapterOnly,
       diagnosticsEnabled = true,
-      includeAdapterMetrics = true;
+      includeAdapterMetrics = true,
+      strictReleaseValidation = false;
 
   final ReaderLayoutEngineMode mode;
   final bool diagnosticsEnabled;
   final bool includeAdapterMetrics;
+  final bool strictReleaseValidation;
 
   bool get buildsLayout => mode != ReaderLayoutEngineMode.legacy;
 }
