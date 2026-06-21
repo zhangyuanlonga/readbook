@@ -365,12 +365,12 @@ void main() {
       'marks ready txt with empty content and missing offsets as stale',
       () async {
         final now = DateTime.parse('2026-02-23T12:00:00.000Z');
-        final file = File('${tempDir.path}/legacy_txt.txt');
+        final file = File('${tempDir.path}/stale_txt.txt');
         await file.writeAsString('第1章\n旧内容');
         await repository.upsertBook(
           LocalBook(
-            id: 'local_index_legacy_txt',
-            title: 'legacy txt',
+            id: 'local_index_stale_txt',
+            title: 'stale txt',
             format: LocalBookFormat.txt,
             storagePath: file.path,
             fileSize: await file.length(),
@@ -381,11 +381,11 @@ void main() {
           ),
         );
         await repository.replaceChapters(
-          bookId: 'local_index_legacy_txt',
+          bookId: 'local_index_stale_txt',
           chapters: <LocalChapter>[
             LocalChapter(
-              id: 'local_index_legacy_txt_0',
-              bookId: 'local_index_legacy_txt',
+              id: 'local_index_stale_txt_0',
+              bookId: 'local_index_stale_txt',
               chapterIndex: 0,
               title: '第1章',
               content: '',
@@ -399,7 +399,7 @@ void main() {
         final service = buildService(parsers: const [_FakeSuccessParser()]);
 
         final refreshed = await service.refreshBookState(
-          bookId: 'local_index_legacy_txt',
+          bookId: 'local_index_stale_txt',
         );
 
         expect(refreshed, isNotNull);

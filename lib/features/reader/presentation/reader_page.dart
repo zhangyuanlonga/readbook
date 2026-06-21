@@ -901,7 +901,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   String? _layoutReleaseRequestSignature;
   String? _layoutReleaseDiagnostic;
   double _layoutReleaseTargetRatio = 0;
-  int _layoutReleaseInitialPageIndex = 0;
+  int? _layoutReleaseInitialPageIndex = 0;
   bool _layoutReleaseRendererActive = false;
   ReaderPaginationSpec? _lastPaginationSpec;
   double? _measuredPinnedChapterHeaderWidth;
@@ -1044,7 +1044,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   void _syncLayoutReleaseRequest(
     ReaderLayoutRequest request, {
     required double targetRatio,
-    required int initialPageIndex,
+    required int? initialPageIndex,
   }) {
     if (_layoutReleaseRequestSignature == request.layoutSignature) {
       return;
@@ -1057,7 +1057,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _layoutReleaseLayoutSignature = null;
     _layoutReleaseDiagnostic = null;
     _layoutReleaseTargetRatio = targetRatio.clamp(0.0, 1.0).toDouble();
-    _layoutReleaseInitialPageIndex = max(0, initialPageIndex);
+    _layoutReleaseInitialPageIndex =
+        initialPageIndex == null ? null : max(0, initialPageIndex);
   }
 
   TextAlign _paragraphTextAlign(ReaderSettings settings) {
@@ -3282,6 +3283,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     setState(() {
       _pageTurnRuntimeController.commitCurlTurn(pageIndex: nextIndex);
+      _pageTurnRuntimeController.commitPagedPosition(
+        pageIndex: nextIndex,
+        pageCount: pageCount,
+      );
     });
     _scheduleProgressSave();
     _recordFirstPageTurnCompleted(mode: 'curl');

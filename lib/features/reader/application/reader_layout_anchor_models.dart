@@ -189,8 +189,8 @@ class ReaderLayoutRangeSegment {
   final String selectedText;
 }
 
-class ReaderLayoutLegacyProgressSnapshot {
-  const ReaderLayoutLegacyProgressSnapshot({
+class ReaderLayoutProgressSnapshot {
+  const ReaderLayoutProgressSnapshot({
     required this.chapterOffset,
     required this.chapterPositionRatio,
     required this.pageIndex,

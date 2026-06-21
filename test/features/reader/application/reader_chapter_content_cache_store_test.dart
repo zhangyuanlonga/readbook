@@ -52,33 +52,30 @@ void main() {
       expect(writeResult.status, AppCacheWriteStatus.written);
       expect(readResult.status, AppCacheReadStatus.hit);
       expect(readResult.entry?.payload, '{"content":"正文"}');
-      expect(
-        readResult.entry?.metadata['legacyCacheKey'],
-        'source_1|chapter://1',
-      );
+      expect(readResult.entry?.metadata['cacheKey'], 'source_1|chapter://1');
     });
 
-    test('reads existing legacy source-url cache keys', () async {
+    test('reads existing source-url cache keys', () async {
       await database.upsertChapterCache(
-        cacheKey: 'source_legacy|chapter://legacy',
-        bookId: 'book_legacy',
-        sourceId: 'source_legacy',
+        cacheKey: 'source_1|chapter://1',
+        bookId: 'book_1',
+        sourceId: 'source_1',
         chapterIndex: 2,
-        chapterUrl: 'chapter://legacy',
-        content: 'legacy payload',
+        chapterUrl: 'chapter://1',
+        content: 'cached payload',
       );
 
       final result = await store.read(
         keyBuilder.build(
-          bookId: 'book_legacy',
-          sourceId: 'source_legacy',
-          chapterUrl: 'chapter://legacy',
+          bookId: 'book_1',
+          sourceId: 'source_1',
+          chapterUrl: 'chapter://1',
           chapterIndex: 2,
         ),
       );
 
       expect(result.status, AppCacheReadStatus.hit);
-      expect(result.entry?.payload, 'legacy payload');
+      expect(result.entry?.payload, 'cached payload');
     });
 
     test('returns miss for absent chapter content', () async {

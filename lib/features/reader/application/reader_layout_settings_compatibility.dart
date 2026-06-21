@@ -59,7 +59,7 @@ class ReaderLayoutSettingsCompatibilityMatrix {
     ReaderLayoutSettingCompatibilityItem(
       key: 'horizontalPadding',
       status: ReaderLayoutSettingCompatibilityStatus.trackedInLayoutSignature,
-      reason: 'legacy content rect alias derived from body margins',
+      reason: 'content rect alias derived from body margins',
     ),
     ReaderLayoutSettingCompatibilityItem(
       key: 'fontIdentity',

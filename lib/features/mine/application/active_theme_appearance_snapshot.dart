@@ -70,6 +70,9 @@ AppAdvancedThemeEffect _themeEffectFromJson(Object? value) {
     'snow' => AppAdvancedThemeEffect.snow,
     'leaf' => AppAdvancedThemeEffect.leaf,
     'sakura' => AppAdvancedThemeEffect.sakura,
+    'rose' => AppAdvancedThemeEffect.rose,
+    'whitePetal' => AppAdvancedThemeEffect.whitePetal,
+    'wisteria' => AppAdvancedThemeEffect.wisteria,
     'firefly' => AppAdvancedThemeEffect.firefly,
     _ => AppAdvancedThemeEffect.none,
   };

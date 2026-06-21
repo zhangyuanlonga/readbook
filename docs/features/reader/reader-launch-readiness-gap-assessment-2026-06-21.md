@@ -69,9 +69,9 @@ own 分支相对 MD3 额外值得参考：
 
 | 分页子能力 | Legado MD3 / own | 我们当前 | 缺口与验收要求 |
 |---|---|---|---|
-| 页模型 | `TextPage` 内含 chapter/page index、lines、read length、selection pos | legacy 有 paragraph slice，新 renderer 有 layout page/line | 需要确认 release renderer 的 page/line/offset 能覆盖搜索、朗读、标注、书签全部场景 |
+| 页模型 | `TextPage` 内含 chapter/page index、lines、read length、selection pos | 新 renderer 使用 layout page/line，历史 paragraph slice 已退出运行态 | 需要确认 release renderer 的 page/line/offset 能覆盖搜索、朗读、标注、书签全部场景 |
 | 前后页热备 | `prevPage / curPage / nextPage` 常驻，`nextPlusPage` 支撑滚动预渲染 | PageView/animation surface 按当前 pageCount 和目标页构建 | 快速连续翻页、跨章首尾页必须压测，不只测单次点击 |
-| 页码与总页数 | 当前章节 layoutChannel 逐步产页，未完成时显示估算页数 | release pageCount、legacy pageCount 已做 authority 隔离 | 设置变化、fallback、跨章后页码不能短暂回 0、不能串旧 renderer |
+| 页码与总页数 | 当前章节 layoutChannel 逐步产页，未完成时显示估算页数 | release pageCount 是唯一 authority，旧 pageCount 已退出运行态 | 设置变化、跨章后页码不能短暂回 0、不能串历史状态 |
 | 进度保存 | `durChapterIndex + durChapterPos` 统一描述页/章位置 | 章节 ratio、logical position、page index 混合 | 需要验证分页/滚动切换、字体变化、退出重进后恢复到同一段文字附近 |
 | 页内翻页 | `moveToNextPage / setPageIndex` 直接更新 `durChapterPos` | `_turnPagedTextPage` 经 page turn runtime/controller | 快速双击、键盘、音量键、触控滑动必须证明不会重复提交或丢页 |
 | 跨章分页 | 目标章已有 `nextTextChapter` 时直接切换，否则加载后刷新 | 已改成目标未 ready 时降级无动画提交 | 还需证明后台预热足够；快速猛点跨章不能出现空白、旧页残影、错误 loading |
@@ -327,13 +327,13 @@ own 分支相对 MD3 额外值得参考：
 - [ ] V8-P0 只做上线门禁：样本 UI smoke、profile、版本回滚包、全项目门禁。
 - [ ] V8-P1 做 Legado 对齐的滚动手感：可见行感知滚动距离、跨章窗口稳定化、快速输入压测。
 - [ ] V8-P2 做新 renderer 1:1：动画原生承接、搜索/朗读/自动阅读 UI 验收、EPUB 图片策略。
-- [ ] 完成 V8-P0 后再决定是否扩大灰度；完成 V8-P1/P2 后再讨论删除旧阅读器。
+- [ ] 完成 V8-P0 后再决定是否扩大灰度；旧阅读器已不作为包内 fallback，V8-P1/P2 只评估新阅读器体验是否达标。
 
 ---
 
 ## 8. V8 阶段性任务拆分
 
-**V8 目标**: 不是继续堆功能，而是把新阅读器从“代码已接入”推进到“现有用户可稳定使用、能灰度、能回滚、知道哪些功能还不能删除旧实现”。
+**V8 目标**: 不是继续堆功能，而是把新阅读器从“代码已接入”推进到“现有用户可稳定使用、能灰度、能回滚、知道哪些体验仍需补齐”。
 **当前进度**: 50%。阶段 0-8 已完成自动化门禁、样本基线、设置 owner 矩阵代码补齐、专项能力/多 surface/性能预算定向测试和当前上线决策；分页/滚动/设置/朗读/亮度/版本回滚包仍缺真机 UI 验收，不能据此认定可全量上线。
 
 进度口径：
@@ -342,13 +342,13 @@ own 分支相对 MD3 额外值得参考：
 - [x] 30%：完成 P0 自动化门禁，能证明当前代码基线可进入真机 smoke。
 - [ ] 60%：完成分页、滚动、设置三条主链路的高风险体验修复。
 - [ ] 85%：完成搜索、书签、朗读、自动阅读、选择标注、EPUB 混排专项验收。
-- [ ] 100%：完成旧阅读器删除条件复核，并形成是否删除旧阅读器的结论。
+- [ ] 100%：完成新阅读器可用性复核，并形成是否扩大灰度/默认上线的结论。
 
 ### 阶段 0-4 执行记录（2026-06-21）
 
 | 阶段 | 状态 | 已完成 | 未完成/风险 |
 |---|---|---|---|
-| 阶段 0：冻结基线 | 部分完成 | 已确认 `docs/test_readr` 三个样本、文件大小、EPUB HTML 条目数、默认/legacy 开关位置、设置入口与动画枚举 | 还未逐样本记录首屏文字、目标搜索词、章节末尾跨章位置 |
+| 阶段 0：冻结基线 | 部分完成 | 已确认 `docs/test_readr` 三个样本、文件大小、EPUB HTML 条目数、默认单路径状态、设置入口与动画枚举 | 还未逐样本记录首屏文字、目标搜索词、章节末尾跨章位置 |
 | 阶段 1：代码门禁 | 自动化完成 | reader analyze、全项目 analyze、application、presentation、本地 parser 测试均通过 | 默认包/回滚版本“实际打开阅读器”仍需模拟器或真机手工 smoke |
 | 阶段 2：分页 | 自动化覆盖完成 | 已由 presentation/application 测试覆盖动画 registry、paged transition、paperCurl runtime、cross chapter snapshot、EPUB paged smoke | 每种动画的同章/跨章/快速取消还未真机逐项 pass/fail |
 | 阶段 3：滚动 | 自动化覆盖完成 | 已由 scroll renderer、viewport builder、selection area、EPUB scroll smoke 覆盖基础链路 | Legado 手感级对齐、快速猛点、跨章自然滚动仍需真机验收和可能继续修复 |
@@ -472,7 +472,7 @@ own 分支相对 MD3 额外值得参考：
 
 ### 阶段 5：专项能力等价验收
 
-**目标**: 补齐旧阅读器已有能力，避免用户切到新阅读器后发现常用功能不能用。
+**目标**: 确认用户常用能力在新阅读器单路径下仍可用，避免现有用户升级后发现常用功能不能用。
 
 - [x] 搜索：搜索结果跳转、高亮、跨章搜索、退出搜索恢复的 application 层自动化覆盖已通过。
 - [x] 目录：章节跳转、章节末尾跳转、切换分页/滚动后目录进度的跳转/entry resolver 自动化覆盖已通过。
@@ -481,7 +481,7 @@ own 分支相对 MD3 额外值得参考：
 - [ ] 朗读：从当前页开始、高亮跟随、跨页、跨章、手动翻页同步。
 - [x] 自动阅读：分页自动翻页、滚动自动滚、暂停恢复、手动打断、书末行为的 coordinator 自动化覆盖已通过。
 - [x] 阅读记录：阅读时长、最后阅读位置、切 renderer 后统计不重复不丢的 coordinator/metrics 自动化覆盖已通过。
-- [ ] 阶段完成：旧阅读器常用功能在新 renderer 下都有 pass/fail 结论；fail 项不得进入删除旧阅读器范围。
+- [ ] 阶段完成：常用功能在新 renderer 下都有 pass/fail 结论；fail 项不得进入扩大灰度范围。
 
 **当前进度**: 60%。专项能力自动化覆盖已通过；朗读真实播放、高亮跟随、灵感工具窗完整 UI 流仍需真机验收。
 
@@ -516,9 +516,9 @@ own 分支相对 MD3 额外值得参考：
 
 **当前进度**: 25%。性能预算和 widget smoke 已通过；真机 profile 数据仍为空，所以不能据此判断放量性能。
 
-### 阶段 8：上线决策与旧阅读器处理
+### 阶段 8：上线决策与单路径发布策略
 
-**目标**: 给出明确决策：能否灰度、能否默认、旧阅读器保留还是删除。
+**目标**: 给出明确决策：能否灰度、能否默认、如何用版本/提交回滚兜底。
 
 - [x] 汇总阶段 0-7 的 pass/fail。
 - [x] 列出必须上线前修复的 P0。
@@ -527,9 +527,9 @@ own 分支相对 MD3 额外值得参考：
 - [x] 决定默认动画和默认翻页模式。
 - [x] 决定是否开放全部动画，还是按能力禁用部分动画。
 - [x] 决定是否小范围灰度新 renderer。
-- [x] 决定旧阅读器是否继续保留 fallback。
-- [ ] 若考虑删除旧阅读器，必须确认新 renderer 已原生承接分页动画、滚动、搜索、目录、书签、选择标注、朗读、自动阅读、EPUB、漫画/PDF/音频隔离。
-- [ ] 阶段完成：形成“可上线 / 可灰度 / 不可上线 / 是否删除旧阅读器”的最终结论。
+- [x] 决定旧阅读器不再继续保留包内 fallback。
+- [x] 旧 reader 数据不再兼容迁移：旧进度/旧缓存/无 layout anchor 锚点会被清理或忽略，用户回到新阅读器默认样式/默认位置。
+- [ ] 阶段完成：形成“可上线 / 可灰度 / 不可上线 / 是否扩大默认”的最终结论。
 
 **当前进度**: 80%。当前结论已形成：自动化门禁允许进入真机 smoke；未完成真机 smoke、profile、版本回滚包前，不建议外部灰度或全量默认。
 

@@ -108,10 +108,32 @@ class ReaderPageTurnRuntimeController {
     );
   }
 
-  void commitPaperCurlTurn({required int pageIndex, required int pageCount}) {
-    currentPageIndex = pageIndex;
+  void commitPagedPosition({required int pageIndex, required int pageCount}) {
+    final safeIndex =
+        pageCount <= 0 ? 0 : pageIndex.clamp(0, max(0, pageCount - 1)).toInt();
+    currentPageIndex = safeIndex;
     pagedPaginationState = pagedPaginationState.copyWith(
-      pendingRestoreRatio: pageIndex / max(1, pageCount - 1),
+      pendingRestoreRatio: safeIndex / max(1, pageCount - 1),
+    );
+  }
+
+  void commitPaperCurlTurn({required int pageIndex, required int pageCount}) {
+    commitPagedPosition(pageIndex: pageIndex, pageCount: pageCount);
+  }
+
+  void commitCrossChapterPagedTurn({
+    required int direction,
+    required int pageCount,
+  }) {
+    final forward = direction >= 0;
+    final targetRatio = forward ? 0.0 : 1.0;
+    final targetPageIndex =
+        forward || pageCount <= 0 ? 0 : max(0, pageCount - 1);
+    currentPageIndex = targetPageIndex;
+    pagedTransition = PagedTransitionController.idleState;
+    curlTransition = const ReaderCurlTransitionState();
+    pagedPaginationState = pagedPaginationState.copyWith(
+      pendingRestoreRatio: targetRatio,
     );
   }
 

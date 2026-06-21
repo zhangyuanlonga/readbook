@@ -558,15 +558,6 @@ class ReaderPaginationCacheService
         await file.delete();
         deleted += 1;
       }
-      final legacyFile = await _legacyChapterLayoutCacheFile(
-        sourceId: sourceId,
-        chapterUrl: chapterUrl,
-        signature: signature,
-      );
-      if (await legacyFile.exists()) {
-        await legacyFile.delete();
-        deleted += 1;
-      }
     } catch (_) {
       // Delete failures are reported as partial misses by the caller path.
     }
@@ -652,28 +643,18 @@ class ReaderPaginationCacheService
         chapterUrl: chapterUrl,
         signature: signature,
       );
-      var targetFile = file;
-      if (!await targetFile.exists()) {
-        final legacyFile = await _legacyChapterLayoutCacheFile(
+      if (!await file.exists()) {
+        _traceCacheEvent(
+          'reader.pagination.cache.miss',
           sourceId: sourceId,
           chapterUrl: chapterUrl,
           signature: signature,
+          status: 'disk_missing',
         );
-        if (await legacyFile.exists()) {
-          targetFile = legacyFile;
-        } else {
-          _traceCacheEvent(
-            'reader.pagination.cache.miss',
-            sourceId: sourceId,
-            chapterUrl: chapterUrl,
-            signature: signature,
-            status: 'disk_missing',
-          );
-          return null;
-        }
+        return null;
       }
       final result = await _decodePersistedChapterLayoutFile(
-        file: targetFile,
+        file: file,
         sourceId: sourceId,
         chapterUrl: chapterUrl,
         signature: signature,
@@ -706,23 +687,13 @@ class ReaderPaginationCacheService
         chapterUrl: chapterUrl,
         signature: signature,
       );
-      var targetFile = file;
-      if (!await targetFile.exists()) {
-        final legacyFile = await _legacyChapterLayoutCacheFile(
-          sourceId: sourceId,
-          chapterUrl: chapterUrl,
-          signature: signature,
+      if (!await file.exists()) {
+        return const _ReaderPaginationPersistedReadResult(
+          status: AppCacheReadStatus.miss,
         );
-        if (await legacyFile.exists()) {
-          targetFile = legacyFile;
-        } else {
-          return const _ReaderPaginationPersistedReadResult(
-            status: AppCacheReadStatus.miss,
-          );
-        }
       }
       final decoded = await _decodePersistedChapterLayoutFile(
-        file: targetFile,
+        file: file,
         sourceId: sourceId,
         chapterUrl: chapterUrl,
         signature: signature,
@@ -901,26 +872,6 @@ class ReaderPaginationCacheService
   static Future<Directory> _defaultDirectoryProvider() async {
     final cacheDirectory = await getApplicationCacheDirectory();
     return Directory(p.join(cacheDirectory.path, 'reader_pagination_cache'));
-  }
-
-  Future<File> _legacyChapterLayoutCacheFile({
-    required String sourceId,
-    required String chapterUrl,
-    required String signature,
-  }) async {
-    final supportDirectory = await getApplicationSupportDirectory();
-    final cacheKey = buildChapterLayoutCacheKey(
-      sourceId: sourceId,
-      chapterUrl: chapterUrl,
-      signature: signature,
-    );
-    return File(
-      p.join(
-        supportDirectory.path,
-        'reader_pagination_cache',
-        '${_stablePaginationCacheHash(cacheKey)}.json',
-      ),
-    );
   }
 
   String _stablePaginationCacheHash(String input) {

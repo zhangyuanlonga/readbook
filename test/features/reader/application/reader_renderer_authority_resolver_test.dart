@@ -18,18 +18,21 @@ void main() {
       expect(snapshot.reason, 'layout_release_active');
     });
 
-    test('keeps release authority without scheduling legacy when inactive', () {
-      final snapshot = resolver.resolve(
-        releaseActive: false,
-        releasePageCount: 4,
-        currentPageIndex: 3,
-      );
+    test(
+      'keeps release authority without scheduling alternate renderer when inactive',
+      () {
+        final snapshot = resolver.resolve(
+          releaseActive: false,
+          releasePageCount: 4,
+          currentPageIndex: 3,
+        );
 
-      expect(snapshot.authority, ReaderRendererAuthority.release);
-      expect(snapshot.pageCount, 0);
-      expect(snapshot.currentPageIndex, 0);
-      expect(snapshot.reason, 'layout_release_inactive');
-    });
+        expect(snapshot.authority, ReaderRendererAuthority.release);
+        expect(snapshot.pageCount, 0);
+        expect(snapshot.currentPageIndex, 0);
+        expect(snapshot.reason, 'layout_release_inactive');
+      },
+    );
 
     test('keeps release authority while exposing inactive reason', () {
       final snapshot = resolver.resolve(

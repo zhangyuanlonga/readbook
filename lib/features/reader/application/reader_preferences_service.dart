@@ -914,8 +914,7 @@ class ReaderPreferencesService implements PreferenceRepairService {
     }
 
     for (final key in prefs.getKeys()) {
-      if (key.startsWith(_progressPrefix) &&
-          !_isValidReadingProgressJsonSync(prefs.getString(key))) {
+      if (key.startsWith(_progressPrefix)) {
         await prefs.remove(key);
         removedKeys.add(key);
         continue;
@@ -947,21 +946,8 @@ class ReaderPreferencesService implements PreferenceRepairService {
       return null;
     }
 
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map) {
-        return null;
-      }
-
-      final progress = ReadingProgress.fromJson(
-        decoded.map((key, value) => MapEntry(key.toString(), value)),
-      );
-      await _database.upsertReadingProgress(progress);
-      await prefs.remove('$_progressPrefix$normalizedBookId');
-      return progress;
-    } on FormatException {
-      return null;
-    }
+    await prefs.remove('$_progressPrefix$normalizedBookId');
+    return null;
   }
 
   bool _isValidStringListJsonSync(String? raw) {
@@ -995,25 +981,6 @@ class ReaderPreferencesService implements PreferenceRepairService {
         }
         return false;
       }
-      return true;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  bool _isValidReadingProgressJsonSync(String? raw) {
-    final normalized = raw?.trim() ?? '';
-    if (normalized.isEmpty) {
-      return true;
-    }
-    try {
-      final decoded = jsonDecode(normalized);
-      if (decoded is! Map) {
-        return false;
-      }
-      ReadingProgress.fromJson(
-        decoded.map((key, value) => MapEntry(key.toString(), value)),
-      );
       return true;
     } catch (_) {
       return false;
@@ -1062,33 +1029,10 @@ class ReaderPreferencesService implements PreferenceRepairService {
     final results = <String, ReadingProgress>{
       for (final item in databaseItems) item.bookId.trim(): item,
     };
-    final migratedLegacyKeys = <String>[];
     for (final key in prefs.getKeys()) {
       if (!key.startsWith(_progressPrefix)) {
         continue;
       }
-      final raw = prefs.getString(key);
-      if (raw == null || raw.trim().isEmpty) {
-        continue;
-      }
-      try {
-        final decoded = jsonDecode(raw);
-        if (decoded is! Map) {
-          continue;
-        }
-        final progress = ReadingProgress.fromJson(
-          decoded.map(
-            (nestedKey, value) => MapEntry(nestedKey.toString(), value),
-          ),
-        );
-        results[progress.bookId.trim()] = progress;
-        migratedLegacyKeys.add(key);
-        await _database.upsertReadingProgress(progress);
-      } on FormatException {
-        continue;
-      }
-    }
-    for (final key in migratedLegacyKeys) {
       await prefs.remove(key);
     }
     final sorted = results.values.toList(growable: false)

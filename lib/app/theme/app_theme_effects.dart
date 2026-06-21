@@ -9,6 +9,9 @@ const List<AppAdvancedThemeEffect> appAdvancedThemeEffectOptions =
       AppAdvancedThemeEffect.snow,
       AppAdvancedThemeEffect.leaf,
       AppAdvancedThemeEffect.sakura,
+      AppAdvancedThemeEffect.rose,
+      AppAdvancedThemeEffect.whitePetal,
+      AppAdvancedThemeEffect.wisteria,
       AppAdvancedThemeEffect.firefly,
     ];
 
@@ -19,6 +22,9 @@ String appAdvancedThemeEffectLabel(AppAdvancedThemeEffect effect) {
     AppAdvancedThemeEffect.snow => '雪',
     AppAdvancedThemeEffect.leaf => '落叶',
     AppAdvancedThemeEffect.sakura => '樱花',
+    AppAdvancedThemeEffect.rose => '玫瑰花瓣',
+    AppAdvancedThemeEffect.whitePetal => '白色花瓣',
+    AppAdvancedThemeEffect.wisteria => '紫藤',
     AppAdvancedThemeEffect.firefly => '萤火',
   };
 }
@@ -44,6 +50,18 @@ AmbientEffectConfig? appAmbientEffectConfigFor(
       preview ? const LeafEffect.light() : const LeafEffect.medium(),
     AppAdvancedThemeEffect.sakura =>
       preview ? const SakuraEffect.light() : const SakuraEffect.medium(),
+    AppAdvancedThemeEffect.rose =>
+      preview
+          ? const PetalEffect.light(style: PetalStyle.rose)
+          : const PetalEffect.medium(style: PetalStyle.rose),
+    AppAdvancedThemeEffect.whitePetal =>
+      preview
+          ? const PetalEffect.light(style: PetalStyle.white)
+          : const PetalEffect.medium(style: PetalStyle.white),
+    AppAdvancedThemeEffect.wisteria =>
+      preview
+          ? const PetalEffect.light(style: PetalStyle.wisteria)
+          : const PetalEffect.medium(style: PetalStyle.wisteria),
     AppAdvancedThemeEffect.firefly =>
       preview ? const FireflyEffect.light() : const FireflyEffect.medium(),
   };

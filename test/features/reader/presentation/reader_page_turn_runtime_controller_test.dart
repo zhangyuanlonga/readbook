@@ -71,5 +71,35 @@ void main() {
       expect(controller.currentPageIndex, 2);
       expect(controller.pagedPaginationState.pendingRestoreRatio, 0.5);
     });
+
+    test('commits generic paged position with clamped restore ratio', () {
+      final controller = ReaderPageTurnRuntimeController();
+
+      controller.commitPagedPosition(pageIndex: 9, pageCount: 5);
+
+      expect(controller.currentPageIndex, 4);
+      expect(controller.pagedPaginationState.pendingRestoreRatio, 1);
+    });
+
+    test('commits forward cross chapter page at chapter start', () {
+      final controller =
+          ReaderPageTurnRuntimeController()..currentPageIndex = 8;
+
+      controller.commitCrossChapterPagedTurn(direction: 1, pageCount: 6);
+
+      expect(controller.currentPageIndex, 0);
+      expect(controller.pagedPaginationState.pendingRestoreRatio, 0);
+      expect(controller.pagedTransition.isAnimating, isFalse);
+      expect(controller.curlTransition.isAnimating, isFalse);
+    });
+
+    test('commits backward cross chapter page at chapter end', () {
+      final controller = ReaderPageTurnRuntimeController();
+
+      controller.commitCrossChapterPagedTurn(direction: -1, pageCount: 6);
+
+      expect(controller.currentPageIndex, 5);
+      expect(controller.pagedPaginationState.pendingRestoreRatio, 1);
+    });
   });
 }

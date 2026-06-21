@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_component_theme_tokens.dart';
+
 // UI-GOV-EXEMPT-FILE: theme-asset
 // reason: Generated text covers are content artwork palettes, not app surfaces.
 // owner: app-ui
@@ -28,10 +30,16 @@ class TextCoverPlaceholder extends StatelessWidget {
     final normalizedAuthor = _normalizeText(author);
     final seed = '$normalizedTitle|$normalizedAuthor';
     final hash = _resolveSeedHash(seed);
-    final palette = _coverPalettes[hash % _coverPalettes.length];
-    final template = _CoverTemplate.values[hash % _CoverTemplate.values.length];
-    final textColor = palette.primaryText;
-    final secondaryTextColor = palette.secondaryText;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final tokens = appComponentThemeTokensOf(context);
+    final variant = _CoverVariant.values[hash % _CoverVariant.values.length];
+    final palette = _CoverPalette.fromTheme(
+      colorScheme: colorScheme,
+      seed: hash,
+      variant: variant,
+    );
+    final resolvedRadius = _resolveBorderRadius(borderRadius, tokens);
     final showAuthor = normalizedAuthor.isNotEmpty && resolvedHeight >= 82;
     final compact = resolvedHeight < 82 || resolvedWidth < 56;
     final displayTitle =
@@ -44,105 +52,164 @@ class TextCoverPlaceholder extends StatelessWidget {
             : resolvedHeight >= 120
             ? 4
             : 3;
-    final titleAlign = TextAlign.left;
-    final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
-      color: textColor,
+    final titleStyle = theme.textTheme.titleMedium?.copyWith(
+      color: palette.primaryText.withValues(alpha: 0.88),
       fontWeight: FontWeight.w700,
-      height: compact ? 1.05 : 1.08,
+      height: compact ? 1.1 : 1.14,
       fontSize:
           compact
-              ? (resolvedWidth * 0.12).clamp(7.6, 9.4)
-              : (resolvedWidth * 0.12).clamp(9.0, 14.0),
-      letterSpacing: compact ? 0.1 : 0.2,
+              ? (resolvedWidth * 0.108).clamp(7.0, 8.8)
+              : (resolvedWidth * 0.105).clamp(8.6, 12.4),
+      letterSpacing: 0,
     );
-    final authorStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
-      color: secondaryTextColor,
-      fontWeight: FontWeight.w500,
-      height: 1.0,
-      fontSize: compact ? 7.0 : 8.8,
-      letterSpacing: 0.2,
+    final authorStyle = theme.textTheme.labelSmall?.copyWith(
+      color: palette.secondaryText.withValues(alpha: 0.78),
+      fontWeight: FontWeight.w600,
+      height: 1.05,
+      fontSize: compact ? 6.4 : 8.0,
+      letterSpacing: 0,
     );
     final contentPadding = EdgeInsets.fromLTRB(
+      resolvedWidth * (compact ? 0.14 : 0.16),
+      resolvedHeight * (compact ? 0.12 : 0.13),
       resolvedWidth * (compact ? 0.11 : 0.13),
-      resolvedHeight * (compact ? 0.10 : 0.12),
-      resolvedWidth * (compact ? 0.11 : 0.13),
-      resolvedHeight * (compact ? 0.08 : 0.10),
+      resolvedHeight * (compact ? 0.09 : 0.10),
     );
 
     return Container(
       width: resolvedWidth,
       height: resolvedHeight,
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        borderRadius: borderRadius,
+        borderRadius: resolvedRadius,
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: palette.background,
+          colors: <Color>[
+            palette.backgroundStart,
+            palette.backgroundMid,
+            palette.backgroundEnd,
+          ],
+          stops: const <double>[0, 0.52, 1],
         ),
+        border: Border.all(
+          color: palette.border,
+          width: tokens.card.borderWidth.clamp(0.8, 1.4),
+        ),
+        boxShadow: <BoxShadow>[
+          // UI-GOV-EXEMPT: box-shadow theme-generated-cover
+          BoxShadow(
+            color: colorScheme.shadow.withValues(
+              alpha: tokens.card.shadowAlpha.clamp(0.08, 0.18),
+            ),
+            blurRadius: tokens.card.shadowBlur.clamp(8, 18),
+            offset: Offset(0, tokens.card.shadowOffsetY.clamp(2, 6)),
+          ),
+        ],
       ),
       child: Stack(
         children: [
           Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
-                borderRadius: borderRadius,
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.white.withValues(alpha: 0.02),
-                    Colors.black.withValues(alpha: 0.08),
+                gradient: RadialGradient(
+                  center: variant.glowAlignment,
+                  radius: 1.15,
+                  colors: <Color>[
+                    palette.glow.withValues(alpha: 0.42),
+                    palette.glow.withValues(alpha: 0),
                   ],
                 ),
               ),
             ),
           ),
-          ..._buildTemplateDecorations(
-            template: template,
-            palette: palette,
-            width: resolvedWidth,
-            height: resolvedHeight,
-            borderRadius: borderRadius,
+          Positioned(
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: (resolvedWidth * 0.105).clamp(5.0, 13.0),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: palette.spine.withValues(alpha: 0.72),
+                border: Border(
+                  right: BorderSide(
+                    color: palette.primaryText.withValues(alpha: 0.08),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: resolvedWidth * 0.16,
+            right: resolvedWidth * 0.13,
+            top: resolvedHeight * 0.12,
+            child: _CoverHeader(
+              compact: compact,
+              palette: palette,
+              variant: variant,
+            ),
+          ),
+          Positioned(
+            right: -resolvedWidth * 0.20,
+            bottom: -resolvedWidth * 0.26,
+            child: Container(
+              width: resolvedWidth * 0.64,
+              height: resolvedWidth * 0.64,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: palette.primaryText.withValues(alpha: 0.032),
+                  width: resolvedWidth * 0.045,
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: resolvedWidth * 0.16,
+            right: resolvedWidth * 0.13,
+            bottom: resolvedHeight * (showAuthor ? 0.11 : 0.12),
+            child: _CoverFooter(
+              label: showAuthor ? normalizedAuthor : '书享阅读',
+              compact: compact,
+              palette: palette,
+              style: authorStyle,
+            ),
           ),
           Padding(
             padding: contentPadding,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildTemplateHeader(
-                  template: template,
-                  palette: palette,
-                  compact: compact,
-                ),
-                SizedBox(height: compact ? 4 : 8),
+                SizedBox(height: compact ? 18 : 26),
                 Expanded(
-                  child: Text(
-                    displayTitle,
-                    maxLines: titleMaxLines,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: titleAlign,
-                    style: titleStyle,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      displayTitle,
+                      maxLines: titleMaxLines,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.start,
+                      style: titleStyle,
+                    ),
                   ),
                 ),
-                if (showAuthor)
-                  Padding(
-                    padding: EdgeInsets.only(top: compact ? 4 : 6),
-                    child: Text(
-                      normalizedAuthor,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: titleAlign,
-                      style: authorStyle,
-                    ),
-                  )
-                else
-                  const SizedBox.shrink(),
+                SizedBox(height: compact ? 18 : 24),
               ],
             ),
           ),
         ],
       ),
     );
+  }
+
+  static BorderRadius _resolveBorderRadius(
+    BorderRadius requested,
+    AppComponentThemeTokens tokens,
+  ) {
+    if (requested != const BorderRadius.all(Radius.circular(12))) {
+      return requested;
+    }
+    return BorderRadius.circular(tokens.card.radius.clamp(8, 18));
   }
 
   static String _normalizeText(String? value) {
@@ -191,228 +258,181 @@ class TextCoverPlaceholder extends StatelessWidget {
   }
 }
 
-enum _CoverTemplate { classic, band, seal }
+enum _CoverVariant {
+  calm(Alignment(-0.75, -0.82), 'LIBRARY'),
+  vivid(Alignment(0.72, -0.68), 'BOOK'),
+  quiet(Alignment(-0.20, 0.84), 'READ');
+
+  const _CoverVariant(this.glowAlignment, this.label);
+
+  final Alignment glowAlignment;
+  final String label;
+}
 
 class _CoverPalette {
   const _CoverPalette({
-    required this.background,
-    required this.accent,
-    required this.secondaryAccent,
+    required this.backgroundStart,
+    required this.backgroundMid,
+    required this.backgroundEnd,
+    required this.spine,
+    required this.glow,
+    required this.border,
     required this.primaryText,
     required this.secondaryText,
+    required this.accent,
   });
 
-  final List<Color> background;
-  final Color accent;
-  final Color secondaryAccent;
+  final Color backgroundStart;
+  final Color backgroundMid;
+  final Color backgroundEnd;
+  final Color spine;
+  final Color glow;
+  final Color border;
   final Color primaryText;
   final Color secondaryText;
+  final Color accent;
+
+  factory _CoverPalette.fromTheme({
+    required ColorScheme colorScheme,
+    required int seed,
+    required _CoverVariant variant,
+  }) {
+    final dark = colorScheme.brightness == Brightness.dark;
+    final accent = switch (seed % 4) {
+      0 => colorScheme.primary,
+      1 => colorScheme.secondary,
+      2 => colorScheme.tertiary,
+      _ => colorScheme.primaryContainer,
+    };
+    final base = switch (variant) {
+      _CoverVariant.calm => colorScheme.surfaceContainerHighest,
+      _CoverVariant.vivid => colorScheme.primaryContainer,
+      _CoverVariant.quiet => colorScheme.secondaryContainer,
+    };
+    final canvas = dark ? colorScheme.surfaceContainerLow : colorScheme.surface;
+    final text = colorScheme.onSurface;
+    final start = Color.alphaBlend(
+      accent.withValues(alpha: dark ? 0.30 : 0.18),
+      canvas,
+    );
+    final mid = Color.alphaBlend(
+      base.withValues(alpha: dark ? 0.46 : 0.58),
+      canvas,
+    );
+    final end = Color.alphaBlend(
+      colorScheme.surfaceContainerHighest.withValues(alpha: dark ? 0.36 : 0.78),
+      canvas,
+    );
+    return _CoverPalette(
+      backgroundStart: start,
+      backgroundMid: mid,
+      backgroundEnd: end,
+      spine: Color.alphaBlend(
+        accent.withValues(alpha: dark ? 0.18 : 0.12),
+        canvas,
+      ),
+      glow: accent,
+      border: colorScheme.outlineVariant.withValues(alpha: dark ? 0.36 : 0.48),
+      primaryText: text,
+      secondaryText: colorScheme.onSurfaceVariant,
+      accent: accent,
+    );
+  }
 }
 
-const List<_CoverPalette> _coverPalettes = [
-  _CoverPalette(
-    background: [Color(0xFFF2E8D7), Color(0xFFE5D2B2)],
-    accent: Color(0xFF3C312B),
-    secondaryAccent: Color(0xFF9E7B4F),
-    primaryText: Color(0xFF2E241E),
-    secondaryText: Color(0xFF5D4A3B),
-  ),
-  _CoverPalette(
-    background: [Color(0xFF23354A), Color(0xFF182534)],
-    accent: Color(0xFFF1D08A),
-    secondaryAccent: Color(0xFF8BA7C8),
-    primaryText: Color(0xFFF7F2E6),
-    secondaryText: Color(0xFFD6C8AB),
-  ),
-  _CoverPalette(
-    background: [Color(0xFFEEE8E0), Color(0xFFD6C9BC)],
-    accent: Color(0xFF6E3D35),
-    secondaryAccent: Color(0xFFC38D6A),
-    primaryText: Color(0xFF342925),
-    secondaryText: Color(0xFF6A5750),
-  ),
-  _CoverPalette(
-    background: [Color(0xFF1F2E28), Color(0xFF15201C)],
-    accent: Color(0xFFD6C07F),
-    secondaryAccent: Color(0xFF7E9A88),
-    primaryText: Color(0xFFF2EEE3),
-    secondaryText: Color(0xFFCBBE97),
-  ),
-  _CoverPalette(
-    background: [Color(0xFF4A1F26), Color(0xFF2E1217)],
-    accent: Color(0xFFE7C9A3),
-    secondaryAccent: Color(0xFFB8717D),
-    primaryText: Color(0xFFF8EFE7),
-    secondaryText: Color(0xFFE2C4BB),
-  ),
-  _CoverPalette(
-    background: [Color(0xFFE9EDF2), Color(0xFFD2DCE8)],
-    accent: Color(0xFF2E4967),
-    secondaryAccent: Color(0xFF8CA3BB),
-    primaryText: Color(0xFF1F3044),
-    secondaryText: Color(0xFF50667E),
-  ),
-];
+class _CoverHeader extends StatelessWidget {
+  const _CoverHeader({
+    required this.compact,
+    required this.palette,
+    required this.variant,
+  });
 
-List<Widget> _buildTemplateDecorations({
-  required _CoverTemplate template,
-  required _CoverPalette palette,
-  required double width,
-  required double height,
-  required BorderRadius borderRadius,
-}) {
-  return switch (template) {
-    _CoverTemplate.classic => <Widget>[
-      Positioned(
-        left: width * 0.08,
-        top: height * 0.08,
-        right: width * 0.08,
-        bottom: height * 0.08,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: palette.accent.withValues(alpha: 0.14),
-              width: 1.0,
-            ),
-          ),
-        ),
-      ),
-      Positioned(
-        top: height * 0.11,
-        left: width * 0.12,
-        child: Container(
-          width: width * 0.26,
-          height: 2,
-          color: palette.secondaryAccent.withValues(alpha: 0.45),
-        ),
-      ),
-    ],
-    _CoverTemplate.band => <Widget>[
-      Positioned(
-        left: 0,
-        top: height * 0.18,
-        child: Container(
-          width: width * 0.2,
-          height: height * 0.64,
-          decoration: BoxDecoration(
-            color: palette.accent.withValues(alpha: 0.18),
-            borderRadius: BorderRadius.only(
-              topRight: Radius.circular(width * 0.12),
-              bottomRight: Radius.circular(width * 0.12),
-            ),
-          ),
-        ),
-      ),
-      Positioned(
-        right: width * 0.08,
-        top: height * 0.08,
-        child: Container(
-          width: width * 0.32,
-          height: width * 0.32,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.white.withValues(alpha: 0.08),
-          ),
-        ),
-      ),
-    ],
-    _CoverTemplate.seal => <Widget>[
-      Positioned(
-        right: width * 0.11,
-        top: height * 0.10,
-        child: Transform.rotate(
-          angle: -0.16,
-          child: Container(
-            padding: EdgeInsets.symmetric(
-              horizontal: width * 0.05,
-              vertical: height * 0.016,
-            ),
-            decoration: BoxDecoration(
-              color: palette.accent.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: palette.accent.withValues(alpha: 0.18)),
-            ),
-            child: Text(
-              '藏书',
-              style: TextStyle(
-                color: palette.accent.withValues(alpha: 0.62),
-                fontSize: (width * 0.07).clamp(7.0, 10.0),
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ),
-      ),
-      Positioned(
-        left: width * 0.10,
-        bottom: height * 0.13,
-        child: Container(
-          width: width * 0.22,
-          height: 2,
-          color: palette.secondaryAccent.withValues(alpha: 0.38),
-        ),
-      ),
-    ],
-  };
-}
+  final bool compact;
+  final _CoverPalette palette;
+  final _CoverVariant variant;
 
-Widget _buildTemplateHeader({
-  required _CoverTemplate template,
-  required _CoverPalette palette,
-  required bool compact,
-}) {
-  return switch (template) {
-    _CoverTemplate.classic => Row(
+  @override
+  Widget build(BuildContext context) {
+    if (compact) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          width: 16,
+          height: 2.4,
+          decoration: BoxDecoration(
+            color: palette.accent.withValues(alpha: 0.68),
+            borderRadius: BorderRadius.circular(99),
+          ),
+        ),
+      );
+    }
+    return Row(
       children: [
+        Container(
+          width: 20,
+          height: 3.2,
+          decoration: BoxDecoration(
+            color: palette.accent.withValues(alpha: 0.68),
+            borderRadius: BorderRadius.circular(99),
+          ),
+        ),
+        const SizedBox(width: 6),
         Expanded(
           child: Container(
-            height: 1.2,
-            color: palette.accent.withValues(alpha: 0.28),
+            height: 1,
+            color: palette.primaryText.withValues(alpha: 0.14),
           ),
         ),
         const SizedBox(width: 6),
         Text(
-          '精选',
+          variant.label,
           style: TextStyle(
-            color: palette.secondaryText,
-            fontSize: compact ? 5.8 : 7.8,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.1,
-          ),
-        ),
-      ],
-    ),
-    _CoverTemplate.band => Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-        decoration: BoxDecoration(
-          color: palette.accent.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Text(
-          'SERIES',
-          style: TextStyle(
-            color: palette.secondaryText,
-            fontSize: compact ? 5.8 : 7.4,
+            color: palette.secondaryText.withValues(alpha: 0.72),
+            fontSize: 7.4,
             fontWeight: FontWeight.w700,
             letterSpacing: 0.8,
           ),
         ),
-      ),
-    ),
-    _CoverTemplate.seal => Align(
-      alignment: Alignment.centerLeft,
-      child: Text(
-        'BOOK',
-        style: TextStyle(
-          color: palette.secondaryText,
-          fontSize: compact ? 5.8 : 7.2,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 1.4,
+      ],
+    );
+  }
+}
+
+class _CoverFooter extends StatelessWidget {
+  const _CoverFooter({
+    required this.label,
+    required this.compact,
+    required this.palette,
+    required this.style,
+  });
+
+  final String label;
+  final bool compact;
+  final _CoverPalette palette;
+  final TextStyle? style;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: compact ? 3.8 : 4.8,
+          height: compact ? 3.8 : 4.8,
+          decoration: BoxDecoration(
+            color: palette.accent.withValues(alpha: 0.62),
+            shape: BoxShape.circle,
+          ),
         ),
-      ),
-    ),
-  };
+        const SizedBox(width: 5),
+        Expanded(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: style,
+          ),
+        ),
+      ],
+    );
+  }
 }

@@ -111,8 +111,8 @@ class LocalChapterReadableDocumentNormalizer {
     if (content.trim().isEmpty) {
       return '';
     }
-    // 如果旧数据只有独立 imageUrls，没有兼容内容里的图片标记，至少把图片
-    // 接到正文末尾，避免轻量正文路径丢失图文混排里的图片块。
+    // 结构化 document 缺失时，用 imageUrls 补齐图片块，避免轻量正文路径
+    // 丢失 EPUB / 图文本地章节里的图片内容。
     return '$content\n\n$imageParagraphs';
   }
 }
@@ -219,23 +219,6 @@ class LocalChapterContentService {
       chapterIndex: chapterIndex,
     );
     if (_needsReindex(book)) {
-      if (chapter != null &&
-          _canUseLegacyTxtOffsetFallback(
-            originalBook: originalBook,
-            refreshedBook: refreshedBook,
-            chapter: chapter,
-          )) {
-        unawaited(_indexService.ensureIndexed(bookId: normalizedBookId));
-        final readableBook = await _hydrateReadableBook(book);
-        final hydratedContent = await _loadTxtChapterContentByOffsets(
-          chapter: chapter,
-          book: readableBook,
-        );
-        return _readableDocumentNormalizer.normalize(
-          chapter.copyWith(content: hydratedContent),
-        );
-      }
-
       _ensureBookReadyForReading(book);
     }
 
@@ -445,33 +428,6 @@ class LocalChapterContentService {
   }) {
     return book.format == LocalBookFormat.pdf &&
         (chapter.sourceRef?.trim().isNotEmpty ?? false);
-  }
-
-  bool _canUseLegacyTxtOffsetFallback({
-    required LocalBook originalBook,
-    required LocalBook? refreshedBook,
-    required LocalChapter chapter,
-  }) {
-    if (originalBook.format != LocalBookFormat.txt ||
-        originalBook.indexStatus != LocalBookIndexStatus.ready ||
-        !chapter.hasOffsetRange ||
-        chapter.hasReadablePayload) {
-      return false;
-    }
-    final nextBook = refreshedBook;
-    if (nextBook == null ||
-        nextBook.indexStatus != LocalBookIndexStatus.stale) {
-      return false;
-    }
-    final metadataChanged =
-        originalBook.sourceFileSize != nextBook.sourceFileSize ||
-        originalBook.sourceFileLastModifiedMs !=
-            nextBook.sourceFileLastModifiedMs ||
-        originalBook.storageFileLastModifiedMs !=
-            nextBook.storageFileLastModifiedMs ||
-        originalBook.fileSize != nextBook.fileSize ||
-        originalBook.splitLongChapter != nextBook.splitLongChapter;
-    return !metadataChanged;
   }
 
   Future<LocalBook> _hydrateReadableBook(LocalBook book) async {

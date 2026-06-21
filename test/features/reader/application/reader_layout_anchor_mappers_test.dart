@@ -72,7 +72,7 @@ void main() {
     const mapper = ReaderAnnotationAnchorMapper();
     const runtime = ReaderSelectionRuntime();
 
-    test('builds a dual-written bookmark and restores layout anchor', () {
+    test('builds bookmark payload and restores layout anchor', () {
       final anchor =
           runtime
               .selectOffsets(
@@ -107,39 +107,52 @@ void main() {
       expect(restored.note, 'note');
     });
 
-    test('falls back to legacy offsets for old bookmarks', () {
+    test('ignores bookmarks without layout anchors', () {
       final restored = mapper.fromBookmark(
-        bookmark: _legacyBookmark(start: 13, end: 16),
+        bookmark: _bookmarkWithoutLayoutAnchor(start: 13, end: 16),
         layoutPages: _pages(),
       );
 
-      expect(restored, isNotNull);
-      expect(restored!.anchor.selectedText, 'foo');
+      expect(restored, isNull);
     });
   });
 
   group('ReaderBookmarkAnchorMapper', () {
     const mapper = ReaderBookmarkAnchorMapper();
 
-    test('maps bookmark start to stable layout position', () {
-      final anchor = mapper.fromBookmark(
-        bookmark: _legacyBookmark(start: 13, end: 16),
+    test('maps layout anchor to stable layout position', () {
+      const runtime = ReaderSelectionRuntime();
+      final anchor =
+          runtime
+              .selectOffsets(
+                layoutPages: _pages(),
+                startOffset: 13,
+                endOffset: 16,
+                kind: ReaderLayoutAnchorKind.bookmark,
+              )!
+              .anchor;
+      final restored = mapper.fromBookmark(
+        bookmark: _bookmarkWithLayoutAnchor(anchor),
         layoutPages: _pages(),
       );
 
-      expect(anchor, isNotNull);
-      expect(anchor!.position.pageIndex, 1);
-      expect(anchor.position.chapterOffset, 13);
-      expect(anchor.range!.selectedText, 'foo');
+      expect(restored, isNotNull);
+      expect(restored!.position.pageIndex, 1);
+      expect(restored.position.chapterOffset, 13);
+      expect(restored.range!.selectedText, 'foo');
     });
 
     test('builds point bookmark with layout position payload', () {
-      final position =
-          mapper.restorePosition(
-            layoutPages: _pages(),
-            legacyChapterOffset: 13,
-            legacyRatio: 0.5,
-          )!;
+      const position = ReaderLayoutAnchoredPosition(
+        kind: ReaderLayoutAnchorKind.bookmark,
+        position: ReaderLayoutPosition(
+          pageIndex: 1,
+          lineIndex: 0,
+          columnIndex: 0,
+          chapterOffset: 13,
+        ),
+        chapterProgressRatio: 0.5,
+      );
       final bookmark = mapper.buildBookmarkForPosition(
         position: position,
         bookId: 'book-1',
@@ -198,33 +211,51 @@ void main() {
   group('ReaderLayoutProgressAnchorMapper', () {
     const mapper = ReaderLayoutProgressAnchorMapper();
 
-    test('round-trips legacy progress and layout position', () {
-      final anchor = mapper.fromLegacyProgress(
+    test('captures progress from layout position', () {
+      final progress = mapper.toProgressSnapshot(
         layoutPages: _pages(),
-        chapterProgressRatio: 0.65,
-      );
-      final legacy = mapper.toLegacyProgress(
-        layoutPages: _pages(),
-        position: anchor!.position,
+        position: const ReaderLayoutPosition(
+          pageIndex: 1,
+          lineIndex: 0,
+          columnIndex: 0,
+          chapterOffset: 13,
+        ),
       );
 
-      expect(anchor.pageIndex, 1);
-      expect(legacy.pageIndex, 1);
-      expect(legacy.totalPageCount, 2);
-      expect(legacy.chapterPositionRatio, closeTo(0.65, 0.08));
+      expect(progress.pageIndex, 1);
+      expect(progress.totalPageCount, 2);
+      expect(progress.chapterPositionRatio, closeTo(0.65, 0.08));
     });
   });
 }
 
-Bookmark _legacyBookmark({required int start, required int end}) {
+Bookmark _bookmarkWithoutLayoutAnchor({required int start, required int end}) {
   return Bookmark(
-    id: 'legacy-$start-$end',
+    id: 'old-$start-$end',
     bookId: 'book-1',
     chapterId: 'chapter-1',
     chapterIndex: 0,
     startOffset: start,
     endOffset: end,
-    snippet: 'legacy',
+    snippet: 'old',
+    createdAt: DateTime(2026, 6, 20, 9),
+    updatedAt: DateTime(2026, 6, 20, 9),
+    color: '__highlight__',
+  );
+}
+
+Bookmark _bookmarkWithLayoutAnchor(ReaderLayoutAnchoredRange anchor) {
+  return Bookmark(
+    id: 'bookmark-${anchor.startOffset}-${anchor.endOffset}',
+    bookId: 'book-1',
+    chapterId: 'chapter-1',
+    chapterIndex: 0,
+    startOffset: anchor.startOffset,
+    endOffset: anchor.endOffset,
+    snippet: Bookmark.buildLayoutSnippetPayload(
+      quote: anchor.selectedText,
+      layoutAnchor: anchor.toJson(),
+    ),
     createdAt: DateTime(2026, 6, 20, 9),
     updatedAt: DateTime(2026, 6, 20, 9),
     color: '__highlight__',

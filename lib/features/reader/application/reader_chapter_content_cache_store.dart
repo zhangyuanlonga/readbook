@@ -29,10 +29,7 @@ class ReaderChapterContentCacheKeyBuilder {
     );
   }
 
-  String legacyStorageKey({
-    required String sourceId,
-    required String chapterUrl,
-  }) {
+  String storageKey({required String sourceId, required String chapterUrl}) {
     return '${sourceId.trim()}|${chapterUrl.trim()}';
   }
 
@@ -75,7 +72,7 @@ class ReaderChapterContentCacheStore implements AppCacheStore {
           cost: stopwatch.elapsed,
         );
       }
-      final cacheKey = _keyBuilder.legacyStorageKey(
+      final cacheKey = _keyBuilder.storageKey(
         sourceId: sourceId,
         chapterUrl: chapterUrl,
       );
@@ -104,7 +101,7 @@ class ReaderChapterContentCacheStore implements AppCacheStore {
           'chapterIndex': cached.chapterIndex,
           'chapterTitle': cached.chapterTitle,
           'chapterUrl': cached.chapterUrl,
-          'legacyCacheKey': cached.cacheKey,
+          'cacheKey': cached.cacheKey,
         },
       );
       if (!entry.hasVersion(resolvedPolicy.version)) {
@@ -175,7 +172,7 @@ class ReaderChapterContentCacheStore implements AppCacheStore {
         );
       }
       await _database.upsertChapterCache(
-        cacheKey: _keyBuilder.legacyStorageKey(
+        cacheKey: _keyBuilder.storageKey(
           sourceId: sourceId,
           chapterUrl: chapterUrl,
         ),
@@ -218,10 +215,7 @@ class ReaderChapterContentCacheStore implements AppCacheStore {
         );
       }
       final deleted = await _database.deleteChapterCache(
-        _keyBuilder.legacyStorageKey(
-          sourceId: sourceId,
-          chapterUrl: chapterUrl,
-        ),
+        _keyBuilder.storageKey(sourceId: sourceId, chapterUrl: chapterUrl),
       );
       return AppCacheDeleteResult.deleted(
         scope: scope,
@@ -315,12 +309,11 @@ class ReaderChapterContentCacheStore implements AppCacheStore {
   FormatException? _tryResolveCorruptedPayload(String payload) {
     final trimmed = payload.trim();
     final gatewayPrefix = ReaderGatewayContentCacheCodec.payloadPrefix;
-    final legacyImagePrefix = ReaderGatewayContentCacheCodec.legacyImagePrefix;
+    if (ReaderGatewayContentCacheCodec.isUnsupportedPayload(trimmed)) {
+      return const FormatException('unsupported old reader cache payload');
+    }
     if (trimmed.startsWith(gatewayPrefix)) {
       return _tryDecodeJsonPayload(trimmed.substring(gatewayPrefix.length));
-    }
-    if (trimmed.startsWith(legacyImagePrefix)) {
-      return _tryDecodeJsonPayload(trimmed.substring(legacyImagePrefix.length));
     }
     return null;
   }

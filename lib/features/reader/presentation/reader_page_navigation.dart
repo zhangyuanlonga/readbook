@@ -279,7 +279,10 @@ extension _ReaderPageNavigationExtension on _ReaderPageState {
       );
       _pagedTransitionController.stop();
       setState(() {
-        _pageTurnRuntimeController.currentPageIndex = targetPageIndex;
+        _pageTurnRuntimeController.commitPagedPosition(
+          pageIndex: targetPageIndex,
+          pageCount: pageCount,
+        );
         _pageTurnRuntimeController.beginPagedTransition(
           PagedTransitionState(
             style: state.style,
@@ -308,6 +311,10 @@ extension _ReaderPageNavigationExtension on _ReaderPageState {
       _curlAutoTurnController.stop();
       setState(() {
         _pageTurnRuntimeController.commitCurlTurn(pageIndex: targetPageIndex);
+        _pageTurnRuntimeController.commitPagedPosition(
+          pageIndex: targetPageIndex,
+          pageCount: pageCount,
+        );
       });
       _syncActiveReadingRecordSessionProgress();
       _scheduleProgressSave();

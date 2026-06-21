@@ -1,8 +1,8 @@
 # 阅读器旧实现移除计划
 
 **日期**: 2026-06-21
-**状态**: P0-P8 已执行，发布门禁待真机完成
-**完成进度**: 95%
+**状态**: P0-P9 已执行，发布门禁待真机完成
+**完成进度**: 96%
 **目标**: 在新阅读器已完成滚动、分页、动画、选择、设置、跨章与阅读记录验收后，移除旧阅读器 fallback 和旧分页实现路径，降低新旧共存导致的隐藏 bug。
 
 ---
@@ -16,6 +16,7 @@
 - [x] 漫画、PDF、音频不是“旧阅读器”，它们是独立 surface，不能误删。
 - [x] 搜索、朗读、自动阅读、书签、灵感、设置、缓存、阅读记录是共享能力，不能因为文件名不新而删除。
 - [x] 所有删除动作必须保持用户能力不退化：滚动、分页、翻页动画、长按、灵感、信息排版、跨章、预加载、阅读记录都要继续可用。
+- [x] 旧 reader 数据不再做兼容迁移：读到旧进度、旧图片 payload、无 layout anchor 的旧书签/标注时清理或忽略，用户回到新阅读器默认样式/默认位置。
 
 ---
 
@@ -29,9 +30,9 @@
 - [x] `ReaderRendererAuthorityResolver` 中 legacy/release authority 双权威切换逻辑。
 - [x] `READER_LAYOUT_FORCE_LEGACY`、`READER_LAYOUT_ENABLE_RELEASE` 等旧回滚开关。
 - [x] `_ensurePagination` 仅服务旧文本分页的调用链。
-- [ ] `ReaderTextPagedView` 中不再被新分页 surface 使用的旧 paragraph slice 渲染路径。
-- [x] `ReaderPagedSlice`、`ReaderPagedSliceLayoutAdapter` 中只为旧分页兼容存在的桥接代码。
-- [ ] 旧 cross-chapter snapshot fallback 中只为 legacy page 截图服务的路径。
+- [x] `ReaderTextPagedView` / `ReaderPagedSlice` 已复核为新分页共享模型，从删除候选中剔除。
+- [x] `ReaderPagedSliceLayoutAdapter` 中只为旧分页兼容存在的桥接代码已删除。
+- [x] 旧 cross-chapter snapshot fallback 中只为 legacy page 截图服务的路径已移除；跨章动画只使用新 page snapshot，目标未 ready 时直接无动画提交。
 - [x] 旧 renderer diagnostics、fallback reason、legacy test fixture。
 - [x] V6/V7 文档中关于“TF 需保留 legacy fallback”的临时说明，删除后改为历史记录。
 
@@ -40,7 +41,7 @@
 - [ ] `ReaderPage` 主壳、viewport、settings、overlay、navigation command、runtime controller。
 - [ ] `ReaderLayoutEngine`、`ReaderLayoutPage`、`ReaderLayoutLine`、layout cache 和 release renderer。
 - [ ] `ReaderPagedAnimationSurface`、`ReaderPaperCurlPagedView`、curl/cover/translate/fade/vertical 动画 renderer，只要它们已被新分页承接。
-- [ ] `ReaderTextPagedView` 如果仍作为新分页 page frame 容器使用，则应重命名或收敛，而不是直接删。
+- [x] `ReaderTextPagedView` / `ReaderPagedSlice` 当前作为新分页 page frame 和共享分页模型保留；如后续重命名，按结构任务处理，不按旧阅读器删除。
 - [ ] 连续滚动 `ReaderPageContinuousTextChapter` 和跨章窗口逻辑。
 - [ ] 漫画 `ReaderMangaView`、PDF `ReaderPdfView`、音频 `ReaderAudioView`。
 - [ ] 本地图书解析、在线内容加载、章节缓存、阅读记录、书签、灵感、搜索、朗读、自动阅读。
@@ -202,7 +203,7 @@
 
 **验收**:
 
-- [ ] `rg "LegacyRenderer|legacyBuilder|FORCE_LEGACY|ENABLE_RELEASE|STRICT_RELEASE"` 只剩历史文档或完全为空。
+- [x] `rg "LegacyRenderer|legacyBuilder|FORCE_LEGACY|ENABLE_RELEASE|STRICT_RELEASE"` 只剩历史文档或完全为空。
 - [ ] `rg "fallback"` 剩余项均为通用容错，不是旧阅读器回退。
 - [x] `flutter analyze lib/features/reader test/features/reader` 通过。
 - [ ] `git diff --check` 通过。
@@ -216,6 +217,7 @@
 - [x] 新增或更新验收报告：旧阅读器移除完成记录。
 - [x] 在本文件每个阶段补执行记录、提交 hash 和测试结果。
 - [x] 若删除过程中发现保留项，写入“延期项”而不是静默留下。
+- [x] 记录旧数据不再兼容迁移的策略和验证结果。
 
 **验收**:
 
@@ -329,7 +331,7 @@
 
 ### P4-P7 延期项
 
-- [ ] `ReaderTextPagedView` 与 `ReaderPagedSlice` 仍被 offset mapper、content state、selection/presentation 测试使用，当前不再作为正式渲染入口，后续如果重命名/删除需单独开 P8+ 结构任务。
+- [x] `ReaderTextPagedView` 与 `ReaderPagedSlice` 仍被 offset mapper、content state、selection/presentation 测试使用，已确认是新分页共享模型；后续如重命名需单独开结构任务。
 - [ ] `fallback` 词仍存在于通用容错：书签/snippet 恢复、错误展示、字体/图片/缓存兼容、reading record 迁移等，不属于旧阅读器回退。
 - [ ] 真机 UI smoke、profile 数据、版本回滚演练仍属于 P8 发布门禁。
 
@@ -385,12 +387,34 @@ flutter test test/features/reader/presentation -r compact
 - [ ] 灰度期间确认没有旧路径诊断日志。
 - [ ] 发布负责人补齐 release branch、appVersion/buildNumber、灰度名单、回滚负责人。
 
+### P9 旧数据兼容路径收口
+
+- [x] `ReaderPreferencesService` 读到 SharedPreferences 旧阅读进度时直接删除并返回 `null`，不再迁移到数据库。
+- [x] `ReaderPreferencesService.loadAllProgresses()` 清理旧 `reader.progress.*` prefs，只返回数据库里的新进度。
+- [x] `repairCorruptedPreferences()` 清理旧 reader progress key，不再尝试解析旧 progress JSON。
+- [x] `ReaderChapterContentCacheStore` 删除 support 目录旧分页缓存 fallback，只读当前 cache 目录。
+- [x] `ReaderGatewayContentCacheCodec` 不再解码 `__appread_image_payload__:` 旧图片 payload，只标记为 unsupported，让缓存 miss 后重新加载。
+- [x] `ReaderChapterContentCacheStore` metadata 从 `legacyCacheKey` 改为 `cacheKey`，缓存 key builder 从 `legacyStorageKey` 改为 `storageKey`。
+- [x] `ReaderAnnotationAnchorMapper` 和 `ReaderBookmarkAnchorMapper` 不再用旧 offset fallback 恢复无 layout anchor 的书签/标注。
+- [x] `ReaderLayoutProgressAnchorMapper` 删除 `fromLegacyProgress` / `toLegacyProgress`，只保留 `toProgressSnapshot`。
+- [x] `ReaderTypographyMetricsResolver` 删除旧段距阈值换算，设置按新范围 clamp。
+- [x] `LocalChapterContentService` 删除 stale TXT index 的旧 offset fallback；仅保留当前本地内容读取、结构化 document 补齐和有效 byte range 路径。
+- [x] `ReaderFeatureParityMatrix`、resource budget、layout settings compatibility 等代码去除 legacy 命名。
+- [x] 测试改为验证：旧 progress 会被清理、旧图片 payload 不解码、无 layout anchor 的旧书签/标注返回空、新 layout anchor 正常恢复。
+
+### P9 验证结果
+
+- [x] `flutter test test/features/reader/application/reader_chapter_content_cache_store_test.dart test/features/reader/application/reader_gateway_content_cache_codec_test.dart test/features/reader/application/reader_preferences_service_test.dart test/features/reader/application/reader_layout_anchor_mappers_test.dart test/features/reader/application/reader_renderer_authority_resolver_test.dart test/features/reader/application/reader_surface_position_runtime_test.dart test/features/reader/application/local/local_book_index_service_test.dart test/features/reader/application/local/txt_local_book_parser_test.dart test/features/reader/application/reader_layout_release_policy_test.dart test/features/reader/application/reader_feature_parity_matrix_test.dart -r compact` 通过。
+- [x] `flutter analyze lib/features/reader test/features/reader` 通过。
+- [x] `rg "旧阅读器|legacy reader|LegacyReader|legacyReader|readerLegacy|ReaderLegacy|ForceLegacy|forceLegacy|legacy[A-Z]|_legacy|\blegacy\b|旧 renderer|旧进度|旧缓存|旧书签|旧样式|旧数据" lib/features/reader test/features/reader` 无命中。
+- [x] 精准 legacy 符号扫描仅剩 `PdfViewerSizeDelegateProviderLegacy`，这是 PDF 插件公开类名，不属于文本旧阅读器。
+
 ---
 
 ## 7. 风险清单
 
-- [ ] 删除旧分页过早，paperCurl 或 cross-chapter snapshot 仍依赖旧 page widget。
-- [ ] `ReaderTextPagedView` 名字像旧实现，但可能仍是新 surface frame，误删会破坏分页。
+- [ ] 后续若继续重命名 `ReaderTextPagedView` / `ReaderPagedSlice`，必须确认 paperCurl 和 cross-chapter snapshot 仍有新 page frame。
+- [ ] `ReaderTextPagedView` 名字像旧实现，但已是新分页共享模型，误删会破坏分页。
 - [ ] `fallback` 词在代码中大量表示通用容错，不能用全局搜索直接删除。
 - [ ] 旧 dart-define 删除后，线上问题只能靠版本回滚，灰度范围必须更保守。
 - [ ] 设置页某些选项如果只在旧 renderer 生效，删除后会变成静默失效。
@@ -408,6 +432,7 @@ flutter test test/features/reader/presentation -r compact
 - [ ] 第 4 个提交：P4/P5 设置与测试迁移。
 - [ ] 第 5 个提交：P6 删除代码。
 - [x] 第 6 个提交：P7/P8 文档、验收和回滚策略更新。
+- [x] 第 7 个提交：P9 旧数据兼容路径收口，旧格式清理/忽略，回到新阅读器默认行为。
 
 每个提交后至少运行：
 
@@ -432,6 +457,7 @@ rg "reader_content_.*legacy|effectiveMode=legacy|legacy fallback" lib/features/r
 - [x] 用户打开阅读器只存在新阅读器一条文本路径。
 - [x] 代码中不存在可运行的旧文本 renderer fallback。
 - [x] 旧 dart-define 开关已删除或不再影响运行态。
+- [x] 旧 reader 数据不再迁移兼容；旧进度/旧缓存/无 layout anchor 锚点会被清理或忽略。
 - [ ] 滚动、分页、动画、设置、选择、标注、搜索、朗读、自动阅读全部完成验收。
 - [ ] 漫画/PDF/音频 surface 不受影响。
 - [x] 阅读器范围 analyze/test 通过。

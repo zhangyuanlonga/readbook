@@ -212,43 +212,47 @@ class ChapterContentService {
       chapterUrl: normalizedChapterUrl,
       chapterIndex: chapterIndex,
     );
-    final cacheKey = _chapterContentCacheKeyBuilder.legacyStorageKey(
+    final cacheKey = _chapterContentCacheKeyBuilder.storageKey(
       sourceId: normalizedSourceId,
       chapterUrl: normalizedChapterUrl,
     );
     final cached = _chapterCache[cacheKey];
     if (cached != null) {
-      final decoded = ReaderGatewayContentCacheCodec.decode(cached);
-      if (_shouldBypassLegacyAudioListingCache(
-        sourceId: normalizedSourceId,
-        chapterUrl: normalizedChapterUrl,
-        decoded: decoded,
-      )) {
+      if (ReaderGatewayContentCacheCodec.isUnsupportedPayload(cached)) {
         _chapterCache.remove(cacheKey);
       } else {
-        _logger.info(
-          'Chapter content cache hit',
-          context: <String, Object?>{
-            'chain': 'content',
-            'step': 'content',
-            'sourceId': normalizedSourceId,
-            'bookId': normalizedBookId,
-            'chapterUrl': normalizedChapterUrl,
-            'cacheHit': true,
-            'isImageContent': decoded.imageUrls.isNotEmpty,
-          },
-        );
-        return ChapterContentResult(
-          content: decoded.content,
-          fromCache: true,
-          imageUrls: decoded.imageUrls,
-          imageHeaders: decoded.imageHeaders,
-          contentType: decoded.contentType,
-          audioUrl: decoded.audioUrl,
-          audioManifestUrl: decoded.audioManifestUrl,
-          audioHeaders: decoded.audioHeaders,
-          executionContext: null,
-        );
+        final decoded = ReaderGatewayContentCacheCodec.decode(cached);
+        if (_shouldBypassStaleAudioListingCache(
+          sourceId: normalizedSourceId,
+          chapterUrl: normalizedChapterUrl,
+          decoded: decoded,
+        )) {
+          _chapterCache.remove(cacheKey);
+        } else {
+          _logger.info(
+            'Chapter content cache hit',
+            context: <String, Object?>{
+              'chain': 'content',
+              'step': 'content',
+              'sourceId': normalizedSourceId,
+              'bookId': normalizedBookId,
+              'chapterUrl': normalizedChapterUrl,
+              'cacheHit': true,
+              'isImageContent': decoded.imageUrls.isNotEmpty,
+            },
+          );
+          return ChapterContentResult(
+            content: decoded.content,
+            fromCache: true,
+            imageUrls: decoded.imageUrls,
+            imageHeaders: decoded.imageHeaders,
+            contentType: decoded.contentType,
+            audioUrl: decoded.audioUrl,
+            audioManifestUrl: decoded.audioManifestUrl,
+            audioHeaders: decoded.audioHeaders,
+            executionContext: null,
+          );
+        }
       }
     }
 
@@ -273,39 +277,47 @@ class ChapterContentService {
         );
       }
       if (persistedContent.isNotEmpty) {
-        _chapterCache[cacheKey] = persistedContent;
-        final decoded = ReaderGatewayContentCacheCodec.decode(persistedContent);
-        if (_shouldBypassLegacyAudioListingCache(
-          sourceId: normalizedSourceId,
-          chapterUrl: normalizedChapterUrl,
-          decoded: decoded,
+        if (ReaderGatewayContentCacheCodec.isUnsupportedPayload(
+          persistedContent,
         )) {
           _chapterCache.remove(cacheKey);
         } else {
-          _logger.info(
-            'Chapter content cache hit',
-            context: <String, Object?>{
-              'chain': 'content',
-              'step': 'content',
-              'sourceId': normalizedSourceId,
-              'bookId': normalizedBookId,
-              'chapterUrl': normalizedChapterUrl,
-              'cacheHit': true,
-              'cacheSource': 'database',
-              'isImageContent': decoded.imageUrls.isNotEmpty,
-            },
+          _chapterCache[cacheKey] = persistedContent;
+          final decoded = ReaderGatewayContentCacheCodec.decode(
+            persistedContent,
           );
-          return ChapterContentResult(
-            content: decoded.content,
-            fromCache: true,
-            imageUrls: decoded.imageUrls,
-            imageHeaders: decoded.imageHeaders,
-            contentType: decoded.contentType,
-            audioUrl: decoded.audioUrl,
-            audioManifestUrl: decoded.audioManifestUrl,
-            audioHeaders: decoded.audioHeaders,
-            executionContext: null,
-          );
+          if (_shouldBypassStaleAudioListingCache(
+            sourceId: normalizedSourceId,
+            chapterUrl: normalizedChapterUrl,
+            decoded: decoded,
+          )) {
+            _chapterCache.remove(cacheKey);
+          } else {
+            _logger.info(
+              'Chapter content cache hit',
+              context: <String, Object?>{
+                'chain': 'content',
+                'step': 'content',
+                'sourceId': normalizedSourceId,
+                'bookId': normalizedBookId,
+                'chapterUrl': normalizedChapterUrl,
+                'cacheHit': true,
+                'cacheSource': 'database',
+                'isImageContent': decoded.imageUrls.isNotEmpty,
+              },
+            );
+            return ChapterContentResult(
+              content: decoded.content,
+              fromCache: true,
+              imageUrls: decoded.imageUrls,
+              imageHeaders: decoded.imageHeaders,
+              contentType: decoded.contentType,
+              audioUrl: decoded.audioUrl,
+              audioManifestUrl: decoded.audioManifestUrl,
+              audioHeaders: decoded.audioHeaders,
+              executionContext: null,
+            );
+          }
         }
       }
     } catch (error) {
@@ -475,7 +487,7 @@ class ChapterContentService {
           updatedAt: now,
           lastAccessedAt: now,
           metadata: <String, Object?>{
-            'legacyCacheKey': cacheKey,
+            'cacheKey': cacheKey,
             'bookId': bookId,
             'sourceId': sourceId,
             'chapterIndex': chapterIndex,
@@ -498,7 +510,7 @@ class ChapterContentService {
     }
   }
 
-  bool _shouldBypassLegacyAudioListingCache({
+  bool _shouldBypassStaleAudioListingCache({
     required String sourceId,
     required String chapterUrl,
     required ReaderGatewayContentCachePayload decoded,

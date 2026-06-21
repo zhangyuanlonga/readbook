@@ -12,7 +12,7 @@ void main() {
         darkConfig: AppAdvancedThemeModeConfig(
           colors: const AppAdvancedThemeColors(primaryColorValue: 0xFF112233),
         ),
-        themeEffect: AppAdvancedThemeEffect.firefly,
+        themeEffect: AppAdvancedThemeEffect.rose,
         appInterfaceFontFamilyKey: ' font_ui_snapshot ',
       );
 
@@ -21,7 +21,7 @@ void main() {
       );
 
       expect(restored.appInterfaceFontFamilyKey, 'font_ui_snapshot');
-      expect(restored.themeEffect, AppAdvancedThemeEffect.firefly);
+      expect(restored.themeEffect, AppAdvancedThemeEffect.rose);
       expect(restored.lightConfig?.colors.primaryColorValue, 0xFF336699);
       expect(restored.darkConfig?.colors.primaryColorValue, 0xFF112233);
     });

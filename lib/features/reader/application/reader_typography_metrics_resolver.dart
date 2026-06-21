@@ -3,13 +3,9 @@ import '../../../domain/entities/reader_settings.dart';
 class ReaderTypographyMetricsResolver {
   const ReaderTypographyMetricsResolver();
 
-  static const double _legacyParagraphSpacingThreshold = 8;
-
   ReaderSettings normalizeSettings(ReaderSettings settings) {
     final normalizedParagraphSpacing =
-        settings.paragraphSpacing >= _legacyParagraphSpacingThreshold
-            ? (settings.paragraphSpacing / 7).clamp(0.0, 20.0).toDouble()
-            : settings.paragraphSpacing.clamp(0.0, 20.0).toDouble();
+        settings.paragraphSpacing.clamp(0.0, 20.0).toDouble();
     final normalizedParagraphIndent =
         settings.paragraphIndent.clamp(0.0, 4.0).toDouble();
 

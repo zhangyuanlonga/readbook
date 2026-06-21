@@ -1894,6 +1894,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
           rejectReason: ReaderPageTurnRejectReason.crossChapterCancelled,
         );
       }
+      _commitCrossChapterPagedTextPosition(direction);
       _recordFirstPageTurnCompleted(mode: completionMode);
       _syncActiveReadingRecordSessionProgress();
       _scheduleProgressSave();
@@ -1947,6 +1948,7 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
         rejectReason: ReaderPageTurnRejectReason.crossChapterCancelled,
       );
     }
+    _commitCrossChapterPagedTextPosition(direction);
 
     final targetReady = await _waitForCrossChapterSnapshotTarget(
       generation: generation,
@@ -2014,6 +2016,18 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
       }
     }
     return null;
+  }
+
+  void _commitCrossChapterPagedTextPosition(int direction) {
+    if (!_isPagedTextReaderEnabled()) {
+      return;
+    }
+    setState(() {
+      _pageTurnRuntimeController.commitCrossChapterPagedTurn(
+        direction: direction,
+        pageCount: _currentPagedPageCount,
+      );
+    });
   }
 
   PagedAnimationMotionSpec _crossChapterMotionSpecForStyle(
@@ -2322,7 +2336,10 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     }
 
     setState(() {
-      _pageTurnRuntimeController.currentPageIndex = commit.nextPageIndex;
+      _pageTurnRuntimeController.commitPagedPosition(
+        pageIndex: commit.nextPageIndex,
+        pageCount: _currentPagedPageCount,
+      );
       _pageTurnRuntimeController.beginPagedTransition(commit.nextState);
     });
     _syncActiveReadingRecordSessionProgress();

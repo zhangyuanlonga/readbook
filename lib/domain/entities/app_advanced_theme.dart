@@ -21,7 +21,17 @@ enum AppAdvancedThemeNavigationStyle { soft, floating, compact }
 
 enum AppAdvancedThemeSwitchStyle { soft, contrast }
 
-enum AppAdvancedThemeEffect { none, rain, snow, leaf, sakura, firefly }
+enum AppAdvancedThemeEffect {
+  none,
+  rain,
+  snow,
+  leaf,
+  sakura,
+  rose,
+  whitePetal,
+  wisteria,
+  firefly,
+}
 
 @JsonSerializable(createFactory: false, createToJson: false)
 class AppAdvancedThemeComponentStyle {
@@ -1001,6 +1011,9 @@ class AppAdvancedTheme {
       'snow' => AppAdvancedThemeEffect.snow,
       'leaf' => AppAdvancedThemeEffect.leaf,
       'sakura' => AppAdvancedThemeEffect.sakura,
+      'rose' => AppAdvancedThemeEffect.rose,
+      'whitePetal' => AppAdvancedThemeEffect.whitePetal,
+      'wisteria' => AppAdvancedThemeEffect.wisteria,
       'firefly' => AppAdvancedThemeEffect.firefly,
       _ => AppAdvancedThemeEffect.none,
     };

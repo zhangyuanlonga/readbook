@@ -30,7 +30,12 @@ class ReaderGatewayContentCacheCodec {
   const ReaderGatewayContentCacheCodec._();
 
   static const String payloadPrefix = '__appread_gateway_payload__:';
-  static const String legacyImagePrefix = '__appread_image_payload__:';
+  static const String _unsupportedImagePayloadPrefix =
+      '__appread_image_payload__:';
+
+  static bool isUnsupportedPayload(String payload) {
+    return payload.trim().startsWith(_unsupportedImagePayloadPrefix);
+  }
 
   static String encode({
     required String content,
@@ -75,11 +80,6 @@ class ReaderGatewayContentCacheCodec {
     if (trimmed.startsWith(payloadPrefix)) {
       return _decodeJsonPayload(trimmed.substring(payloadPrefix.length));
     }
-    if (trimmed.startsWith(legacyImagePrefix)) {
-      return _decodeLegacyImagePayload(
-        trimmed.substring(legacyImagePrefix.length),
-      );
-    }
     return ReaderGatewayContentCachePayload(content: trimmed);
   }
 
@@ -103,30 +103,6 @@ class ReaderGatewayContentCacheCodec {
     } on FormatException {
       return ReaderGatewayContentCachePayload(content: raw.trim());
     }
-  }
-
-  static ReaderGatewayContentCachePayload _decodeLegacyImagePayload(
-    String raw,
-  ) {
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is List) {
-        return ReaderGatewayContentCachePayload(
-          content: '',
-          imageUrls: _normalizeList(decoded),
-        );
-      }
-      if (decoded is Map) {
-        return ReaderGatewayContentCachePayload(
-          content: '',
-          imageUrls: _normalizeList(decoded['imageUrls'] as List? ?? const []),
-          imageHeaders: _normalizeDynamicMap(decoded['imageHeaders']),
-        );
-      }
-    } on FormatException {
-      return ReaderGatewayContentCachePayload(content: raw.trim());
-    }
-    return ReaderGatewayContentCachePayload(content: raw.trim());
   }
 
   static List<String> _normalizeList(List<dynamic> values) {

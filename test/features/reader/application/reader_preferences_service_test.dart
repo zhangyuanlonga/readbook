@@ -207,7 +207,7 @@ void main() {
       expect(await service.loadTapZoneGuideShown(), isTrue);
     });
 
-    test('ignores legacy layout fields when loading settings', () async {
+    test('ignores removed layout fields when loading settings', () async {
       SharedPreferences.setMockInitialValues({
         'reader.settings.bodyMarginMode': 'preset',
         'reader.settings.bodyMarginPreset': 'relaxed',
@@ -262,7 +262,7 @@ void main() {
       expect(restored.infoFooterMarginRight, 80);
     });
 
-    test('saving settings clears legacy storage keys', () async {
+    test('saving settings clears removed storage keys', () async {
       SharedPreferences.setMockInitialValues({
         'reader.settings.bodyMarginMode': 'preset',
         'reader.settings.bodyMarginPreset': 'relaxed',
@@ -384,42 +384,34 @@ void main() {
       expect(newProgress.chapterIndex, 1);
     });
 
-    test('rejects legacy progress payload without position ratio', () async {
+    test('drops old progress payload without position ratio', () async {
       SharedPreferences.setMockInitialValues({
-        'reader.progress.book_legacy':
-            '{"bookId":"book_legacy","sourceId":"src_legacy","detailUrl":"https://example.com/book/legacy","chapterId":"chapter_1","chapterUrl":"https://example.com/book/legacy/1","chapterTitle":"第一章","chapterIndex":1,"updatedAt":"2026-02-12T12:00:00.000Z"}',
+        'reader.progress.book_old':
+            '{"bookId":"book_old","sourceId":"src_old","detailUrl":"https://example.com/book/old","chapterId":"chapter_1","chapterUrl":"https://example.com/book/old/1","chapterTitle":"第一章","chapterIndex":1,"updatedAt":"2026-02-12T12:00:00.000Z"}',
       });
 
       final service = await _createService();
-      final restored = await service.loadProgress('book_legacy');
+      final restored = await service.loadProgress('book_old');
 
       expect(restored, isNull);
     });
 
-    test(
-      'migrates legacy progress payload from SharedPreferences to database',
-      () async {
-        SharedPreferences.setMockInitialValues({
-          'reader.progress.book_legacy':
-              '{"bookId":"book_legacy","sourceId":"src_legacy","detailUrl":"https://example.com/book/legacy","chapterId":"chapter_1","chapterUrl":"https://example.com/book/legacy/1","chapterTitle":"第一章","chapterIndex":1,"updatedAt":"2026-02-12T12:00:00.000Z","chapterPositionRatio":0.4}',
-        });
+    test('drops old progress payload from SharedPreferences', () async {
+      SharedPreferences.setMockInitialValues({
+        'reader.progress.book_old':
+            '{"bookId":"book_old","sourceId":"src_old","detailUrl":"https://example.com/book/old","chapterId":"chapter_1","chapterUrl":"https://example.com/book/old/1","chapterTitle":"第一章","chapterIndex":1,"updatedAt":"2026-02-12T12:00:00.000Z","chapterPositionRatio":0.4}',
+      });
 
-        final service = await _createService();
-        final restored = await service.loadProgress('book_legacy');
+      final service = await _createService();
+      final restored = await service.loadProgress('book_old');
 
-        expect(restored, isNotNull);
-        expect(restored!.chapterPositionRatio, 0.4);
+      expect(restored, isNull);
 
-        final prefs = await SharedPreferences.getInstance();
-        expect(prefs.containsKey('reader.progress.book_legacy'), isFalse);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.containsKey('reader.progress.book_old'), isFalse);
+    });
 
-        final restoredAgain = await service.loadProgress('book_legacy');
-        expect(restoredAgain, isNotNull);
-        expect(restoredAgain!.chapterTitle, '第一章');
-      },
-    );
-
-    test('ignores legacy single background image key', () async {
+    test('ignores removed single background image key', () async {
       SharedPreferences.setMockInitialValues({
         'reader.settings.customBackgroundImageBase64': 'legacy_background',
       });

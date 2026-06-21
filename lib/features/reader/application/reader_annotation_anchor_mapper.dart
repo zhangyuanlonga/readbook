@@ -37,22 +37,16 @@ class ReaderAnnotationAnchorMapper {
     final restored = ReaderLayoutAnchoredRange.fromJson(
       bookmark.content.layoutAnchor ?? const <String, Object?>{},
     );
-    final snapshot =
-        restored == null
-            ? selectionRuntime.selectOffsets(
-              layoutPages: layoutPages,
-              startOffset: bookmark.startOffset,
-              endOffset: bookmark.endOffset,
-              kind: ReaderLayoutAnchorKind.annotation,
-              sourceId: bookmark.id,
-            )
-            : selectionRuntime.selectPositions(
-              layoutPages: layoutPages,
-              start: restored.range.start,
-              end: restored.range.end,
-              kind: ReaderLayoutAnchorKind.annotation,
-              sourceId: bookmark.id,
-            );
+    if (restored == null) {
+      return null;
+    }
+    final snapshot = selectionRuntime.selectPositions(
+      layoutPages: layoutPages,
+      start: restored.range.start,
+      end: restored.range.end,
+      kind: ReaderLayoutAnchorKind.annotation,
+      sourceId: bookmark.id,
+    );
     if (snapshot == null || snapshot.isCollapsed) {
       return null;
     }

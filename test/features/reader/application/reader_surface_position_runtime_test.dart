@@ -81,7 +81,7 @@ void main() {
       expect(runtime.toSnapshot(position).viewportMode, 'imagePaged');
     });
 
-    test('restores legacy snapshots and reports diagnostics', () {
+    test('restores stored image snapshots and reports diagnostics', () {
       final plan = runtime.restoreFromProgress(
         ReadingProgress(
           bookId: 'book-a',

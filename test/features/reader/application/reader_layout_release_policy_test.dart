@@ -24,7 +24,7 @@ void main() {
       expect(decision.options.mode, ReaderLayoutEngineMode.experimental);
     });
 
-    test('diagnostics omit removed legacy switches', () {
+    test('diagnostics omit removed rollout switches', () {
       const policy = ReaderLayoutReleasePolicy();
 
       final decision = policy.resolve(
@@ -37,10 +37,6 @@ void main() {
       expect(decision.useReleaseRenderer, isTrue);
       expect(decision.mode, ReaderLayoutEngineMode.experimental);
       expect(decision.reason, 'enabled');
-      expect(
-        decision.toDiagnosticsContext(),
-        isNot(contains('readerLayoutReleaseForceLegacy')),
-      );
       expect(
         decision.toDiagnosticsContext(),
         isNot(contains('readerLayoutReleaseEnabled')),

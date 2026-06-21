@@ -53,7 +53,7 @@ class ReaderDeviceTierResolver {
     }
 
     final modelName = input.modelName?.toLowerCase().trim() ?? '';
-    if (_looksLikeLegacyPhone(modelName)) {
+    if (_looksLikeLowEndPhone(modelName)) {
       return ReaderDeviceTier.low;
     }
     if (_looksLikeRecentFlagship(modelName)) {
@@ -66,7 +66,7 @@ class ReaderDeviceTierResolver {
     return ReaderDeviceTier.normal;
   }
 
-  bool _looksLikeLegacyPhone(String modelName) {
+  bool _looksLikeLowEndPhone(String modelName) {
     if (modelName.isEmpty) {
       return false;
     }

@@ -133,7 +133,7 @@ Second chapter content.
     );
 
     test(
-      'uses built-in chapter rules without legacy custom rule storage',
+      'uses built-in chapter rules without removed custom rule storage',
       () async {
         final file = File('${tempDir.path}/custom_rule.txt');
         final longContent = List.filled(1200, '自定义内容').join();
@@ -164,12 +164,12 @@ $longContent
       },
     );
 
-    test('ignores legacy custom chapter rule preferences', () async {
+    test('ignores removed custom chapter rule preferences', () async {
       SharedPreferences.setMockInitialValues({
         'reader.local.txt.chapterRules': '''
 [
   {
-    "id": "legacy-custom",
+    "id": "removed-custom",
     "name": "旧版自定义规则",
     "pattern": "^### .+ ###\$",
     "enabled": true,
@@ -179,7 +179,7 @@ $longContent
 ''',
       });
 
-      final file = File('${tempDir.path}/legacy_custom_rule.txt');
+      final file = File('${tempDir.path}/removed_custom_rule.txt');
       final longContent = List.filled(7000, '旧规则内容').join();
       await file.writeAsString('''
 ### LEGACY ONE ###
@@ -192,7 +192,7 @@ $longContent
       final now = DateTime.parse('2026-02-23T12:00:00.000Z');
       final result = await parser.parse(
         LocalBook(
-          id: 'local_txt_legacy_custom_1',
+          id: 'local_txt_removed_custom_1',
           title: '旧规则残留书',
           format: LocalBookFormat.txt,
           storagePath: file.path,

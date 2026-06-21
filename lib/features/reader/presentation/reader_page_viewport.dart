@@ -618,10 +618,15 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
           );
         }
 
+        final pendingRestoreRatio =
+            _pageTurnRuntimeController.pagedPaginationState.pendingRestoreRatio;
         _syncLayoutReleaseRequest(
           releaseRequest,
-          targetRatio: _currentLogicalPositionRatio(),
-          initialPageIndex: _pageTurnRuntimeController.currentPageIndex,
+          targetRatio: pendingRestoreRatio ?? _currentLogicalPositionRatio(),
+          initialPageIndex:
+              pendingRestoreRatio == null
+                  ? _pageTurnRuntimeController.currentPageIndex
+                  : null,
         );
         return ReaderLayoutReleaseSurface(
           request: releaseRequest,
@@ -816,11 +821,12 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
     }
     final pageCount = max(1, _layoutReleasePageCount ?? _currentPagedPageCount);
     final safeIndex = pageIndex.clamp(0, pageCount - 1).toInt();
-    if (_pageTurnRuntimeController.currentPageIndex != safeIndex) {
-      _updateReaderState(() {
-        _pageTurnRuntimeController.currentPageIndex = safeIndex;
-      });
-    }
+    _updateReaderState(() {
+      _pageTurnRuntimeController.commitPagedPosition(
+        pageIndex: safeIndex,
+        pageCount: pageCount,
+      );
+    });
     _syncActiveReadingRecordSessionProgress();
     _scheduleProgressSave();
   }

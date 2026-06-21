@@ -120,14 +120,14 @@ void main() {
       updatedAt: DateTime.parse('2026-06-20T00:00:00.000Z'),
       lightConfig: AppAdvancedThemeModeConfig(),
       darkConfig: AppAdvancedThemeModeConfig(),
-      themeEffect: AppAdvancedThemeEffect.sakura,
+      themeEffect: AppAdvancedThemeEffect.wisteria,
     );
 
     final json = theme.toJson();
-    expect(json['themeEffect'], 'sakura');
+    expect(json['themeEffect'], 'wisteria');
 
     final restored = AppAdvancedTheme.fromJson(json);
-    expect(restored.themeEffect, AppAdvancedThemeEffect.sakura);
+    expect(restored.themeEffect, AppAdvancedThemeEffect.wisteria);
 
     final cleared = restored.copyWith(themeEffect: AppAdvancedThemeEffect.none);
     expect(cleared.toJson().containsKey('themeEffect'), isFalse);

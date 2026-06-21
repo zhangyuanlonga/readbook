@@ -32,14 +32,19 @@ void main() {
       expect(decoded.hasAudioContent, isTrue);
     });
 
-    test('reads legacy image payloads', () {
-      final decoded = ReaderGatewayContentCacheCodec.decode(
-        '${ReaderGatewayContentCacheCodec.legacyImagePrefix}'
-        '{"imageUrls":[" https://img.example/1.jpg "],"imageHeaders":{"A":" b "}}',
-      );
+    test('flags unsupported image payloads instead of decoding old cache', () {
+      const payload =
+          '__appread_image_payload__:'
+          '{"imageUrls":[" https://img.example/1.jpg "],"imageHeaders":{"A":" b "}}';
 
-      expect(decoded.imageUrls, const <String>['https://img.example/1.jpg']);
-      expect(decoded.imageHeaders, const <String, String>{'A': 'b'});
+      final decoded = ReaderGatewayContentCacheCodec.decode(payload);
+
+      expect(
+        ReaderGatewayContentCacheCodec.isUnsupportedPayload(payload),
+        isTrue,
+      );
+      expect(decoded.imageUrls, isEmpty);
+      expect(decoded.imageHeaders, isEmpty);
     });
   });
 }

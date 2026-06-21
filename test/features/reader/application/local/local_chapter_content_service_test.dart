@@ -261,7 +261,7 @@ $chapter2
       await repository.upsertBook(
         LocalBook(
           id: 'local_offset_only_1',
-          title: '仅偏移旧数据测试',
+          title: '仅偏移陈旧索引测试',
           format: LocalBookFormat.txt,
           storagePath: file.path,
           fileSize: fileStat.size,

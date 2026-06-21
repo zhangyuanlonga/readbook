@@ -38,22 +38,16 @@ class ReaderBookmarkAnchorMapper {
     final restored = ReaderLayoutAnchoredRange.fromJson(
       bookmark.content.layoutAnchor ?? const <String, Object?>{},
     );
-    final rangeSnapshot =
-        restored == null
-            ? selectionRuntime.selectOffsets(
-              layoutPages: layoutPages,
-              startOffset: bookmark.startOffset,
-              endOffset: bookmark.endOffset,
-              kind: ReaderLayoutAnchorKind.bookmark,
-              sourceId: bookmark.id,
-            )
-            : selectionRuntime.selectPositions(
-              layoutPages: layoutPages,
-              start: restored.range.start,
-              end: restored.range.end,
-              kind: ReaderLayoutAnchorKind.bookmark,
-              sourceId: bookmark.id,
-            );
+    if (restored == null) {
+      return null;
+    }
+    final rangeSnapshot = selectionRuntime.selectPositions(
+      layoutPages: layoutPages,
+      start: restored.range.start,
+      end: restored.range.end,
+      kind: ReaderLayoutAnchorKind.bookmark,
+      sourceId: bookmark.id,
+    );
     final startPosition =
         rangeSnapshot?.range.start ??
         hitTestService.chapterOffsetToPosition(
@@ -63,7 +57,7 @@ class ReaderBookmarkAnchorMapper {
     if (startPosition == null) {
       return null;
     }
-    final progress = progressMapper.toLegacyProgress(
+    final progress = progressMapper.toProgressSnapshot(
       layoutPages: layoutPages,
       position: startPosition,
     );
@@ -111,20 +105,6 @@ class ReaderBookmarkAnchorMapper {
       note: existing?.note,
       createdAt: existing?.createdAt ?? timestamp,
       updatedAt: timestamp,
-    );
-  }
-
-  ReaderLayoutAnchoredPosition? restorePosition({
-    required List<ReaderLayoutPage> layoutPages,
-    required int legacyChapterOffset,
-    double? legacyRatio,
-    String? sourceId,
-  }) {
-    return progressMapper.fromLegacyProgress(
-      layoutPages: layoutPages,
-      chapterOffset: legacyChapterOffset,
-      chapterProgressRatio: legacyRatio ?? 0,
-      sourceId: sourceId,
     );
   }
 
