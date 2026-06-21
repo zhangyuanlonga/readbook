@@ -50,7 +50,6 @@ import 'advanced_theme_editor_models.dart';
 import 'widgets/advanced_theme_basic_section.dart';
 import 'widgets/advanced_theme_editor_shell_widgets.dart';
 import 'widgets/advanced_theme_font_section.dart';
-import 'widgets/advanced_theme_launch_gallery_selection_card.dart';
 import 'widgets/advanced_theme_preview_panel.dart';
 import 'widgets/advanced_theme_resource_picker_widgets.dart';
 
@@ -438,51 +437,27 @@ class _AdvancedThemeEditorPageState
                       ),
                     ],
                   ),
-                  actions: [
-                    AppButton(
-                      variant: AppButtonVariant.text,
-                      onPressed: () => Navigator.of(context).pop(),
-                      label: '取消',
-                    ),
-                    const Spacer(),
-                    AppButton(
-                      variant: AppButtonVariant.text,
-                      onPressed:
-                          () => unawaited(
-                            _openRouteFromSheet(
-                              context,
-                              '/appearance?section=background',
+                  actions: _buildResourcePickerActions(
+                    context,
+                    manageRoute: '/appearance?section=background',
+                    onClear:
+                        selectedPath == null
+                            ? null
+                            : () => Navigator.of(context).pop(
+                              const AdvancedThemeWallpaperSelectionResult(
+                                path: null,
+                              ),
                             ),
-                          ),
-                      label: '去管理',
-                    ),
-                    const SizedBox(width: 8),
-                    AppButton(
-                      variant: AppButtonVariant.text,
-                      onPressed:
-                          selectedPath == null
-                              ? null
-                              : () => Navigator.of(context).pop(
-                                const AdvancedThemeWallpaperSelectionResult(
-                                  path: null,
-                                ),
+                    onApply:
+                        selectedPath == null
+                            ? null
+                            : () => Navigator.of(context).pop(
+                              AdvancedThemeWallpaperSelectionResult(
+                                path: selectedPath!,
+                                fit: selectedFit,
                               ),
-                      label: '取消绑定',
-                    ),
-                    const SizedBox(width: 8),
-                    AppButton(
-                      onPressed:
-                          selectedPath == null
-                              ? null
-                              : () => Navigator.of(context).pop(
-                                AdvancedThemeWallpaperSelectionResult(
-                                  path: selectedPath!,
-                                  fit: selectedFit,
-                                ),
-                              ),
-                      label: '应用',
-                    ),
-                  ],
+                            ),
+                  ),
                 );
               },
             );
@@ -583,51 +558,27 @@ class _AdvancedThemeEditorPageState
                       ),
                     ],
                   ),
-                  actions: [
-                    AppButton(
-                      variant: AppButtonVariant.text,
-                      onPressed:
-                          () => unawaited(
-                            _openRouteFromSheet(
-                              context,
-                              '/appearance/reader-background',
+                  actions: _buildResourcePickerActions(
+                    context,
+                    manageRoute: '/appearance/reader-background',
+                    onClear:
+                        selectedPath == null
+                            ? null
+                            : () => Navigator.of(context).pop(
+                              const AdvancedThemeWallpaperSelectionResult(
+                                path: null,
+                              ),
                             ),
-                          ),
-                      label: '去管理',
-                    ),
-                    const Spacer(),
-                    AppButton(
-                      variant: AppButtonVariant.secondary,
-                      onPressed: () => Navigator.of(context).pop(),
-                      label: '取消',
-                    ),
-                    const SizedBox(width: 10),
-                    AppButton(
-                      variant: AppButtonVariant.text,
-                      onPressed:
-                          selectedPath == null
-                              ? null
-                              : () => Navigator.of(context).pop(
-                                const AdvancedThemeWallpaperSelectionResult(
-                                  path: null,
-                                ),
+                    onApply:
+                        selectedPath == null
+                            ? null
+                            : () => Navigator.of(context).pop(
+                              AdvancedThemeWallpaperSelectionResult(
+                                path: selectedPath!,
+                                fit: selectedFit,
                               ),
-                      label: '取消绑定',
-                    ),
-                    const SizedBox(width: 10),
-                    AppButton(
-                      onPressed:
-                          selectedPath == null
-                              ? null
-                              : () => Navigator.of(context).pop(
-                                AdvancedThemeWallpaperSelectionResult(
-                                  path: selectedPath!,
-                                  fit: selectedFit,
-                                ),
-                              ),
-                      label: '应用',
-                    ),
-                  ],
+                            ),
+                  ),
                 );
               },
             );
@@ -691,82 +642,87 @@ class _AdvancedThemeEditorPageState
   }
 
   Future<void> _pickBottomNavGallery() async {
-    if (_bottomNavGalleries.isEmpty || _isSaving) {
+    if (_isSaving) {
       return;
     }
     String? selectedId = _draft?.bottomNavGalleryId;
-    final nextId = await showAdaptiveActionSurface<String>(
+    final result =
+        await showAdaptiveActionSurface<
+          AdvancedThemeBottomNavGallerySelectionResult
+        >(
       context: context,
       maxWidth: 720,
       maxHeightFactor: _resourcePickerSheetHeightFactor,
       padding: EdgeInsets.zero,
       builder: (context) {
-        final colorScheme = Theme.of(context).colorScheme;
         return StatefulBuilder(
           builder: (context, setSheetState) {
             return _buildResourcePickerSheet(
               context,
               title: '选择底栏图集',
-              content: ListView.separated(
-                itemCount: _bottomNavGalleries.length,
-                separatorBuilder: (_, __) => const Divider(height: 1),
-                itemBuilder: (context, index) {
-                  final gallery = _bottomNavGalleries[index];
-                  final selected = gallery.id == selectedId;
-                  return InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: () {
-                      setSheetState(() {
-                        selectedId = gallery.id;
-                      });
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 4,
-                        vertical: 12,
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              gallery.name,
-                              style: Theme.of(context).textTheme.labelLarge
-                                  ?.copyWith(fontWeight: FontWeight.w700),
+              helperText: '显示的是底栏图集页素材列表，点选图集即可绑定。',
+              content:
+                  _bottomNavGalleries.isEmpty
+                      ? _buildEmptyResourceState(
+                        context,
+                        icon: Icons.dashboard_outlined,
+                        title: '还没有底栏图集',
+                        description: '先去底栏图集页准备素材，再回来绑定。',
+                      )
+                      : ListView.separated(
+                        itemCount: _bottomNavGalleries.length,
+                        separatorBuilder:
+                            (_, __) => const SizedBox(height: 10),
+                        itemBuilder: (context, index) {
+                          final gallery = _bottomNavGalleries[index];
+                          final selected = gallery.id == selectedId;
+                          return _buildResourcePickerListTile(
+                            context,
+                            title: gallery.name,
+                            subtitle: gallery.isBuiltIn ? '内置图集' : '自定义图集',
+                            selected: selected,
+                            leading: _buildVisualBottomNavGalleryPreview(
+                              context,
+                              gallery: gallery,
+                              width: 58,
+                              height: 70,
                             ),
+                            onTap: () {
+                              setSheetState(() {
+                                selectedId = gallery.id;
+                              });
+                            },
+                          );
+                        },
+                      ),
+              actions: _buildResourcePickerActions(
+                context,
+                manageRoute: '/bottom-nav-icon-galleries',
+                onClear:
+                    selectedId == null
+                        ? null
+                        : () => Navigator.of(context).pop(
+                          const AdvancedThemeBottomNavGallerySelectionResult(
+                            applied: true,
+                            galleryId: null,
                           ),
-                          if (selected)
-                            Icon(
-                              Icons.check_rounded,
-                              color: colorScheme.primary,
-                              size: 18,
-                            ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
+                        ),
+                onApply:
+                    selectedId == null
+                        ? null
+                        : () => Navigator.of(context).pop(
+                          AdvancedThemeBottomNavGallerySelectionResult(
+                            applied: true,
+                            galleryId: selectedId,
+                          ),
+                        ),
               ),
-              actions: [
-                AppButton(
-                  variant: AppButtonVariant.text,
-                  onPressed: () => Navigator.of(context).pop(),
-                  label: '取消',
-                ),
-                const Spacer(),
-                AppButton(
-                  onPressed:
-                      selectedId == null
-                          ? null
-                          : () => Navigator.of(context).pop(selectedId),
-                  label: '应用',
-                ),
-              ],
             );
           },
         );
       },
     );
-    if (nextId == null || !mounted) {
+    if (result == null || !result.applied || !mounted) {
       return;
     }
     final draft = _draft;
@@ -774,7 +730,10 @@ class _AdvancedThemeEditorPageState
       return;
     }
     setState(() {
-      _draft = draft.copyWith(bottomNavGalleryId: nextId);
+      _draft =
+          result.galleryId == null
+              ? draft.copyWith(clearBottomNavGalleryId: true)
+              : draft.copyWith(bottomNavGalleryId: result.galleryId);
     });
   }
 
@@ -792,12 +751,12 @@ class _AdvancedThemeEditorPageState
       maxHeightFactor: _resourcePickerSheetHeightFactor,
       padding: EdgeInsets.zero,
       builder: (context) {
-        final colorScheme = Theme.of(context).colorScheme;
         return StatefulBuilder(
           builder: (context, setSheetState) {
             return _buildResourcePickerSheet(
               context,
               title: '选择${_modeLabel(_selectedMode)}封面图集',
+              helperText: '显示的是封面图集页素材列表，点选图集即可绑定。',
               content:
                   _coverGalleries.isEmpty
                       ? _buildEmptyResourceState(
@@ -808,7 +767,7 @@ class _AdvancedThemeEditorPageState
                       )
                       : ListView.separated(
                         itemCount: _coverGalleries.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        separatorBuilder: (_, __) => const SizedBox(height: 10),
                         itemBuilder: (context, index) {
                           final gallery = _coverGalleries[index];
                           final selected = gallery.id == selectedId;
@@ -816,108 +775,58 @@ class _AdvancedThemeEditorPageState
                             gallery.imagePaths,
                           );
                           final imageCount = gallery.imagePaths.length;
-                          return InkWell(
-                            borderRadius: BorderRadius.circular(12),
+                          return _buildResourcePickerListTile(
+                            context,
+                            title: gallery.name,
+                            subtitle:
+                                imageCount <= 0 ? '暂无图片' : '$imageCount 张图片',
+                            selected: selected,
+                            leading: _buildVisualImageResourcePreview(
+                              context,
+                              previewPath: previewPath,
+                              title: gallery.name,
+                              width: 58,
+                              height: 70,
+                              onLongPress:
+                                  previewPath == null
+                                      ? null
+                                      : () => unawaited(
+                                        _showImagePreviewDialog(
+                                          imagePath: previewPath,
+                                          title: gallery.name,
+                                        ),
+                                      ),
+                            ),
                             onTap: () {
                               setSheetState(() {
                                 selectedId = gallery.id;
                               });
                             },
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 4,
-                                vertical: 12,
-                              ),
-                              child: Row(
-                                children: [
-                                  _buildGalleryPreviewThumb(
-                                    context,
-                                    previewPath: previewPath,
-                                    title: gallery.name,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          gallery.name,
-                                          style: Theme.of(
-                                            context,
-                                          ).textTheme.labelLarge?.copyWith(
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          imageCount <= 0
-                                              ? '暂无图片'
-                                              : '$imageCount 张图片',
-                                          style: Theme.of(
-                                            context,
-                                          ).textTheme.bodySmall?.copyWith(
-                                            color: colorScheme.onSurfaceVariant,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  if (selected)
-                                    Icon(
-                                      Icons.check_rounded,
-                                      color: colorScheme.primary,
-                                      size: 18,
-                                    ),
-                                ],
-                              ),
-                            ),
                           );
                         },
                       ),
-              actions: [
-                AppButton(
-                  variant: AppButtonVariant.text,
-                  onPressed: () => Navigator.of(context).pop(),
-                  label: '取消',
-                ),
-                const Spacer(),
-                AppButton(
-                  variant: AppButtonVariant.text,
-                  onPressed:
-                      () => unawaited(
-                        _openRouteFromSheet(context, '/cover-galleries'),
-                      ),
-                  label: '去管理',
-                ),
-                const SizedBox(width: 8),
-                AppButton(
-                  variant: AppButtonVariant.text,
-                  onPressed:
-                      selectedId == null
-                          ? null
-                          : () => Navigator.of(context).pop(
-                            const AdvancedThemeCoverGallerySelectionResult(
-                              applied: true,
-                              galleryId: null,
-                            ),
+              actions: _buildResourcePickerActions(
+                context,
+                manageRoute: '/cover-galleries',
+                onClear:
+                    selectedId == null
+                        ? null
+                        : () => Navigator.of(context).pop(
+                          const AdvancedThemeCoverGallerySelectionResult(
+                            applied: true,
+                            galleryId: null,
                           ),
-                  label: '取消绑定',
-                ),
-                const SizedBox(width: 8),
-                AppButton(
-                  onPressed:
-                      selectedId == null
-                          ? null
-                          : () => Navigator.of(context).pop(
-                            AdvancedThemeCoverGallerySelectionResult(
-                              applied: true,
-                              galleryId: selectedId,
-                            ),
+                        ),
+                onApply:
+                    selectedId == null
+                        ? null
+                        : () => Navigator.of(context).pop(
+                          AdvancedThemeCoverGallerySelectionResult(
+                            applied: true,
+                            galleryId: selectedId,
                           ),
-                  label: '应用',
-                ),
-              ],
+                        ),
+              ),
             );
           },
         );
@@ -959,8 +868,8 @@ class _AdvancedThemeEditorPageState
           builder: (context, setSheetState) {
             return _buildResourcePickerSheet(
               context,
-              title: '选择启动图',
-              helperText: '显示的是启动图集页的列表图，点选图集即可绑定，长按缩略图可放大。',
+              title: '选择启动图集',
+              helperText: '显示的是启动图集页素材列表，点选图集即可绑定。',
               content:
                   _launchImageGalleries.isEmpty
                       ? _buildEmptyResourceState(
@@ -974,96 +883,62 @@ class _AdvancedThemeEditorPageState
                         separatorBuilder: (_, __) => const SizedBox(height: 10),
                         itemBuilder: (context, index) {
                           final gallery = _launchImageGalleries[index];
-                          return AdvancedThemeLaunchGallerySelectionCard(
+                          final previewPath = _firstExistingImagePath(
+                            gallery.imagePaths,
+                          );
+                          final imageCount = gallery.imagePaths.length;
+                          return _buildResourcePickerListTile(
+                            context,
                             title: gallery.name,
                             subtitle:
-                                gallery.imagePaths.isEmpty
-                                    ? '暂无图片'
-                                    : '${gallery.imagePaths.length} 张启动图',
-                            previewPaths: _existingImagePaths(
-                              gallery.imagePaths,
-                            ),
+                                imageCount <= 0 ? '暂无图片' : '$imageCount 张启动图',
                             selected: gallery.id == selectedId,
+                            leading: _buildVisualImageResourcePreview(
+                              context,
+                              previewPath: previewPath,
+                              title: gallery.name,
+                              width: 58,
+                              height: 70,
+                              onLongPress:
+                                  previewPath == null
+                                      ? null
+                                      : () => unawaited(
+                                        _showImagePreviewDialog(
+                                          imagePath: previewPath,
+                                          title: gallery.name,
+                                        ),
+                                      ),
+                            ),
                             onTap: () {
                               setSheetState(() {
                                 selectedId = gallery.id;
                               });
                             },
-                            previewThumbBuilder:
-                                ({
-                                  required previewPath,
-                                  required title,
-                                  required width,
-                                  required height,
-                                  required borderRadius,
-                                  required onTap,
-                                  onLongPress,
-                                }) => _buildGalleryPreviewThumb(
-                                  context,
-                                  previewPath: previewPath,
-                                  title: title,
-                                  width: width,
-                                  height: height,
-                                  borderRadius: borderRadius,
-                                  onTap: onTap,
-                                  onLongPress: onLongPress,
-                                ),
-                            onPreviewLongPress:
-                                (previewPath) => unawaited(
-                                  _showImagePreviewDialog(
-                                    imagePath: previewPath,
-                                    title: gallery.name,
-                                  ),
-                                ),
                           );
                         },
                       ),
-              actions: [
-                AppButton(
-                  variant: AppButtonVariant.text,
-                  onPressed: () => Navigator.of(context).pop(),
-                  label: '取消',
-                ),
-                const Spacer(),
-                AppButton(
-                  variant: AppButtonVariant.text,
-                  onPressed:
-                      () => unawaited(
-                        _openRouteFromSheet(
-                          context,
-                          '/appearance/launch-image',
+              actions: _buildResourcePickerActions(
+                context,
+                manageRoute: '/appearance/launch-image',
+                onClear:
+                    selectedId == null
+                        ? null
+                        : () => Navigator.of(context).pop(
+                          const AdvancedThemeLaunchImageGallerySelectionResult(
+                            applied: true,
+                            galleryId: null,
+                          ),
                         ),
-                      ),
-                  label: '去管理',
-                ),
-                const SizedBox(width: 8),
-                AppButton(
-                  variant: AppButtonVariant.text,
-                  onPressed:
-                      selectedId == null
-                          ? null
-                          : () => Navigator.of(context).pop(
-                            const AdvancedThemeLaunchImageGallerySelectionResult(
-                              applied: true,
-                              galleryId: null,
-                            ),
+                onApply:
+                    selectedId == null
+                        ? null
+                        : () => Navigator.of(context).pop(
+                          AdvancedThemeLaunchImageGallerySelectionResult(
+                            applied: true,
+                            galleryId: selectedId,
                           ),
-                  label: '取消绑定',
-                ),
-                const SizedBox(width: 8),
-                AppButton(
-                  onPressed:
-                      selectedId == null
-                          ? null
-                          : () => Navigator.of(context).pop(
-                            AdvancedThemeLaunchImageGallerySelectionResult(
-                              applied: true,
-                              galleryId: selectedId,
-                            ),
-                          ),
-                  label: '应用',
-                ),
-              ],
+                        ),
+              ),
             );
           },
         );
@@ -1089,71 +964,60 @@ class _AdvancedThemeEditorPageState
       return;
     }
 
-    final selectedEffect = _draft?.themeEffect ?? AppAdvancedThemeEffect.none;
+    var selectedEffect = _draft?.themeEffect ?? AppAdvancedThemeEffect.none;
     final result = await showAdaptiveActionSurface<AppAdvancedThemeEffect>(
       context: context,
-      maxWidth: 560,
-      maxHeightFactor: 0.56,
+      maxWidth: 720,
+      maxHeightFactor: _resourcePickerSheetHeightFactor,
       padding: EdgeInsets.zero,
       builder: (context) {
-        final colorScheme = Theme.of(context).colorScheme;
-        final componentTokens = appComponentThemeTokensOf(context);
-        final itemRadius = BorderRadius.all(
-          Radius.circular(componentTokens.button.radius),
-        );
-        return _buildResourcePickerSheet(
-          context,
-          title: '选择主题特效',
-          helperText: '特效跟随高级主题生效，会叠加在应用界面上，不影响点击和滚动。',
-          content: ListView.separated(
-            itemCount: appAdvancedThemeEffectOptions.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
-            itemBuilder: (context, index) {
-              final effect = appAdvancedThemeEffectOptions[index];
-              final selected = effect == selectedEffect;
-              return InkWell(
-                borderRadius: itemRadius,
-                onTap: () => Navigator.of(context).pop(effect),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 10,
-                  ),
-                  child: Row(
-                    children: [
-                      _buildThemeEffectPreviewThumb(
-                        context,
-                        effect: effect,
-                        size: 44,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          appAdvancedThemeEffectLabel(effect),
-                          style: Theme.of(context).textTheme.labelLarge
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                      ),
-                      if (selected)
-                        Icon(
-                          Icons.check_rounded,
-                          color: colorScheme.primary,
-                          size: 18,
-                        ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-          actions: [
-            AppButton(
-              variant: AppButtonVariant.text,
-              onPressed: () => Navigator.of(context).pop(),
-              label: '取消',
-            ),
-            const Spacer(),
-          ],
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return _buildResourcePickerSheet(
+              context,
+              title: '选择主题特效',
+              helperText: '特效跟随高级主题生效，会叠加在应用界面上，不影响点击和滚动。',
+              content: ListView.separated(
+                itemCount: appAdvancedThemeEffectOptions.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                itemBuilder: (context, index) {
+                  final effect = appAdvancedThemeEffectOptions[index];
+                  final selected = effect == selectedEffect;
+                  return _buildResourcePickerListTile(
+                    context,
+                    title: appAdvancedThemeEffectLabel(effect),
+                    subtitle:
+                        effect == AppAdvancedThemeEffect.none
+                            ? '不叠加主题特效'
+                            : '跟随高级主题生效',
+                    selected: selected,
+                    leading: _buildVisualThemeEffectPreview(
+                      context,
+                      effect: effect,
+                      width: 58,
+                      height: 70,
+                      iconSize: 58,
+                    ),
+                    onTap: () {
+                      setSheetState(() {
+                        selectedEffect = effect;
+                      });
+                    },
+                  );
+                },
+              ),
+              actions: _buildResourcePickerActions(
+                context,
+                onClear:
+                    selectedEffect == AppAdvancedThemeEffect.none
+                        ? null
+                        : () => Navigator.of(
+                          context,
+                        ).pop(AppAdvancedThemeEffect.none),
+                onApply: () => Navigator.of(context).pop(selectedEffect),
+              ),
+            );
+          },
         );
       },
     );
@@ -1523,6 +1387,96 @@ class _AdvancedThemeEditorPageState
     );
   }
 
+  List<Widget> _buildResourcePickerActions(
+    BuildContext context, {
+    String? manageRoute,
+    String manageLabel = '去管理',
+    VoidCallback? onClear,
+    VoidCallback? onApply,
+    String applyLabel = '应用',
+  }) {
+    return [
+      AppButton(
+        variant: AppButtonVariant.text,
+        onPressed: () => Navigator.of(context).pop(),
+        label: '取消',
+      ),
+      const Spacer(),
+      if (manageRoute != null) ...[
+        AppButton(
+          variant: AppButtonVariant.text,
+          onPressed: () => unawaited(_openRouteFromSheet(context, manageRoute)),
+          label: manageLabel,
+        ),
+        const SizedBox(width: 8),
+      ],
+      if (onClear != null) ...[
+        AppButton(
+          variant: AppButtonVariant.text,
+          onPressed: onClear,
+          label: '取消绑定',
+        ),
+        const SizedBox(width: 8),
+      ],
+      AppButton(onPressed: onApply, label: applyLabel),
+    ];
+  }
+
+  Widget _buildResourcePickerListTile(
+    BuildContext context, {
+    required String title,
+    required bool selected,
+    required VoidCallback onTap,
+    String? subtitle,
+    Widget? leading,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final componentTokens = appComponentThemeTokensOf(context);
+    final radius = BorderRadius.all(Radius.circular(componentTokens.card.radius));
+    return AppSurface(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      borderRadius: radius,
+      backgroundColor:
+          selected ? colorScheme.primaryContainer : colorScheme.surface,
+      borderColor: selected ? colorScheme.primary : colorScheme.outlineVariant,
+      onTap: onTap,
+      child: Row(
+        children: [
+          if (leading != null) ...[leading, const SizedBox(width: 12)],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                if (subtitle != null && subtitle.trim().isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (selected)
+            Icon(Icons.check_rounded, color: colorScheme.primary, size: 18),
+        ],
+      ),
+    );
+  }
+
   AppAdvancedThemeModeConfig _defaultModeConfigForMode(
     AppAdvancedThemeMode mode,
   ) {
@@ -1642,79 +1596,6 @@ class _AdvancedThemeEditorPageState
           (imagePath, title) => unawaited(
             _showImagePreviewDialog(imagePath: imagePath, title: title),
           ),
-    );
-  }
-
-  Widget _buildGalleryPreviewThumb(
-    BuildContext context, {
-    required String? previewPath,
-    required String title,
-    double width = 34,
-    double height = 48,
-    double borderRadius = 8,
-    bool useAddPlaceholder = false,
-    VoidCallback? onTap,
-    VoidCallback? onLongPress,
-  }) {
-    return AdvancedThemeGalleryPreviewThumb(
-      previewPath: previewPath,
-      title: title,
-      width: width,
-      height: height,
-      borderRadius: borderRadius,
-      useAddPlaceholder: useAddPlaceholder,
-      imageBuilder: (context, path, fit) => _buildResolvedImage(path, fit: fit),
-      onTap: onTap,
-      onLongPress: onLongPress,
-    );
-  }
-
-  Widget _buildThemeEffectPreviewThumb(
-    BuildContext context, {
-    required AppAdvancedThemeEffect effect,
-    double size = 72,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final componentTokens = appComponentThemeTokensOf(context);
-    final radius = BorderRadius.all(
-      Radius.circular(componentTokens.card.radius),
-    );
-    final config = appAmbientEffectConfigFor(effect, preview: true);
-    final base = AppSurface(
-      padding: EdgeInsets.zero,
-      borderRadius: radius,
-      backgroundColor: colorScheme.surfaceContainerHighest,
-      borderColor: colorScheme.outlineVariant,
-      clipBehavior: Clip.antiAlias,
-      child: Center(
-        child: Icon(
-          config == null
-              ? Icons.motion_photos_off_outlined
-              : Icons.auto_awesome_rounded,
-          size: size >= 60 ? 22 : 18,
-          color:
-              config == null
-                  ? colorScheme.onSurfaceVariant
-                  : colorScheme.primary,
-        ),
-      ),
-    );
-    final preview = SizedBox(width: size, height: size, child: base);
-    if (config == null) {
-      return preview;
-    }
-    return SizedBox(
-      width: size,
-      height: size,
-      child: ClipRRect(
-        borderRadius: radius,
-        child: AmbientEffectsContainer(
-          foregroundEffect: config,
-          performanceMode: PerformanceMode.low,
-          renderStyle: EffectRenderStyle.layered,
-          child: base,
-        ),
-      ),
     );
   }
 

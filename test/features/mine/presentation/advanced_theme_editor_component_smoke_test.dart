@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shuxiang_reading_next/app/theme/app_theme_palette.dart';
+import 'package:shuxiang_reading_next/app/widgets/app_animated_dashed_rounded_border.dart';
 import 'package:shuxiang_reading_next/core/storage/managed_asset_store.dart';
 import 'package:shuxiang_reading_next/domain/entities/app_advanced_theme.dart';
 import 'package:shuxiang_reading_next/domain/entities/bottom_nav_icon_gallery.dart';
@@ -143,6 +144,7 @@ void main() {
     expect(find.text('启动图集'), findsOneWidget);
     expect(find.text('底栏图集'), findsOneWidget);
     expect(find.text('主题特效'), findsOneWidget);
+    expect(find.byType(AppAnimatedDashedRoundedBorder), findsNWidgets(6));
     final resourceGrid = tester.widget<GridView>(
       find.byKey(const ValueKey<String>('advanced_theme_visual_resource_grid')),
     );

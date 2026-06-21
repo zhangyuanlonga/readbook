@@ -146,6 +146,16 @@ class AdvancedThemeLaunchImageGallerySelectionResult {
   final String? galleryId;
 }
 
+class AdvancedThemeBottomNavGallerySelectionResult {
+  const AdvancedThemeBottomNavGallerySelectionResult({
+    required this.applied,
+    required this.galleryId,
+  });
+
+  final bool applied;
+  final String? galleryId;
+}
+
 class AdvancedThemeWallpaperSelectionResult {
   const AdvancedThemeWallpaperSelectionResult({
     required this.path,

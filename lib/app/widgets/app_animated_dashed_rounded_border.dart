@@ -80,7 +80,7 @@ class _AppAnimatedDashedRoundedBorderState
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
-      painter: _DashedRoundedRectPainter(
+      foregroundPainter: _DashedRoundedRectPainter(
         color: widget.color,
         radius: widget.radius,
         strokeWidth: widget.strokeWidth,
