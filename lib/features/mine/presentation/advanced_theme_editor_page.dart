@@ -381,13 +381,18 @@ class _AdvancedThemeEditorPageState
       return;
     }
     final draft = _draft;
+    final currentConfig =
+        draft?.configFor(_selectedMode) ??
+        _defaultModeConfigForMode(_selectedMode);
     final currentFit =
-        draft?.configFor(_selectedMode).wallpaperFit ??
-        AppAdvancedThemeWallpaperFit.cover;
+        currentConfig.wallpaperFit;
     String? selectedPath =
         draft == null ? null : _selectedWallpaperPreviewPath(draft);
     final imagePaths = _existingImagePaths(_backgroundLibraryPaths);
     var selectedFit = currentFit;
+    var selectedOverlayOpacity = currentConfig.wallpaperOverlayOpacity;
+    var selectedOpacity = currentConfig.wallpaperOpacity;
+    var selectedBlurSigma = currentConfig.wallpaperBlurSigma;
     final result =
         await showAdaptiveActionSurface<AdvancedThemeWallpaperSelectionResult>(
           context: context,
@@ -403,19 +408,6 @@ class _AdvancedThemeEditorPageState
                   helperText: '显示的是背景页素材列表，长按图片可放大预览。',
                   content: Column(
                     children: [
-                      _buildListSectionBody(
-                        context,
-                        child: _buildCompactFitRow(
-                          context,
-                          label: '壁纸图片适配',
-                          fit: selectedFit,
-                          onChanged:
-                              (fit) => setSheetState(() {
-                                selectedFit = fit;
-                              }),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
                       Expanded(
                         child:
                             imagePaths.isEmpty
@@ -437,6 +429,30 @@ class _AdvancedThemeEditorPageState
                                   },
                                 ),
                       ),
+                      const SizedBox(height: 10),
+                      _buildAppWallpaperSelectionControls(
+                        context,
+                        fit: selectedFit,
+                        overlayOpacity: selectedOverlayOpacity,
+                        opacity: selectedOpacity,
+                        blurSigma: selectedBlurSigma,
+                        onFitChanged:
+                            (fit) => setSheetState(() {
+                              selectedFit = fit;
+                            }),
+                        onOverlayOpacityChanged:
+                            (value) => setSheetState(() {
+                              selectedOverlayOpacity = value;
+                            }),
+                        onOpacityChanged:
+                            (value) => setSheetState(() {
+                              selectedOpacity = value;
+                            }),
+                        onBlurSigmaChanged:
+                            (value) => setSheetState(() {
+                              selectedBlurSigma = value;
+                            }),
+                      ),
                     ],
                   ),
                   actions: _buildResourcePickerActions(
@@ -446,8 +462,12 @@ class _AdvancedThemeEditorPageState
                         selectedPath == null
                             ? null
                             : () => Navigator.of(context).pop(
-                              const AdvancedThemeWallpaperSelectionResult(
+                              AdvancedThemeWallpaperSelectionResult(
                                 path: null,
+                                fit: selectedFit,
+                                opacity: selectedOpacity,
+                                blurSigma: selectedBlurSigma,
+                                overlayOpacity: selectedOverlayOpacity,
                               ),
                             ),
                     onApply:
@@ -457,6 +477,9 @@ class _AdvancedThemeEditorPageState
                               AdvancedThemeWallpaperSelectionResult(
                                 path: selectedPath!,
                                 fit: selectedFit,
+                                opacity: selectedOpacity,
+                                blurSigma: selectedBlurSigma,
+                                overlayOpacity: selectedOverlayOpacity,
                               ),
                             ),
                   ),
@@ -477,7 +500,13 @@ class _AdvancedThemeEditorPageState
       setState(() {
         _draft = draft.copyWithModeConfig(
           _selectedMode,
-          currentConfig.copyWith(clearWallpaperPath: true),
+          currentConfig.copyWith(
+            clearWallpaperPath: true,
+            wallpaperFit: result.fit,
+            wallpaperOpacity: result.opacity,
+            wallpaperBlurSigma: result.blurSigma,
+            wallpaperOverlayOpacity: result.overlayOpacity,
+          ),
         );
       });
       return;
@@ -491,7 +520,7 @@ class _AdvancedThemeEditorPageState
     if (!mounted) {
       return;
     }
-    _setWallpaperFit(result.fit);
+    _applyWallpaperSelectionTuning(result);
   }
 
   Future<void> _applyPickedWallpaper(PickedImageData picked) =>
@@ -502,13 +531,18 @@ class _AdvancedThemeEditorPageState
       return;
     }
     final draft = _draft;
+    final currentConfig =
+        draft?.configFor(_selectedMode) ??
+        _defaultModeConfigForMode(_selectedMode);
     final currentFit =
-        draft?.configFor(_selectedMode).readerWallpaperFit ??
-        AppAdvancedThemeWallpaperFit.cover;
+        currentConfig.readerWallpaperFit;
     String? selectedPath =
         draft == null ? null : _selectedReaderWallpaperPreviewPath(draft);
     final imagePaths = _existingImagePaths(_readerBackgroundLibraryPaths);
     var selectedFit = currentFit;
+    var selectedOverlayOpacity = currentConfig.readerWallpaperOverlayOpacity;
+    var selectedOpacity = currentConfig.readerWallpaperOpacity;
+    var selectedBlurSigma = currentConfig.readerWallpaperBlurSigma;
     final result =
         await showAdaptiveActionSurface<AdvancedThemeWallpaperSelectionResult>(
           context: context,
@@ -524,19 +558,6 @@ class _AdvancedThemeEditorPageState
                   helperText: '显示的是阅读背景页素材列表，长按图片可放大预览。',
                   content: Column(
                     children: [
-                      _buildListSectionBody(
-                        context,
-                        child: _buildCompactFitRow(
-                          context,
-                          label: '阅读器图片适配',
-                          fit: selectedFit,
-                          onChanged:
-                              (fit) => setSheetState(() {
-                                selectedFit = fit;
-                              }),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
                       Expanded(
                         child:
                             imagePaths.isEmpty
@@ -558,6 +579,30 @@ class _AdvancedThemeEditorPageState
                                   },
                                 ),
                       ),
+                      const SizedBox(height: 10),
+                      _buildReaderWallpaperSelectionControls(
+                        context,
+                        fit: selectedFit,
+                        overlayOpacity: selectedOverlayOpacity,
+                        opacity: selectedOpacity,
+                        blurSigma: selectedBlurSigma,
+                        onFitChanged:
+                            (fit) => setSheetState(() {
+                              selectedFit = fit;
+                            }),
+                        onOverlayOpacityChanged:
+                            (value) => setSheetState(() {
+                              selectedOverlayOpacity = value;
+                            }),
+                        onOpacityChanged:
+                            (value) => setSheetState(() {
+                              selectedOpacity = value;
+                            }),
+                        onBlurSigmaChanged:
+                            (value) => setSheetState(() {
+                              selectedBlurSigma = value;
+                            }),
+                      ),
                     ],
                   ),
                   actions: _buildResourcePickerActions(
@@ -567,8 +612,12 @@ class _AdvancedThemeEditorPageState
                         selectedPath == null
                             ? null
                             : () => Navigator.of(context).pop(
-                              const AdvancedThemeWallpaperSelectionResult(
+                              AdvancedThemeWallpaperSelectionResult(
                                 path: null,
+                                fit: selectedFit,
+                                opacity: selectedOpacity,
+                                blurSigma: selectedBlurSigma,
+                                overlayOpacity: selectedOverlayOpacity,
                               ),
                             ),
                     onApply:
@@ -578,6 +627,9 @@ class _AdvancedThemeEditorPageState
                               AdvancedThemeWallpaperSelectionResult(
                                 path: selectedPath!,
                                 fit: selectedFit,
+                                opacity: selectedOpacity,
+                                blurSigma: selectedBlurSigma,
+                                overlayOpacity: selectedOverlayOpacity,
                               ),
                             ),
                   ),
@@ -601,7 +653,13 @@ class _AdvancedThemeEditorPageState
       setState(() {
         _draft = draft.copyWithModeConfig(
           _selectedMode,
-          currentConfig.copyWith(clearReaderWallpaperPath: true),
+          currentConfig.copyWith(
+            clearReaderWallpaperPath: true,
+            readerWallpaperFit: result.fit,
+            readerWallpaperOpacity: result.opacity,
+            readerWallpaperBlurSigma: result.blurSigma,
+            readerWallpaperOverlayOpacity: result.overlayOpacity,
+          ),
         );
       });
       return;
@@ -621,7 +679,12 @@ class _AdvancedThemeEditorPageState
       }
       final updatedConfig = nextDraft
           .configFor(_selectedMode)
-          .copyWith(readerWallpaperFit: result.fit);
+          .copyWith(
+            readerWallpaperFit: result.fit,
+            readerWallpaperOpacity: result.opacity,
+            readerWallpaperBlurSigma: result.blurSigma,
+            readerWallpaperOverlayOpacity: result.overlayOpacity,
+          );
       setState(() {
         _draft = nextDraft.copyWithModeConfig(_selectedMode, updatedConfig);
       });
@@ -1601,6 +1664,115 @@ class _AdvancedThemeEditorPageState
     );
   }
 
+  Widget _buildAppWallpaperSelectionControls(
+    BuildContext context, {
+    required AppAdvancedThemeWallpaperFit fit,
+    required double overlayOpacity,
+    required double opacity,
+    required double blurSigma,
+    required ValueChanged<AppAdvancedThemeWallpaperFit> onFitChanged,
+    required ValueChanged<double> onOverlayOpacityChanged,
+    required ValueChanged<double> onOpacityChanged,
+    required ValueChanged<double> onBlurSigmaChanged,
+  }) {
+    return _buildListSectionBody(
+      context,
+      child: Column(
+        children: [
+          _buildCompactFitRow(
+            context,
+            label: '壁纸图片适配',
+            fit: fit,
+            onChanged: onFitChanged,
+          ),
+          const Divider(height: 1),
+          _buildWallpaperOverlayOpacityRow(
+            context,
+            opacity: overlayOpacity,
+            onChanged: onOverlayOpacityChanged,
+          ),
+          const Divider(height: 1),
+          _buildWallpaperOpacityRow(
+            context,
+            opacity: opacity,
+            onChanged: onOpacityChanged,
+          ),
+          const Divider(height: 1),
+          _buildWallpaperBlurRow(
+            context,
+            blurSigma: blurSigma,
+            onChanged: onBlurSigmaChanged,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReaderWallpaperSelectionControls(
+    BuildContext context, {
+    required AppAdvancedThemeWallpaperFit fit,
+    required double overlayOpacity,
+    required double opacity,
+    required double blurSigma,
+    required ValueChanged<AppAdvancedThemeWallpaperFit> onFitChanged,
+    required ValueChanged<double> onOverlayOpacityChanged,
+    required ValueChanged<double> onOpacityChanged,
+    required ValueChanged<double> onBlurSigmaChanged,
+  }) {
+    return _buildListSectionBody(
+      context,
+      child: Column(
+        children: [
+          _buildCompactFitRow(
+            context,
+            label: '阅读器图片适配',
+            fit: fit,
+            onChanged: onFitChanged,
+          ),
+          const Divider(height: 1),
+          _buildReaderWallpaperOverlayOpacityRow(
+            context,
+            opacity: overlayOpacity,
+            onChanged: onOverlayOpacityChanged,
+          ),
+          const Divider(height: 1),
+          _buildReaderWallpaperOpacityRow(
+            context,
+            opacity: opacity,
+            onChanged: onOpacityChanged,
+          ),
+          const Divider(height: 1),
+          _buildReaderWallpaperBlurRow(
+            context,
+            blurSigma: blurSigma,
+            onChanged: onBlurSigmaChanged,
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _applyWallpaperSelectionTuning(
+    AdvancedThemeWallpaperSelectionResult result,
+  ) {
+    final draft = _draft;
+    if (draft == null || _isSaving) {
+      return;
+    }
+    final currentConfig = draft.configFor(_selectedMode);
+    setState(() {
+      _draft = draft.copyWithModeConfig(
+        _selectedMode,
+        currentConfig.copyWith(
+          wallpaperFit: result.fit,
+          wallpaperOpacity: result.opacity,
+          wallpaperBlurSigma: result.blurSigma,
+          wallpaperOverlayOpacity: result.overlayOpacity,
+        ),
+      );
+    });
+  }
+
   void _setWallpaperOverlayOpacity(double value) {
     final draft = _draft;
     if (draft == null || _isSaving) {
@@ -1672,23 +1844,6 @@ class _AdvancedThemeEditorPageState
       _draft = draft.copyWithModeConfig(
         _selectedMode,
         currentConfig.copyWith(wallpaperBlurSigma: normalized),
-      );
-    });
-  }
-
-  void _setWallpaperFit(AppAdvancedThemeWallpaperFit fit) {
-    final draft = _draft;
-    if (draft == null || _isSaving) {
-      return;
-    }
-    final currentConfig = draft.configFor(_selectedMode);
-    if (currentConfig.wallpaperFit == fit) {
-      return;
-    }
-    setState(() {
-      _draft = draft.copyWithModeConfig(
-        _selectedMode,
-        currentConfig.copyWith(wallpaperFit: fit),
       );
     });
   }
@@ -2458,8 +2613,6 @@ class _AdvancedThemeEditorPageState
             },
           ),
         ),
-        const SizedBox(height: 10),
-        _buildBackgroundResourceTuningSection(context, draft),
       ],
     );
   }
@@ -2718,61 +2871,6 @@ class _AdvancedThemeEditorPageState
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildBackgroundResourceTuningSection(
-    BuildContext context,
-    AppAdvancedTheme draft,
-  ) {
-    final currentConfig = draft.configFor(_selectedMode);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionLabel(
-          context,
-          '背景资源参数',
-          tooltipMessage: '应用背景和阅读背景的透明度、遮罩和模糊参数。',
-        ),
-        const SizedBox(height: 4),
-        _buildPanel(
-          context,
-          padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
-          child: Column(
-            children: [
-              _buildWallpaperOverlayOpacityRow(
-                context,
-                opacity: currentConfig.wallpaperOverlayOpacity,
-              ),
-              const Divider(height: 1),
-              _buildWallpaperOpacityRow(
-                context,
-                opacity: currentConfig.wallpaperOpacity,
-              ),
-              const Divider(height: 1),
-              _buildWallpaperBlurRow(
-                context,
-                blurSigma: currentConfig.wallpaperBlurSigma,
-              ),
-              const Divider(height: 1),
-              _buildReaderWallpaperOverlayOpacityRow(
-                context,
-                opacity: currentConfig.readerWallpaperOverlayOpacity,
-              ),
-              const Divider(height: 1),
-              _buildReaderWallpaperOpacityRow(
-                context,
-                opacity: currentConfig.readerWallpaperOpacity,
-              ),
-              const Divider(height: 1),
-              _buildReaderWallpaperBlurRow(
-                context,
-                blurSigma: currentConfig.readerWallpaperBlurSigma,
-              ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 
@@ -3342,8 +3440,10 @@ class _AdvancedThemeEditorPageState
   Widget _buildWallpaperOverlayOpacityRow(
     BuildContext context, {
     required double opacity,
+    ValueChanged<double>? onChanged,
   }) {
     final normalizedOpacity = opacity.clamp(0.0, 1.0).toDouble();
+    final effectiveOnChanged = onChanged ?? _setWallpaperOverlayOpacity;
     return _buildStrengthSliderRow(
       context,
       label: '壁纸遮罩透明度',
@@ -3351,15 +3451,17 @@ class _AdvancedThemeEditorPageState
       value: normalizedOpacity,
       min: 0,
       max: 1,
-      onChanged: _isSaving ? null : _setWallpaperOverlayOpacity,
+      onChanged: _isSaving ? null : effectiveOnChanged,
     );
   }
 
   Widget _buildWallpaperOpacityRow(
     BuildContext context, {
     required double opacity,
+    ValueChanged<double>? onChanged,
   }) {
     final normalizedOpacity = opacity.clamp(0.0, 1.0).toDouble();
+    final effectiveOnChanged = onChanged ?? _setWallpaperOpacity;
     return _buildStrengthSliderRow(
       context,
       label: '壁纸不透明度',
@@ -3367,16 +3469,18 @@ class _AdvancedThemeEditorPageState
       value: normalizedOpacity,
       min: 0,
       max: 1,
-      onChanged: _isSaving ? null : _setWallpaperOpacity,
+      onChanged: _isSaving ? null : effectiveOnChanged,
     );
   }
 
   Widget _buildWallpaperBlurRow(
     BuildContext context, {
     required double blurSigma,
+    ValueChanged<double>? onChanged,
   }) {
     final normalizedBlur = blurSigma.clamp(0.0, 24.0).toDouble();
     final blurLabel = normalizedBlur.toStringAsFixed(0);
+    final effectiveOnChanged = onChanged ?? _setWallpaperBlurSigma;
     return _buildStrengthSliderRow(
       context,
       label: '壁纸模糊程度',
@@ -3385,15 +3489,17 @@ class _AdvancedThemeEditorPageState
       min: 0,
       max: 24,
       divisions: 24,
-      onChanged: _isSaving ? null : _setWallpaperBlurSigma,
+      onChanged: _isSaving ? null : effectiveOnChanged,
     );
   }
 
   Widget _buildReaderWallpaperOverlayOpacityRow(
     BuildContext context, {
     required double opacity,
+    ValueChanged<double>? onChanged,
   }) {
     final normalizedOpacity = opacity.clamp(0.0, 1.0).toDouble();
+    final effectiveOnChanged = onChanged ?? _setReaderWallpaperOverlayOpacity;
     return _buildStrengthSliderRow(
       context,
       label: '阅读器遮罩透明度',
@@ -3401,15 +3507,17 @@ class _AdvancedThemeEditorPageState
       value: normalizedOpacity,
       min: 0,
       max: 1,
-      onChanged: _isSaving ? null : _setReaderWallpaperOverlayOpacity,
+      onChanged: _isSaving ? null : effectiveOnChanged,
     );
   }
 
   Widget _buildReaderWallpaperOpacityRow(
     BuildContext context, {
     required double opacity,
+    ValueChanged<double>? onChanged,
   }) {
     final normalizedOpacity = opacity.clamp(0.0, 1.0).toDouble();
+    final effectiveOnChanged = onChanged ?? _setReaderWallpaperOpacity;
     return _buildStrengthSliderRow(
       context,
       label: '阅读器背景不透明度',
@@ -3417,15 +3525,17 @@ class _AdvancedThemeEditorPageState
       value: normalizedOpacity,
       min: 0,
       max: 1,
-      onChanged: _isSaving ? null : _setReaderWallpaperOpacity,
+      onChanged: _isSaving ? null : effectiveOnChanged,
     );
   }
 
   Widget _buildReaderWallpaperBlurRow(
     BuildContext context, {
     required double blurSigma,
+    ValueChanged<double>? onChanged,
   }) {
     final normalizedBlur = blurSigma.clamp(0.0, 24.0).toDouble();
+    final effectiveOnChanged = onChanged ?? _setReaderWallpaperBlurSigma;
     return _buildStrengthSliderRow(
       context,
       label: '阅读器背景模糊程度',
@@ -3434,7 +3544,7 @@ class _AdvancedThemeEditorPageState
       min: 0,
       max: 24,
       divisions: 24,
-      onChanged: _isSaving ? null : _setReaderWallpaperBlurSigma,
+      onChanged: _isSaving ? null : effectiveOnChanged,
     );
   }
 

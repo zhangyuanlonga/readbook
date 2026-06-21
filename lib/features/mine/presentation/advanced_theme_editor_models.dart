@@ -160,10 +160,16 @@ class AdvancedThemeWallpaperSelectionResult {
   const AdvancedThemeWallpaperSelectionResult({
     required this.path,
     this.fit = AppAdvancedThemeWallpaperFit.cover,
+    this.opacity = 1,
+    this.blurSigma = 0,
+    this.overlayOpacity = 0,
   });
 
   final String? path;
   final AppAdvancedThemeWallpaperFit fit;
+  final double opacity;
+  final double blurSigma;
+  final double overlayOpacity;
 }
 
 class AdvancedThemeFontSelectionResult {

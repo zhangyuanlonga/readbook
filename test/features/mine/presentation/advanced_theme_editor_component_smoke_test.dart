@@ -135,6 +135,7 @@ void main() {
     );
     expect(find.text('壁纸图片适配'), findsNothing);
     expect(find.text('阅读器图片适配'), findsNothing);
+    expect(find.text('背景资源参数'), findsNothing);
     await _dragUntilFound(tester, editorScroll, find.text('视觉资源'));
     await tester.pump();
 
@@ -162,6 +163,21 @@ void main() {
     expect(resourceGridDelegate.crossAxisCount, 3);
     expect(resourceGridDelegate.mainAxisExtent, greaterThan(210));
     expect(resourceGridDelegate.mainAxisExtent, lessThan(240));
+    expect(find.text('背景资源参数'), findsNothing);
+
+    await tester.tap(find.text('应用背景'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('选择应用背景'), findsOneWidget);
+    expect(find.text('壁纸图片适配'), findsOneWidget);
+    expect(find.text('壁纸遮罩'), findsOneWidget);
+    expect(find.text('壁纸透明度'), findsOneWidget);
+    expect(find.text('壁纸模糊'), findsOneWidget);
+
+    Navigator.of(tester.element(find.text('选择应用背景'))).pop();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     await _dragUntilFound(tester, editorScroll, find.text('圆角比例'));
     await tester.pump();
