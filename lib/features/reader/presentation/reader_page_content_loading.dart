@@ -205,13 +205,10 @@ extension _ReaderPageContentLoadingExtension on _ReaderPageState {
     double? targetOffset,
   }) {
     const enabledSteps = <String>{
-      'load_adjacent_inserted',
       'load_adjacent_result_empty',
       'load_adjacent_target_rejected',
       'anchor_restore_jump',
-      'activate_commit',
       'activate_restore_offset_jump',
-      'sync_active_activate_resolved',
     };
     if (!enabledSteps.contains(step)) {
       return;

@@ -8,9 +8,6 @@ import '../application/reader_layout_request.dart';
 import '../application/reader_selection_runtime.dart';
 import 'reader_layout_paged_view.dart';
 
-typedef ReaderLayoutLegacyRendererBuilder =
-    Widget Function(BuildContext context, ReaderLayoutRendererState state);
-
 typedef ReaderLayoutRendererLoadingBuilder =
     Widget Function(BuildContext context, ReaderLayoutRendererState? state);
 
@@ -34,7 +31,6 @@ class ReaderLayoutRendererPreviewSurface extends StatefulWidget {
     this.initialPageIndex,
     this.pageIndex,
     this.nearbyPageRadius = 1,
-    this.legacyBuilder,
     this.loadingBuilder,
     this.diagnosticsBuilder,
     this.readyBuilder,
@@ -58,7 +54,6 @@ class ReaderLayoutRendererPreviewSurface extends StatefulWidget {
   final int? initialPageIndex;
   final int? pageIndex;
   final int nearbyPageRadius;
-  final ReaderLayoutLegacyRendererBuilder? legacyBuilder;
   final ReaderLayoutRendererLoadingBuilder? loadingBuilder;
   final ReaderLayoutRendererDiagnosticsBuilder? diagnosticsBuilder;
   final ReaderLayoutRendererReadyBuilder? readyBuilder;
@@ -166,20 +161,12 @@ class _ReaderLayoutRendererPreviewSurfaceState
           );
     }
 
-    if (state.shouldUseLegacyRenderer) {
-      if (widget.options.strictReleaseValidation) {
-        return ReaderLayoutStrictReleaseFailure(state: state);
-      }
-      return widget.legacyBuilder?.call(context, state) ??
-          const SizedBox.shrink();
+    if (state.hasFailure) {
+      return ReaderLayoutStrictReleaseFailure(state: state);
     }
 
     if (!state.canRenderLayout) {
-      if (widget.options.strictReleaseValidation) {
-        return ReaderLayoutStrictReleaseFailure(state: state);
-      }
-      return widget.legacyBuilder?.call(context, state) ??
-          const SizedBox.shrink();
+      return ReaderLayoutStrictReleaseFailure(state: state);
     }
 
     final diagnosticsOverlay =
@@ -223,7 +210,7 @@ class ReaderLayoutStrictReleaseFailure extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final effectiveReason =
         reason ??
-        state?.diagnostics.fallbackReason ??
+        state?.diagnostics.failureReason ??
         state?.errorMessage ??
         'release_renderer_unavailable';
     final details = <String>[

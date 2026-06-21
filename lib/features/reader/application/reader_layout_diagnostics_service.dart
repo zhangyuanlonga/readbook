@@ -2,24 +2,18 @@ import 'reader_layout_engine_mode.dart';
 
 class ReaderLayoutDevOptions {
   const ReaderLayoutDevOptions({
-    this.mode = ReaderLayoutEngineMode.legacy,
+    this.mode = ReaderLayoutEngineMode.experimental,
     this.diagnosticsEnabled = false,
     this.includeAdapterMetrics = true,
     this.strictReleaseValidation = false,
   });
-
-  const ReaderLayoutDevOptions.adapterOnlyDiagnostics()
-    : mode = ReaderLayoutEngineMode.adapterOnly,
-      diagnosticsEnabled = true,
-      includeAdapterMetrics = true,
-      strictReleaseValidation = false;
 
   final ReaderLayoutEngineMode mode;
   final bool diagnosticsEnabled;
   final bool includeAdapterMetrics;
   final bool strictReleaseValidation;
 
-  bool get buildsLayout => mode != ReaderLayoutEngineMode.legacy;
+  bool get buildsLayout => true;
 }
 
 class ReaderLayoutDiagnosticsPresenter {
@@ -33,11 +27,11 @@ class ReaderLayoutDiagnosticsPresenter {
       'layoutEffectiveMode': diagnostics.effectiveMode.name,
       'layoutPageCount': diagnostics.layoutPageCount,
       'layoutElapsedMicros': diagnostics.elapsedMicros,
-      'layoutUsedFallback': diagnostics.usedFallback,
+      'layoutHasFailure': diagnostics.hasFailure,
       if (diagnostics.surfaceKind != null)
         'layoutSurfaceKind': diagnostics.surfaceKind!.name,
-      if (diagnostics.fallbackReason != null)
-        'layoutFallbackReason': diagnostics.fallbackReason,
+      if (diagnostics.failureReason != null)
+        'layoutFailureReason': diagnostics.failureReason,
       if (diagnostics.errorMessage != null)
         'layoutErrorMessage': diagnostics.errorMessage,
     };

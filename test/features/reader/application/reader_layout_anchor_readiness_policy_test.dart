@@ -39,7 +39,7 @@ void main() {
       expect(decision.reason, 'layout_pages_not_ready');
     });
 
-    test('falls back for legacy or non paged text surfaces', () {
+    test('uses non-layout anchors for inactive or non paged text surfaces', () {
       final inactive = policy.resolve(
         consumer: ReaderLayoutAnchorConsumer.search,
         snapshot: const ReaderLayoutAnchorReadinessSnapshot(
@@ -59,8 +59,9 @@ void main() {
         ),
       );
 
-      expect(inactive.type, ReaderLayoutAnchorReadinessType.legacyFallback);
-      expect(scroll.type, ReaderLayoutAnchorReadinessType.legacyFallback);
+      expect(inactive.type, ReaderLayoutAnchorReadinessType.nonLayoutAnchor);
+      expect(scroll.type, ReaderLayoutAnchorReadinessType.nonLayoutAnchor);
+      expect(scroll.reason, 'non_paged_text_uses_scroll_anchor');
     });
 
     test('keeps audio progress outside text layout anchors', () {

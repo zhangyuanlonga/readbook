@@ -5,7 +5,7 @@ enum ReaderLayoutAnchorConsumer { search, readAloud, autoRead, audioProgress }
 
 enum ReaderLayoutAnchorReadinessType {
   layoutAnchor,
-  legacyFallback,
+  nonLayoutAnchor,
   blocked,
   notApplicable,
 }
@@ -72,13 +72,13 @@ class ReaderLayoutAnchorReadinessPolicy {
     }
     if (!snapshot.isTextPaged) {
       return const ReaderLayoutAnchorReadinessDecision(
-        type: ReaderLayoutAnchorReadinessType.legacyFallback,
-        reason: 'non_paged_text_uses_legacy_anchor',
+        type: ReaderLayoutAnchorReadinessType.nonLayoutAnchor,
+        reason: 'non_paged_text_uses_scroll_anchor',
       );
     }
     if (!snapshot.releaseActive) {
       return const ReaderLayoutAnchorReadinessDecision(
-        type: ReaderLayoutAnchorReadinessType.legacyFallback,
+        type: ReaderLayoutAnchorReadinessType.nonLayoutAnchor,
         reason: 'layout_release_inactive',
       );
     }

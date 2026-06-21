@@ -15,15 +15,16 @@ void main() {
       expect(ids, contains('manga_surface_isolation'));
     });
 
-    test('marks unbridged animations as TF legacy fallback items', () {
-      final fallbackIds =
-          ReaderFeatureParityMatrix.legacyFallbackItemsForTf()
+    test('marks migrated animations as release complete items', () {
+      final completeIds =
+          ReaderFeatureParityMatrix.v7CoreItems
+              .where((item) => item.isReleaseComplete)
               .map((item) => item.id)
               .toSet();
 
-      expect(fallbackIds, contains('paper_curl_animation'));
-      expect(fallbackIds, contains('curl_animation'));
-      expect(fallbackIds, contains('cover_translate_fade_animation'));
+      expect(completeIds, contains('paper_curl_animation'));
+      expect(completeIds, contains('curl_animation'));
+      expect(completeIds, contains('cover_translate_fade_animation'));
     });
 
     test('keeps release incomplete items visible for later V nodes', () {

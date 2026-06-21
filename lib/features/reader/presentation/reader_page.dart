@@ -147,7 +147,6 @@ import '../application/reader_runtime_wake_policy.dart';
 import '../application/reader_visual_overrides_service.dart';
 import '../application/reader_session_state.dart';
 import '../application/reader_session_state_resolver.dart';
-import '../application/reader_streaming_pagination_controller.dart';
 import '../application/reader_source_switch_coordinator.dart';
 import '../application/reader_source_switch_service.dart';
 import '../application/reader_reading_record_coordinator.dart';
@@ -210,7 +209,6 @@ import 'reader_runtime_controller.dart';
 import 'reader_selection_overlay_policy.dart';
 import 'reader_selection_toolbar_presenter.dart';
 import 'reader_tap_zone_resolver.dart';
-import 'reader_text_paged_view.dart';
 import 'reader_touch_navigation_controller.dart';
 import 'reader_viewport_builder.dart';
 import 'widgets/background/reader_background_layer.dart';
@@ -610,8 +608,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       const ReaderPaginationEngine();
   final ReaderPaginationController _paginationController =
       const ReaderPaginationController();
-  final ReaderStreamingPaginationController _streamingPaginationController =
-      const ReaderStreamingPaginationController();
   final ReaderImageDecodeBudgetResolver _imageDecodeBudgetResolver =
       const ReaderImageDecodeBudgetResolver();
   final ReaderDeviceTierResolver _deviceTierResolver =
@@ -907,7 +903,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   double _layoutReleaseTargetRatio = 0;
   int _layoutReleaseInitialPageIndex = 0;
   bool _layoutReleaseRendererActive = false;
-  int get _paginationTaskId => _readerSessionController.paginationGeneration;
   ReaderPaginationSpec? _lastPaginationSpec;
   double? _measuredPinnedChapterHeaderWidth;
   bool _isSystemUiVisible = false;
@@ -1028,10 +1023,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return _rendererAuthorityResolver.resolve(
       releaseActive: _layoutReleaseRendererActive,
       releasePageCount: _layoutReleasePageCount,
-      legacyTextPageCount: _pagedPages.length,
-      legacyBlockPageCount: _pagedBlockPages.length,
       currentPageIndex: _pageTurnRuntimeController.currentPageIndex,
-      fallbackReason: _layoutReleaseDiagnostic,
+      inactiveReason: _layoutReleaseDiagnostic,
     );
   }
 
@@ -1065,67 +1058,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _layoutReleaseDiagnostic = null;
     _layoutReleaseTargetRatio = targetRatio.clamp(0.0, 1.0).toDouble();
     _layoutReleaseInitialPageIndex = max(0, initialPageIndex);
-  }
-
-  PageController? _resolveStaticPagedTextPageController(int pageCount) {
-    if (pageCount <= 0) {
-      return null;
-    }
-    final safePage = _pageTurnRuntimeController.currentPageIndex.clamp(
-      0,
-      _safePageUpperBound(pageCount),
-    );
-    final controller = _staticPagedTextPageControllerInstance;
-    if (controller == null) {
-      _staticPagedTextPageControllerInstance = PageController(
-        initialPage: safePage,
-      );
-      return _staticPagedTextPageControllerInstance;
-    }
-    if (!controller.hasClients && controller.initialPage != safePage) {
-      controller.dispose();
-      _staticPagedTextPageControllerInstance = PageController(
-        initialPage: safePage,
-      );
-      return _staticPagedTextPageControllerInstance;
-    }
-    if (controller.hasClients) {
-      final current = _readSingleAttachedPage(controller);
-      if (current != safePage &&
-          !_pageTurnRuntimeController.pagedTransition.isAnimating &&
-          !_isCurlAutoTurning) {
-        final syncGeneration =
-            ++_pageTurnRuntimeController.pagedTextControllerSyncGeneration;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted ||
-              syncGeneration !=
-                  _pageTurnRuntimeController
-                      .pagedTextControllerSyncGeneration ||
-              _staticPagedTextPageControllerInstance != controller ||
-              !controller.hasClients ||
-              _pageTurnRuntimeController.pagedTransition.isAnimating ||
-              _isCurlAutoTurning) {
-            return;
-          }
-          final target = _pageTurnRuntimeController.currentPageIndex.clamp(
-            0,
-            _safePageUpperBound(_currentPagedPageCount),
-          );
-          final currentPage = _readSingleAttachedPage(controller);
-          if (currentPage != target) {
-            controller.jumpToPage(target);
-          }
-        });
-      }
-    }
-    return controller;
-  }
-
-  int _readSingleAttachedPage(PageController controller) {
-    if (!controller.hasClients || controller.positions.length != 1) {
-      return controller.initialPage;
-    }
-    return controller.page?.round() ?? controller.initialPage;
   }
 
   TextAlign _paragraphTextAlign(ReaderSettings settings) {
@@ -2602,16 +2534,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         this,
       )._isInlineImageParagraph(paragraph);
 
-  int _clampInt(int value, int min, int max) {
-    if (value < min) {
-      return min;
-    }
-    if (value > max) {
-      return max;
-    }
-    return value;
-  }
-
   int _paragraphIndentLength() {
     final indentCount = _typographyMetricsResolver.resolveParagraphIndentCount(
       _settings,
@@ -3167,22 +3089,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   Widget _buildPagedReader(ReaderThemeColors colors) =>
       _buildPagedTextViewport(colors);
 
-  Widget _buildPagedPageContainer({
-    required ReaderThemeColors colors,
-    required int pageIndex,
-    required int total,
-    required Size pageSize,
-    required ReaderTextPagedViewModel pagedViewModel,
-    bool includeBackgroundDecoration = false,
-  }) => _ReaderPageContentRenderingExtension(this)._buildPagedPageContainer(
-    colors: colors,
-    pageIndex: pageIndex,
-    total: total,
-    pageSize: pageSize,
-    pagedViewModel: pagedViewModel,
-    includeBackgroundDecoration: includeBackgroundDecoration,
-  );
-
   Widget _buildPagedHeaderSection(
     ReaderThemeColors colors,
     ReaderSurfaceMetrics layoutMetrics,
@@ -3479,118 +3385,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _scheduleProgressSave();
   }
 
-  void _ensurePagination({required ReaderPaginationSpec spec}) {
-    if (!mounted || !_isTextPagedViewport) {
-      return;
-    }
-    final plan = _paginationController.buildEnsurePlan(
-      spec: spec,
-      chapterId: _chapterId,
-      currentState: _pageTurnRuntimeController.pagedPaginationState,
-      hasExistingPages: _pagedPages.isNotEmpty || _pagedBlockPages.isNotEmpty,
-      currentProgressRatio: _currentScrollRatio(),
-    );
-    if (!plan.shouldPaginate) {
-      return;
-    }
-
-    final taskId =
-        _readerSessionController
-            .beginIntent(const ReaderSessionIntent.changeSettings())
-            .paginationTaskToken!;
-    unawaited(
-      _restoreOrPaginateCurrentChapter(taskId: taskId, spec: spec, plan: plan),
-    );
-  }
-
-  Future<void> _restoreOrPaginateCurrentChapter({
-    required int taskId,
-    required ReaderPaginationSpec spec,
-    required ReaderPaginationEnsurePlan plan,
-  }) async {
-    final sourceId = (_sourceId ?? '').trim();
-    final chapterUrl = (_chapterUrl ?? '').trim();
-
-    if (sourceId.isNotEmpty && chapterUrl.isNotEmpty) {
-      final cachedLayout = await _loadPrecomputedChapterLayout(
-        sourceId: sourceId,
-        chapterUrl: chapterUrl,
-        signature: plan.signature,
-      );
-      if (!mounted || taskId != _paginationTaskId) {
-        return;
-      }
-      if (cachedLayout != null && cachedLayout.pagedBlockPages.isNotEmpty) {
-        final targetIndex = _chapterLoadPlanner.resolvePageIndexByRatio(
-          targetRatio: plan.preservedRatio,
-          pageCount: cachedLayout.pagedBlockPages.length,
-        );
-        setState(() {
-          _pagedPages = const <List<ReaderPagedSlice>>[];
-          _pagedBlockPages = cachedLayout.pagedBlockPages;
-          _pageTurnRuntimeController.currentPageIndex = targetIndex;
-          _pageTurnRuntimeController
-              .pagedPaginationState = ReaderPaginationSessionState(
-            signature: cachedLayout.paginationSignature,
-          );
-          if (_paragraphs.isEmpty && cachedLayout.paragraphs.isNotEmpty) {
-            _paragraphs = List<String>.unmodifiable(cachedLayout.paragraphs);
-          }
-          _resetPagedTransitionState();
-          _resetCurlAnimationState();
-        });
-        _traceReaderFirstPageReady(
-          source: 'block_cache',
-          pageCount: cachedLayout.pagedBlockPages.length,
-        );
-        return;
-      }
-      if (cachedLayout != null && cachedLayout.pagedPages.isNotEmpty) {
-        final targetIndex = _chapterLoadPlanner.resolvePageIndexByRatio(
-          targetRatio: plan.preservedRatio,
-          pageCount: cachedLayout.pagedPages.length,
-        );
-        setState(() {
-          _pagedPages = cachedLayout.pagedPages;
-          _pagedBlockPages = const <List<ReaderPagedBlock>>[];
-          _pageTurnRuntimeController.currentPageIndex = targetIndex;
-          _pageTurnRuntimeController
-              .pagedPaginationState = ReaderPaginationSessionState(
-            signature: cachedLayout.paginationSignature,
-          );
-          if (_paragraphs.isEmpty && cachedLayout.paragraphs.isNotEmpty) {
-            _paragraphs = List<String>.unmodifiable(cachedLayout.paragraphs);
-          }
-          _resetPagedTransitionState();
-          _resetCurlAnimationState();
-        });
-        _traceReaderFirstPageReady(
-          source: 'text_cache',
-          pageCount: cachedLayout.pagedPages.length,
-        );
-        return;
-      }
-    }
-
-    _resetPagedTransitionState();
-    _resetCurlAnimationState();
-
-    setState(() {
-      _textPaginationFallbackDiagnostic = null;
-      _pageTurnRuntimeController.pagedPaginationState =
-          plan.buildLoadingState();
-      _pagedPages = const [];
-      _pagedBlockPages = const <List<ReaderPagedBlock>>[];
-      _pageTurnRuntimeController.currentPageIndex = 0;
-    });
-
-    await _paginateCurrentChapter(
-      taskId: taskId,
-      spec: spec,
-      signature: plan.signature,
-    );
-  }
-
   void _resetCurlAnimationState() {
     _curlAutoTurnController.stop();
     _pageTurnRuntimeController.resetCurlTransition(
@@ -3652,186 +3446,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     }, growable: false);
   }
 
-  Future<void> _paginateCurrentChapter({
-    required int taskId,
-    required ReaderPaginationSpec spec,
-    required String signature,
-  }) async {
-    final paragraphs =
-        _paragraphs.isEmpty ? <String>[_content.trim()] : _paragraphs;
-    final colors = _resolveThemeColors(_effectiveReaderThemeMode(), _settings);
-    final request = ReaderPaginationRequest(
-      paragraphs: paragraphs,
-      spec: spec,
-      paragraphStyle: _paragraphTextStyle(colors).copyWith(color: Colors.black),
-      paragraphModels: _buildPaginationParagraphModels(colors, paragraphs),
-      textScaler: MediaQuery.textScalerOf(context),
-      shouldAbort: () => !mounted || taskId != _paginationTaskId,
-    );
-    if (_document.hasImageBlocks) {
-      await for (final event in _streamingPaginationController.paginateBlocks(
-        ReaderBlockPaginationRequest(
-          renderItems: _renderItems,
-          paragraphs: paragraphs,
-          spec: spec,
-          paragraphStyle: _paragraphTextStyle(
-            colors,
-          ).copyWith(color: Colors.black),
-          paragraphModels: _buildPaginationParagraphModels(colors, paragraphs),
-          textScaler: MediaQuery.textScalerOf(context),
-          shouldAbort: () => !mounted || taskId != _paginationTaskId,
-          imagePlaceholderAspectRatio: spec.imagePlaceholderAspectRatio,
-        ),
-        targetRatio:
-            _pageTurnRuntimeController
-                .pagedPaginationState
-                .pendingRestoreRatio ??
-            0,
-      )) {
-        if (!mounted || taskId != _paginationTaskId) {
-          return;
-        }
-        if (event.type == ReaderStreamingPaginationEventType.cancelled) {
-          return;
-        }
-        final pages = event.pages;
-        if (pages.isEmpty) {
-          if (event.completed) {
-            _fallbackTextPaginationToScroll(
-              'block pagination completed with no pages',
-            );
-          }
-          continue;
-        }
-        final pendingRatio =
-            _pageTurnRuntimeController.pagedPaginationState.pendingRestoreRatio;
-        final targetIndex =
-            pendingRatio == null
-                ? _pageTurnRuntimeController.currentPageIndex.clamp(
-                  0,
-                  pages.length - 1,
-                )
-                : (pendingRatio.clamp(0.0, 1.0) * (pages.length - 1))
-                    .round()
-                    .clamp(0, pages.length - 1);
-        setState(() {
-          _textPaginationFallbackDiagnostic = null;
-          _pageTurnRuntimeController
-              .pagedPaginationState = ReaderPaginationSessionState(
-            signature: signature,
-            isPaginating: !event.completed,
-          );
-          _pagedPages = const <List<ReaderPagedSlice>>[];
-          _pagedBlockPages = pages;
-          _pageTurnRuntimeController.currentPageIndex = targetIndex;
-          _resetCurlAnimationState();
-        });
-        _traceReaderFirstPageReady(
-          source: event.completed ? 'block_complete' : 'block_stream',
-          pageCount: pages.length,
-        );
-        if (event.completed &&
-            _paginationCacheService.shouldPersistChapterLayout(
-              sourceId: _sourceId ?? '',
-              chapterUrl: _chapterUrl ?? '',
-            )) {
-          _storePrecomputedChapterLayout(
-            sourceId: _sourceId ?? '',
-            chapterUrl: _chapterUrl ?? '',
-            layout: ReaderPrecomputedChapterLayout(
-              paragraphs: paragraphs,
-              pagedPages: const <List<ReaderPagedSlice>>[],
-              pagedBlockPages: pages,
-              paginationSignature: signature,
-            ),
-          );
-        }
-      }
-      return;
-    }
-
-    await for (final event in _streamingPaginationController.paginateText(
-      request,
-      targetRatio:
-          _pageTurnRuntimeController.pagedPaginationState.pendingRestoreRatio ??
-          0,
-    )) {
-      if (!mounted || taskId != _paginationTaskId) {
-        return;
-      }
-      if (event.type == ReaderStreamingPaginationEventType.cancelled) {
-        return;
-      }
-      final pages = event.pages;
-      if (pages.isEmpty) {
-        setState(() {
-          _pageTurnRuntimeController
-              .pagedPaginationState = _pageTurnRuntimeController
-              .pagedPaginationState
-              .copyWith(isPaginating: false, pendingRestoreRatio: null);
-          _pagedPages = const [];
-          _pagedBlockPages = const <List<ReaderPagedBlock>>[];
-          _resetCurlAnimationState();
-        });
-        continue;
-      }
-      var targetIndex = 0;
-      final pendingRatio =
-          _pageTurnRuntimeController.pagedPaginationState.pendingRestoreRatio;
-      if (pendingRatio != null && pages.isNotEmpty) {
-        targetIndex = (pendingRatio.clamp(0.0, 1.0) * (pages.length - 1))
-            .round()
-            .clamp(0, pages.length - 1);
-      }
-      setState(() {
-        _pageTurnRuntimeController
-            .pagedPaginationState = ReaderPaginationSessionState(
-          signature: signature,
-          isPaginating: !event.completed,
-        );
-        _pagedPages = pages;
-        _pagedBlockPages = const <List<ReaderPagedBlock>>[];
-        _pageTurnRuntimeController.currentPageIndex = targetIndex;
-        _resetCurlAnimationState();
-      });
-      _traceReaderFirstPageReady(
-        source: event.completed ? 'text_complete' : 'text_stream',
-        pageCount: pages.length,
-      );
-      if (event.completed) {
-        if (_paginationCacheService.shouldPersistChapterLayout(
-          sourceId: _sourceId ?? '',
-          chapterUrl: _chapterUrl ?? '',
-        )) {
-          _storePrecomputedChapterLayout(
-            sourceId: _sourceId ?? '',
-            chapterUrl: _chapterUrl ?? '',
-            layout: ReaderPrecomputedChapterLayout(
-              paragraphs: paragraphs,
-              pagedPages: pages,
-              paginationSignature: signature,
-            ),
-          );
-        }
-      }
-    }
-    return;
-  }
-
-  void _traceReaderFirstPageReady({
-    required String source,
-    required int pageCount,
-  }) {
-    developer.Timeline.instantSync(
-      'reader.first_page_ready',
-      arguments: <String, Object?>{
-        'source': source,
-        'pageCount': pageCount,
-        'chapterId': _chapterId,
-      },
-    );
-  }
-
   void _logLongPressTrace(
     String step, {
     Map<String, Object?> context = const <String, Object?>{},
@@ -3847,22 +3461,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         ...context,
       },
     );
-  }
-
-  void _fallbackTextPaginationToScroll(String diagnostic) {
-    if (!mounted) {
-      return;
-    }
-    _resetPagedTransitionState();
-    _resetCurlAnimationState();
-    setState(() {
-      _textPaginationFallbackDiagnostic = diagnostic;
-      _pageTurnRuntimeController.pagedPaginationState =
-          const ReaderPaginationSessionState();
-      _pagedPages = const <List<ReaderPagedSlice>>[];
-      _pagedBlockPages = const <List<ReaderPagedBlock>>[];
-      _pageTurnRuntimeController.currentPageIndex = 0;
-    });
   }
 
   Widget _buildTapAwareBody({required Widget child}) {

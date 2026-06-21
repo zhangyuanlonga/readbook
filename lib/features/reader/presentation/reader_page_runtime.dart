@@ -240,14 +240,6 @@ extension _ReaderPageRuntimeExtension on _ReaderPageState {
     );
   }
 
-  void _handlePagedScrollInteractionChanged(bool isInteracting) {
-    if (isInteracting) {
-      _markReaderInteractionBusy(ReaderInteractionRuntimeState.dragging);
-    } else {
-      _scheduleReaderInteractionSettle();
-    }
-  }
-
   void _scheduleNeighborPreload() {
     _scheduleContinuousTextNeighborWindowWarmup();
     if (_isLowPriorityReaderWorkPaused) {

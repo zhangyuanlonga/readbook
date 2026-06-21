@@ -24,8 +24,8 @@ void main() {
       expect(decision.options.mode, ReaderLayoutEngineMode.experimental);
     });
 
-    test('keeps legacy renderer when force legacy is enabled', () {
-      const policy = ReaderLayoutReleasePolicy(forceLegacy: true);
+    test('diagnostics omit removed legacy switches', () {
+      const policy = ReaderLayoutReleasePolicy();
 
       final decision = policy.resolve(
         contentMode: ReaderContentMode.text,
@@ -34,9 +34,17 @@ void main() {
         contentLength: 120,
       );
 
-      expect(decision.useReleaseRenderer, isFalse);
-      expect(decision.mode, ReaderLayoutEngineMode.legacy);
-      expect(decision.reason, 'force_legacy');
+      expect(decision.useReleaseRenderer, isTrue);
+      expect(decision.mode, ReaderLayoutEngineMode.experimental);
+      expect(decision.reason, 'enabled');
+      expect(
+        decision.toDiagnosticsContext(),
+        isNot(contains('readerLayoutReleaseForceLegacy')),
+      );
+      expect(
+        decision.toDiagnosticsContext(),
+        isNot(contains('readerLayoutReleaseEnabled')),
+      );
     });
 
     test('passes strict release validation to renderer options', () {

@@ -17,7 +17,6 @@ class ReaderLayoutReleaseSurface extends StatelessWidget {
     this.initialPageIndex,
     this.pageIndex,
     this.nearbyPageRadius = 1,
-    this.legacyBuilder,
     this.loadingBuilder,
     this.readyBuilder,
     this.showDiagnosticsOverlay = false,
@@ -40,7 +39,6 @@ class ReaderLayoutReleaseSurface extends StatelessWidget {
   final int? initialPageIndex;
   final int? pageIndex;
   final int nearbyPageRadius;
-  final ReaderLayoutLegacyRendererBuilder? legacyBuilder;
   final ReaderLayoutRendererLoadingBuilder? loadingBuilder;
   final ReaderLayoutRendererReadyBuilder? readyBuilder;
   final bool showDiagnosticsOverlay;
@@ -65,7 +63,6 @@ class ReaderLayoutReleaseSurface extends StatelessWidget {
       initialPageIndex: initialPageIndex,
       pageIndex: pageIndex,
       nearbyPageRadius: nearbyPageRadius,
-      legacyBuilder: legacyBuilder,
       loadingBuilder: loadingBuilder,
       readyBuilder: readyBuilder,
       showDiagnosticsOverlay: showDiagnosticsOverlay,

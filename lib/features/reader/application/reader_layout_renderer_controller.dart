@@ -6,7 +6,7 @@ import 'reader_layout_engine_mode.dart';
 import 'reader_layout_request.dart';
 import 'reader_layout_stream_controller.dart';
 
-enum ReaderLayoutRendererStateKind { legacy, loading, ready, fallback }
+enum ReaderLayoutRendererStateKind { loading, ready, failed }
 
 class ReaderLayoutRendererState {
   const ReaderLayoutRendererState({
@@ -33,10 +33,7 @@ class ReaderLayoutRendererState {
   final Map<String, Object?> diagnosticsContext;
   final String? errorMessage;
 
-  bool get shouldUseLegacyRenderer {
-    return kind == ReaderLayoutRendererStateKind.legacy ||
-        kind == ReaderLayoutRendererStateKind.fallback;
-  }
+  bool get hasFailure => kind == ReaderLayoutRendererStateKind.failed;
 
   bool get canRenderLayout {
     return kind == ReaderLayoutRendererStateKind.ready && pages.isNotEmpty;
@@ -63,30 +60,6 @@ class ReaderLayoutRendererController {
     int nearbyPageRadius = 1,
   }) async* {
     final requestedMode = options.mode;
-    if (requestedMode == ReaderLayoutEngineMode.legacy) {
-      yield _state(
-        kind: ReaderLayoutRendererStateKind.legacy,
-        requestedMode: requestedMode,
-        effectiveMode: ReaderLayoutEngineMode.legacy,
-        pages: const <ReaderLayoutPage>[],
-        pageIndex: 0,
-        completed: true,
-        fromCache: false,
-        elapsedMicros: 0,
-      );
-      return;
-    }
-
-    if (requestedMode == ReaderLayoutEngineMode.adapterOnly) {
-      yield _fallbackState(
-        requestedMode: requestedMode,
-        reason: 'adapter_only_requires_legacy_slices',
-        errorMessage: null,
-        elapsedMicros: 0,
-      );
-      return;
-    }
-
     final normalizedRatio = targetRatio.clamp(0.0, 1.0);
     final stopwatch = Stopwatch()..start();
     final cacheEntry = await _tryReadCache(request);
@@ -149,7 +122,7 @@ class ReaderLayoutRendererController {
         case ReaderLayoutStreamEventType.complete:
           stopwatch.stop();
           if (event.pages.isEmpty) {
-            yield _fallbackState(
+            yield _failureState(
               requestedMode: requestedMode,
               reason: 'empty_layout_result',
               errorMessage: null,
@@ -180,7 +153,7 @@ class ReaderLayoutRendererController {
           );
         case ReaderLayoutStreamEventType.cancelled:
           stopwatch.stop();
-          yield _fallbackState(
+          yield _failureState(
             requestedMode: requestedMode,
             reason: 'layout_cancelled',
             errorMessage: event.errorMessage,
@@ -188,7 +161,7 @@ class ReaderLayoutRendererController {
           );
         case ReaderLayoutStreamEventType.failed:
           stopwatch.stop();
-          yield _fallbackState(
+          yield _failureState(
             requestedMode: requestedMode,
             reason: 'layout_stream_failed',
             errorMessage: event.errorMessage,
@@ -220,22 +193,22 @@ class ReaderLayoutRendererController {
     }
   }
 
-  ReaderLayoutRendererState _fallbackState({
+  ReaderLayoutRendererState _failureState({
     required ReaderLayoutEngineMode requestedMode,
     required String reason,
     required String? errorMessage,
     required int elapsedMicros,
   }) {
     return _state(
-      kind: ReaderLayoutRendererStateKind.fallback,
+      kind: ReaderLayoutRendererStateKind.failed,
       requestedMode: requestedMode,
-      effectiveMode: ReaderLayoutEngineMode.legacy,
+      effectiveMode: ReaderLayoutEngineMode.experimental,
       pages: const <ReaderLayoutPage>[],
       pageIndex: 0,
       completed: true,
       fromCache: false,
       elapsedMicros: elapsedMicros,
-      fallbackReason: reason,
+      failureReason: reason,
       errorMessage: errorMessage,
     );
   }
@@ -249,7 +222,7 @@ class ReaderLayoutRendererController {
     required bool completed,
     required bool fromCache,
     required int elapsedMicros,
-    String? fallbackReason,
+    String? failureReason,
     String? errorMessage,
   }) {
     final diagnostics = ReaderLayoutDiagnostics(
@@ -257,7 +230,7 @@ class ReaderLayoutRendererController {
       effectiveMode: effectiveMode,
       layoutPageCount: pages.length,
       elapsedMicros: elapsedMicros,
-      fallbackReason: fallbackReason,
+      failureReason: failureReason,
       errorMessage: errorMessage,
     );
     return ReaderLayoutRendererState(

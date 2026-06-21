@@ -2,7 +2,7 @@
 
 **日期**: 2026-06-20  
 **范围**: V7 P0-P7 已落地内容、阅读器专项 analyze/test、`docs/test_readr` 本地样本 smoke  
-**结论**: 阅读器专项门禁通过；全项目 analyze 被非阅读器测试阻塞；TF 外部邀请前仍需补 profile/manual fallback 验收。
+**结论**: 阅读器专项门禁通过；旧阅读器 fallback 已移除；发布前仍需补 profile 和版本回滚演练。
 
 ---
 
@@ -17,7 +17,7 @@
 | 本地 TXT/EPUB parser tests | 通过 | `txt_local_book_parser_test.dart` + `epub_local_book_parser_test.dart`，35 tests passed |
 | `docs/test_readr` 样本 smoke | 通过 | 文件类型、尺寸、行数、EPUB zip 完整性和结构统计通过 |
 | profile mode 性能记录 | 未执行 | 需要真机或目标设备 profile/run 验收 |
-| TF fallback 一键恢复 | 部分完成 | `READER_LAYOUT_FORCE_LEGACY=true` 回滚开关存在并有单测；外部邀请前仍需 release 包人工验证 |
+| 版本回滚演练 | 未执行 | 旧 dart-define 回滚开关已删除，外部发布前需确认上一稳定版本/提交可回退 |
 
 ---
 
@@ -47,12 +47,12 @@
 
 ## 4. V7 功能等价结论
 
-- [x] P0 功能矩阵、fallback 原则和 TestFlight 首包策略已文档化。
+- [x] P0 功能矩阵、单路径原则和版本回滚策略已文档化。
 - [x] P1-P7 的核心代码路径已有 reader application/presentation 单测覆盖。
-- [x] 新旧 renderer authority 已明确，release active 和 legacy fallback 不再共享隐式 page count。
-- [x] 未桥接的旧翻页动画继续回落 legacy，不会在新 renderer 下静默失效。
+- [x] renderer authority 已明确，release active 只信 release page count。
+- [x] 旧翻页动画已迁入 release animation surface，不再回落旧 renderer。
 - [x] selection active gate、annotation 样式、settings signature、混排 payload、anchor readiness 已进入可复跑测试。
-- [ ] paperCurl/curl/cover/translate/fade/vertical 的 release 原生动画仍未迁移完成，目前结论是“可用但走 legacy fallback”。
+- [x] paperCurl/curl/cover/translate/fade/vertical 的 release 原生动画已迁移完成。
 - [ ] 搜索高亮/目录搜索跳转、自动阅读跨章仍需 UI 或端到端验收。
 - [ ] 图片点击、重试、真实尺寸更新策略仍未完整接入 release renderer。
 
@@ -61,7 +61,7 @@
 ## 5. 发布前剩余门禁
 
 - [ ] 修复或隔离 `mine` 高级主题编辑器测试后，让全项目 `flutter analyze` 通过。
-- [ ] 在目标设备执行 profile mode：首屏进入、连续翻页、设置变化重排、release/legacy fallback 切换。
+- [ ] 在目标设备执行 profile mode：首屏进入、连续翻页、设置变化重排、release failure 诊断。
 - [ ] 用 `docs/test_readr` 三个样本做手工 UI 验收，并补首次打开耗时、章节识别、分页数量、设置重排、退出恢复记录。
-- [ ] 用 `--dart-define=READER_LAYOUT_FORCE_LEGACY=true` 出一次回滚验证包，确认 TF 外部邀请前可一键恢复旧阅读器。
-- [ ] 决定 release 原生动画迁移优先级：paperCurl/curl 优先，其次 cover/translate/fade/vertical。
+- [ ] 做一次版本/提交回滚演练，确认外部发布前可退回上一稳定包。
+- [x] release 原生动画迁移优先级已执行：paperCurl/curl、cover/translate/fade/vertical 已接入。

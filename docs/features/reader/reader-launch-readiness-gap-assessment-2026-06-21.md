@@ -6,7 +6,7 @@
 - `/Users/zhangyuanlong/Downloads/legado-with-MD3-main`
 - `/Users/zhangyuanlong/Downloads/legado-own`
 
-**当前结论**: 现在不能把“新阅读器已经 1:1 替代旧阅读器”作为上线结论。更准确的判断是：阅读器专项代码门禁已通过，文本阅读核心链路已有明显改善，但默认包仍是“新 renderer 优先 + legacy fallback”，旧阅读器没有完全停用。可做小范围灰度，但不建议删除旧阅读器或面向全部用户宣称新阅读器完全稳定；验证新阅读器是否完整接手时必须使用 `--dart-define=READER_LAYOUT_STRICT_RELEASE=true`，让任何 fallback 直接暴露为诊断页。
+**当前结论**: 文本阅读器已进入新 renderer 单路径，旧 renderer fallback 和旧 dart-define 回滚开关已移除。当前仍不应跳过上线验收：需要用真实样本、真机 profile、分页/滚动/设置/选择/搜索/朗读/自动阅读矩阵证明单路径稳定；回滚策略从“包内切旧阅读器”改为“回退上一稳定版本/提交”。
 
 ---
 
@@ -34,10 +34,10 @@ own 分支相对 MD3 额外值得参考：
 
 ## 2. 我们当前已经追上的部分
 
-- [x] 文本分页新 renderer 已接入正式入口，并有 legacy fallback。
-- [x] 新增严格验收开关 `READER_LAYOUT_STRICT_RELEASE=true`：打开后 release renderer 不能静默回旧阅读器，策略拒绝、request 缺失、renderer fallback 都会显示诊断页。
+- [x] 文本分页新 renderer 已接入正式入口，旧 renderer fallback 已移除。
+- [x] release renderer 不能静默回旧阅读器；策略拒绝、request 缺失、renderer failure 都会显示诊断页。
 - [x] 新旧 renderer authority 已拆开，page count/page index 不再完全隐式共享。
-- [x] 未桥接的翻页动画可以显式回落 legacy，避免静默失效。
+- [x] 翻页动画已由 release animation surface 承接，避免静默失效。
 - [x] selection active gate、annotation range、settings signature、layout cache、anchor readiness 已有测试覆盖。
 - [x] 连续滚动已补当前章节前后一章 warmup，不再只靠接近边缘时触发。
 - [x] 滚动点击翻页已改为可中断/续接，快速点击不再因 `_isScrollStepAnimating` 被直接吞掉。
@@ -57,11 +57,11 @@ own 分支相对 MD3 额外值得参考：
 | 滚动点击距离 | 按可见页最后/第一行计算，保留一行 | 仍主要按 viewport 比例 + 行高 reserve | 手感还不像主流阅读器，长段/不同字体下距离不稳 |
 | 相邻页/章热备 | `prev/current/next` 模型长期常驻，nextPlus 参与预渲染 | 已补相邻章 warmup，但不是同一套 page model | 快速跨章比之前好，但还不是 Legado 级别 |
 | EPUB layout 复用 | own 有 layout key，版式未变直接复用 | 我们有 pagination/layout cache，但真实 EPUB UI 验收不足 | EPUB 首开、重排、图片尺寸仍缺上线证据 |
-| 动画 | 旧动画与 page factory 深度融合 | 新 renderer 未完整桥接，部分 fallback legacy | 可用但不是 1:1；共存期间仍有隐藏状态风险 |
+| 动画 | 旧动画与 page factory 深度融合 | 新 renderer 已桥接主动画 | 仍需逐动画真机验收：跨章、快速取消、背景遮罩、内存释放 |
 | 选择/标注 | 当前页模型能给行列坐标，长按/选择/朗读共用 | 新 layout 有 anchor，但工具链仍需端到端验收 | 灵感、复制、已有标注唤起可能存在边界遗漏 |
 | 搜索/朗读/自动阅读 | 与章节/页/行模型绑定 | anchor mapper 有测试，UI 行为未完整验收 | 搜索跳转、高亮、自动阅读跨章仍是 P0/P1 风险 |
 | 性能基线 | 原生 Canvas 绘制，可控预渲染 | Flutter widget/layout + snapshot/cache | 缺 profile 真机数据，不能只凭单测判断 |
-| 回滚 | 单一原生阅读器，无新旧混跑 | 有 dart-define fallback，但未完整出包验证 | 发布前必须有可执行回滚包 |
+| 回滚 | 单一原生阅读器，无新旧混跑 | 旧 dart-define fallback 已移除 | 发布前必须完成版本/提交回滚演练 |
 
 ### 3.1 分页链路差距细化
 
@@ -165,7 +165,7 @@ own 分支相对 MD3 额外值得参考：
 - [ ] 不要求所有动画手感达到 Legado 100%，但要求每个动画都有明确 pass/fail 记录。
 - [ ] 任一动画未过关时，设置页要禁用该动画或降级到 `none/cover`，不能让用户选择后遇到坏状态。
 - [ ] 跨章翻页必须依赖后台预热，不应让用户“等目标页”；预热未命中时可以无动画提交，但不能空白、不能 loading 截图入动画。
-- [ ] 删除旧阅读器前，新 renderer 必须原生承接分页动画、搜索、目录、书签、朗读、自动阅读、选择标注，不再依赖 legacy fallback 才算 1:1。
+- [x] 新 renderer 已原生承接分页动画；搜索、目录、书签、朗读、自动阅读、选择标注继续按 release 单路径专项验收。
 
 ### 3.4 界面设置逐字段 Owner 与验收矩阵
 
@@ -231,7 +231,7 @@ own 分支相对 MD3 额外值得参考：
 - [ ] 不能再用“滚动已优化”代表阅读器可上线；分页、设置、专项能力必须分别给结论。
 - [ ] 不能再用“动画已接入”代表动画 1:1；每个动画都要有同章、跨章、快速取消、背景遮罩记录。
 - [ ] 不能再用“设置已保存”代表设置正确；每个设置必须有 owner，明确是否触发布局、是否只 repaint、是否只影响 shell。
-- [ ] 不能再用“有 legacy fallback”代表安全；fallback 是灰度兜底，不是删除旧阅读器的依据。
+- [x] 不能再用“有 legacy fallback”代表安全；旧 fallback 已移除，安全性必须来自单路径验收和版本回滚。
 - [ ] 上线前至少要形成一张 pass/fail 表：分页 8 链路、界面设置 5 类 owner、样本 TXT/EPUB、真机 profile、回滚包。
 
 ---
@@ -241,10 +241,10 @@ own 分支相对 MD3 额外值得参考：
 ### 4.1 P0：上线前必须补齐
 
 - [ ] 真机 UI smoke：用 `docs/test_readr` 三个样本逐一记录首次打开、章节识别、翻页、滚动、设置变化、退出重进恢复。
-- [ ] strict release smoke：使用 `--dart-define=READER_LAYOUT_STRICT_RELEASE=true` 打开同一批样本，确认分页、动画、设置切换、搜索/朗读/标注不会触发 legacy fallback 诊断页。
+- [ ] release 单路径 smoke：打开同一批样本，确认分页、动画、设置切换、搜索/朗读/标注不会触发 release failure 诊断页。
 - [ ] profile mode 性能基线：首开耗时、连续翻页帧率、快速滚动 jank、内存峰值、图片章节峰值。
-- [ ] 回滚包验证：使用 `--dart-define=READER_LAYOUT_FORCE_LEGACY=true` 打包并实际打开阅读器验证。
-- [ ] 新旧共存压力测试：快速切换动画、滚动/分页、字号/边距、背景、横竖屏后状态不串。
+- [ ] 回滚演练：回退上一稳定版本/提交并实际打开阅读器验证。
+- [x] 新旧共存压力测试改为历史项；当前重点是 release 单路径快速切换动画、滚动/分页、字号/边距、背景、横竖屏后状态不串。
 - [ ] 搜索/目录跳转/书签跳转/朗读/自动阅读跨章做 UI 或集成验收。
 - [ ] EPUB 真实 UI 验收：图片比例、点击预览/重试、caption/footnote/link、重排后位置恢复。
 - [ ] 全项目门禁恢复：至少发布分支需要 `flutter analyze` 结论明确，非阅读器阻塞要修复或隔离。
@@ -253,7 +253,7 @@ own 分支相对 MD3 额外值得参考：
 
 - [ ] 滚动点击距离改成可见行感知，追平 Legado 的“保留一行”逻辑。
 - [ ] 连续滚动跨章从“多章节 ListView warmup”进一步抽象成稳定 page/window model，减少动态高度导致的跳动。
-- [ ] 新 renderer 原生承接 paperCurl/curl/cover/translate/fade/vertical，减少长期 legacy fallback。
+- [x] 新 renderer 原生承接 paperCurl/curl/cover/translate/fade/vertical。
 - [ ] 选择/标注工具条补完整端到端矩阵：复制、保存灵感、编辑、删除、点击已有标注、跨页拖拽。
 - [ ] 阅读记录/阅读时长/自动保存与新旧 renderer 统一，避免切 surface 后进度或统计异常。
 - [ ] 图片 layout cache 与真实尺寸更新策略补齐，避免 EPUB 图片章节二次跳动。
@@ -314,9 +314,9 @@ own 分支相对 MD3 额外值得参考：
 ### G4：回滚和灰度
 
 - [ ] 默认包验证新 renderer。
-- [ ] `READER_LAYOUT_FORCE_LEGACY=true` 回滚包验证旧阅读器可用。
-- [ ] `READER_LAYOUT_STRICT_RELEASE=true` 验收包验证新阅读器完整接手；该包只用于开发/灰度验收，不作为普通用户默认策略。
-- [ ] diagnostics 能记录 renderer：legacy / release / fallback。
+- [ ] 版本/提交回滚演练。
+- [ ] release 单路径验收包验证新阅读器完整接手。
+- [ ] diagnostics 能记录 release renderer 状态、page count、failure reason。
 - [ ] 灰度反馈入口和问题收集字段明确。
 
 ---
@@ -349,14 +349,14 @@ own 分支相对 MD3 额外值得参考：
 | 阶段 | 状态 | 已完成 | 未完成/风险 |
 |---|---|---|---|
 | 阶段 0：冻结基线 | 部分完成 | 已确认 `docs/test_readr` 三个样本、文件大小、EPUB HTML 条目数、默认/legacy 开关位置、设置入口与动画枚举 | 还未逐样本记录首屏文字、目标搜索词、章节末尾跨章位置 |
-| 阶段 1：代码门禁 | 自动化完成 | reader analyze、全项目 analyze、application、presentation、本地 parser 测试均通过 | 默认包/legacy 包“实际打开阅读器”仍需模拟器或真机手工 smoke |
+| 阶段 1：代码门禁 | 自动化完成 | reader analyze、全项目 analyze、application、presentation、本地 parser 测试均通过 | 默认包/回滚版本“实际打开阅读器”仍需模拟器或真机手工 smoke |
 | 阶段 2：分页 | 自动化覆盖完成 | 已由 presentation/application 测试覆盖动画 registry、paged transition、paperCurl runtime、cross chapter snapshot、EPUB paged smoke | 每种动画的同章/跨章/快速取消还未真机逐项 pass/fail |
 | 阶段 3：滚动 | 自动化覆盖完成 | 已由 scroll renderer、viewport builder、selection area、EPUB scroll smoke 覆盖基础链路 | Legado 手感级对齐、快速猛点、跨章自然滚动仍需真机验收和可能继续修复 |
 | 阶段 4：界面设置 | 代码补齐完成 | 已补 `ReaderLayoutSettingsCompatibilityMatrix`，覆盖 layout/chrome/platform/visual/interaction/surface/data owner，并新增测试 | 字体、边距、信息栏、亮度、背景图、点击区域仍需真机 UI 验收 |
 | 阶段 5：专项能力 | 自动化覆盖完成 | 定向测试覆盖搜索/目录、跳转、书签恢复、标注、分页长按选择、自动阅读、阅读记录 | 朗读真实播放、高亮跟随、灵感工具窗完整交互仍需真机 UI 验收 |
 | 阶段 6：多 surface | 自动化覆盖完成 | 定向测试覆盖 EPUB parser、PDF parser、local chapter content、manga/audio/runtime ratio、EPUB/manga widget smoke | 真实 EPUB 大目录打开、图片失败重试、PDF/漫画/音频完整用户流仍需真机验收 |
 | 阶段 7：性能压力 | 策略/Widget smoke 完成 | 定向测试覆盖 performance budget、resource budget、image decode budget、rendering memory smoke | Android/iOS profile 帧率、jank、内存峰值仍未采集 |
-| 阶段 8：上线决策 | 已形成当前结论 | 当前可进入真机 smoke/内部灰度准备；不建议全量默认、不建议删除旧阅读器 | 需要默认包和 legacy 包都实际打开通过后，才讨论外部灰度 |
+| 阶段 8：上线决策 | 已形成当前结论 | 当前可进入真机 smoke/内部灰度准备；不建议跳过 profile 和回滚演练直接全量 | 需要默认包和回滚版本都实际打开通过后，才讨论外部灰度 |
 
 样本基线：
 
@@ -382,7 +382,7 @@ own 分支相对 MD3 额外值得参考：
 - [x] 阶段 4/5 定向测试：设置、搜索/目录、跳转、书签、标注、分页长按选择、自动阅读、阅读记录通过，76 tests passed。
 - [x] 阶段 6/7 定向测试：EPUB/PDF/local content、多 surface、runtime、性能/资源/图片预算、rendering smoke 通过，78 tests passed。
 - [ ] 默认包实际打开阅读器：待真机/模拟器 smoke。
-- [ ] `READER_LAYOUT_FORCE_LEGACY=true` 实际打开阅读器：待真机/模拟器 smoke。
+- [ ] 版本回滚后实际打开阅读器：待真机/模拟器 smoke。
 
 执行中观察到的非阻塞项：
 
@@ -394,7 +394,7 @@ own 分支相对 MD3 额外值得参考：
 
 **目标**: 先冻结当前行为，避免一边修一边不知道退化了哪里。
 
-- [x] 记录当前默认 renderer、fallback renderer、强制 legacy 的开关行为。
+- [x] 记录当前默认 renderer、failure diagnostics、版本回滚策略。
 - [x] 整理 `docs/test_readr` 样本清单：TXT 长文本、TXT 普通章节、EPUB 图文混排。
 - [ ] 为每个样本记录：首开章节、章节数、首屏文字、目标搜索词、章节末尾跨章位置。
 - [x] 记录当前分页动画可选项和默认值。
@@ -414,10 +414,10 @@ own 分支相对 MD3 额外值得参考：
 - [x] 跑本地导入/TXT/EPUB parser 相关测试。
 - [x] 跑一次全项目 `flutter analyze`，记录非阅读器阻塞项。
 - [ ] 使用默认配置启动阅读器，确认新 renderer 路径生效。
-- [ ] 使用 `--dart-define=READER_LAYOUT_FORCE_LEGACY=true` 启动阅读器，确认旧路径可回滚。
-- [ ] 阶段完成：默认包和 legacy 包都能打开阅读器，代码门禁结果有明确记录。
+- [ ] 回退上一稳定版本/提交并启动阅读器，确认版本回滚可用。
+- [ ] 阶段完成：默认包和回滚版本都能打开阅读器，代码门禁结果有明确记录。
 
-**当前进度**: 70%。自动化门禁完成；实际打开默认/legacy 阅读器待真机或模拟器 smoke。
+**当前进度**: 70%。自动化门禁完成；实际打开默认阅读器和回滚版本待真机或模拟器 smoke。
 
 ### 阶段 2：分页主链路验收与修复
 
@@ -537,16 +537,16 @@ own 分支相对 MD3 额外值得参考：
 
 - [x] 当前可以进入：模拟器/真机 smoke、内部人员试用、继续补用户体验修复。
 - [ ] 当前不建议：直接全量默认新阅读器。
-- [ ] 当前不建议：删除旧阅读器或移除 legacy fallback。
-- [ ] 当前不建议：向外部用户扩大灰度，除非默认包和 `READER_LAYOUT_FORCE_LEGACY=true` 包都实际打开阅读器通过。
+- [x] 旧阅读器 fallback 已删除，后续不再以旧路径作为上线兜底。
+- [ ] 当前不建议：向外部用户扩大灰度，除非默认包 smoke/profile 和版本回滚演练都通过。
 - [x] 默认策略建议：继续保留当前默认配置，但灰度前要在设置页对未真机通过的高风险动画保持可降级策略。
-- [x] 旧阅读器策略建议：保留 fallback，直到分页动画、滚动跨章、朗读、选择标注、EPUB 多 surface、真机性能全部有 pass 记录。
+- [x] 旧阅读器策略建议已更新：不保留包内 fallback，改用版本回滚，并补分页动画、滚动跨章、朗读、选择标注、EPUB 多 surface、真机性能 pass 记录。
 
 P0 未完成：
 
 - [ ] 默认包实际打开阅读器 smoke。
-- [ ] strict release 验收包实际打开阅读器 smoke。
-- [ ] legacy 回滚包实际打开阅读器 smoke。
+- [ ] release 单路径实际打开阅读器 smoke。
+- [ ] 版本回滚演练实际打开阅读器 smoke。
 - [ ] 每种分页动画同章/跨章/快速取消真机验收。
 - [ ] 滚动快速点击、跨章、长按工具窗真机验收。
 - [ ] 亮度、音量键、系统手势真机验收。

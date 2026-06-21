@@ -425,127 +425,6 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
 
         final pageSize = constraints.biggest;
 
-        void scheduleLegacyPagination() {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            _ensurePagination(spec: paginationSpec);
-          });
-        }
-
-        Widget buildLegacyViewport([ReaderLayoutRendererState? _]) {
-          scheduleLegacyPagination();
-          final hasPagedContent =
-              _pagedPages.isNotEmpty || _pagedBlockPages.isNotEmpty;
-          if (_pageTurnRuntimeController.pagedPaginationState.isPaginating &&
-              !hasPagedContent) {
-            return buildLoadingViewport(total: _currentPagedPageCount);
-          }
-
-          final pageCount = _currentPagedPageCount;
-          if (pageCount <= 0) {
-            return buildLoadingViewport(total: 1);
-          }
-
-          final animationStyle = _currentPagedAnimationStyle();
-          final motion = _pagedTextRenderer.motionSpecForStyle(animationStyle);
-          final curlState = ReaderPagedViewportCurlState(
-            isAnimating: _isCurlAutoTurning,
-            isPreview: _isCurlPreviewActive,
-            direction: _curlAutoDirection,
-            fromIndex: _curlAnimationFromIndex,
-            toIndex: _curlAnimationToIndex,
-            previewProgress: _curlPreviewProgress,
-            commitOnAnimationEnd: _curlCommitOnAnimationEnd,
-            isCrossChapter: _isCurlCrossChapterTurn,
-          );
-          final transitionPlan = _pagedViewportTransitionResolver.resolve(
-            requestedAnimationStyle: animationStyle,
-            pageCount: pageCount,
-            currentPageIndex: _pageTurnRuntimeController.currentPageIndex,
-            pagedTransition: _pageTurnRuntimeController.pagedTransition,
-            curlState: curlState,
-          );
-          final viewportInput = ReaderPagedViewportInput(
-            chapterId: _chapterId,
-            pageIndex: _pageTurnRuntimeController.currentPageIndex,
-            pageCount: pageCount,
-            pageSize: pageSize,
-            animationStyle: animationStyle,
-            viewportMetricsHash:
-                _paginationSpecResolver
-                    .buildSignature(chapterId: _chapterId, spec: paginationSpec)
-                    .hashCode,
-          );
-          return ReaderPagedAnimationSurface(
-            model: pagedViewModel,
-            plan: transitionPlan,
-            pageBuilder:
-                ({
-                  required int pageIndex,
-                  required bool includeBackgroundDecoration,
-                }) => _buildPagedPageContainer(
-                  colors: colors,
-                  pageIndex: pageIndex,
-                  total: pageCount,
-                  pageSize: pageSize,
-                  pagedViewModel: pagedViewModel,
-                  includeBackgroundDecoration: includeBackgroundDecoration,
-                ),
-            pagedTransitionAnimation: _pagedTransitionController,
-            curlAnimation: _curlAutoTurnController,
-            switchInCurve: motion.switchInCurve,
-            staticPageController: _resolveStaticPagedTextPageController(
-              pageCount,
-            ),
-            onStaticPageChanged: (pageIndex) {
-              if (!mounted) {
-                return;
-              }
-              _updateReaderState(() {
-                _pageTurnRuntimeController.currentPageIndex = pageIndex;
-              });
-              _syncActiveReadingRecordSessionProgress();
-              _scheduleProgressSave();
-            },
-            onStaticScrollInteractionChanged:
-                _handlePagedScrollInteractionChanged,
-            paperCurlKey: _paperCurlViewKey,
-            paperCurlSurface: ReaderPaperCurlPagedSurface(
-              surfaceToken: viewportInput,
-              pageCount: pageCount,
-              currentPageIndex: _pageTurnRuntimeController.currentPageIndex,
-              pageBuilder:
-                  (context, pageIndex) => _buildPagedPageContainer(
-                    colors: colors,
-                    pageIndex: pageIndex,
-                    total: pageCount,
-                    pageSize: pageSize,
-                    pagedViewModel: pagedViewModel,
-                    includeBackgroundDecoration: true,
-                  ),
-            ),
-            onPaperCurlTurnStarted: (_) {
-              _markReaderInteractionBusy(
-                ReaderInteractionRuntimeState.animating,
-              );
-              _recordFirstPageTurnCompleted(mode: 'paper_curl');
-            },
-            onPaperCurlTurnRejected: (_) {
-              _scheduleReaderInteractionSettle();
-            },
-            onPaperCurlTurnResult: _handlePaperCurlTurnResult,
-            onPaperCurlPageCommitted: _commitPaperCurlPage,
-            curlState: curlState,
-            curlColors: CurlRendererColors(
-              backgroundColor: colors.background,
-              dividerColor: colors.divider,
-              overlayColor: colors.overlay,
-            ),
-            selectionWrapper: (child) => _wrapSelectionArea(child: child),
-            disabledSelectionWrapper:
-                (child) => SelectionContainer.disabled(child: child),
-          );
-        }
-
         Widget buildReleaseFrame({
           required int pageIndex,
           required int pageCount,
@@ -722,27 +601,21 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
           final diagnostic = _formatLayoutReleaseDiagnostic(
             releaseDecision.toDiagnosticsContext(),
           );
-          _deactivateLayoutReleaseForFallback(diagnostic);
-          if (releaseDecision.strictReleaseValidation) {
-            return ReaderLayoutStrictReleaseFailure(
-              reason: releaseDecision.reason,
-              diagnostic: diagnostic,
-            );
-          }
-          return buildLegacyViewport();
+          _deactivateLayoutReleaseForFailure(diagnostic);
+          return ReaderLayoutStrictReleaseFailure(
+            reason: releaseDecision.reason,
+            diagnostic: diagnostic,
+          );
         }
 
         final releaseRequest = _buildLayoutReleaseRequest(paginationSpec);
         if (releaseRequest == null) {
           const diagnostic = 'readerLayoutReleaseReason=no_request';
-          _deactivateLayoutReleaseForFallback(diagnostic);
-          if (releaseDecision.strictReleaseValidation) {
-            return const ReaderLayoutStrictReleaseFailure(
-              reason: 'no_request',
-              diagnostic: diagnostic,
-            );
-          }
-          return buildLegacyViewport();
+          _deactivateLayoutReleaseForFailure(diagnostic);
+          return const ReaderLayoutStrictReleaseFailure(
+            reason: 'no_request',
+            diagnostic: diagnostic,
+          );
         }
 
         _syncLayoutReleaseRequest(
@@ -758,7 +631,6 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
           initialPageIndex: _layoutReleaseInitialPageIndex,
           pageIndex: _pageTurnRuntimeController.currentPageIndex,
           nearbyPageRadius: 1,
-          legacyBuilder: (context, state) => buildLegacyViewport(state),
           loadingBuilder:
               (context, state) =>
                   buildLoadingViewport(total: _currentPagedPageCount),
@@ -798,7 +670,7 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
     );
   }
 
-  void _deactivateLayoutReleaseForFallback(String diagnostic) {
+  void _deactivateLayoutReleaseForFailure(String diagnostic) {
     _layoutReleaseRendererController.cancelActive();
     _layoutReleaseRendererActive = false;
     _layoutReleasePages = const <ReaderLayoutPage>[];
@@ -860,8 +732,7 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
     ReaderLayoutRendererState state,
     ReaderLayoutReleaseDecision decision,
   ) {
-    final isActive =
-        decision.useReleaseRenderer && !state.shouldUseLegacyRenderer;
+    final isActive = decision.useReleaseRenderer && state.canRenderLayout;
     final pageCount = state.pages.length;
     final layoutSignature =
         state.pages.isEmpty ? null : state.pages.first.layoutSignature;
@@ -887,13 +758,8 @@ extension _ReaderPageViewportExtension on _ReaderPageState {
     final rendererAuthority = _rendererAuthorityResolver.resolve(
       releaseActive: isActive,
       releasePageCount: pageCount,
-      legacyTextPageCount: _pagedPages.length,
-      legacyBlockPageCount: _pagedBlockPages.length,
       currentPageIndex: _pageTurnRuntimeController.currentPageIndex,
-      fallbackReason:
-          state.shouldUseLegacyRenderer
-              ? state.diagnostics.fallbackReason
-              : null,
+      inactiveReason: state.hasFailure ? state.diagnostics.failureReason : null,
     );
     final context = <String, Object?>{
       ...decision.toDiagnosticsContext(),

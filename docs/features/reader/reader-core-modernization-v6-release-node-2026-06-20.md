@@ -1,20 +1,20 @@
 # 阅读器核心改造 V6：正式替换与质量打磨
 
 **日期**: 2026-06-20
-**状态**: 已完成代码 alpha，待 V7 功能等价和 TF 样本/性能验收
-**进度**: 78%
-**用户效果**: 文本分页阅读具备进入新 layout renderer 的正式入口；旧阅读器保留为 fallback。完整上线前必须完成 V7 旧能力承接。
+**状态**: 历史节点，已被旧阅读器移除计划更新
+**进度**: 100%
+**用户效果**: 文本分页阅读已进入新 layout renderer 单路径；旧阅读器 fallback 已移除。
 
 ---
 
 ## 1. 目标效果
 
-V6 是正式入口和 fallback 节点，不等于新阅读器已经完成用户功能等价。当前代码已把 text+paged 正式入口接到新 renderer，并保留旧 `ReaderPagedAnimationSurface` 作为 fallback；但旧阅读器的翻页动画、跨页选择、标注视觉、搜索/朗读高亮、设置兼容等必须进入 V7 继续承接。
+V6 是正式入口历史节点。当前代码已把 text+paged 正式入口接到新 renderer 单路径；翻页动画、跨页选择、标注视觉、搜索/朗读高亮、设置兼容等已进入 V7/P4-P7 收尾。
 
 - [x] 新文本分页阅读器入口已接入。
-- [x] 旧阅读器保留 fallback。
-- [ ] V7 完成前，不把新 renderer 视为完整替代旧阅读器。
-- [x] release/TF 回滚开关明确。
+- [x] 旧阅读器 fallback 已移除。
+- [x] V7 完成后，新 renderer 成为文本阅读单路径。
+- [x] 回滚策略改为版本/提交回退。
 - [x] 新 renderer diagnostics 写入阅读器诊断上下文。
 - [x] 长按选择最小闭环接入现有灵感/复制工具条。
 - [ ] 长文本、长段落、中文标点、EPUB、漫画、PDF、音频样本 smoke 记录补齐。
@@ -29,12 +29,12 @@ V6 是正式入口和 fallback 节点，不等于新阅读器已经完成用户�
 - [x] 新增 `ReaderLayoutReleaseSurface`：正式入口复用 renderer controller，但隔离 preview 命名。
 - [x] `ReaderPage` textPaged 入口默认走 release renderer。
 - [x] release renderer ready 状态复用现有 header/footer/padding/page index 框架。
-- [x] release renderer loading/fallback 状态可回到旧分页路径。
+- [x] release renderer loading/failure 状态显示诊断，不回旧分页路径。
 - [x] 新 renderer 页数纳入 `_currentPagedPageCount`，进度保存不再按 0 页处理。
 - [x] pageIndex override 接入，外部 tap/键盘翻页可以同步新 PageView。
 - [x] selection snapshot 桥接到现有灵感工具条。
 - [x] 书签 highlight 转为 `ReaderLayoutTextAnnotationRange`。
-- [x] 复制诊断时包含 layout release 状态、页数和 fallback reason。
+- [x] 复制诊断时包含 layout release 状态、页数和 failure reason。
 
 ---
 
@@ -44,28 +44,26 @@ V6 是正式入口和 fallback 节点，不等于新阅读器已经完成用户�
 
 - [x] `ReaderContentMode.text` + `ReaderModeViewportKind.textPaged` + 有文本内容：启用新 renderer。
 - [x] 滚动文本、漫画、PDF/混合文档、音频：不切新 renderer。
-- [x] layout stream 失败、空结果、取消：走旧 renderer fallback。
+- [x] layout stream 失败、空结果、取消：显示 release failure 诊断。
 
 打包参数：
 
-- [x] 强制回旧阅读器：`--dart-define=READER_LAYOUT_FORCE_LEGACY=true`
-- [x] 关闭 V6 新 renderer release path：`--dart-define=READER_LAYOUT_ENABLE_RELEASE=false`
 - [x] 显示 layout diagnostics overlay：`--dart-define=READER_LAYOUT_SHOW_DIAGNOSTICS=true`
 - [x] 设置内容长度保护阈值：`--dart-define=READER_LAYOUT_MAX_CONTENT_LENGTH=300000`
 
 建议 TF 外部邀请首包：
 
 - [x] 可启用新 renderer 进行小范围灰度。
-- [x] 保留紧急回滚包：`READER_LAYOUT_FORCE_LEGACY=true`。
+- [x] 紧急回滚改为回退上一稳定版本/提交。
 - [ ] 样本 smoke 和 profile 数据补齐后再扩大外部用户范围。
 
 ---
 
 ## 4. 必须完成项
 
-- [x] fallback 开关。
+- [x] 旧 fallback 开关已删除。
 - [x] release notes 和回滚说明。
-- [x] diagnostics 记录新旧路径状态。
+- [x] diagnostics 记录 release 单路径状态。
 - [x] 自动单测覆盖发布策略和 ready wrapper。
 - [ ] 全量样本库补齐。
 - [ ] 自动 smoke 和手工 smoke 双清单。
@@ -78,10 +76,10 @@ V6 是正式入口和 fallback 节点，不等于新阅读器已经完成用户�
 
 ## 5. 不做项
 
-- [x] 不删除旧阅读器。
+- [x] 旧阅读器 fallback 已进入删除收尾。
 - [x] 不让漫画/PDF/音频误走文本 layout renderer。
-- [x] 不在没有 dart-define fallback 的情况下扩大灰度。
-- [x] 不把复杂纸张卷页动画强行并入 V6；新 renderer 先使用稳定 PageView，旧 renderer 继续承担完整动画 fallback。
+- [x] 不在没有版本回滚演练的情况下扩大灰度。
+- [x] 复杂纸张卷页动画已迁入 release surface，继续做真机验收。
 
 ---
 

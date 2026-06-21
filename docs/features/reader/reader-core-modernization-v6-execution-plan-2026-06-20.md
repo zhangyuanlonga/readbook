@@ -1,8 +1,8 @@
 # 阅读器核心改造 V6 执行计划：正式入口、TF 灰度与回滚
 
 **日期**: 2026-06-20
-**状态**: 代码 alpha 已完成，V7 功能等价前不视为完整替代
-**完成进度**: 78%
+**状态**: 历史计划，已被旧阅读器移除计划 P4-P7 更新
+**完成进度**: 100%
 
 ---
 
@@ -10,10 +10,10 @@
 
 - [x] 新增 release policy，集中控制正式入口是否启用新 renderer。
 - [x] text+paged 已具备进入新 renderer 的正式入口。
-- [ ] V7 功能等价前，不把新 renderer 视为完整替代旧阅读器。
+- [x] V7 功能等价后，文本阅读正式入口进入新 renderer 单路径。
 - [x] 非文本、滚动文本、漫画、PDF/混合文档、音频不切换。
-- [x] 支持 `READER_LAYOUT_FORCE_LEGACY=true` 强制旧阅读器。
-- [x] 支持 `READER_LAYOUT_ENABLE_RELEASE=false` 关闭新 renderer release path。
+- [x] 旧强制回滚 dart-define 已删除；回滚策略改为版本/提交回退。
+- [x] 旧关闭 release path dart-define 已删除；默认包不再切回旧 renderer。
 - [x] 支持 `READER_LAYOUT_SHOW_DIAGNOSTICS=true` 显示诊断 overlay。
 - [x] 支持 `READER_LAYOUT_MAX_CONTENT_LENGTH` 内容长度保护阈值。
 
@@ -23,8 +23,8 @@
 - [x] `ReaderPage` 的 textPaged viewport 接入 release decision。
 - [x] release ready 状态复用现有分页 header/footer/padding。
 - [x] release loading 状态复用现有分页 loading 占位。
-- [x] release fallback 状态回到旧 renderer。
-- [x] 旧 `_ensurePagination` 只在 legacy/fallback 路径触发，避免默认路径重复分页。
+- [x] release failure 状态显示明确诊断，不再回旧 renderer。
+- [x] 旧 `_ensurePagination` 和 streaming pagination 运行态已删除。
 
 ## P2 进度与翻页同步
 
@@ -47,7 +47,7 @@
 ## P4 自动化验证
 
 - [x] 新增 `reader_layout_release_policy_test.dart`。
-- [x] 覆盖默认开启、强制 legacy、非目标 surface、内容长度阈值、fingerprint 稳定性。
+- [x] 覆盖默认开启、旧开关已移除、非目标 surface、内容长度阈值、fingerprint 稳定性。
 - [x] renderer preview surface 测试覆盖 readyBuilder。
 - [x] targeted `flutter analyze` 通过。
 - [x] targeted release/surface tests 通过。
@@ -55,8 +55,8 @@
 
 ## P5 TF 灰度建议
 
-- [ ] TF 首包是否启用新 renderer 取决于 V7 功能等价完成度。
-- [x] 同时准备 `READER_LAYOUT_FORCE_LEGACY=true` 紧急回滚包。
+- [x] 当前默认包使用新 renderer 单路径，旧阅读器不再作为包内开关回滚方案。
+- [x] 紧急回滚改为回退上一稳定版本/提交。
 - [x] 小范围外部邀请可先覆盖本地 TXT、在线章节、EPUB 混排。
 - [ ] 若 V7 未完成，只允许把新 renderer 作为小范围灰度/诊断路径。
 - [ ] 外部用户反馈模板补充 layout release diagnostic 字段。
@@ -78,19 +78,9 @@
 
 ---
 
-## 回滚指令
+## 回滚策略
 
-紧急回滚无需删除代码，打包时加入：
-
-```bash
---dart-define=READER_LAYOUT_FORCE_LEGACY=true
-```
-
-保守关闭新 renderer release path：
-
-```bash
---dart-define=READER_LAYOUT_ENABLE_RELEASE=false
-```
+旧 dart-define 回滚方式已废弃。当前回滚方式是回退上一稳定版本或旧阅读器删除前基线提交。
 
 诊断构建：
 

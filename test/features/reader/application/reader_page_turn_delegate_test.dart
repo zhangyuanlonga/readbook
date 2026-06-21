@@ -6,28 +6,12 @@ void main() {
   group('ReaderPageTurnDelegate', () {
     const delegate = ReaderPageTurnDelegate();
 
-    test('allows legacy renderer to keep the requested animation style', () {
-      final decision = delegate.resolve(
-        const ReaderPageTurnDelegateRequest(
-          surface: ReaderPageTurnRendererSurface.legacy,
-          requestedStyle: ReaderPageAnimationStyle.paperCurl,
-        ),
-      );
-
-      expect(decision.usesLegacyFallback, isFalse);
-      expect(decision.effectiveStyle, ReaderPageAnimationStyle.paperCurl);
-    });
-
     test('allows layout release to keep every existing page animation', () {
       for (final style in ReaderPageAnimationStyle.values) {
         final decision = delegate.resolve(
-          ReaderPageTurnDelegateRequest(
-            surface: ReaderPageTurnRendererSurface.layoutRelease,
-            requestedStyle: style,
-          ),
+          ReaderPageTurnDelegateRequest(requestedStyle: style),
         );
 
-        expect(decision.usesLegacyFallback, isFalse, reason: style.name);
         expect(decision.effectiveStyle, style);
         expect(decision.reason, 'layout_release_supported');
       }

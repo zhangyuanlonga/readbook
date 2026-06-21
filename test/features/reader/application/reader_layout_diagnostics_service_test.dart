@@ -9,36 +9,32 @@ void main() {
       const presenter = ReaderLayoutDiagnosticsPresenter();
       final context = presenter.toReaderDiagnosticsContext(
         const ReaderLayoutDiagnostics(
-          requestedMode: ReaderLayoutEngineMode.adapterOnly,
-          effectiveMode: ReaderLayoutEngineMode.legacy,
+          requestedMode: ReaderLayoutEngineMode.experimental,
+          effectiveMode: ReaderLayoutEngineMode.experimental,
           layoutPageCount: 0,
           elapsedMicros: 120,
           surfaceKind: ReaderSurfaceKind.text,
-          fallbackReason: 'adapter_error',
+          failureReason: 'layout_stream_failed',
           errorMessage: 'boom',
         ),
       );
 
-      expect(context['layoutRequestedMode'], 'adapterOnly');
-      expect(context['layoutEffectiveMode'], 'legacy');
+      expect(context['layoutRequestedMode'], 'experimental');
+      expect(context['layoutEffectiveMode'], 'experimental');
       expect(context['layoutPageCount'], 0);
-      expect(context['layoutUsedFallback'], isTrue);
+      expect(context['layoutHasFailure'], isTrue);
       expect(context['layoutSurfaceKind'], 'text');
-      expect(context['layoutFallbackReason'], 'adapter_error');
+      expect(context['layoutFailureReason'], 'layout_stream_failed');
       expect(context['layoutErrorMessage'], 'boom');
     });
   });
 
   group('ReaderLayoutDevOptions', () {
-    test('defaults to legacy and can enable adapter diagnostics', () {
+    test('defaults to layout release mode', () {
       const defaults = ReaderLayoutDevOptions();
-      const adapterOnly = ReaderLayoutDevOptions.adapterOnlyDiagnostics();
 
-      expect(defaults.mode, ReaderLayoutEngineMode.legacy);
-      expect(defaults.buildsLayout, isFalse);
-      expect(adapterOnly.mode, ReaderLayoutEngineMode.adapterOnly);
-      expect(adapterOnly.diagnosticsEnabled, isTrue);
-      expect(adapterOnly.buildsLayout, isTrue);
+      expect(defaults.mode, ReaderLayoutEngineMode.experimental);
+      expect(defaults.buildsLayout, isTrue);
     });
   });
 }

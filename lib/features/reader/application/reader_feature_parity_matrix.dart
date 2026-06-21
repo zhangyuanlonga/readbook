@@ -10,7 +10,6 @@ class ReaderFeatureParityItem {
     required this.legacyStatus,
     required this.releaseStatus,
     required this.notes,
-    this.requiresLegacyFallbackForTf = false,
   });
 
   final String id;
@@ -19,7 +18,6 @@ class ReaderFeatureParityItem {
   final ReaderFeatureParityStatus legacyStatus;
   final ReaderFeatureParityStatus releaseStatus;
   final String notes;
-  final bool requiresLegacyFallbackForTf;
 
   bool get isReleaseComplete =>
       releaseStatus == ReaderFeatureParityStatus.available ||
@@ -44,37 +42,33 @@ class ReaderFeatureParityMatrix {
       title: '纸张卷页 paperCurl',
       stage: ReaderFeatureParityStage.p1,
       legacyStatus: ReaderFeatureParityStatus.available,
-      releaseStatus: ReaderFeatureParityStatus.partial,
-      notes: 'layout release 尚未有 page snapshot curl surface，TF 阶段回落旧 renderer。',
-      requiresLegacyFallbackForTf: true,
+      releaseStatus: ReaderFeatureParityStatus.available,
+      notes: 'layout release 已接入 paper curl surface，跨章失败时按新路径降级。',
     ),
     ReaderFeatureParityItem(
       id: 'curl_animation',
       title: '仿真 curl 动画',
       stage: ReaderFeatureParityStage.p1,
       legacyStatus: ReaderFeatureParityStatus.available,
-      releaseStatus: ReaderFeatureParityStatus.partial,
-      notes: '旧 curl transition 仍依赖旧 page stack，TF 阶段回落旧 renderer。',
-      requiresLegacyFallbackForTf: true,
+      releaseStatus: ReaderFeatureParityStatus.available,
+      notes: 'curl transition 已由 release page snapshot/animation surface 承接。',
     ),
     ReaderFeatureParityItem(
       id: 'cover_translate_fade_animation',
       title: '覆盖、滑动、淡入动画',
       stage: ReaderFeatureParityStage.p1,
       legacyStatus: ReaderFeatureParityStatus.available,
-      releaseStatus: ReaderFeatureParityStatus.partial,
+      releaseStatus: ReaderFeatureParityStatus.available,
       notes:
-          'layout release 尚未消费 ReaderPagedAnimationSurface transition stack。',
-      requiresLegacyFallbackForTf: true,
+          'layout release 直接消费 ReaderPagedAnimationSurface transition stack。',
     ),
     ReaderFeatureParityItem(
       id: 'cross_chapter_snapshot_turn',
       title: '跨章节翻页动画',
       stage: ReaderFeatureParityStage.p1,
       legacyStatus: ReaderFeatureParityStatus.available,
-      releaseStatus: ReaderFeatureParityStatus.partial,
-      notes: '仍以主页面截图过渡为主，后续需要 layout page snapshot source。',
-      requiresLegacyFallbackForTf: true,
+      releaseStatus: ReaderFeatureParityStatus.available,
+      notes: '跨章节翻页动画只消费新 renderer 截图，未准备好时新路径降级。',
     ),
     ReaderFeatureParityItem(
       id: 'tap_keyboard_volume_wheel_intent',
@@ -204,7 +198,8 @@ class ReaderFeatureParityMatrix {
       stage: ReaderFeatureParityStage.p7,
       legacyStatus: ReaderFeatureParityStatus.available,
       releaseStatus: ReaderFeatureParityStatus.available,
-      notes: 'release policy 输出 active/reason/mode/requested animation。',
+      notes:
+          'release policy 输出 active/reason/mode/requested animation，不再输出旧 renderer 回退项。',
     ),
   ];
 
@@ -222,12 +217,6 @@ class ReaderFeatureParityMatrix {
   ) {
     return v7CoreItems
         .where((item) => item.stage == stage)
-        .toList(growable: false);
-  }
-
-  static List<ReaderFeatureParityItem> legacyFallbackItemsForTf() {
-    return v7CoreItems
-        .where((item) => item.requiresLegacyFallbackForTf)
         .toList(growable: false);
   }
 

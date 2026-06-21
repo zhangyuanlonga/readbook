@@ -523,7 +523,7 @@ extension _ReaderPageShellExtension on _ReaderPageState {
         return true;
       }
       _logScrollPageStep(
-        step: 'edge_fallback_chapter_jump',
+        step: 'edge_adjacent_unavailable',
         forward: forward,
         source: source,
         currentOffset:
@@ -536,7 +536,6 @@ extension _ReaderPageShellExtension on _ReaderPageState {
                 : null,
         distance: distance,
       );
-      await _jumpTo(targetChapterIndex, initialScrollRatio: forward ? 0 : 1);
       return true;
     }
 
@@ -559,9 +558,6 @@ extension _ReaderPageShellExtension on _ReaderPageState {
                 : null,
         distance: distance,
       );
-      if (targetChapterIndex != null) {
-        await _jumpTo(targetChapterIndex, initialScrollRatio: forward ? 0 : 1);
-      }
       return true;
     }
 

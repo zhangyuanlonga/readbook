@@ -12,26 +12,6 @@ import 'package:shuxiang_reading_next/features/reader/presentation/reader_layout
 import 'package:shuxiang_reading_next/features/reader/presentation/reader_layout_renderer_preview_surface.dart';
 
 void main() {
-  testWidgets('preview surface keeps legacy mode on the fallback builder', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: ReaderLayoutRendererPreviewSurface(
-            request: _request('正文'),
-            legacyBuilder: (context, state) {
-              return Text('legacy:${state.effectiveMode.name}');
-            },
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('legacy:legacy'), findsOneWidget);
-  });
-
   testWidgets('preview surface renders experimental layout pages', (
     tester,
   ) async {
@@ -73,7 +53,7 @@ void main() {
     expect(diagnostics.last.completed, isTrue);
   });
 
-  testWidgets('preview surface falls back when experimental layout fails', (
+  testWidgets('preview surface shows failure when experimental layout fails', (
     tester,
   ) async {
     final controller = ReaderLayoutRendererController(
@@ -92,32 +72,6 @@ void main() {
               mode: ReaderLayoutEngineMode.experimental,
               diagnosticsEnabled: true,
             ),
-            legacyBuilder: (context, state) {
-              return Text(state.diagnostics.fallbackReason ?? 'legacy');
-            },
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('layout_stream_failed'), findsOneWidget);
-  });
-
-  testWidgets('strict release validation blocks legacy fallback', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: ReaderLayoutRendererPreviewSurface(
-            request: _request('正文'),
-            options: const ReaderLayoutDevOptions(
-              strictReleaseValidation: true,
-            ),
-            legacyBuilder: (context, state) {
-              return const Text('legacy builder should not render');
-            },
           ),
         ),
       ),
@@ -130,10 +84,10 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.text('legacy builder should not render'), findsNothing);
+    expect(find.textContaining('reason=layout_stream_failed'), findsOneWidget);
   });
 
-  testWidgets('strict release validation blocks layout failure fallback', (
+  testWidgets('strict release validation reports layout failure', (
     tester,
   ) async {
     final controller = ReaderLayoutRendererController(
@@ -153,9 +107,6 @@ void main() {
               diagnosticsEnabled: true,
               strictReleaseValidation: true,
             ),
-            legacyBuilder: (context, state) {
-              return const Text('legacy builder should not render');
-            },
           ),
         ),
       ),
@@ -163,7 +114,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('reason=layout_stream_failed'), findsOneWidget);
-    expect(find.text('legacy builder should not render'), findsNothing);
   });
 }
 

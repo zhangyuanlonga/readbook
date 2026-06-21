@@ -9,45 +9,39 @@ void main() {
       final snapshot = resolver.resolve(
         releaseActive: true,
         releasePageCount: 4,
-        legacyTextPageCount: 9,
-        legacyBlockPageCount: 10,
         currentPageIndex: 6,
       );
 
       expect(snapshot.authority, ReaderRendererAuthority.release);
       expect(snapshot.pageCount, 4);
       expect(snapshot.currentPageIndex, 3);
-      expect(snapshot.shouldScheduleLegacyPagination, isFalse);
+      expect(snapshot.reason, 'layout_release_active');
     });
 
-    test('uses legacy page count and schedules pagination when inactive', () {
+    test('keeps release authority without scheduling legacy when inactive', () {
       final snapshot = resolver.resolve(
         releaseActive: false,
         releasePageCount: 4,
-        legacyTextPageCount: 2,
-        legacyBlockPageCount: 5,
         currentPageIndex: 3,
       );
 
-      expect(snapshot.authority, ReaderRendererAuthority.legacy);
-      expect(snapshot.pageCount, 5);
-      expect(snapshot.currentPageIndex, 3);
-      expect(snapshot.shouldScheduleLegacyPagination, isTrue);
+      expect(snapshot.authority, ReaderRendererAuthority.release);
+      expect(snapshot.pageCount, 0);
+      expect(snapshot.currentPageIndex, 0);
+      expect(snapshot.reason, 'layout_release_inactive');
     });
 
-    test('marks fallback authority with reason', () {
+    test('keeps release authority while exposing inactive reason', () {
       final snapshot = resolver.resolve(
         releaseActive: false,
         releasePageCount: null,
-        legacyTextPageCount: 3,
-        legacyBlockPageCount: 0,
         currentPageIndex: 8,
-        fallbackReason: 'layout_stream_failed',
+        inactiveReason: 'layout_stream_failed',
       );
 
-      expect(snapshot.authority, ReaderRendererAuthority.fallback);
-      expect(snapshot.pageCount, 3);
-      expect(snapshot.currentPageIndex, 2);
+      expect(snapshot.authority, ReaderRendererAuthority.release);
+      expect(snapshot.pageCount, 0);
+      expect(snapshot.currentPageIndex, 0);
       expect(snapshot.reason, 'layout_stream_failed');
     });
   });

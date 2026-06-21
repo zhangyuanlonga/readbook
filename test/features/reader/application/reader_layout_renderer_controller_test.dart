@@ -11,7 +11,7 @@ import 'package:shuxiang_reading_next/features/reader/domain/entities/reader_lay
 
 void main() {
   group('ReaderLayoutRendererController', () {
-    test('keeps legacy mode on the old renderer path', () async {
+    test('uses layout release mode by default', () async {
       final controller = ReaderLayoutRendererController();
 
       final states =
@@ -22,10 +22,10 @@ void main() {
               )
               .toList();
 
-      expect(states, hasLength(1));
-      expect(states.single.kind, ReaderLayoutRendererStateKind.legacy);
-      expect(states.single.shouldUseLegacyRenderer, isTrue);
-      expect(states.single.pages, isEmpty);
+      expect(states.first.kind, ReaderLayoutRendererStateKind.loading);
+      expect(states.last.kind, ReaderLayoutRendererStateKind.ready);
+      expect(states.last.hasFailure, isFalse);
+      expect(states.last.pages, isNotEmpty);
     });
 
     test(
@@ -77,28 +77,6 @@ void main() {
       },
     );
 
-    test('falls back to legacy when adapter-only mode is requested', () async {
-      final controller = ReaderLayoutRendererController();
-
-      final states =
-          await controller
-              .watch(
-                _request(text: '正文'),
-                options: const ReaderLayoutDevOptions(
-                  mode: ReaderLayoutEngineMode.adapterOnly,
-                  diagnosticsEnabled: true,
-                ),
-              )
-              .toList();
-
-      expect(states.single.kind, ReaderLayoutRendererStateKind.fallback);
-      expect(states.single.shouldUseLegacyRenderer, isTrue);
-      expect(
-        states.single.diagnostics.fallbackReason,
-        'adapter_only_requires_legacy_slices',
-      );
-    });
-
     test('renders epub-like title, text, and image blocks', () async {
       final controller = ReaderLayoutRendererController();
 
@@ -135,7 +113,7 @@ void main() {
       );
     });
 
-    test('falls back to legacy when layout stream fails', () async {
+    test('reports failed state when layout stream fails', () async {
       final controller = ReaderLayoutRendererController(
         streamController: ReaderLayoutStreamController(
           engine: const _ThrowingLayoutEngine(),
@@ -153,9 +131,9 @@ void main() {
               )
               .toList();
 
-      expect(states.last.kind, ReaderLayoutRendererStateKind.fallback);
-      expect(states.last.shouldUseLegacyRenderer, isTrue);
-      expect(states.last.diagnostics.fallbackReason, 'layout_stream_failed');
+      expect(states.last.kind, ReaderLayoutRendererStateKind.failed);
+      expect(states.last.hasFailure, isTrue);
+      expect(states.last.diagnostics.failureReason, 'layout_stream_failed');
       expect(states.last.errorMessage, contains('layout failed'));
     });
   });
