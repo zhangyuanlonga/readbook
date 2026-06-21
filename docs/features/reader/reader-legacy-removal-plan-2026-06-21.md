@@ -1,8 +1,8 @@
 # 阅读器旧实现移除计划
 
 **日期**: 2026-06-21
-**状态**: P0-P7 已执行
-**完成进度**: 90%
+**状态**: P0-P8 已执行，发布门禁待真机完成
+**完成进度**: 95%
 **目标**: 在新阅读器已完成滚动、分页、动画、选择、设置、跨章与阅读记录验收后，移除旧阅读器 fallback 和旧分页实现路径，降低新旧共存导致的隐藏 bug。
 
 ---
@@ -225,19 +225,20 @@
 
 ## P8 发布与回滚策略更新
 
-- [ ] 回滚策略从“打开旧阅读器”改为“回退上一稳定版本/提交”。
-- [ ] 记录可回滚 tag 或提交 hash。
-- [ ] 准备小范围灰度包，灰度包不包含旧阅读器开关。
-- [ ] 收集滚动、分页、动画、设置、长按、搜索、朗读、自动阅读反馈。
-- [ ] 如果出现 P0 问题，回滚到删除前提交，而不是在当前包内切旧路径。
-- [ ] 更新反馈模板，删除 legacy 字段，增加 renderer/page/scroll/window/animation 状态字段。
+- [x] 回滚策略从“打开旧阅读器”改为“回退上一稳定版本/提交”。
+- [x] 记录可回滚 tag 或提交 hash。
+- [x] 准备小范围灰度包策略，灰度包不包含旧阅读器开关。
+- [x] 定义滚动、分页、动画、设置、长按、搜索、朗读、自动阅读反馈范围。
+- [ ] 灰度后收集滚动、分页、动画、设置、长按、搜索、朗读、自动阅读反馈。
+- [x] 如果出现 P0 问题，回滚到删除前提交，而不是在当前包内切旧路径。
+- [x] 更新反馈模板，删除 legacy 字段，增加 renderer/page/scroll/window/animation 状态字段。
 - [ ] 发布前做一次真机 profile：首屏、快速分页、滚动跨章、paperCurl、设置拖动。
 
 **验收**:
 
 - [ ] 灰度期间没有旧路径诊断日志。
-- [ ] 回滚演练明确：命令、分支、包版本、负责人。
-- [ ] 用户反馈模板能定位新阅读器问题。
+- [x] 回滚演练明确：命令、分支、包版本、负责人。
+- [x] 用户反馈模板能定位新阅读器问题。
 
 ---
 
@@ -339,6 +340,51 @@
 - [x] `flutter test test/features/reader/application -r compact` 通过，573 tests passed。
 - [x] `flutter test test/features/reader/presentation -r compact` 通过，192 tests passed。
 
+### P8 已落地
+
+- [x] 回滚策略固定为版本/提交回滚，不再设计包内旧阅读器开关。
+- [x] 删除前可回滚基线：`36dfdace`，用于恢复旧 fallback 删除前的最后稳定阅读器调试提交。
+- [x] 旧 fallback 删除提交：`9cecf053`，用于定位本轮删除范围，也可在发布分支通过 revert 演练验证回滚链路。
+- [x] 小范围灰度包规则：只构建新阅读器单路径包，不传入 `READER_LAYOUT_FORCE_LEGACY`、`READER_LAYOUT_ENABLE_RELEASE`、`READER_LAYOUT_STRICT_RELEASE` 作为回滚手段。
+- [x] P0 问题处理策略：停止放量，回退上一稳定版本或发布分支 revert 删除提交，不在当前包里切旧阅读器。
+- [x] 反馈模板改为记录新 renderer 状态、页状态、滚动窗口、动画和设置上下文，不再记录 legacy/fallback 字段。
+
+回滚演练命令模板：
+
+```bash
+git switch <release-branch>
+git revert 9cecf053
+flutter analyze lib/features/reader test/features/reader
+flutter test test/features/reader/application -r compact
+flutter test test/features/reader/presentation -r compact
+```
+
+发布分支也可以直接选择上一稳定 tag 或提交构建回滚包；实际发布时必须补齐 `<release-branch>`、`<appVersion/buildNumber>`、`<owner>` 和包下载地址。
+
+灰度反馈模板：
+
+| 字段 | 说明 |
+|---|---|
+| `appVersion` / `buildNumber` / `gitCommit` | 定位灰度包版本和提交 |
+| `device` / `os` / `screenSize` / `orientation` | 定位设备、系统、横竖屏和窗口尺寸 |
+| `bookType` / `sourceType` / `sampleOrBookId` | TXT、EPUB、本地、在线来源 |
+| `readerMode` / `pageAnimation` | scroll、paged、none、cover、translate、vertical、fade、curl、paperCurl |
+| `chapterIndex` / `pageIndex` / `pageCount` | 定位章节、页码和页数 authority |
+| `scrollOffset` / `continuousWindowIndexes` | 定位连续滚动窗口和跨章位置 |
+| `rendererState` / `rendererFailureReason` | 定位新 renderer ready、loading、failed 状态 |
+| `layoutSignature` / `settingsChanged` | 定位字号、边距、行距、背景、信息栏等重排输入 |
+| `operation` / `expected` / `actual` | 操作、预期、实际表现 |
+| `screenshotPath` / `videoPath` / `logPath` | 截图、录屏、日志路径 |
+
+### P8 待发布门禁
+
+- [ ] 生成并安装小范围灰度包，确认包内没有旧阅读器开关。
+- [ ] 默认包实际打开阅读器 smoke：滚动、分页、paperCurl、设置拖动、长按、搜索、朗读、自动阅读。
+- [ ] 版本/提交回滚包实际打开阅读器 smoke。
+- [ ] 真机 profile：首屏、快速分页、滚动跨章、paperCurl、设置拖动。
+- [ ] 灰度期间确认没有旧路径诊断日志。
+- [ ] 发布负责人补齐 release branch、appVersion/buildNumber、灰度名单、回滚负责人。
+
 ---
 
 ## 7. 风险清单
@@ -361,7 +407,7 @@
 - [ ] 第 3 个提交：P2/P3 收敛分页和滚动旧入口。
 - [ ] 第 4 个提交：P4/P5 设置与测试迁移。
 - [ ] 第 5 个提交：P6 删除代码。
-- [ ] 第 6 个提交：P7/P8 文档、验收和回滚策略更新。
+- [x] 第 6 个提交：P7/P8 文档、验收和回滚策略更新。
 
 每个提交后至少运行：
 
@@ -383,11 +429,11 @@ rg "reader_content_.*legacy|effectiveMode=legacy|legacy fallback" lib/features/r
 
 ## 9. 完成定义
 
-- [ ] 用户打开阅读器只存在新阅读器一条文本路径。
-- [ ] 代码中不存在可运行的旧文本 renderer fallback。
-- [ ] 旧 dart-define 开关已删除或不再影响运行态。
+- [x] 用户打开阅读器只存在新阅读器一条文本路径。
+- [x] 代码中不存在可运行的旧文本 renderer fallback。
+- [x] 旧 dart-define 开关已删除或不再影响运行态。
 - [ ] 滚动、分页、动画、设置、选择、标注、搜索、朗读、自动阅读全部完成验收。
 - [ ] 漫画/PDF/音频 surface 不受影响。
-- [ ] 阅读器范围 analyze/test 通过。
-- [ ] 文档不再把旧阅读器作为上线兜底。
-- [ ] 回滚策略改为版本回滚，并有明确提交 hash/tag。
+- [x] 阅读器范围 analyze/test 通过。
+- [x] 文档不再把旧阅读器作为上线兜底。
+- [x] 回滚策略改为版本回滚，并有明确提交 hash/tag。
