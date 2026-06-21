@@ -1,5 +1,8 @@
 import 'dart:async';
 
+// UI-GOV-EXEMPT-FILE: fixed-visual
+// reason: onboarding preview miniatures are illustrative mockups, not reusable app surfaces.
+
 import 'package:first_run_kit/first_run_kit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -40,11 +43,7 @@ class OnboardingPage extends ConsumerWidget {
         skipButtonBuilder: _textButton,
       ),
       steps: const <FirstRunStep>[
-        OnboardingStep(
-          title: '欢迎来到书享阅读',
-          description: '先选好阅读和管理习惯，之后都可以在设置里随时调整。',
-          image: _WelcomeMark(),
-        ),
+        CustomStep(widget: _WelcomeStep()),
         CustomStep(widget: _AppearancePreferenceStep()),
         CustomStep(widget: _LayoutPreferenceStep()),
         CustomStep(widget: _ImportPermissionNoteStep()),
@@ -110,24 +109,24 @@ class _OnboardingFinishedRedirectState
   }
 }
 
-class _WelcomeMark extends StatelessWidget {
-  const _WelcomeMark();
+class _WelcomeStep extends StatelessWidget {
+  const _WelcomeStep();
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      width: 104,
-      height: 104,
-      decoration: BoxDecoration(
-        color: colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: Icon(
-        Icons.menu_book_rounded,
-        color: colorScheme.onPrimaryContainer,
-        size: 54,
-      ),
+    return const _StepSurface(
+      icon: Icons.menu_book_rounded,
+      title: '欢迎来到书享阅读',
+      subtitle: '先选好阅读和管理习惯，之后都可以在设置里随时调整。',
+      preview: _WelcomePreview(),
+      children: <Widget>[
+        _MutedInfoRow(
+          icon: Icons.auto_stories_rounded,
+          text: '书架、阅读和我的页面会保持一致的体验。',
+        ),
+        SizedBox(height: 12),
+        _MutedInfoRow(icon: Icons.tune_rounded, text: '本次只做初始偏好，后续可以随时修改。'),
+      ],
     );
   }
 }
@@ -160,6 +159,7 @@ class _AppearancePreferenceStepState
       icon: Icons.palette_rounded,
       title: '选择第一眼的样子',
       subtitle: '主题和底部导航会立即保存。',
+      preview: _AppearancePreview(themeId: _themeId),
       children: <Widget>[
         Text('默认主题', style: theme.textTheme.titleSmall),
         const SizedBox(height: 12),
@@ -278,6 +278,10 @@ class _LayoutPreferenceStepState extends ConsumerState<_LayoutPreferenceStep> {
       icon: Icons.view_agenda_rounded,
       title: '选择常用列表',
       subtitle: '书架和我的页面会按你的习惯打开。',
+      preview: _LayoutPreview(
+        bookshelfGrid: _bookshelfGrid,
+        mineGrid: _mineLayoutMode == MinePageLayoutMode.grid,
+      ),
       children: <Widget>[
         Text('书架', style: theme.textTheme.titleSmall),
         const SizedBox(height: 12),
@@ -358,6 +362,7 @@ class _ImportPermissionNoteStep extends StatelessWidget {
       icon: Icons.folder_open_rounded,
       title: '导入时再授权',
       subtitle: '本地书、字体、背景图都可以稍后添加。',
+      preview: _ImportPreview(),
       children: <Widget>[
         _MutedInfoRow(icon: Icons.book_rounded, text: '导入本地书时再选择文件。'),
         SizedBox(height: 12),
@@ -374,52 +379,437 @@ class _StepSurface extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.subtitle,
+    required this.preview,
     required this.children,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
+  final Widget preview;
   final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    return Center(
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: Icon(icon, color: colorScheme.onPrimaryContainer),
+    return Material(
+      type: MaterialType.transparency,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  preview,
+                  const SizedBox(height: 24),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 50,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: colorScheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Icon(
+                          icon,
+                          color: colorScheme.onPrimaryContainer,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title,
+                              style: theme.textTheme.headlineSmall?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                height: 1.08,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              subtitle,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                                height: 1.4,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  ...children,
+                ],
               ),
             ),
-            const SizedBox(height: 18),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _PreviewFrame extends StatelessWidget {
+  const _PreviewFrame({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      height: 190,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: colorScheme.outlineVariant),
+        boxShadow: [
+          BoxShadow(
+            color: colorScheme.shadow.withValues(alpha: 0.08),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
+class _WelcomePreview extends StatelessWidget {
+  const _WelcomePreview();
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return _PreviewFrame(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.menu_book_rounded, color: colorScheme.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Container(
+                  height: 26,
+                  decoration: BoxDecoration(
+                    color: colorScheme.surface,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Expanded(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: const [
+                _MiniBookCover(title: '长夜'),
+                SizedBox(width: 12),
+                _MiniBookCover(title: '星河'),
+                SizedBox(width: 12),
+                _MiniBookCover(title: '风物'),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AppearancePreview extends StatelessWidget {
+  const _AppearancePreview({required this.themeId});
+
+  final String themeId;
+
+  @override
+  Widget build(BuildContext context) {
+    final presets = appOfficialThemePresets.take(3).toList(growable: false);
+    final selectedIndex = presets.indexWhere(
+      (preset) => preset.id.themeId == themeId,
+    );
+    return _PreviewFrame(
+      child: Row(
+        children: [
+          for (var index = 0; index < presets.length; index++) ...[
+            Expanded(
+              child: _ThemePreviewCard(
+                preset: presets[index],
+                selected:
+                    index == selectedIndex || (selectedIndex < 0 && index == 0),
+              ),
+            ),
+            if (index < presets.length - 1) const SizedBox(width: 10),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _LayoutPreview extends StatelessWidget {
+  const _LayoutPreview({required this.bookshelfGrid, required this.mineGrid});
+
+  final bool bookshelfGrid;
+  final bool mineGrid;
+
+  @override
+  Widget build(BuildContext context) {
+    return _PreviewFrame(
+      child: Row(
+        children: [
+          Expanded(
+            child: _LayoutPreviewPanel(
+              title: '书架',
+              grid: bookshelfGrid,
+              icon: Icons.menu_book_rounded,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _LayoutPreviewPanel(
+              title: '我的',
+              grid: mineGrid,
+              icon: Icons.person_outline_rounded,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ImportPreview extends StatelessWidget {
+  const _ImportPreview();
+
+  @override
+  Widget build(BuildContext context) {
+    return const _PreviewFrame(
+      child: Column(
+        children: [
+          _ImportPreviewRow(icon: Icons.upload_file_rounded, label: '本地书籍'),
+          SizedBox(height: 10),
+          _ImportPreviewRow(icon: Icons.wallpaper_rounded, label: '背景与封面'),
+          SizedBox(height: 10),
+          _ImportPreviewRow(icon: Icons.font_download_rounded, label: '字体资源'),
+        ],
+      ),
+    );
+  }
+}
+
+class _MiniBookCover extends StatelessWidget {
+  const _MiniBookCover({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Expanded(
+      child: Container(
+        height: 108,
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: Color.alphaBlend(
+            colorScheme.primary.withValues(alpha: 0.10),
+            colorScheme.surface,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: colorScheme.outlineVariant),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 26,
+              height: 4,
+              decoration: BoxDecoration(
+                color: colorScheme.primary.withValues(alpha: 0.55),
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+            const Spacer(),
             Text(
               title,
-              style: theme.textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w700,
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ThemePreviewCard extends StatelessWidget {
+  const _ThemePreviewCard({required this.preset, required this.selected});
+
+  final AppOfficialThemePreset preset;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 160),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: selected ? colorScheme.primaryContainer : colorScheme.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: selected ? colorScheme.primary : colorScheme.outlineVariant,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _ThemeSwatches(colors: preset.previewSwatches),
+          const Spacer(),
+          Text(
+            preset.id.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              fontWeight: FontWeight.w800,
+              color:
+                  selected
+                      ? colorScheme.onPrimaryContainer
+                      : colorScheme.onSurface,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LayoutPreviewPanel extends StatelessWidget {
+  const _LayoutPreviewPanel({
+    required this.title,
+    required this.grid,
+    required this.icon,
+  });
+
+  final String title;
+  final bool grid;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 18, color: colorScheme.primary),
+              const SizedBox(width: 6),
+              Text(title, style: Theme.of(context).textTheme.labelLarge),
+            ],
+          ),
+          const Spacer(),
+          if (grid)
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: List.generate(4, (_) => _PreviewBlock.square()),
+            )
+          else
+            Column(
+              children: List.generate(
+                3,
+                (_) => Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: _PreviewBlock.line(),
+                ),
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              subtitle,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: colorScheme.onSurfaceVariant,
+        ],
+      ),
+    );
+  }
+}
+
+class _PreviewBlock extends StatelessWidget {
+  const _PreviewBlock._({required this.width, required this.height});
+
+  factory _PreviewBlock.square() =>
+      const _PreviewBlock._(width: 34, height: 28);
+
+  factory _PreviewBlock.line() =>
+      const _PreviewBlock._(width: double.infinity, height: 12);
+
+  final double width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+      ),
+    );
+  }
+}
+
+class _ImportPreviewRow extends StatelessWidget {
+  const _ImportPreviewRow({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: colorScheme.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: colorScheme.outlineVariant),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: colorScheme.primary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                label,
+                style: Theme.of(
+                  context,
+                ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
               ),
             ),
-            const SizedBox(height: 24),
-            ...children,
+            Icon(
+              Icons.chevron_right_rounded,
+              color: colorScheme.onSurfaceVariant,
+            ),
           ],
         ),
       ),

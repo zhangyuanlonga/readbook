@@ -20,12 +20,28 @@ void main() {
 
       expect(resolved.canAutoRead, isTrue);
       expect(resolved.supportsCatalogContentSearch, isTrue);
+      expect(resolved.canSwitchSource, isTrue);
+      expect(resolved.canCacheChapter, isTrue);
       expect(
         resolved.primaryBottomAction,
         ReaderPrimaryBottomAction.interfacePanel,
       );
       expect(resolved.supportsCatalogNavigation, isTrue);
     });
+
+    test(
+      'keeps switch source disabled when content provider does not support it',
+      () {
+        final resolved = resolver.resolve(
+          contentMode: ReaderContentMode.text,
+          contentCapabilities: const ContentCapabilities(),
+          hasInlineImageParagraphs: false,
+        );
+
+        expect(resolved.canSwitchSource, isFalse);
+        expect(resolved.canCacheChapter, isFalse);
+      },
+    );
 
     test('disables auto read and search for hybrid mode', () {
       final resolved = resolver.resolve(

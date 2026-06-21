@@ -4849,7 +4849,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     return provider?.capabilities ?? const ContentCapabilities();
   }
 
-  bool get _canSwitchSource => false;
+  bool get _canSwitchSource {
+    return _readerModeCapabilities.canSwitchSource &&
+        (_sourceId ?? '').trim().isNotEmpty &&
+        (_detailUrl ?? '').trim().isNotEmpty;
+  }
+
   bool get _canCacheChapter => _readerModeCapabilities.canCacheChapter;
 
   String get _currentBookId {
