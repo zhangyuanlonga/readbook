@@ -2321,6 +2321,7 @@ class _AdvancedThemeEditorPageState
                         title: '应用背景',
                         width: previewWidth,
                         height: previewHeight,
+                        animateFilledBorder: true,
                         onLongPress:
                             wallpaperPath == null
                                 ? null
@@ -2348,6 +2349,7 @@ class _AdvancedThemeEditorPageState
                         title: '阅读器背景',
                         width: previewWidth,
                         height: previewHeight,
+                        animateFilledBorder: true,
                         onLongPress:
                             readerWallpaperPath == null
                                 ? null
@@ -2375,6 +2377,7 @@ class _AdvancedThemeEditorPageState
                         title: _selectedCoverGallery()?.name ?? '书籍封面',
                         width: previewWidth,
                         height: previewHeight,
+                        animateFilledBorder: true,
                         onLongPress:
                             coverGalleryPreviewPath == null
                                 ? null
@@ -2401,6 +2404,7 @@ class _AdvancedThemeEditorPageState
                         title: _selectedLaunchImageGallery()?.name ?? '启动图集',
                         width: previewWidth,
                         height: previewHeight,
+                        animateFilledBorder: true,
                         onLongPress:
                             launchGalleryPreviewPath == null
                                 ? null
@@ -2426,6 +2430,7 @@ class _AdvancedThemeEditorPageState
                         gallery: bottomNavGallery,
                         width: previewWidth,
                         height: previewHeight,
+                        animateFilledBorder: true,
                       ),
                       onTap: _isSaving ? () {} : _pickBottomNavGallery,
                     ),
@@ -2441,6 +2446,7 @@ class _AdvancedThemeEditorPageState
                         width: previewWidth,
                         height: previewHeight,
                         iconSize: squarePreviewSize,
+                        animateFilledBorder: true,
                       ),
                       onTap: _isSaving ? () {} : _pickThemeEffect,
                     ),
@@ -2516,6 +2522,7 @@ class _AdvancedThemeEditorPageState
     required String title,
     required double width,
     required double height,
+    bool animateFilledBorder = false,
     VoidCallback? onLongPress,
   }) {
     if (previewPath == null || previewPath.isEmpty) {
@@ -2530,6 +2537,7 @@ class _AdvancedThemeEditorPageState
       width: width,
       height: height,
       clip: true,
+      animatedBorder: animateFilledBorder,
       onLongPress: onLongPress,
       child: _buildResolvedImage(previewPath, fit: BoxFit.cover),
     );
@@ -2562,11 +2570,14 @@ class _AdvancedThemeEditorPageState
     required double height,
     required Widget child,
     bool dashedBorder = false,
+    bool animatedBorder = false,
     bool clip = false,
     VoidCallback? onLongPress,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     final componentTokens = appComponentThemeTokensOf(context);
+    final borderColor =
+        animatedBorder ? colorScheme.primary : colorScheme.onSurfaceVariant;
     final frame = AppSurface(
       tone: AppSurfaceTone.transparent,
       padding: EdgeInsets.zero,
@@ -2579,10 +2590,11 @@ class _AdvancedThemeEditorPageState
       width: width,
       height: height,
       child:
-          dashedBorder
+          dashedBorder || animatedBorder
               ? AppAnimatedDashedRoundedBorder(
-                color: colorScheme.onSurfaceVariant,
+                color: borderColor,
                 radius: componentTokens.card.radius,
+                strokeWidth: animatedBorder ? 1.8 : 1.4,
                 child: frame,
               )
               : frame,
@@ -2594,6 +2606,7 @@ class _AdvancedThemeEditorPageState
     required BottomNavIconGallery? gallery,
     required double width,
     required double height,
+    bool animateFilledBorder = false,
   }) {
     if (gallery == null) {
       return _buildVisualEmptyResourcePreview(
@@ -2606,6 +2619,7 @@ class _AdvancedThemeEditorPageState
       context,
       width: width,
       height: height,
+      animatedBorder: animateFilledBorder,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10),
         child: Column(
@@ -2671,6 +2685,7 @@ class _AdvancedThemeEditorPageState
     required double width,
     required double height,
     required double iconSize,
+    bool animateFilledBorder = false,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     final config = appAmbientEffectConfigFor(effect, preview: true);
@@ -2686,6 +2701,7 @@ class _AdvancedThemeEditorPageState
       width: width,
       height: height,
       clip: true,
+      animatedBorder: animateFilledBorder,
       child: SizedBox.expand(
         child: AmbientEffectsContainer(
           foregroundEffect: config,
