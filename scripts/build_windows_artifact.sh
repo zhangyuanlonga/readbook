@@ -169,6 +169,11 @@ if [[ "${SKIP_PUB_GET}" != "1" ]]; then
   "${FLUTTER_CMD}" pub get
 fi
 
+if is_windows_host; then
+  export CL="/D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS ${CL:-}"
+  echo "==> MSVC CL flags: suppress experimental coroutine header deprecation"
+fi
+
 echo "==> flutter build windows --${BUILD_MODE}"
 CMD=("${FLUTTER_CMD}" build windows --"${BUILD_MODE}")
 if [[ -n "${BUILD_NAME}" ]]; then

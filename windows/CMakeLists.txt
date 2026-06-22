@@ -32,6 +32,14 @@ set(CMAKE_CXX_FLAGS_PROFILE "${CMAKE_CXX_FLAGS_RELEASE}")
 # Use Unicode for all projects.
 add_definitions(-DUNICODE -D_UNICODE)
 
+if(MSVC)
+  # MSVC 14.51+ turns the deprecated <experimental/coroutine> header used by
+  # generated C++/WinRT code in some Windows plugins into a hard error.
+  add_definitions(-D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)
+  string(APPEND CMAKE_CXX_FLAGS
+    " /D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS")
+endif()
+
 # Compilation settings that should be applied to most targets.
 #
 # Be cautious about adding new options here, as plugins use this function by
@@ -42,13 +50,6 @@ function(APPLY_STANDARD_SETTINGS TARGET)
   target_compile_options(${TARGET} PRIVATE /W4 /WX /wd"4100")
   target_compile_options(${TARGET} PRIVATE /EHsc)
   target_compile_definitions(${TARGET} PRIVATE "_HAS_EXCEPTIONS=0")
-  if(MSVC)
-    # MSVC 14.51+ turns the deprecated <experimental/coroutine> header used by
-    # some Windows plugins into a hard error. Keep plugin builds green until
-    # their generated C++/WinRT code migrates to the C++20 <coroutine> header.
-    target_compile_definitions(${TARGET} PRIVATE
-      _SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)
-  endif()
   target_compile_definitions(${TARGET} PRIVATE "$<$<CONFIG:Debug>:_DEBUG>")
 endfunction()
 
