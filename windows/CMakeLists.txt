@@ -42,6 +42,13 @@ function(APPLY_STANDARD_SETTINGS TARGET)
   target_compile_options(${TARGET} PRIVATE /W4 /WX /wd"4100")
   target_compile_options(${TARGET} PRIVATE /EHsc)
   target_compile_definitions(${TARGET} PRIVATE "_HAS_EXCEPTIONS=0")
+  if(MSVC)
+    # MSVC 14.51+ turns the deprecated <experimental/coroutine> header used by
+    # some Windows plugins into a hard error. Keep plugin builds green until
+    # their generated C++/WinRT code migrates to the C++20 <coroutine> header.
+    target_compile_definitions(${TARGET} PRIVATE
+      _SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)
+  endif()
   target_compile_definitions(${TARGET} PRIVATE "$<$<CONFIG:Debug>:_DEBUG>")
 endfunction()
 
@@ -56,14 +63,6 @@ add_subdirectory("runner")
 # Generated plugin build rules, which manage building the plugins and adding
 # them to the application.
 include(flutter/generated_plugins.cmake)
-
-if(TARGET permission_handler_windows_plugin)
-  # MSVC 14.51+ turns the deprecated <experimental/coroutine> header used by
-  # permission_handler_windows into a hard error. Keep the Windows build green
-  # until the plugin migrates to the C++20 <coroutine> header.
-  target_compile_definitions(permission_handler_windows_plugin PRIVATE
-    _SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)
-endif()
 
 
 # === Installation ===
