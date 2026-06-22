@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:pdfrx/pdfrx.dart';
 
+import 'reader_icons.dart';
+
 class ReaderPdfViewportSnapshot {
   const ReaderPdfViewportSnapshot({
     required this.pageIndex,
@@ -156,11 +158,7 @@ class _ReaderPdfViewState extends State<ReaderPdfView> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.picture_as_pdf_rounded,
-              size: 36,
-              color: theme.colorScheme.error,
-            ),
+            Icon(ReaderIcons.pdf, size: 36, color: theme.colorScheme.error),
             const SizedBox(height: 12),
             Text(
               'PDF 打开失败',

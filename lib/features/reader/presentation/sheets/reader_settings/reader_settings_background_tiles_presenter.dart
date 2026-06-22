@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../../app/theme/app_theme_palette.dart';
 import '../../../../../domain/entities/reader_settings.dart';
+import '../../reader_icons.dart';
 import '../../reader_page_support_models.dart';
 import 'reader_theme_background_settings_section.dart';
 
@@ -85,7 +86,7 @@ class ReaderSettingsBackgroundTilesPresenter {
           selected: isSelected,
           previewBytes: previewBytes,
           showLabel: true,
-          icon: previewBytes == null ? Icons.broken_image_outlined : null,
+          icon: previewBytes == null ? ReaderIcons.brokenImage : null,
           onTap: () => onSelectCustom(source),
         ),
       );

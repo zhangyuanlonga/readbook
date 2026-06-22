@@ -8,6 +8,7 @@ import '../../../../../app/widgets/foundation/app_button.dart';
 import '../../../../../app/widgets/import_export_task_overlay.dart';
 import '../../../../../domain/entities/reader_settings.dart';
 import '../../../application/reader_font_registry_service.dart';
+import '../../reader_icons.dart';
 
 typedef ReaderFontImportCallback =
     Future<ReaderCustomFontEntry?> Function(
@@ -190,7 +191,7 @@ class _ReaderFontPickerSheetContentState
             widget.settings.fontSource == ReaderFontSource.system &&
             widget.settings.systemFontPreset ==
                 ReaderSystemFontPreset.defaultSans,
-        icon: Icons.font_download_outlined,
+        icon: ReaderIcons.fontLibrary,
         onTap: () => _selectSystemFont(ReaderSystemFontPreset.defaultSans),
       ),
       _ReaderFontChoiceTile(
@@ -198,7 +199,7 @@ class _ReaderFontPickerSheetContentState
         selected:
             widget.settings.fontSource == ReaderFontSource.system &&
             widget.settings.systemFontPreset == ReaderSystemFontPreset.serif,
-        icon: Icons.format_shapes_rounded,
+        icon: ReaderIcons.fontSerif,
         onTap: () => _selectSystemFont(ReaderSystemFontPreset.serif),
       ),
       _ReaderFontChoiceTile(
@@ -207,14 +208,14 @@ class _ReaderFontPickerSheetContentState
             widget.settings.fontSource == ReaderFontSource.system &&
             widget.settings.systemFontPreset ==
                 ReaderSystemFontPreset.monospace,
-        icon: Icons.code_rounded,
+        icon: ReaderIcons.fontMonospace,
         onTap: () => _selectSystemFont(ReaderSystemFontPreset.monospace),
       ),
       ...widget.availableCustomFonts.map(
         (entry) => _ReaderFontChoiceTile(
           label: entry.displayName,
           selected: selectedCustomFont?.fontFamilyKey == entry.fontFamilyKey,
-          icon: Icons.font_download_outlined,
+          icon: ReaderIcons.fontLibrary,
           onTap: () => _selectCustomFont(entry),
         ),
       ),
@@ -222,7 +223,7 @@ class _ReaderFontPickerSheetContentState
         label: '自定义',
         selected: false,
         loading: _isImporting,
-        icon: Icons.upload_file_rounded,
+        icon: ReaderIcons.upload,
         onTap: _importCustomFont,
       ),
     ];
@@ -260,7 +261,7 @@ class _ReaderFontPickerSheetContentState
                 variant: AppButtonVariant.text,
                 size: AppButtonSize.compact,
                 onPressed: () => unawaited(widget.onManageFonts()),
-                icon: const Icon(Icons.open_in_new_rounded, size: 16),
+                icon: const Icon(ReaderIcons.fontManage, size: 16),
                 label: '去我的管理字体',
               ),
             ),

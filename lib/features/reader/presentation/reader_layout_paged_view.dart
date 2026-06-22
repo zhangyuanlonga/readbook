@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../application/reader_layout_render_model.dart';
 import '../application/reader_selection_runtime.dart';
 import '../domain/entities/reader_layout_models.dart';
+import 'reader_icons.dart';
 
 typedef ReaderLayoutImagePlaceholderBuilder =
     Widget Function(BuildContext context, ReaderLayoutRenderFragment fragment);
@@ -633,7 +634,7 @@ class _ReaderLayoutDefaultImagePlaceholder extends StatelessWidget {
       ),
       child: Center(
         child: Icon(
-          Icons.image_outlined,
+          ReaderIcons.image,
           size: 22,
           color: colorScheme.onSurfaceVariant,
         ),

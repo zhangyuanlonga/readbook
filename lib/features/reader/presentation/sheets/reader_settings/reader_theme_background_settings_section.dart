@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../../../../app/widgets/foundation/app_button.dart';
 import '../../../../../domain/entities/reader_settings.dart';
 import '../../../application/reader_content_session.dart';
+import '../../reader_icons.dart';
 import '../../widgets/reader_typography_slider_row.dart';
 import 'reader_page_turn_settings_section.dart';
 import 'reader_settings_components.dart';
@@ -196,8 +197,8 @@ class ReaderThemeBackgroundSettingsPanel extends StatelessWidget {
             ),
             icon: Icon(
               settings.themeMode == ReaderThemeMode.sepia
-                  ? Icons.visibility_rounded
-                  : Icons.visibility_outlined,
+                  ? ReaderIcons.eyeComfortOn
+                  : ReaderIcons.eyeComfortOff,
               size: _scale(16),
             ),
             label: '护眼',
@@ -214,7 +215,7 @@ class ReaderThemeBackgroundSettingsPanel extends StatelessWidget {
           Flexible(
             fit: FlexFit.loose,
             child: _InterfaceCapsuleEntry(
-              icon: Icons.format_size_rounded,
+              icon: ReaderIcons.font,
               title: '字体',
               compactScale: compactScale,
               onTap: () => onSelectSettingsGroup('typography'),
@@ -224,7 +225,7 @@ class ReaderThemeBackgroundSettingsPanel extends StatelessWidget {
           Flexible(
             fit: FlexFit.loose,
             child: _InterfaceCapsuleEntry(
-              icon: Icons.info_outline_rounded,
+              icon: ReaderIcons.infoLayout,
               title: '信息排版',
               compactScale: compactScale,
               onTap: () => onSelectSettingsGroup('info_layout'),
@@ -235,7 +236,7 @@ class ReaderThemeBackgroundSettingsPanel extends StatelessWidget {
         Flexible(
           fit: FlexFit.loose,
           child: _InterfaceCapsuleEntry(
-            icon: Icons.tune_rounded,
+            icon: ReaderIcons.settings,
             title: '更多',
             compactScale: compactScale,
             onTap: () => onSelectSettingsGroup('interaction'),
@@ -275,7 +276,7 @@ class ReaderThemeBackgroundSettingsPanel extends StatelessWidget {
             ReaderBackgroundImageTile(
               label: '无背景',
               selected: !hasBackgroundImage,
-              icon: Icons.hide_image_outlined,
+              icon: ReaderIcons.noBackground,
               scale: backgroundTileScale,
               onTap: onClearBackgroundImage,
             ),
@@ -301,7 +302,7 @@ class ReaderThemeBackgroundSettingsPanel extends StatelessWidget {
             ReaderBackgroundImageTile(
               label: '自定义',
               selected: false,
-              icon: Icons.upload_file_rounded,
+              icon: ReaderIcons.upload,
               showLabel: true,
               scale: backgroundTileScale,
               onTap: onApplyCustomBackgroundImage,
@@ -310,7 +311,7 @@ class ReaderThemeBackgroundSettingsPanel extends StatelessWidget {
             AppButton(
               variant: AppButtonVariant.secondary,
               onPressed: onOpenBackgroundManagement,
-              icon: const Icon(Icons.open_in_new_rounded, size: 16),
+              icon: const Icon(ReaderIcons.openExternal, size: 16),
               label: '去我的管理',
             ),
             if (hasBackgroundImage && onRemoveActiveBackground != null) ...[
@@ -389,7 +390,7 @@ class ReaderThemeBackgroundColorDot extends StatelessWidget {
           child:
               selected
                   ? Icon(
-                    Icons.check_rounded,
+                    ReaderIcons.selected,
                     size: 14 * scale,
                     color: iconColor,
                   )
@@ -642,7 +643,7 @@ class _BrightnessFollowChip extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
-                value ? Icons.brightness_auto_rounded : Icons.tune_rounded,
+                value ? ReaderIcons.followSystem : ReaderIcons.settings,
                 size: _scale(14),
                 color: value ? activeColor : colorScheme.onSurfaceVariant,
               ),
@@ -738,7 +739,7 @@ class _InterfaceCapsuleEntry extends StatelessWidget {
               ),
               SizedBox(width: _scale(2)),
               Icon(
-                Icons.chevron_right_rounded,
+                ReaderIcons.disclosure,
                 color: colorScheme.onSurfaceVariant,
                 size: _scale(16),
               ),

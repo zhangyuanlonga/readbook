@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../reader_icons.dart';
+
 import '../../../../../app/widgets/foundation/foundation.dart';
 
 class ReaderSettingsSectionCard extends StatelessWidget {
@@ -196,7 +198,7 @@ class ReaderSettingsGroupEntryCard extends StatelessWidget {
           ),
           SizedBox(width: _scale(6)),
           Icon(
-            Icons.chevron_right_rounded,
+            ReaderIcons.disclosure,
             color: colorScheme.onSurfaceVariant,
             size: _scale(18),
           ),

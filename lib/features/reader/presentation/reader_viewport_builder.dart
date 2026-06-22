@@ -12,6 +12,7 @@ import '../application/reader_content_session.dart';
 import '../application/reader_document_render_model.dart';
 import '../application/reader_surface_metrics.dart';
 import 'reader_body_region.dart';
+import 'reader_icons.dart';
 import 'reader_manga_view.dart';
 import 'reader_shell.dart';
 import 'reader_text_scroll_view.dart';
@@ -116,11 +117,7 @@ class ReaderViewportBuilder {
           stateCard: ReaderBodyRegionStateCard(
             title: '加载失败',
             message: state.errorText!,
-            icon: Icon(
-              Icons.warning_amber_rounded,
-              color: palette.metaColor,
-              size: 20,
-            ),
+            icon: Icon(ReaderIcons.warning, color: palette.metaColor, size: 20),
             action: Wrap(
               spacing: 10,
               runSpacing: 8,
@@ -140,7 +137,7 @@ class ReaderViewportBuilder {
                   AppButton(
                     variant: AppButtonVariant.secondary,
                     onPressed: onCopyDiagnostics,
-                    icon: const Icon(Icons.copy_rounded, size: 16),
+                    icon: const Icon(ReaderIcons.copy, size: 16),
                     label: '复制诊断信息',
                   ),
                 if (state.canSwitchSource)
@@ -148,7 +145,7 @@ class ReaderViewportBuilder {
                     variant: AppButtonVariant.secondary,
                     onPressed:
                         state.isSwitchSourceLoading ? null : onSwitchSource,
-                    icon: const Icon(Icons.swap_horiz_rounded),
+                    icon: const Icon(ReaderIcons.switchSource),
                     isLoading: state.isSwitchSourceLoading,
                     label: state.isSwitchSourceLoading ? '换源中...' : '切换书源',
                   ),
@@ -173,7 +170,7 @@ class ReaderViewportBuilder {
             title: '暂无正文',
             message: '当前章节没有可展示的内容。',
             icon: Icon(
-              Icons.article_outlined,
+              ReaderIcons.emptyContent,
               color: palette.metaColor,
               size: 20,
             ),

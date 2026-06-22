@@ -18,6 +18,7 @@ import '../application/reader_mode_model.dart';
 import '../application/reader_catalog_search_presentation.dart';
 import '../application/reader_catalog_search_service.dart';
 import '../application/reader_logical_position.dart';
+import 'reader_icons.dart';
 import 'reader_layout_context.dart';
 
 class ReaderCatalogSheetSelection {
@@ -214,7 +215,7 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
           hintText: hintText,
           textInputAction: TextInputAction.search,
           prefixIcon: Icon(
-            Icons.search_rounded,
+            ReaderIcons.search,
             size: 20,
             color: colorScheme.onSurfaceVariant,
           ),
@@ -265,8 +266,8 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
                 ListTile(
                   leading: Icon(
                     catalogDescending
-                        ? Icons.arrow_downward_rounded
-                        : Icons.arrow_upward_rounded,
+                        ? ReaderIcons.sortDescending
+                        : ReaderIcons.sortAscending,
                   ),
                   title: Text(catalogDescending ? '切换为正序' : '切换为倒序'),
                   onTap: () => Navigator.of(actionContext).pop('sort'),
@@ -338,7 +339,7 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
                       padding: const EdgeInsets.symmetric(horizontal: 24),
                       child: AppStateView(
                         kind: AppViewStateKind.filteredEmpty,
-                        icon: Icons.manage_search_rounded,
+                        icon: ReaderIcons.filteredEmpty,
                         title: '未找到匹配内容',
                         description:
                             supportsContentSearch
@@ -588,7 +589,7 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
                       ),
                   child: Center(
                     child: Icon(
-                      Icons.more_horiz_rounded,
+                      ReaderIcons.more,
                       size: 20,
                       color: colorScheme.onSurfaceVariant,
                     ),
@@ -741,7 +742,7 @@ Future<ReaderCatalogSheetResult?> showReaderCatalogSheet({
                 return buildCenteredMobileState(
                   child: AppStateView(
                     kind: AppViewStateKind.filteredEmpty,
-                    icon: Icons.manage_search_rounded,
+                    icon: ReaderIcons.filteredEmpty,
                     title: '未找到匹配内容',
                     description:
                         supportsContentSearch
@@ -1479,14 +1480,14 @@ class _ReaderCatalogChapterTile extends StatelessWidget {
               child:
                   isVolume
                       ? Icon(
-                        Icons.folder_outlined,
+                        ReaderIcons.catalogVolume,
                         size: 14,
                         color: colorScheme.onSecondaryContainer,
                       )
                       : Icon(
                         selected
-                            ? Icons.menu_book_rounded
-                            : Icons.article_outlined,
+                            ? ReaderIcons.currentChapter
+                            : ReaderIcons.catalogChapter,
                         size: 14,
                         color:
                             selected
@@ -1536,8 +1537,8 @@ class _ReaderCatalogChapterTile extends StatelessWidget {
             else
               Icon(
                 selected
-                    ? Icons.play_circle_fill_rounded
-                    : Icons.chevron_right_rounded,
+                    ? ReaderIcons.currentChapterIndicator
+                    : ReaderIcons.disclosure,
                 size: 16,
                 color:
                     selected
@@ -1640,10 +1641,10 @@ class _CatalogSearchEntryTile extends StatelessWidget {
               ),
               child: Icon(
                 entry.isContent
-                    ? Icons.article_outlined
+                    ? ReaderIcons.catalogChapter
                     : isVolumeEntry
-                    ? Icons.folder_outlined
-                    : Icons.list_alt_outlined,
+                    ? ReaderIcons.catalogVolume
+                    : ReaderIcons.catalog,
                 size: 14,
                 color: accentColor,
               ),
@@ -1792,7 +1793,7 @@ class _BookmarkGroupSection extends StatelessWidget {
                     IconButton(
                       tooltip: '删除',
                       visualDensity: VisualDensity.compact,
-                      icon: const Icon(Icons.delete_outline, size: 16),
+                      icon: const Icon(ReaderIcons.delete, size: 16),
                       onPressed: () => onDelete(bookmark),
                     ),
                   ],

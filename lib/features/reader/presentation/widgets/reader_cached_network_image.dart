@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/cache/cover_image_disk_cache.dart';
+import '../reader_icons.dart';
 
 typedef ReaderCachedImagePlaceholder =
     Widget Function(BuildContext context, String url);
@@ -98,7 +99,7 @@ class ReaderCachedNetworkImage extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     return ColoredBox(
       color: colorScheme.errorContainer.withValues(alpha: 0.16),
-      child: Icon(Icons.broken_image_outlined, color: colorScheme.error),
+      child: Icon(ReaderIcons.brokenImage, color: colorScheme.error),
     );
   }
 

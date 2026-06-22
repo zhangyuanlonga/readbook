@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../../app/widgets/foundation/app_button.dart';
 import '../../../../../domain/entities/reader_settings.dart';
 import '../../../application/reader_settings_groups.dart';
+import '../../reader_icons.dart';
 import '../../widgets/reader_typography_slider_row.dart';
 import 'reader_settings_components.dart';
 
@@ -88,7 +89,7 @@ class ReaderLayoutInfoSettingsPanel extends StatelessWidget {
                   ),
                 );
               },
-              icon: const Icon(Icons.restart_alt_rounded, size: 16),
+              icon: const Icon(ReaderIcons.reset, size: 16),
               label: '恢复默认',
             ),
           ],
@@ -183,7 +184,7 @@ class ReaderLayoutInfoSettingsPanel extends StatelessWidget {
                   ),
                 );
               },
-              icon: const Icon(Icons.restart_alt_rounded, size: 16),
+              icon: const Icon(ReaderIcons.reset, size: 16),
               label: '恢复默认',
             ),
           ],
@@ -270,7 +271,7 @@ class ReaderLayoutInfoSettingsPanel extends StatelessWidget {
                   ),
                 );
               },
-              icon: const Icon(Icons.restart_alt_rounded, size: 16),
+              icon: const Icon(ReaderIcons.reset, size: 16),
               label: '恢复默认',
             ),
           ],
@@ -356,7 +357,7 @@ class ReaderLayoutInfoSettingsPanel extends StatelessWidget {
                   ),
                 );
               },
-              icon: const Icon(Icons.restart_alt_rounded, size: 16),
+              icon: const Icon(ReaderIcons.reset, size: 16),
               label: '恢复默认',
             ),
           ],

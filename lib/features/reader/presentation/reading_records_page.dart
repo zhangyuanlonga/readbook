@@ -37,6 +37,7 @@ import '../application/reading_records_query_service.dart';
 import '../application/reading_records_stats_presenter.dart';
 import '../application/reading_record_service.dart';
 import '../application/reader_system_settings_service.dart';
+import 'reader_icons.dart';
 
 enum _HeatmapRangeMode { threeMonths, sixMonths, oneYear, all }
 
@@ -460,7 +461,7 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
                 IconButton(
                   tooltip: '上一个周期',
                   onPressed: () => _movePeriod(-1),
-                  icon: const Icon(Icons.chevron_left_rounded),
+                  icon: const Icon(ReaderIcons.previousPeriod),
                 ),
                 Expanded(
                   child: Text(
@@ -475,7 +476,7 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
                   tooltip: '下一个周期',
                   onPressed:
                       _canMovePeriodForward ? () => _movePeriod(1) : null,
-                  icon: const Icon(Icons.chevron_right_rounded),
+                  icon: const Icon(ReaderIcons.nextPeriod),
                 ),
                 AppButton(
                   variant: AppButtonVariant.text,
@@ -507,7 +508,7 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
               child: Row(
                 children: [
                   Icon(
-                    Icons.pause_circle_outline_rounded,
+                    ReaderIcons.recordsPaused,
                     size: 18,
                     color: colorScheme.onTertiaryContainer,
                   ),
@@ -665,7 +666,7 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
           const SizedBox(height: 12),
           if (_period == ReadingRecordsPeriod.all) ...[
             _buildHeatmapMenu<_HeatmapRangeMode>(
-              icon: Icons.date_range_rounded,
+              icon: ReaderIcons.recordsDateRange,
               label: _heatmapRangeLabel,
               actions: const [
                 AppMenuAction(
@@ -883,7 +884,7 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
                 IconButton(
                   tooltip: '查看日历',
                   onPressed: () => _openDistributionCalendarSheet(calendar),
-                  icon: const Icon(Icons.calendar_month_rounded),
+                  icon: const Icon(ReaderIcons.recordsCalendar),
                 ),
               ],
             ),
@@ -1612,17 +1613,17 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
               children: [
                 _buildCalendarDetailChip(
                   context,
-                  icon: Icons.auto_stories_rounded,
+                  icon: ReaderIcons.recordsReadDuration,
                   text: '${detail.workCount} 本',
                 ),
                 _buildCalendarDetailChip(
                   context,
-                  icon: Icons.schedule_rounded,
+                  icon: ReaderIcons.recordsSession,
                   text: '${detail.sessionCount} 段',
                 ),
                 _buildCalendarDetailChip(
                   context,
-                  icon: Icons.text_fields_rounded,
+                  icon: ReaderIcons.recordsChars,
                   text: '${_formatReadChars(detail.readChars)} 字',
                 ),
               ],
@@ -2020,7 +2021,7 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
             ),
             const SizedBox(width: 4),
             Icon(
-              Icons.keyboard_arrow_down_rounded,
+              ReaderIcons.dropdown,
               size: 18,
               color: colorScheme.onSurfaceVariant,
             ),
@@ -2226,7 +2227,7 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
                     SizedBox(
                       width: tileWidth,
                       child: _buildMetricTile(
-                        icon: Icons.auto_stories_rounded,
+                        icon: ReaderIcons.recordsReadDuration,
                         label: '阅读时长',
                         value: _formatDuration(summary.totalReadMillis),
                       ),
@@ -2234,7 +2235,7 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
                     SizedBox(
                       width: tileWidth,
                       child: _buildMetricTile(
-                        icon: Icons.calendar_month_rounded,
+                        icon: ReaderIcons.recordsReadDays,
                         label: '阅读天数',
                         value: '${summary.totalDays} 天',
                       ),
@@ -2242,7 +2243,7 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
                     SizedBox(
                       width: tileWidth,
                       child: _buildMetricTile(
-                        icon: Icons.text_fields_rounded,
+                        icon: ReaderIcons.recordsChars,
                         label: '阅读字数',
                         value: _formatReadChars(summary.totalReadChars),
                       ),
@@ -2250,7 +2251,7 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
                     SizedBox(
                       width: tileWidth,
                       child: _buildMetricTile(
-                        icon: Icons.speed_rounded,
+                        icon: ReaderIcons.recordsSpeed,
                         label: '阅读速度',
                         value: _formatReadSpeed(summary.readCharsPerMinute),
                       ),
@@ -2258,7 +2259,7 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
                     SizedBox(
                       width: tileWidth,
                       child: _buildMetricTile(
-                        icon: Icons.import_contacts_rounded,
+                        icon: ReaderIcons.recordsReadingBooks,
                         label: '在读书籍',
                         value: '${summary.readingBookCount} 本',
                       ),
@@ -2266,7 +2267,7 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
                     SizedBox(
                       width: tileWidth,
                       child: _buildMetricTile(
-                        icon: Icons.task_alt_rounded,
+                        icon: ReaderIcons.recordsCompletedBooks,
                         label: '读完书籍',
                         value: '${summary.completedBookCount} 本',
                       ),
@@ -2274,7 +2275,7 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
                     SizedBox(
                       width: tileWidth,
                       child: _buildMetricTile(
-                        icon: Icons.menu_book_rounded,
+                        icon: ReaderIcons.recordsTotalBooks,
                         label: '累计读过',
                         value: '${summary.totalBooks} 本',
                       ),
@@ -2282,7 +2283,7 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
                     SizedBox(
                       width: tileWidth,
                       child: _buildMetricTile(
-                        icon: Icons.bookmarks_outlined,
+                        icon: ReaderIcons.recordsChapters,
                         label: '触达章节',
                         value: '${summary.chapterCount} 章',
                       ),
@@ -2388,7 +2389,7 @@ class _ReadingRecordsPageState extends ConsumerState<ReadingRecordsPage> {
 
   Widget _buildEmptyCard(String message) {
     return AppEmptyStateCard(
-      icon: Icons.insights_rounded,
+      icon: ReaderIcons.recordsInsights,
       title: '暂无统计数据',
       description: message,
       compact: true,

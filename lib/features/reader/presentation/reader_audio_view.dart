@@ -7,6 +7,7 @@ import '../../../app/widgets/foundation/foundation.dart';
 import '../application/audio_reading_mode.dart';
 import '../application/reader_audio_controller.dart';
 import '../application/reader_content_session.dart';
+import 'reader_icons.dart';
 
 class ReaderAudioViewModel {
   const ReaderAudioViewModel({
@@ -217,7 +218,7 @@ class _ReaderAudioViewState extends State<ReaderAudioView> {
             ),
             child: Center(
               child: Icon(
-                Icons.graphic_eq_rounded,
+                ReaderIcons.audio,
                 color: theme.colorScheme.onPrimaryContainer,
                 size: 26,
               ),
@@ -331,7 +332,7 @@ class _ReaderAudioViewState extends State<ReaderAudioView> {
             _buildRoundAction(
               theme: theme,
               tooltip: '上一章',
-              icon: Icons.skip_previous_rounded,
+              icon: ReaderIcons.previousChapter,
               size: smallSize,
               onPressed:
                   widget.model.canGoPreviousChapter
@@ -343,7 +344,7 @@ class _ReaderAudioViewState extends State<ReaderAudioView> {
             _buildRoundAction(
               theme: theme,
               tooltip: '快退 ${widget.model.seekStepSeconds} 秒',
-              icon: Icons.replay_10_rounded,
+              icon: ReaderIcons.audioRewind,
               size: smallSize,
               onPressed:
                   state.isReady
@@ -355,10 +356,7 @@ class _ReaderAudioViewState extends State<ReaderAudioView> {
             _buildRoundAction(
               theme: theme,
               tooltip: playback.isPlaying ? '暂停' : '播放',
-              icon:
-                  playback.isPlaying
-                      ? Icons.pause_rounded
-                      : Icons.play_arrow_rounded,
+              icon: playback.isPlaying ? ReaderIcons.pause : ReaderIcons.play,
               size: playSize,
               iconSize: isCompact ? 34 : 38,
               emphasized: true,
@@ -367,7 +365,7 @@ class _ReaderAudioViewState extends State<ReaderAudioView> {
             _buildRoundAction(
               theme: theme,
               tooltip: '快进 ${widget.model.seekStepSeconds} 秒',
-              icon: Icons.forward_30_rounded,
+              icon: ReaderIcons.audioForward,
               size: smallSize,
               onPressed:
                   state.isReady
@@ -379,7 +377,7 @@ class _ReaderAudioViewState extends State<ReaderAudioView> {
             _buildRoundAction(
               theme: theme,
               tooltip: '下一章',
-              icon: Icons.skip_next_rounded,
+              icon: ReaderIcons.nextChapter,
               size: smallSize,
               onPressed:
                   widget.model.canGoNextChapter
@@ -514,7 +512,7 @@ class _ReaderAudioViewState extends State<ReaderAudioView> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Icon(
-                  Icons.error_outline_rounded,
+                  ReaderIcons.audioError,
                   color: theme.colorScheme.error,
                   size: 20,
                 ),
@@ -544,7 +542,7 @@ class _ReaderAudioViewState extends State<ReaderAudioView> {
                 IconButton.filledTonal(
                   onPressed: _controller.retry,
                   tooltip: '重试',
-                  icon: const Icon(Icons.refresh_rounded),
+                  icon: const Icon(ReaderIcons.retry),
                   style: IconButton.styleFrom(
                     fixedSize: const Size.square(36),
                     padding: EdgeInsets.zero,
@@ -614,7 +612,7 @@ class _ReaderAudioViewState extends State<ReaderAudioView> {
               AppButton(
                 variant: AppButtonVariant.secondary,
                 onPressed: state.isReady ? _controller.restart : null,
-                icon: const Icon(Icons.replay_rounded),
+                icon: const Icon(ReaderIcons.audioRestart),
                 label: '重播',
               ),
               AppButton(
@@ -623,7 +621,7 @@ class _ReaderAudioViewState extends State<ReaderAudioView> {
                     audioUrl == null
                         ? null
                         : () => _openExternal(context, audioUrl),
-                icon: const Icon(Icons.open_in_new_rounded),
+                icon: const Icon(ReaderIcons.openExternal),
                 label: '外部打开',
               ),
               AppButton(
@@ -632,7 +630,7 @@ class _ReaderAudioViewState extends State<ReaderAudioView> {
                     audioUrl == null
                         ? null
                         : () => _copyToClipboard(context, audioUrl),
-                icon: const Icon(Icons.copy_rounded),
+                icon: const Icon(ReaderIcons.copy),
                 label: '复制地址',
               ),
             ],

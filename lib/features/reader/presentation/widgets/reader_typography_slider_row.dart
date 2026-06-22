@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../reader_icons.dart';
+
 typedef ReaderPreviewAwareSliderBuilder =
     Widget Function({
       required double min,
@@ -134,7 +136,7 @@ class _ReaderTypographySliderRowState extends State<ReaderTypographySliderRow> {
               minHeight: _scale(28),
             ),
             onPressed: () => nudge(-widget.step),
-            icon: Icon(Icons.remove_rounded, size: _scale(16)),
+            icon: Icon(ReaderIcons.decrease, size: _scale(16)),
           ),
           Expanded(
             child: widget.sliderBuilder(
@@ -153,7 +155,7 @@ class _ReaderTypographySliderRowState extends State<ReaderTypographySliderRow> {
               minHeight: _scale(28),
             ),
             onPressed: () => nudge(widget.step),
-            icon: Icon(Icons.add_rounded, size: _scale(16)),
+            icon: Icon(ReaderIcons.increase, size: _scale(16)),
           ),
           if (widget.showValueLabel && !stacked)
             SizedBox(

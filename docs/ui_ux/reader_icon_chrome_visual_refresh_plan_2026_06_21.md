@@ -24,7 +24,7 @@
   - 禁用：默认颜色降低透明度
 - 所有新增或改造的阅读器图标优先从 `ReaderIcons` 取，不再直接散写 `Icons.xxx`。
 
-## 第一批已纳入统一出口
+## 已纳入统一出口
 
 - [x] 顶部 chrome：返回、目录、界面设置、书籍详情、更多
 - [x] 底部 chrome：目录、自动阅读、日夜模式、界面设置
@@ -33,6 +33,11 @@
 - [x] 选择/批注工具栏：复制、灵感、笔记、高亮、加粗、下划线、波浪线、清除、删除
 - [x] 字体与翻页设置入口：字体、管理字体、字重、点击分区、快捷开关
 - [x] 章节缓存弹窗：章节数、缓存数、完成、失败、进度、停止
+- [x] 第二批：阅读器目录弹窗图标，包括搜索、排序、文件夹、章节、当前章节、更多、删除。
+- [x] 第三批：阅读器设置入口图标，包括背景、布局、字体、字体管理、翻页/互动、主题背景与通用返回/展开/重置。
+- [x] 第四批：阅读错误页、PDF/图片/音频特殊模式、网络图片占位、异常操作入口。
+- [x] 第五批：阅读记录页面图标，包括周期切换、日历、热力图筛选、统计指标、空状态。
+- [x] 第六批：剩余阅读域散点图标收口，包括通用滑杆加减、颜色输入标签、界面入口、chrome 返回、电池状态。
 
 ## 替换表
 
@@ -52,14 +57,27 @@
 | 换源 | `ReaderIcons.switchSource` | `swap_horiz_rounded` | 保持原语义 |
 | 加入书架 | `ReaderIcons.bookshelfAdd` | `bookmark_add_outlined` | 轻量入口 |
 | 已加入书架 | `ReaderIcons.bookshelfAdded` | `bookmark_added` | 当前 Material 无更稳妥 outlined 替代 |
+| 搜索 | `ReaderIcons.search` | `search_rounded` | 目录搜索统一入口 |
+| 空搜索 | `ReaderIcons.filteredEmpty` | `manage_search_rounded` | 目录搜索空状态 |
+| 分卷 | `ReaderIcons.catalogVolume` | `folder_outlined` | 目录分卷 |
+| 章节 | `ReaderIcons.catalogChapter` | `article_outlined` | 普通章节和搜索结果 |
+| 当前章节 | `ReaderIcons.currentChapter` | `menu_book_rounded` | 目录当前章节 |
+| 展开/进入 | `ReaderIcons.disclosure` | `chevron_right_rounded` | 设置、目录通用进入符号 |
+| PDF | `ReaderIcons.pdf` | `picture_as_pdf_rounded` | PDF 模式异常占位 |
+| 音频 | `ReaderIcons.audio` | `graphic_eq_rounded` | 音频阅读模式头部 |
+| 图片占位 | `ReaderIcons.image` / `ReaderIcons.brokenImage` | `image_outlined` / `broken_image_outlined` | 正文图片和网络图片占位 |
+| 加载失败 | `ReaderIcons.warning` | `warning_amber_rounded` | 阅读正文错误页 |
+| 阅读记录周期 | `ReaderIcons.previousPeriod` / `ReaderIcons.nextPeriod` | `chevron_left_rounded` / `chevron_right_rounded` | 阅读记录周期切换 |
+| 阅读记录日期 | `ReaderIcons.recordsDateRange` / `ReaderIcons.recordsCalendar` | `date_range_rounded` / `calendar_month_rounded` | 热力图筛选和日历 |
+| 阅读记录指标 | `ReaderIcons.recordsReadDuration` / `ReaderIcons.recordsChars` / `ReaderIcons.recordsSpeed` 等 | Material 统计类图标 | 统计卡片统一语义 |
+| 电池状态 | `ReaderIcons.battery*` | Material battery 系列 | chrome 信息栏动态电量 |
+| 通用微调 | `ReaderIcons.decrease` / `ReaderIcons.increase` | `remove_rounded` / `add_rounded` | 设置滑杆加减 |
+| 颜色输入 | `ReaderIcons.tag` | `tag_rounded` | 颜色 hex 输入前缀 |
 
 ## 后续阶段任务
 
-- [ ] 第二批：阅读器目录弹窗图标统一，包括搜索、排序、文件夹、章节、当前播放/当前章节、更多、删除。
-- [ ] 第三批：阅读器设置所有 section 头部图标统一，包括背景、布局、音频、漫画、自动阅读、主题背景。
-- [ ] 第四批：阅读错误页、PDF/图片/音频特殊模式、网络图片占位、异常操作入口统一。
-- [ ] 第五批：阅读记录页面图标统一。阅读记录属于阅读域但不是阅读器 chrome，可放后处理。
-- [ ] 第六批：若确认引入 lucide 或 Material Symbols，先替换 `ReaderIcons`，再少量修正尺寸与语义不匹配处。
+- [x] 第五批：阅读记录页面图标统一。阅读记录属于阅读域但不是阅读器 chrome，可放后处理。
+- [x] 第六批：暂不新增 lucide / Material Symbols 依赖，先完成 `ReaderIcons` 统一出口收口；后续若确认换图标包，优先替换 `ReaderIcons`。
 
 ## 验收标准
 

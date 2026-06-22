@@ -260,7 +260,7 @@ class _FontSizeStepper extends StatelessWidget {
                 final next = (settings.fontSize - 1).clamp(5, 50).toDouble();
                 onChanged(settings.copyWith(fontSize: next));
               },
-              icon: Icon(Icons.remove_rounded, size: _scale(15)),
+              icon: Icon(ReaderIcons.decrease, size: _scale(15)),
             ),
             Expanded(
               child: Center(
@@ -289,7 +289,7 @@ class _FontSizeStepper extends StatelessWidget {
                 final next = (settings.fontSize + 1).clamp(5, 50).toDouble();
                 onChanged(settings.copyWith(fontSize: next));
               },
-              icon: Icon(Icons.add_rounded, size: _scale(15)),
+              icon: Icon(ReaderIcons.increase, size: _scale(15)),
             ),
             SizedBox(width: _scale(6)),
           ],
@@ -486,7 +486,7 @@ class _ColorSettingRow extends StatelessWidget {
                   AppButton(
                     variant: AppButtonVariant.tonal,
                     onPressed: () => unawaited(onPick()),
-                    icon: const Icon(Icons.colorize_rounded, size: 16),
+                    icon: const Icon(ReaderIcons.colorPicker, size: 16),
                     label: '颜色',
                   ),
                   if (currentColorValue != null) ...[
@@ -627,7 +627,7 @@ class _ReaderSettingsSecondaryCapsule extends StatelessWidget {
                 ),
                 SizedBox(width: _scale(2)),
                 Icon(
-                  Icons.chevron_right_rounded,
+                  ReaderIcons.disclosure,
                   size: _scale(14),
                   color: colorScheme.onSurfaceVariant,
                 ),

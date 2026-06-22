@@ -653,7 +653,7 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                               ]
                               : <Widget>[
                                 buildSettingsGroupEntryCard(
-                                  icon: Icons.toggle_on_rounded,
+                                  icon: ReaderIcons.quickToggles,
                                   title: '阅读行为',
                                   subtitle: '对齐、按键行为等常用开关',
                                   onTap:
@@ -663,7 +663,7 @@ extension _ReaderPageSettingsSheetExtension on _ReaderPageState {
                                 ),
                                 const SizedBox(height: 10),
                                 buildSettingsGroupEntryCard(
-                                  icon: Icons.auto_awesome_motion_outlined,
+                                  icon: ReaderIcons.readingMotion,
                                   title: isMangaChapter ? '漫画阅读' : '自动阅读',
                                   subtitle:
                                       isMangaChapter

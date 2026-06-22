@@ -3866,7 +3866,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                       },
                       decoration: InputDecoration(
                         isDense: true,
-                        prefixIcon: const Icon(Icons.tag_rounded, size: 18),
+                        prefixIcon: const Icon(ReaderIcons.tag, size: 18),
                         hintText: '#RRGGBB / #AARRGGBB',
                         filled: true,
                         fillColor: colorScheme.surface.withValues(alpha: 0.72),
@@ -4181,7 +4181,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       _chromeAutoReadStatus,
     );
     const interfaceAction = ReaderChromeActionData(
-      icon: Icons.palette_outlined,
+      icon: ReaderIcons.appearance,
       label: '界面',
       tooltip: '界面设置',
     );

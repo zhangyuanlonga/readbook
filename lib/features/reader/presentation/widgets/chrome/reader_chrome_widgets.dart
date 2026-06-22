@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../../domain/entities/reader_settings.dart';
 import '../../../application/reader_layout_resolver.dart';
+import '../../reader_icons.dart';
 import '../../reader_shell.dart';
 
 /// Public palette for reader chrome widgets.
@@ -210,7 +211,7 @@ class ReaderPinnedChapterHeader extends StatelessWidget {
         padding: const EdgeInsets.all(8),
         splashFactory: InkRipple.splashFactory,
       ),
-      icon: const Icon(Icons.chevron_left_rounded, size: 22),
+      icon: const Icon(ReaderIcons.back, size: 22),
     );
   }
 }
@@ -527,28 +528,28 @@ class _ReaderInfoBarBattery extends StatelessWidget {
 
   IconData _batteryIcon() {
     if (readFailed || level == null) {
-      return Icons.battery_unknown_rounded;
+      return ReaderIcons.batteryUnknown;
     }
     final safeLevel = level!.clamp(0, 100);
     if (safeLevel >= 96) {
-      return Icons.battery_full_rounded;
+      return ReaderIcons.batteryFull;
     }
     if (safeLevel >= 80) {
-      return Icons.battery_6_bar_rounded;
+      return ReaderIcons.batterySixBars;
     }
     if (safeLevel >= 60) {
-      return Icons.battery_5_bar_rounded;
+      return ReaderIcons.batteryFiveBars;
     }
     if (safeLevel >= 40) {
-      return Icons.battery_4_bar_rounded;
+      return ReaderIcons.batteryFourBars;
     }
     if (safeLevel >= 25) {
-      return Icons.battery_3_bar_rounded;
+      return ReaderIcons.batteryThreeBars;
     }
     if (safeLevel >= 10) {
-      return Icons.battery_2_bar_rounded;
+      return ReaderIcons.batteryTwoBars;
     }
-    return Icons.battery_alert_rounded;
+    return ReaderIcons.batteryAlert;
   }
 }
 

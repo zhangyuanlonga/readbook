@@ -6,6 +6,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../../../../../app/layout/app_adaptive.dart';
+import '../../reader_icons.dart';
 
 class ReaderSettingsSheetFrame extends StatelessWidget {
   const ReaderSettingsSheetFrame({
@@ -59,7 +60,7 @@ class ReaderSettingsSheetFrame extends StatelessWidget {
                       child: IconButton(
                         visualDensity: VisualDensity.compact,
                         onPressed: onBack,
-                        icon: const Icon(Icons.arrow_back_rounded),
+                        icon: const Icon(ReaderIcons.back),
                       ),
                     ),
                   Center(
