@@ -72,6 +72,15 @@ if(MSVC)
     if(TARGET ${plugin}_plugin)
       target_compile_definitions(${plugin}_plugin PRIVATE
         "_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS")
+      if(MSVC_VERSION GREATER_EQUAL 1950)
+        get_target_property(plugin_compile_options ${plugin}_plugin
+          COMPILE_OPTIONS)
+        if(plugin_compile_options)
+          list(REMOVE_ITEM plugin_compile_options "/await")
+          set_target_properties(${plugin}_plugin PROPERTIES
+            COMPILE_OPTIONS "${plugin_compile_options}")
+        endif()
+      endif()
     endif()
   endforeach(plugin)
 endif()
