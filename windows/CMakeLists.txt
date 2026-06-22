@@ -70,8 +70,24 @@ if(MSVC)
   # some plugin CMake files do not reliably inherit directory-level definitions.
   foreach(plugin ${FLUTTER_PLUGIN_LIST})
     if(TARGET ${plugin}_plugin)
-      target_compile_definitions(${plugin}_plugin PRIVATE
+      set(plugin_target ${plugin}_plugin)
+      get_target_property(aliased_plugin_target ${plugin_target}
+        ALIASED_TARGET)
+      if(aliased_plugin_target)
+        set(plugin_target ${aliased_plugin_target})
+      endif()
+
+      target_compile_definitions(${plugin_target} PRIVATE
         "_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS")
+      if(MSVC_VERSION GREATER_EQUAL 1950)
+        get_target_property(plugin_compile_options ${plugin_target}
+          COMPILE_OPTIONS)
+        if(plugin_compile_options)
+          list(REMOVE_ITEM plugin_compile_options "/await")
+          set_target_properties(${plugin_target} PROPERTIES
+            COMPILE_OPTIONS "${plugin_compile_options}")
+        endif()
+      endif()
     endif()
   endforeach(plugin)
 endif()
