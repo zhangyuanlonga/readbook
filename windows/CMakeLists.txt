@@ -65,6 +65,17 @@ add_subdirectory("runner")
 # them to the application.
 include(flutter/generated_plugins.cmake)
 
+if(MSVC)
+  # Apply the suppression directly to generated plugin targets as well, because
+  # some plugin CMake files do not reliably inherit directory-level definitions.
+  foreach(plugin ${FLUTTER_PLUGIN_LIST})
+    if(TARGET ${plugin}_plugin)
+      target_compile_definitions(${plugin}_plugin PRIVATE
+        "_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS")
+    endif()
+  endforeach(plugin)
+endif()
+
 
 # === Installation ===
 # Support files are copied into place next to the executable, so that it can
