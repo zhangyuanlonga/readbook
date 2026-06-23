@@ -4401,7 +4401,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     final route =
         presentation.allowWebLogin
-            ? sourceWebViewLoginLocation(
+            ? sourceLoginLocation(
               sourceId: sourceId,
               sourceName: _bookTitle.isEmpty ? null : _bookTitle,
             )

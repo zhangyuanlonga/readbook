@@ -3,7 +3,16 @@ import 'package:flutter/material.dart';
 import '../../../../app/widgets/foundation/foundation.dart';
 import '../../application/private_book_source_service.dart';
 
-enum PrivateBookSourceMoreAction { detail, test, submit, edit, delete }
+enum PrivateBookSourceMoreAction {
+  detail,
+  login,
+  session,
+  clearSession,
+  test,
+  submit,
+  edit,
+  delete,
+}
 
 class PrivateBookSourceMoreMenuRules {
   const PrivateBookSourceMoreMenuRules._();
@@ -22,6 +31,9 @@ class PrivateBookSourceMoreMenuButton extends StatelessWidget {
     super.key,
     required this.item,
     required this.onDetail,
+    required this.onLogin,
+    required this.onSession,
+    required this.onClearSession,
     required this.onTest,
     required this.onSubmit,
     required this.onEdit,
@@ -30,6 +42,9 @@ class PrivateBookSourceMoreMenuButton extends StatelessWidget {
 
   final PrivateBookSourceItem item;
   final VoidCallback onDetail;
+  final VoidCallback onLogin;
+  final VoidCallback onSession;
+  final VoidCallback onClearSession;
   final VoidCallback onTest;
   final VoidCallback onSubmit;
   final VoidCallback onEdit;
@@ -48,6 +63,12 @@ class PrivateBookSourceMoreMenuButton extends StatelessWidget {
           switch (action) {
             case PrivateBookSourceMoreAction.detail:
               onDetail();
+            case PrivateBookSourceMoreAction.login:
+              onLogin();
+            case PrivateBookSourceMoreAction.session:
+              onSession();
+            case PrivateBookSourceMoreAction.clearSession:
+              onClearSession();
             case PrivateBookSourceMoreAction.test:
               onTest();
             case PrivateBookSourceMoreAction.submit:
@@ -63,6 +84,21 @@ class PrivateBookSourceMoreMenuButton extends StatelessWidget {
             value: PrivateBookSourceMoreAction.detail,
             label: '详情',
             icon: Icons.info_outline_rounded,
+          ),
+          const AppMenuAction(
+            value: PrivateBookSourceMoreAction.login,
+            label: '登录',
+            icon: Icons.login_rounded,
+          ),
+          const AppMenuAction(
+            value: PrivateBookSourceMoreAction.session,
+            label: '登录状态',
+            icon: Icons.verified_user_outlined,
+          ),
+          const AppMenuAction(
+            value: PrivateBookSourceMoreAction.clearSession,
+            label: '清除登录态',
+            icon: Icons.delete_sweep_outlined,
           ),
           const AppMenuAction(
             value: PrivateBookSourceMoreAction.test,

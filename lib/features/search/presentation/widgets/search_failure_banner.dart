@@ -1,13 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../app/widgets/adaptive_bottom_sheet.dart';
+import '../../../../app/widgets/foundation/app_button.dart';
+import '../../../source/routes.dart';
 import '../../application/search_service.dart';
 import '../online_source_error_presentation.dart';
 
 class SearchFailureBanner extends StatelessWidget {
-  const SearchFailureBanner({super.key, required this.report});
+  const SearchFailureBanner({
+    super.key,
+    required this.report,
+    this.onLoginCompleted,
+  });
 
   final SearchExecutionReport report;
+  final ValueChanged<SourceSearchFailure>? onLoginCompleted;
   static const OnlineSourceErrorPresentationAdapter _errorAdapter =
       OnlineSourceErrorPresentationAdapter();
 
@@ -105,6 +113,9 @@ class SearchFailureBanner extends StatelessWidget {
                       itemBuilder: (context, index) {
                         final failure = report.failures[index];
                         final presentation = _errorAdapter.fromFailure(failure);
+                        final canLogin =
+                            failure.gatewayFailure?.isLoginRequired == true &&
+                            failure.sourceId.trim().isNotEmpty;
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 10),
                           child: Column(
@@ -168,6 +179,23 @@ class SearchFailureBanner extends StatelessWidget {
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
+                              if (canLogin) ...[
+                                const SizedBox(height: 8),
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: AppButton(
+                                    size: AppButtonSize.compact,
+                                    variant: AppButtonVariant.tonal,
+                                    icon: const Icon(Icons.login_rounded),
+                                    label: '登录后重试',
+                                    onPressed:
+                                        () => _openLoginAndRetry(
+                                          context,
+                                          failure,
+                                        ),
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                         );
@@ -181,5 +209,22 @@ class SearchFailureBanner extends StatelessWidget {
         );
       },
     );
+  }
+
+  Future<void> _openLoginAndRetry(
+    BuildContext context,
+    SourceSearchFailure failure,
+  ) async {
+    final result = await context.push<Object?>(
+      sourceLoginLocation(
+        sourceId: failure.sourceId,
+        sourceName: failure.sourceName,
+      ),
+    );
+    if (!context.mounted || result != true) {
+      return;
+    }
+    Navigator.of(context).maybePop();
+    onLoginCompleted?.call(failure);
   }
 }

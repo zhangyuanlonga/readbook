@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/errors/error_stage.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_config.dart';
+import '../../../domain/entities/source_login_capability.dart';
 import '../../search/application/server_gateway_identity.dart';
 
 final sourceRuntimeSessionServiceProvider =
@@ -131,7 +132,16 @@ class SourceLoginTask {
     required this.sourceId,
     required this.sourceName,
     required this.mode,
+    required this.requiredReturns,
+    required this.retrySupported,
+    required this.enabledCookieJar,
+    required this.capability,
     this.loginUrl,
+    this.loginUi,
+    this.loginUiRaw,
+    this.loginUiKind,
+    this.loginCheckJs,
+    this.sessionPolicy,
     this.request,
   });
 
@@ -139,17 +149,54 @@ class SourceLoginTask {
   final String sourceId;
   final String sourceName;
   final String mode;
+  final List<String> requiredReturns;
+  final bool retrySupported;
+  final bool enabledCookieJar;
+  final SourceLoginCapability capability;
   final String? loginUrl;
+  final Object? loginUi;
+  final String? loginUiRaw;
+  final String? loginUiKind;
+  final String? loginCheckJs;
+  final String? sessionPolicy;
   final SourceLoginRequestSnapshot? request;
+
+  bool get hasWebViewLogin =>
+      (loginUrl ?? '').trim().isNotEmpty ||
+      (request?.url.trim().isNotEmpty ?? false);
+
+  bool get hasLoginUi =>
+      loginUi != null || (loginUiRaw ?? '').trim().isNotEmpty;
 
   factory SourceLoginTask.fromJson(Object? value) {
     final map = _asMap(value);
+    final capability = SourceLoginCapability.fromMap(map).merge(
+      SourceLoginCapability(
+        hasLoginUrl:
+            _normalize(map['loginUrl']?.toString()) != null ||
+            _normalize(_asMap(map['request'])['url']?.toString()) != null,
+        hasLoginUi:
+            map['loginUi'] != null ||
+            _normalize(map['loginUiRaw']?.toString()) != null,
+        hasLoginCheckJs: _normalize(map['loginCheckJs']?.toString()) != null,
+        enabledCookieJar: map['enabledCookieJar'] == true,
+      ),
+    );
     return SourceLoginTask(
       taskId: _stringOrDefault(map['taskId'], ''),
       sourceId: _stringOrDefault(map['sourceId'], ''),
       sourceName: _stringOrDefault(map['sourceName'], '书源登录'),
       mode: _stringOrDefault(map['mode'], 'webView'),
+      requiredReturns: _stringList(map['requiredReturns']),
+      retrySupported: map['retrySupported'] != false,
+      enabledCookieJar: map['enabledCookieJar'] == true,
+      capability: capability,
       loginUrl: _normalize(map['loginUrl']?.toString()),
+      loginUi: map['loginUi'],
+      loginUiRaw: _normalize(map['loginUiRaw']?.toString()),
+      loginUiKind: _normalize(map['loginUiKind']?.toString()),
+      loginCheckJs: _normalize(map['loginCheckJs']?.toString()),
+      sessionPolicy: _normalize(map['sessionPolicy']?.toString()),
       request:
           map['request'] == null
               ? null
@@ -206,6 +253,9 @@ class SourceRuntimeSessionSnapshot {
   final String sessionPolicy;
   final int? updatedAt;
   final int ttlSeconds;
+
+  bool get hasAnyCredential =>
+      hasCookie || hasHeaders || hasLoginInfo || hasSourceVariable;
 
   factory SourceRuntimeSessionSnapshot.fromJson(Object? value) {
     if (value is! Map) {
@@ -285,4 +335,14 @@ int? _optionalInt(Object? value) {
     return value.toInt();
   }
   return int.tryParse(value?.toString() ?? '');
+}
+
+List<String> _stringList(Object? value) {
+  if (value is! List) {
+    return const <String>[];
+  }
+  return value
+      .map((item) => item?.toString().trim() ?? '')
+      .where((item) => item.isNotEmpty)
+      .toList(growable: false);
 }

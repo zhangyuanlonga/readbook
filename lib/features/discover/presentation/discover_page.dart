@@ -14,12 +14,17 @@ import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
 import '../../../app/widgets/app_empty_state_card.dart';
+import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/foundation/app_button.dart';
+import '../../../app/widgets/foundation/app_feedback.dart';
 import '../../../app/widgets/foundation/app_progress.dart';
 import '../../../app/widgets/foundation/app_refresh_indicator.dart';
 import '../../../app/widgets/foundation/app_skeleton.dart';
 import '../../../core/network/api_client.dart';
 import '../../mine/application/advanced_theme_provider.dart';
+import '../../source/application/source_runtime_session_service.dart';
+import '../../source/presentation/source_session_status_sheet.dart';
+import '../../source/routes.dart';
 import '../application/discover_source_provider.dart';
 import '../domain/discover_source_summary.dart';
 
@@ -251,6 +256,11 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
                         category: category,
                       );
                     },
+                    onLogin: (source) => _openSourceLogin(source),
+                    onSession:
+                        (source) => unawaited(_openSourceSessionStatus(source)),
+                    onClearSession:
+                        (source) => unawaited(_clearSourceSession(source)),
                   ),
                 );
               },
@@ -543,6 +553,122 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
     );
   }
 
+  Future<void> _openSourceLogin(DiscoverSourceSummary source) async {
+    final sourceId = source.id.trim();
+    if (sourceId.isEmpty) {
+      AppFeedback.showSnackBar(
+        context,
+        message: '缺少书源标识，无法打开登录入口。',
+        tone: AppFeedbackTone.error,
+        useHaptics: false,
+      );
+      return;
+    }
+    final result = await context.push<Object?>(
+      sourceLoginLocation(sourceId: sourceId, sourceName: source.name),
+    );
+    if (!mounted || result != true) {
+      return;
+    }
+    AppFeedback.showSnackBar(
+      context,
+      message: '书源登录会话已提交。',
+      tone: AppFeedbackTone.success,
+      useHaptics: false,
+    );
+    _refreshDiscoverSource(source);
+  }
+
+  Future<void> _openSourceSessionStatus(DiscoverSourceSummary source) async {
+    final sourceId = source.id.trim();
+    if (sourceId.isEmpty) {
+      AppFeedback.showSnackBar(
+        context,
+        message: '缺少书源标识，无法读取登录状态。',
+        tone: AppFeedbackTone.error,
+        useHaptics: false,
+      );
+      return;
+    }
+    final loading = AppFeedback.showSnackBar(
+      context,
+      message: '正在读取登录状态',
+      tone: AppFeedbackTone.loading,
+      useHaptics: false,
+    );
+    try {
+      final snapshot = await ref
+          .read(sourceRuntimeSessionServiceProvider)
+          .loadSession(sourceId: sourceId);
+      loading.close();
+      if (!mounted) return;
+      final action = await showAdaptiveActionSurface<SourceSessionStatusAction>(
+        context: context,
+        maxWidth: 520,
+        builder:
+            (context) => SourceSessionStatusSheet(
+              sourceName: source.name,
+              snapshot: snapshot,
+            ),
+      );
+      if (!mounted || action == null) return;
+      switch (action) {
+        case SourceSessionStatusAction.login:
+          await _openSourceLogin(source);
+        case SourceSessionStatusAction.clear:
+          await _clearSourceSession(source);
+      }
+    } catch (error) {
+      loading.close();
+      if (!mounted) return;
+      AppFeedback.showSnackBar(
+        context,
+        message: '登录状态读取失败：$error',
+        tone: AppFeedbackTone.error,
+        useHaptics: false,
+      );
+    }
+  }
+
+  Future<void> _clearSourceSession(DiscoverSourceSummary source) async {
+    final sourceId = source.id.trim();
+    if (sourceId.isEmpty) {
+      AppFeedback.showSnackBar(
+        context,
+        message: '缺少书源标识，无法清除登录态。',
+        tone: AppFeedbackTone.error,
+        useHaptics: false,
+      );
+      return;
+    }
+    try {
+      await ref
+          .read(sourceRuntimeSessionServiceProvider)
+          .clearSession(sourceId: sourceId);
+      if (!mounted) return;
+      AppFeedback.showSnackBar(
+        context,
+        message: '书源登录态已清除。',
+        tone: AppFeedbackTone.success,
+        useHaptics: false,
+      );
+      _refreshDiscoverSource(source);
+    } catch (error) {
+      if (!mounted) return;
+      AppFeedback.showSnackBar(
+        context,
+        message: '登录态清除失败：$error',
+        tone: AppFeedbackTone.error,
+        useHaptics: false,
+      );
+    }
+  }
+
+  void _refreshDiscoverSource(DiscoverSourceSummary source) {
+    ref.invalidate(discoverSourceCategoriesProvider(source));
+    ref.invalidate(discoverSourcePagerProvider);
+  }
+
   Future<void> _refreshSources() async {
     _searchDebounce?.cancel();
     _searchController.clear();
@@ -704,6 +830,10 @@ typedef _DiscoverCategoryTap =
       DiscoverSourceCategory category,
     );
 
+typedef _DiscoverSourceAction = void Function(DiscoverSourceSummary source);
+
+enum _DiscoverSourceMenuAction { login, session, clearSession }
+
 class _SourceRow extends ConsumerWidget {
   const _SourceRow({
     required this.source,
@@ -711,6 +841,9 @@ class _SourceRow extends ConsumerWidget {
     required this.palette,
     required this.onTap,
     required this.onCategoryTap,
+    required this.onLogin,
+    required this.onSession,
+    required this.onClearSession,
   });
 
   final DiscoverSourceSummary source;
@@ -718,6 +851,9 @@ class _SourceRow extends ConsumerWidget {
   final ResolvedAdvancedThemePalette palette;
   final VoidCallback onTap;
   final _DiscoverCategoryTap onCategoryTap;
+  final _DiscoverSourceAction onLogin;
+  final _DiscoverSourceAction onSession;
+  final _DiscoverSourceAction onClearSession;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -795,6 +931,13 @@ class _SourceRow extends ConsumerWidget {
                     ),
                     const SizedBox(width: 8),
                     _DiscoverSourceScopeChip(source: loadedSource),
+                    const SizedBox(width: 4),
+                    _DiscoverSourceMenuButton(
+                      source: loadedSource,
+                      onLogin: onLogin,
+                      onSession: onSession,
+                      onClearSession: onClearSession,
+                    ),
                     if (showLoadedMeta) ...[
                       const SizedBox(width: 10),
                       _SourceRowLoadedMeta(source: loadedSource),
@@ -875,6 +1018,70 @@ class _SourceRow extends ConsumerWidget {
       return '${failure.displayCode}：${failure.displayHint}';
     }
     return '${failure.displayCode}：${failure.displayHint}\n$actionHint';
+  }
+}
+
+class _DiscoverSourceMenuButton extends StatelessWidget {
+  const _DiscoverSourceMenuButton({
+    required this.source,
+    required this.onLogin,
+    required this.onSession,
+    required this.onClearSession,
+  });
+
+  final DiscoverSourceSummary source;
+  final _DiscoverSourceAction onLogin;
+  final _DiscoverSourceAction onSession;
+  final _DiscoverSourceAction onClearSession;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 32,
+      height: 32,
+      child: PopupMenuButton<_DiscoverSourceMenuAction>(
+        tooltip: '书源操作',
+        padding: EdgeInsets.zero,
+        icon: const Icon(Icons.more_vert_rounded, size: 18),
+        onSelected: (action) {
+          switch (action) {
+            case _DiscoverSourceMenuAction.login:
+              onLogin(source);
+            case _DiscoverSourceMenuAction.session:
+              onSession(source);
+            case _DiscoverSourceMenuAction.clearSession:
+              onClearSession(source);
+          }
+        },
+        itemBuilder:
+            (context) => const <PopupMenuEntry<_DiscoverSourceMenuAction>>[
+              PopupMenuItem(
+                value: _DiscoverSourceMenuAction.login,
+                child: ListTile(
+                  dense: true,
+                  leading: Icon(Icons.login_rounded),
+                  title: Text('登录'),
+                ),
+              ),
+              PopupMenuItem(
+                value: _DiscoverSourceMenuAction.session,
+                child: ListTile(
+                  dense: true,
+                  leading: Icon(Icons.verified_user_outlined),
+                  title: Text('登录状态'),
+                ),
+              ),
+              PopupMenuItem(
+                value: _DiscoverSourceMenuAction.clearSession,
+                child: ListTile(
+                  dense: true,
+                  leading: Icon(Icons.delete_sweep_outlined),
+                  title: Text('清除登录态'),
+                ),
+              ),
+            ],
+      ),
+    );
   }
 }
 
@@ -971,7 +1178,7 @@ class _CategoryPanel extends ConsumerWidget {
     final loadedSource = async?.valueOrNull ?? source;
     final categories = loadedSource.categories;
 
-    Widget message(String text, {VoidCallback? onRetry}) {
+    Widget message(String text, {VoidCallback? onRetry, String? actionLabel}) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
         child: Row(
@@ -990,7 +1197,7 @@ class _CategoryPanel extends ConsumerWidget {
                 variant: AppButtonVariant.text,
                 size: AppButtonSize.compact,
                 onPressed: onRetry,
-                label: '重试',
+                label: actionLabel ?? '重试',
               ),
           ],
         ),
@@ -1003,11 +1210,20 @@ class _CategoryPanel extends ConsumerWidget {
         AsyncValue(:final isLoading) when isLoading => message(
           '正在加载该书源的发现分类...',
         ),
-        AsyncValue(:final hasError) when hasError => message(
-          _SourceRow._failureText(loadedSource) ?? '分类加载失败，请稍后重试',
-          onRetry:
-              () => ref.invalidate(discoverSourceCategoriesProvider(source)),
-        ),
+        AsyncValue(:final hasError, :final error) when hasError => () {
+          final failure = error is ApiException ? error.gatewayFailure : null;
+          final loginRequired = failure?.isLoginRequired == true;
+          return message(
+            _SourceRow._failureText(loadedSource) ?? '分类加载失败，请稍后重试',
+            actionLabel: loginRequired ? '登录后重试' : '重试',
+            onRetry:
+                loginRequired
+                    ? () => unawaited(_openLoginAndRetry(context, ref))
+                    : () => ref.invalidate(
+                      discoverSourceCategoriesProvider(source),
+                    ),
+          );
+        }(),
         _ when categories.isEmpty => message(
           _SourceRow._failureText(loadedSource) ??
               '暂无可浏览分类${_loadMetaText(loadedSource)}',
@@ -1048,6 +1264,26 @@ class _CategoryPanel extends ConsumerWidget {
       return '';
     }
     return '，用时 $latency';
+  }
+
+  Future<void> _openLoginAndRetry(BuildContext context, WidgetRef ref) async {
+    final sourceId = source.id.trim();
+    if (sourceId.isEmpty) {
+      AppFeedback.showSnackBar(
+        context,
+        message: '缺少书源标识，无法打开登录入口。',
+        tone: AppFeedbackTone.error,
+        useHaptics: false,
+      );
+      return;
+    }
+    final result = await context.push<Object?>(
+      sourceLoginLocation(sourceId: sourceId, sourceName: source.name),
+    );
+    if (!context.mounted || result != true) {
+      return;
+    }
+    ref.invalidate(discoverSourceCategoriesProvider(source));
   }
 }
 

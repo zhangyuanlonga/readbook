@@ -8,10 +8,12 @@ import 'package:go_router/go_router.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../../app/platform/app_platform_capabilities.dart';
+import '../../../app/widgets/adaptive_bottom_sheet.dart';
 import '../../../app/widgets/feature_disabled_page.dart';
 import '../../../app/widgets/foundation/foundation.dart';
 import '../application/source_runtime_session_service.dart';
 import '../application/webview_cookie_bridge.dart';
+import 'source_session_status_sheet.dart';
 
 class SourceWebViewLoginPage extends ConsumerStatefulWidget {
   const SourceWebViewLoginPage({
@@ -251,14 +253,27 @@ class _SourceWebViewLoginPageState
       }
 
       final service = ref.read(sourceRuntimeSessionServiceProvider);
-      await service.submitLoginResult(
+      final snapshot = await service.submitLoginResult(
         sourceId: widget.sourceId,
         cookies: hasCookie ? cookie : null,
         localStorage: localStorage,
         finalUrl: _currentUrl,
       );
       if (!mounted) return;
-      _showMessage('登录会话已提交给网关，可以返回重试当前书源。');
+      if ((_loginTask?.loginCheckJs ?? '').trim().isNotEmpty) {
+        _showMessage('登录会话已提交。该源配置了 loginCheckJs，自动校验将在 Rust 兼容阶段接入。');
+      }
+      await showAdaptiveActionSurface<void>(
+        context: context,
+        maxWidth: 520,
+        builder:
+            (context) => SourceSessionStatusSheet(
+              sourceName: _loginTask?.sourceName ?? widget.sourceName ?? '',
+              snapshot: snapshot,
+              showActions: false,
+            ),
+      );
+      if (!mounted) return;
       if (context.canPop()) {
         context.pop(true);
       }

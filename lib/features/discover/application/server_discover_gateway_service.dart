@@ -3,6 +3,7 @@ import '../../../core/errors/error_stage.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_config.dart';
 import '../../../domain/entities/book.dart';
+import '../../../domain/entities/source_login_capability.dart';
 import '../../search/application/server_gateway_identity.dart';
 import '../../source/application/source_health_service.dart';
 import '../domain/discover_source_summary.dart';
@@ -87,6 +88,7 @@ class ServerDiscoverGatewayService {
       enabled: true,
       sourceType: source.sourceType,
       groupName: source.groupName,
+      loginCapability: source.loginCapability,
     );
     return _loadSourceSummary(sourceItem);
   }
@@ -209,6 +211,7 @@ class ServerDiscoverGatewayService {
         accessReason: source.accessReason,
         sourceType: source.sourceType,
         groupName: source.groupName,
+        loginCapability: source.loginCapability,
         sourceReport: response.sourceReport,
       );
     } on AppException catch (error) {
@@ -230,6 +233,7 @@ class ServerDiscoverGatewayService {
         accessReason: source.accessReason,
         sourceType: source.sourceType,
         groupName: source.groupName,
+        loginCapability: source.loginCapability,
         failure: error.gatewayFailure,
       );
     } catch (error) {
@@ -251,6 +255,7 @@ class ServerDiscoverGatewayService {
         accessReason: source.accessReason,
         sourceType: source.sourceType,
         groupName: source.groupName,
+        loginCapability: source.loginCapability,
       );
     }
   }
@@ -269,6 +274,7 @@ class ServerDiscoverGatewayService {
       accessReason: source.accessReason,
       sourceType: source.sourceType,
       groupName: source.groupName,
+      loginCapability: source.loginCapability,
     );
   }
 
@@ -394,6 +400,7 @@ class _GatewaySourceItem {
     this.accessReason,
     this.sourceType,
     this.groupName,
+    this.loginCapability = const SourceLoginCapability(),
   });
 
   final String id;
@@ -405,6 +412,7 @@ class _GatewaySourceItem {
   final String? accessReason;
   final String? sourceType;
   final String? groupName;
+  final SourceLoginCapability loginCapability;
 
   String get origin => 'cloud_catalog';
 
@@ -434,6 +442,7 @@ class _GatewaySourceItem {
         map['sourceType'] ?? map['source_type'] ?? map['visibility'],
       ),
       groupName: _optionalString(map['group_name'] ?? map['groupName']),
+      loginCapability: SourceLoginCapability.fromMap(map),
     );
   }
 }

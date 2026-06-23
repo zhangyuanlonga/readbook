@@ -37,12 +37,14 @@ class BookDetailErrorPresenter extends StatelessWidget {
     super.key,
     required this.message,
     required this.onRetry,
+    this.onLogin,
     this.onSwitchSource,
     this.onCopyDiagnostics,
   });
 
   final String message;
   final VoidCallback onRetry;
+  final VoidCallback? onLogin;
   final VoidCallback? onSwitchSource;
   final VoidCallback? onCopyDiagnostics;
 
@@ -54,9 +56,13 @@ class BookDetailErrorPresenter extends StatelessWidget {
       tone: RuntimeFeedbackTone.error,
       actions: <Widget>[
         AppButton(
-          label: '重试',
+          label: onLogin == null ? '重试' : '登录后重试',
           variant: AppButtonVariant.tonal,
-          onPressed: onRetry,
+          onPressed: onLogin ?? onRetry,
+          icon:
+              onLogin == null
+                  ? null
+                  : const Icon(Icons.login_rounded, size: 16),
         ),
         if (onSwitchSource != null)
           AppButton(
@@ -575,27 +581,34 @@ class BookDetailTocWarningPresenter extends StatelessWidget {
   const BookDetailTocWarningPresenter({
     super.key,
     required this.message,
+    this.onLogin,
     this.onCopyDiagnostics,
   });
 
   final String message;
+  final VoidCallback? onLogin;
   final VoidCallback? onCopyDiagnostics;
 
   @override
   Widget build(BuildContext context) {
     return BookDetailTocWarningCard(
       message: message,
-      actions:
-          onCopyDiagnostics == null
-              ? const <Widget>[]
-              : <Widget>[
-                AppButton(
-                  label: '复制诊断信息',
-                  variant: AppButtonVariant.secondary,
-                  onPressed: onCopyDiagnostics,
-                  icon: const Icon(Icons.copy_rounded, size: 16),
-                ),
-              ],
+      actions: <Widget>[
+        if (onLogin != null)
+          AppButton(
+            label: '登录后重试',
+            variant: AppButtonVariant.tonal,
+            onPressed: onLogin,
+            icon: const Icon(Icons.login_rounded, size: 16),
+          ),
+        if (onCopyDiagnostics != null)
+          AppButton(
+            label: '复制诊断信息',
+            variant: AppButtonVariant.secondary,
+            onPressed: onCopyDiagnostics,
+            icon: const Icon(Icons.copy_rounded, size: 16),
+          ),
+      ],
     );
   }
 }

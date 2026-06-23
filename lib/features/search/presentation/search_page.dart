@@ -647,6 +647,10 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                                                 const SizedBox(height: 8),
                                                 SearchFailureBanner(
                                                   report: report,
+                                                  onLoginCompleted:
+                                                      (_) => unawaited(
+                                                        _runSearch(),
+                                                      ),
                                                 ),
                                               ],
                                               const SizedBox(height: 10),

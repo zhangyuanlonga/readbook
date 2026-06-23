@@ -9,6 +9,9 @@ class PrivateBookSourceTile extends StatelessWidget {
     super.key,
     required this.item,
     required this.onDetail,
+    required this.onLogin,
+    required this.onSession,
+    required this.onClearSession,
     required this.onEdit,
     required this.onDelete,
     required this.onTest,
@@ -17,6 +20,9 @@ class PrivateBookSourceTile extends StatelessWidget {
 
   final PrivateBookSourceItem item;
   final VoidCallback onDetail;
+  final VoidCallback onLogin;
+  final VoidCallback onSession;
+  final VoidCallback onClearSession;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final VoidCallback onTest;
@@ -60,6 +66,9 @@ class PrivateBookSourceTile extends StatelessWidget {
                   PrivateBookSourceMoreMenuButton(
                     item: item,
                     onDetail: onDetail,
+                    onLogin: onLogin,
+                    onSession: onSession,
+                    onClearSession: onClearSession,
                     onTest: onTest,
                     onSubmit: onSubmit,
                     onEdit: onEdit,

@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../../../core/errors/error_stage.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_config.dart';
+import '../../../domain/entities/source_login_capability.dart';
 
 class PrivateBookSourceService {
   PrivateBookSourceService({
@@ -438,6 +439,7 @@ class PrivateBookSourceItem {
     required this.reviewNote,
     required this.lastTestStatus,
     required this.lastTestMessage,
+    required this.loginCapability,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -458,10 +460,12 @@ class PrivateBookSourceItem {
   final String reviewNote;
   final String lastTestStatus;
   final String lastTestMessage;
+  final SourceLoginCapability loginCapability;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
   factory PrivateBookSourceItem.fromJson(Map<String, dynamic> json) {
+    final sourceJson = json['source_json']?.toString() ?? '';
     return PrivateBookSourceItem(
       id: json['id']?.toString() ?? '',
       name: json['name']?.toString() ?? json['title']?.toString() ?? '',
@@ -469,7 +473,7 @@ class PrivateBookSourceItem {
           .map((item) => item.toString())
           .toList(growable: false),
       sourceCode: json['source_code']?.toString() ?? '',
-      sourceJson: json['source_json']?.toString() ?? '',
+      sourceJson: sourceJson,
       description: json['description']?.toString() ?? '',
       groupName: json['group_name']?.toString() ?? '',
       visibility: json['visibility']?.toString() ?? 'private',
@@ -481,6 +485,9 @@ class PrivateBookSourceItem {
       reviewNote: json['review_note']?.toString() ?? '',
       lastTestStatus: json['last_test_status']?.toString() ?? '',
       lastTestMessage: json['last_test_message']?.toString() ?? '',
+      loginCapability: SourceLoginCapability.fromMap(
+        json.map((key, value) => MapEntry(key, value as Object?)),
+      ).merge(SourceLoginCapability.fromSourceJson(sourceJson)),
       createdAt: DateTime.tryParse(json['created_at']?.toString() ?? ''),
       updatedAt: DateTime.tryParse(json['updated_at']?.toString() ?? ''),
     );

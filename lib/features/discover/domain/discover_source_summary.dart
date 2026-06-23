@@ -1,5 +1,6 @@
 import '../../../core/errors/gateway_failure.dart';
 import '../../../domain/entities/book.dart';
+import '../../../domain/entities/source_login_capability.dart';
 
 enum DiscoverSourceStatus { available, slow, unavailable }
 
@@ -18,6 +19,7 @@ class DiscoverSourceSummary {
     this.accessReason,
     this.sourceType,
     this.groupName,
+    this.loginCapability = const SourceLoginCapability(),
     this.sourceReport = const <String, Object?>{},
     this.failure,
   });
@@ -35,6 +37,7 @@ class DiscoverSourceSummary {
   final String? accessReason;
   final String? sourceType;
   final String? groupName;
+  final SourceLoginCapability loginCapability;
   final Map<String, Object?> sourceReport;
   final GatewayFailure? failure;
 }

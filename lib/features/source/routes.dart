@@ -1,9 +1,21 @@
 import 'package:go_router/go_router.dart';
 
+import 'presentation/source_login_entry_page.dart';
 import 'presentation/source_webview_login_page.dart';
 import 'presentation/source_webview_task_page.dart';
 
 final List<RouteBase> sourceRoutes = <RouteBase>[
+  GoRoute(
+    path: '/source/login',
+    name: 'source-login',
+    builder: (context, state) {
+      final query = state.uri.queryParameters;
+      return SourceLoginEntryPage(
+        sourceId: query['sourceId'] ?? '',
+        sourceName: query['sourceName'],
+      );
+    },
+  ),
   GoRoute(
     path: '/source/webview-login',
     name: 'source-webview-login',
@@ -43,6 +55,17 @@ final List<RouteBase> sourceRoutes = <RouteBase>[
     },
   ),
 ];
+
+String sourceLoginLocation({required String sourceId, String? sourceName}) {
+  return Uri(
+    path: '/source/login',
+    queryParameters: <String, String>{
+      'sourceId': sourceId,
+      if ((sourceName ?? '').trim().isNotEmpty)
+        'sourceName': sourceName!.trim(),
+    },
+  ).toString();
+}
 
 String sourceWebViewLoginLocation({
   required String sourceId,

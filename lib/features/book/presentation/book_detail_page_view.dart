@@ -284,6 +284,17 @@ extension on _BookDetailPageState {
                                 BookDetailErrorPresenter(
                                   message: errorText,
                                   onRetry: () => _load(forceRefresh: true),
+                                  onLogin:
+                                      _diagnosticsIsLoginRequired(
+                                            presentationState
+                                                .detailFailureDiagnostics,
+                                          )
+                                          ? () => unawaited(
+                                            _openSourceLoginAndReload(
+                                              includeCatalog: false,
+                                            ),
+                                          )
+                                          : null,
                                   onSwitchSource:
                                       canSwitchFromMissingSource
                                           ? _handleSwitchSource

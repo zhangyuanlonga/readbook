@@ -19,6 +19,9 @@ import '../../../core/auth/auth_event_bus.dart';
 import '../../../core/auth/auth_session.dart';
 import '../../../core/network/api_client.dart';
 import '../../auth/providers.dart' as auth_providers;
+import '../../source/application/source_runtime_session_service.dart';
+import '../../source/presentation/source_session_status_sheet.dart';
+import '../../source/routes.dart';
 import '../application/advanced_theme_provider.dart';
 import '../application/private_book_source_provider.dart';
 import '../application/private_book_source_service.dart';
@@ -172,6 +175,16 @@ class PrivateBookSourcesPage extends ConsumerWidget {
                       onDetail:
                           () =>
                               unawaited(_openDetail(context, ref, item: item)),
+                      onLogin:
+                          () => unawaited(_openSourceLogin(context, ref, item)),
+                      onSession:
+                          () => unawaited(
+                            _openSourceSessionStatus(context, ref, item),
+                          ),
+                      onClearSession:
+                          () => unawaited(
+                            _clearSourceSession(context, ref, item),
+                          ),
                       onEdit:
                           () => unawaited(_openForm(context, ref, item: item)),
                       onDelete:
@@ -387,6 +400,125 @@ class PrivateBookSourcesPage extends ConsumerWidget {
       case null:
         return;
     }
+  }
+
+  static Future<void> _openSourceLogin(
+    BuildContext context,
+    WidgetRef ref,
+    PrivateBookSourceItem item,
+  ) async {
+    final sourceId = item.id.trim();
+    if (sourceId.isEmpty) {
+      AppFeedback.showSnackBar(
+        context,
+        message: '缺少书源标识，无法打开登录入口。',
+        tone: AppFeedbackTone.error,
+        useHaptics: false,
+      );
+      return;
+    }
+
+    final result = await context.push<Object?>(
+      sourceLoginLocation(sourceId: sourceId, sourceName: item.name),
+    );
+    if (!context.mounted || result != true) {
+      return;
+    }
+    AppFeedback.showSnackBar(
+      context,
+      message: '书源登录会话已提交。',
+      tone: AppFeedbackTone.success,
+      useHaptics: false,
+    );
+    _refreshPrivateSources(ref);
+  }
+
+  static Future<void> _openSourceSessionStatus(
+    BuildContext context,
+    WidgetRef ref,
+    PrivateBookSourceItem item,
+  ) async {
+    final sourceId = item.id.trim();
+    if (sourceId.isEmpty) {
+      AppFeedback.showSnackBar(
+        context,
+        message: '缺少书源标识，无法读取登录状态。',
+        tone: AppFeedbackTone.error,
+        useHaptics: false,
+      );
+      return;
+    }
+    final loading = AppFeedback.showSnackBar(
+      context,
+      message: '正在读取登录状态',
+      tone: AppFeedbackTone.loading,
+      useHaptics: false,
+    );
+    try {
+      final snapshot = await ref
+          .read(sourceRuntimeSessionServiceProvider)
+          .loadSession(sourceId: sourceId);
+      loading.close();
+      if (!context.mounted) return;
+      final action = await showAdaptiveActionSurface<SourceSessionStatusAction>(
+        context: context,
+        maxWidth: 520,
+        builder:
+            (context) => SourceSessionStatusSheet(
+              sourceName: item.name,
+              snapshot: snapshot,
+            ),
+      );
+      if (!context.mounted || action == null) return;
+      switch (action) {
+        case SourceSessionStatusAction.login:
+          await _openSourceLogin(context, ref, item);
+        case SourceSessionStatusAction.clear:
+          await _clearSourceSession(context, ref, item);
+      }
+    } catch (error) {
+      loading.close();
+      if (!context.mounted) return;
+      AppFeedback.showSnackBar(
+        context,
+        message: '登录状态读取失败：${_messageOf(error)}',
+        tone: AppFeedbackTone.error,
+        useHaptics: false,
+      );
+    }
+  }
+
+  static Future<void> _clearSourceSession(
+    BuildContext context,
+    WidgetRef ref,
+    PrivateBookSourceItem item,
+  ) async {
+    final sourceId = item.id.trim();
+    if (sourceId.isEmpty) {
+      AppFeedback.showSnackBar(
+        context,
+        message: '缺少书源标识，无法清除登录态。',
+        tone: AppFeedbackTone.error,
+        useHaptics: false,
+      );
+      return;
+    }
+    await _runVoidAction(
+      context,
+      ref,
+      () => ref
+          .read(sourceRuntimeSessionServiceProvider)
+          .clearSession(sourceId: sourceId)
+          .then((_) {}),
+      '书源登录态已清除',
+    );
+    _refreshPrivateSources(ref);
+  }
+
+  static void _refreshPrivateSources(WidgetRef ref) {
+    final selectedGroupId = ref.read(selectedPrivateBookSourceGroupProvider);
+    ref.invalidate(privateBookSourcesProvider(selectedGroupId));
+    ref.invalidate(privateBookSourcesProvider(null));
   }
 
   static Future<PrivateBookSourceItem?> _loadSourceDetailForEdit(

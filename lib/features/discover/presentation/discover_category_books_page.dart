@@ -11,6 +11,7 @@ import '../../../app/layout/app_layout.dart';
 import '../../../app/motion/app_motion_widgets.dart';
 import '../../../app/theme/app_advanced_theme_tokens.dart';
 import '../../../app/widgets/advanced_theme_backdrop_decoration.dart';
+import '../../../app/widgets/foundation/app_feedback.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/errors/gateway_failure.dart';
 import '../../../domain/entities/book.dart';
@@ -21,6 +22,7 @@ import '../../../app/widgets/foundation/app_skeleton.dart';
 import '../../../app/widgets/resolved_book_cover.dart';
 import '../../mine/application/advanced_theme_provider.dart';
 import '../../mine/application/cover_gallery_provider.dart';
+import '../../source/routes.dart';
 import '../application/discover_source_provider.dart';
 import '../domain/discover_source_summary.dart';
 
@@ -101,6 +103,8 @@ class DiscoverCategoryBooksPage extends ConsumerWidget {
                         : categoriesAsync.hasError
                         ? _CategoryLoadFailureState(
                           metrics: metrics,
+                          source: source,
+                          failure: _gatewayFailureOf(categoriesAsync.error),
                           onRetry:
                               () => ref.invalidate(
                                 discoverSourceCategoriesProvider(source),
@@ -203,20 +207,29 @@ class DiscoverCategoryBooksPage extends ConsumerWidget {
     }
     return null;
   }
+
+  GatewayFailure? _gatewayFailureOf(Object? error) {
+    return error is ApiException ? error.gatewayFailure : null;
+  }
 }
 
 class _CategoryLoadFailureState extends StatelessWidget {
   const _CategoryLoadFailureState({
     required this.metrics,
+    required this.source,
+    required this.failure,
     required this.onRetry,
   });
 
   final AppAdaptiveMetrics metrics;
+  final DiscoverSourceSummary source;
+  final GatewayFailure? failure;
   final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
     final topInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
+    final isLoginRequired = failure?.isLoginRequired == true;
     return Padding(
       padding: EdgeInsets.fromLTRB(
         metrics.pagePadding,
@@ -227,13 +240,37 @@ class _CategoryLoadFailureState extends StatelessWidget {
       child: Center(
         child: AppEmptyStateCard(
           icon: Icons.error_outline_rounded,
-          title: '分类加载失败',
-          description: '该书源分类暂时无法加载，请稍后重试',
-          actionLabel: '重试',
-          onAction: onRetry,
+          title: failure?.message ?? '分类加载失败',
+          description:
+              failure == null
+                  ? '该书源分类暂时无法加载，请稍后重试'
+                  : _CategoryBooksGrid.failureDescription(failure!),
+          actionLabel: isLoginRequired ? '登录后重试' : '重试',
+          onAction:
+              isLoginRequired ? () => _openLoginAndRetry(context) : onRetry,
         ),
       ),
     );
+  }
+
+  Future<void> _openLoginAndRetry(BuildContext context) async {
+    final sourceId = source.id.trim();
+    if (sourceId.isEmpty) {
+      AppFeedback.showSnackBar(
+        context,
+        message: '缺少书源标识，无法打开登录入口。',
+        tone: AppFeedbackTone.error,
+        useHaptics: false,
+      );
+      return;
+    }
+    final result = await context.push<Object?>(
+      sourceLoginLocation(sourceId: sourceId, sourceName: source.name),
+    );
+    if (!context.mounted || result != true) {
+      return;
+    }
+    onRetry();
   }
 }
 
@@ -296,7 +333,7 @@ class _CategoryBooksGrid extends ConsumerWidget {
               ? (booksAsync.error as ApiException).gatewayFailure
               : null;
       final description =
-          failure == null ? '该分类书籍暂时无法加载，请稍后重试' : _failureDescription(failure);
+          failure == null ? '该分类书籍暂时无法加载，请稍后重试' : failureDescription(failure);
       return Padding(
         padding: EdgeInsets.fromLTRB(
           metrics.pagePadding,
@@ -309,9 +346,16 @@ class _CategoryBooksGrid extends ConsumerWidget {
             icon: Icons.error_outline_rounded,
             title: failure?.message ?? '加载失败',
             description: description,
-            actionLabel: failure?.retryable == false ? null : '重试',
+            actionLabel:
+                failure?.isLoginRequired == true
+                    ? '登录后重试'
+                    : failure?.retryable == false
+                    ? null
+                    : '重试',
             onAction:
-                failure?.retryable == false
+                failure?.isLoginRequired == true
+                    ? () => _openLoginAndRetry(context, ref, request)
+                    : failure?.retryable == false
                     ? null
                     : () =>
                         ref.invalidate(discoverCategoryBooksProvider(request)),
@@ -395,12 +439,37 @@ class _CategoryBooksGrid extends ConsumerWidget {
     );
   }
 
-  static String _failureDescription(GatewayFailure failure) {
+  static String failureDescription(GatewayFailure failure) {
     final actionHint = failure.actionHint.trim();
     if (actionHint.isEmpty) {
       return '${failure.displayCode}：${failure.displayHint}';
     }
     return '${failure.displayCode}：${failure.displayHint}\n$actionHint';
+  }
+
+  static Future<void> _openLoginAndRetry(
+    BuildContext context,
+    WidgetRef ref,
+    DiscoverCategoryBooksRequest request,
+  ) async {
+    final source = request.source;
+    final sourceId = source.id.trim();
+    if (sourceId.isEmpty) {
+      AppFeedback.showSnackBar(
+        context,
+        message: '缺少书源标识，无法打开登录入口。',
+        tone: AppFeedbackTone.error,
+        useHaptics: false,
+      );
+      return;
+    }
+    final result = await context.push<Object?>(
+      sourceLoginLocation(sourceId: sourceId, sourceName: source.name),
+    );
+    if (!context.mounted || result != true) {
+      return;
+    }
+    ref.invalidate(discoverCategoryBooksProvider(request));
   }
 }
 

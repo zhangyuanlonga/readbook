@@ -73,6 +73,7 @@ import '../../mine/application/advanced_theme_provider.dart';
 import '../../mine/application/cover_gallery_provider.dart';
 import '../../source/application/remote_content_task_conflict_service.dart';
 import '../../source/application/remote_content_task_scheduler_service.dart';
+import '../../source/routes.dart';
 import '../application/book_detail_service.dart';
 import '../application/book_detail_action_service.dart';
 import '../application/book_detail_catalog_service.dart';
@@ -3699,11 +3700,44 @@ class _BookDetailPageState extends ConsumerState<BookDetailPage> {
     final diagnostics = _tocFailureDiagnostics;
     return BookDetailTocWarningPresenter(
       message: message,
+      onLogin:
+          _diagnosticsIsLoginRequired(diagnostics)
+              ? () => unawaited(_openSourceLoginAndReload(includeCatalog: true))
+              : null,
       onCopyDiagnostics:
           diagnostics == null
               ? null
               : () => _copyOnlineDetailDiagnostics(diagnostics),
     );
+  }
+
+  bool _diagnosticsIsLoginRequired(AppExceptionDiagnostics? diagnostics) {
+    final gateway = diagnostics?.gatewayFailure;
+    if (gateway == null) {
+      return false;
+    }
+    final code = gateway['code']?.toString().trim().toUpperCase() ?? '';
+    final category = gateway['category']?.toString().trim().toLowerCase() ?? '';
+    return code == 'LOGIN_REQUIRED' || category == 'loginrequired';
+  }
+
+  Future<void> _openSourceLoginAndReload({required bool includeCatalog}) async {
+    final sourceId = (_activeSourceId ?? '').trim();
+    if (sourceId.isEmpty) {
+      _showMessage('缺少书源标识，无法打开登录入口。');
+      return;
+    }
+    final result = await context.push<Object?>(
+      sourceLoginLocation(
+        sourceId: sourceId,
+        sourceName: (_displayTitle ?? widget.title)?.trim(),
+      ),
+    );
+    if (!mounted || result != true) {
+      return;
+    }
+    _showMessage('登录完成，正在重试。');
+    await _load(forceRefresh: true, includeCatalog: includeCatalog);
   }
 
   void _showMessage(String text) {
